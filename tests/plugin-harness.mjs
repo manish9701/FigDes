@@ -98,6 +98,33 @@ function mixin(node) {
   node.setPluginData = () => {};
   node.getPluginData = () => "";
 
+  // Real Figma exposes absoluteBoundingBox on every scene node. Non-enumerable
+  // so it never leaks into JSON snapshots or clone().
+  Object.defineProperty(node, "absoluteBoundingBox", {
+    configurable: true,
+    get() {
+      return { x: node.x ?? 0, y: node.y ?? 0, width: node.width ?? 0, height: node.height ?? 0 };
+    },
+  });
+
+  /**
+   * Real Figma's `findAll` walks descendants only (never the node itself).
+   * The native layer relies on it for component and context discovery, so the
+   * mock has to provide it rather than letting those calls fail as "not a
+   * function" on the harness.
+   */
+  node.findAll = (predicate = () => true) => {
+    const out = [];
+    const stack = [...(node.children ?? [])];
+    while (stack.length > 0) {
+      const n = stack.pop();
+      if (predicate(n)) out.push(n);
+      if (Array.isArray(n.children)) stack.push(...n.children);
+    }
+    return out;
+  };
+  node.findOne = (predicate) => node.findAll(predicate)[0] ?? null;
+
   /**
    * Stands in for rasterisation. Produces bytes proportional to the requested
    * surface so token and byte estimates in tests reflect a realistic image
@@ -340,6 +367,11 @@ export function makeFigma(doc) {
   const localPaintStyles = [];
   const slideGrid = [];
 
+  // The current page is mutable, as in real Figma. A getter-only property made
+  // createPage/setCurrentPage fail in strict mode, hiding the plugin's real
+  // page-management behaviour.
+  let activePage = doc.page;
+
   const figma = {
     editorType: "figma",
 
@@ -352,7 +384,23 @@ export function makeFigma(doc) {
     },
 
     get currentPage() {
-      return doc.page;
+      return activePage;
+    },
+    set currentPage(page) {
+      activePage = page;
+    },
+
+    createPage: (name) => {
+      const page = mixin({
+        type: "PAGE",
+        id: nextId(),
+        name: name ?? "Page",
+        children: [],
+        selection: [],
+        parent: figma.root,
+      });
+      figma.root.children.push(page);
+      return page;
     },
 
     ui: {
@@ -389,7 +437,7 @@ export function makeFigma(doc) {
     getNodeByIdAsync: async (id) => {
       const direct = byId.get(id);
       if (direct) return direct;
-      const stack = [doc.page];
+      const stack = [...figma.root.children];
       while (stack.length > 0) {
         const node = stack.pop();
         if (node.id === id) return node;
@@ -426,6 +474,12 @@ getLocalVariablesAsync: async () => [
      * producing `space/md` and `space/md 2`.
      */
     variables: {
+      // Real Figma nests the variable reads under `figma.variables`. The mock
+      // had them at the top level, which hid bugs in code that used the real
+      // path; both are provided so nothing regresses.
+      getLocalVariablesAsync: async () => localVariables,
+      getLocalVariables: () => localVariables,
+      getVariableByIdAsync: async (id) => localVariables.find((v) => v.id === id) ?? null,
       getLocalVariableCollectionsAsync: async () => localCollections,
       createVariableCollection: (name) => {
         const collection = {
@@ -442,11 +496,24 @@ getLocalVariablesAsync: async () => [
         localCollections.push(collection);
         return collection;
       },
-      createVariable: (name, collection, resolvedType) => {
+      /**
+       * Accepts either a collection object or a collection id.
+       *
+       * The real API takes `collectionId: string`; the semantic path historically
+       * passed the object. Supporting both keeps the mock honest about the real
+       * signature while the object form is still exercised.
+       */
+      createVariable: (name, collectionOrId, resolvedType) => {
+        const collection =
+          typeof collectionOrId === "string"
+            ? localCollections.find((c) => c.id === collectionOrId)
+            : collectionOrId;
+        if (!collection) throw new Error(`Variable collection not found: ${collectionOrId}`);
         const variable = {
           name,
           id: `VariableID:${localVariables.length + 1}`,
           resolvedType,
+          variableCollectionId: collection.id,
           description: "",
           scopes: ["ALL_SCOPES"],
           valuesByMode: {},
@@ -622,10 +689,10 @@ getLocalVariablesAsync: async () => [
      * state has to walk the tree instead.
      */
     __node: (id) => {
-      // Walks from the *page*, not `doc.root`: in this harness `doc.root` is a
-      // frame living on the page, so anything the plugin appends to
-      // `figma.currentPage` directly would be unreachable from it.
-      const stack = [doc.page];
+      // Walks every page: `doc.root` is a frame living on the first page, so
+      // anything the plugin appends to `figma.currentPage` directly (or to a
+      // page it just created) would be unreachable from it.
+      const stack = [...figma.root.children];
       while (stack.length > 0) {
         const node = stack.pop();
         if (node.id === id) return node;

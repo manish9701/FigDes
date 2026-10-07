@@ -32,7 +32,7 @@ import { guardMutation, resolveExistingResources } from "./plan/gate";
 import { exoSeedOperations, exoSeedCounts } from "./tokens/exo";
 import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, critiqueVisualTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
 import { exportCode } from "./code/export";
-import { UseFigmaArgs, InspectVisualArgs, figdesUseFigmaHandler, figdesInspectVisualHandler } from "./native/use-figma";
+import { UseFigmaArgs, InspectVisualArgs, ReadContextArgs, figdesUseFigmaHandler, figdesInspectVisualHandler, figdesReadContextHandler } from "./native/use-figma";
 
 /* -------------------------------------------------------------------------- */
 /* Shared arg fragments                                                        */
@@ -1152,12 +1152,25 @@ inputSchema: CompileArgs,
   {
     name: "figdes_use_figma",
     title: "Native Execution Tool",
-    description: "Execute controlled JavaScript against the native FigDes Figma API. Supports native creation, inspection, geometry, paint, typography, vectors, auto layout, constraints, components, variants, variables, styles, masks and undo-safe script transactions. It does not expose the raw global figma object. All fig.* calls are asynchronous and must be awaited.",
+    description:
+      "Execute controlled JavaScript against the FigDes native design API. Supports node inspection and querying, native node creation/modification, typography, fills, strokes and effects, vectors and custom paths, auto-layout and constraints, components and instances, variants, variables and styles, cloning/grouping/reordering, geometry inspection, and transactional execution. Every call is validated against a strict action schema and runs inside one rollback-safe transaction with a hard time budget that covers async work; a per-session lock stops two native scripts from interleaving. All fig.* calls are asynchronous and must be awaited. Does not expose the raw global Figma API.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
       const parsed = UseFigmaArgs.parse(args ?? {});
       return figdesUseFigmaHandler(registry.resolve(parsed.sessionId), parsed);
     }
+  },
+
+  {
+    name: "figdes_read_context",
+    title: "Read the file before changing it",
+    description:
+      "The read/context layer: understand an existing Figma file before modifying it. scope 'file' returns robust file metadata (pages, selection, component/variable/style counts, library collections); 'design-system' returns file metadata plus top-level frames and a bounded design-system summary; 'libraries' returns enabled team-library variable collections; 'components' returns local components and component sets; 'node' returns one node's full state (geometry, layout, paints, styles, text, component info). Read-only: it never opens a transaction. Use it to reuse what already exists instead of rebuilding it.",
+    inputSchema: ReadContextArgs,
+    handler: async (args, registry) => {
+      const parsed = ReadContextArgs.parse(args ?? {});
+      return figdesReadContextHandler(registry.resolve(parsed.sessionId), parsed);
+    },
   },
 
   {
@@ -1174,30 +1187,39 @@ inputSchema: CompileArgs,
   {
     name: "compare_visuals",
     title: "Compare two visual states",
-    description: "Render two Figma nodes and return structural deltas plus both screenshots. The tool never claims that one version is visually better automatically; use the images and measured deltas for the judgement.",
+    description:
+      "The compare step of the review loop (inspect -> render -> critique -> modify -> render -> compare). Renders two nodes, returns both screenshots and measurable before/after structural evidence (node, surface, area, density deltas) with an explicit render status per side. It never claims one version is better automatically: the measured deltas are evidence, the judgement is yours. Failure states (missing node, failed render, empty image) are reported rather than silently skipped.",
     inputSchema: CompareVisualsArgs,
     handler: async (args, registry) => {
       const parsed = CompareVisualsArgs.parse(args);
       const session = registry.resolve(parsed.sessionId);
 
-      const [beforeMetrics, afterMetrics] = await Promise.all([
-        session.request("collect_metrics", { target: parsed.beforeNodeId }),
-        session.request("collect_metrics", { target: parsed.afterNodeId }),
-      ]) as [MetricsReport, MetricsReport];
-
-      const render = async (nodeId: string) => {
+      const collect = async (nodeId: string): Promise<{ ok: boolean; report?: MetricsReport; error?: string }> => {
         try {
-          return await session.request("render_node", {
-            nodeId,
-            maxWidth: 1024,
-            detail: "low",
-          }) as any;
-        } catch {
-          return null;
+          return { ok: true, report: (await session.request("collect_metrics", { target: nodeId })) as MetricsReport };
+        } catch (err) {
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
         }
       };
 
-      const [beforeRender, afterRender] = await Promise.all([
+      const render = async (nodeId: string): Promise<{ ok: boolean; data?: string; error?: string; width?: number; height?: number; estimatedTokens?: number }> => {
+        try {
+          const res = (await session.request("render_node", { nodeId, maxWidth: 1024, detail: "low" })) as {
+            data?: string;
+            width?: number;
+            height?: number;
+            estimatedTokens?: number;
+          };
+          if (!res?.data) return { ok: false, error: "Render returned no image data." };
+          return { ok: true, data: res.data, width: res.width, height: res.height, estimatedTokens: res.estimatedTokens };
+        } catch (err) {
+          return { ok: false, error: err instanceof Error ? err.message : String(err) };
+        }
+      };
+
+      const [beforeCollect, afterCollect, beforeRender, afterRender] = await Promise.all([
+        collect(parsed.beforeNodeId),
+        collect(parsed.afterNodeId),
         render(parsed.beforeNodeId),
         render(parsed.afterNodeId),
       ]);
@@ -1208,50 +1230,75 @@ inputSchema: CompileArgs,
         frames: report.nodes.filter((n) => n.type === "FRAME").length,
         instances: report.nodes.filter((n) => n.type === "INSTANCE").length,
         texts: report.nodes.filter((n) => n.type === "TEXT").length,
-        visibleArea: report.nodes
-          .filter((n) => n.visible)
-          .reduce((sum, n) => sum + n.w * n.h, 0),
+        visibleArea: report.nodes.filter((n) => n.visible).reduce((sum, n) => sum + n.w * n.h, 0),
         filledSurfaces: report.nodes.filter((n) => Boolean(n.fill)).length,
         roundedSurfaces: report.nodes.filter((n) => (n.radius ?? 0) > 0).length,
       });
 
-      const before = summarize(beforeMetrics);
-      const after = summarize(afterMetrics);
+      const before = beforeCollect.report ? summarize(beforeCollect.report) : null;
+      const after = afterCollect.report ? summarize(afterCollect.report) : null;
 
-      const delta = {
-        nodes: after.nodes - before.nodes,
-        frames: after.frames - before.frames,
-        instances: after.instances - before.instances,
-        texts: after.texts - before.texts,
-        visibleArea: after.visibleArea - before.visibleArea,
-        filledSurfaces: after.filledSurfaces - before.filledSurfaces,
-        roundedSurfaces: after.roundedSurfaces - before.roundedSurfaces,
-      };
+      const delta =
+        before && after
+          ? {
+              nodes: after.nodes - before.nodes,
+              frames: after.frames - before.frames,
+              instances: after.instances - before.instances,
+              texts: after.texts - before.texts,
+              visibleArea: after.visibleArea - before.visibleArea,
+              filledSurfaces: after.filledSurfaces - before.filledSurfaces,
+              roundedSurfaces: after.roundedSurfaces - before.roundedSurfaces,
+            }
+          : null;
 
-      const content: any[] = [{
-        type: "text",
-        text: JSON.stringify({
-          status: "comparison-ready",
-          before,
-          after,
-          delta,
-          judgement: "Human/model visual judgement is required. The tool intentionally does not fabricate an improved=true result.",
-          focalOnly: parsed.focalOnly ?? false,
-        }, null, 2),
-      }];
+      const failures: string[] = [];
+      if (!beforeCollect.ok) failures.push(`before metrics failed: ${beforeCollect.error}`);
+      if (!afterCollect.ok) failures.push(`after metrics failed: ${afterCollect.error}`);
+      if (!beforeRender.ok) failures.push(`before render failed: ${beforeRender.error}`);
+      if (!afterRender.ok) failures.push(`after render failed: ${afterRender.error}`);
 
-      if (beforeRender?.data) {
-        content.push({
+      const nextActions: string[] = [];
+      if (!beforeRender.ok || !afterRender.ok) {
+        nextActions.push("Fix the render failure (node exists? is it a frame/component/instance?) before judging the change.");
+      }
+      if (delta) {
+        if (delta.visibleArea === 0 && delta.nodes !== 0) {
+          nextActions.push("Structure changed but visible area did not: confirm the change is actually visible, not just structural.");
+        }
+        if (delta.roundedSurfaces > 0 && after && after.roundedSurfaces >= after.filledSurfaces) {
+          nextActions.push("The change added rounded surfaces: check whether it drifted toward a card wall.");
+        }
+      }
+      if (nextActions.length === 0) nextActions.push("Compare the two images: does the intended focal point read more clearly after than before?");
+
+      const content: any[] = [
+        {
           type: "text",
-          text: "BEFORE screenshot",
-        });
+          text: JSON.stringify(
+            {
+              status: failures.length > 0 ? "comparison-partial" : "comparison-ready",
+              before,
+              after,
+              delta,
+              renderStatus: { before: beforeRender.ok ? "ok" : "failed", after: afterRender.ok ? "ok" : "failed" },
+              failures,
+              nextActions,
+              judgement:
+                "Measured deltas are evidence, not a verdict. The tool intentionally does not fabricate improved=true; judge the two images yourself.",
+              focalOnly: parsed.focalOnly ?? false,
+            },
+            null,
+            2,
+          ),
+        },
+      ];
+
+      if (beforeRender.ok && beforeRender.data) {
+        content.push({ type: "text", text: "BEFORE screenshot" });
         content.push({ type: "image", data: beforeRender.data, mimeType: "image/png" });
       }
-      if (afterRender?.data) {
-        content.push({
-          type: "text",
-          text: "AFTER screenshot",
-        });
+      if (afterRender.ok && afterRender.data) {
+        content.push({ type: "text", text: "AFTER screenshot" });
         content.push({ type: "image", data: afterRender.data, mimeType: "image/png" });
       }
 

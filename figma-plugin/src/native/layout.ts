@@ -1,71 +1,75 @@
-import { serialize, resolve, asScene } from './utils';
+import { serialize, resolve, resolveScene } from "./utils";
 
-export function handleLayout(action: string, target: any, params: any) {
-  if (!target && action !== 'setAutoLayout' && action !== 'setClipContent' && action !== 'setConstraints' && action !== 'clone' && action !== 'remove' && action !== 'append' && action !== 'rename' && action !== 'insertChild') return null;
-  const sn = target ? asScene(resolve(target)) : null;
-  if (!sn && action !== 'append' && action !== 'insertChild') return null;
-
+export async function handleLayout(
+  action: string,
+  target: string | undefined,
+  params: Record<string, unknown>,
+): Promise<unknown> {
   switch (action) {
-    case 'setAutoLayout': {
-      if (sn && 'layoutMode' in sn) {
-        (sn as any).layoutMode = params.direction || 'NONE';
-        if (params.primaryAxisSizing) (sn as any).primaryAxisSizingMode = params.primaryAxisSizing;
-        if (params.counterAxisSizing) (sn as any).counterAxisSizingMode = params.counterAxisSizing;
-        if (params.primaryAxisAlignItems) (sn as any).primaryAxisAlignItems = params.primaryAxisAlignItems;
-        if (params.counterAxisAlignItems) (sn as any).counterAxisAlignItems = params.counterAxisAlignItems;
-        if (params.itemSpacing !== undefined) (sn as any).itemSpacing = params.itemSpacing;
-        if (params.paddingTop !== undefined) (sn as any).paddingTop = params.paddingTop;
-        if (params.paddingRight !== undefined) (sn as any).paddingRight = params.paddingRight;
-        if (params.paddingBottom !== undefined) (sn as any).paddingBottom = params.paddingBottom;
-        if (params.paddingLeft !== undefined) (sn as any).paddingLeft = params.paddingLeft;
-        if (params.layoutWrap !== undefined) (sn as any).layoutWrap = params.layoutWrap;
-        if (params.counterAxisAlignContent !== undefined) (sn as any).counterAxisAlignContent = params.counterAxisAlignContent;
+    case "setAutoLayout": {
+      const sn = await resolveScene(target);
+      if ("layoutMode" in sn) {
+        const f = sn as FrameNode;
+        if (params.direction) f.layoutMode = params.direction as FrameNode["layoutMode"];
+        if (params.primaryAxisSizing) f.primaryAxisSizingMode = params.primaryAxisSizing as FrameNode["primaryAxisSizingMode"];
+        if (params.counterAxisSizing) f.counterAxisSizingMode = params.counterAxisSizing as FrameNode["counterAxisSizingMode"];
+        if (params.primaryAxisAlignItems) f.primaryAxisAlignItems = params.primaryAxisAlignItems as FrameNode["primaryAxisAlignItems"];
+        if (params.counterAxisAlignItems) f.counterAxisAlignItems = params.counterAxisAlignItems as FrameNode["counterAxisAlignItems"];
+        if (params.itemSpacing !== undefined) f.itemSpacing = Number(params.itemSpacing);
+        if (params.paddingTop !== undefined) f.paddingTop = Number(params.paddingTop);
+        if (params.paddingRight !== undefined) f.paddingRight = Number(params.paddingRight);
+        if (params.paddingBottom !== undefined) f.paddingBottom = Number(params.paddingBottom);
+        if (params.paddingLeft !== undefined) f.paddingLeft = Number(params.paddingLeft);
+        if (params.layoutWrap !== undefined) f.layoutWrap = params.layoutWrap as FrameNode["layoutWrap"];
+        if (params.counterAxisAlignContent !== undefined) {
+          f.counterAxisAlignContent = params.counterAxisAlignContent as FrameNode["counterAxisAlignContent"];
+        }
       }
-      return sn ? serialize(sn) : null;
+      return serialize(sn);
     }
-    case 'setClipContent': {
-      if (sn && 'clipsContent' in sn) (sn as any).clipsContent = params.value;
-      return sn ? serialize(sn) : null;
+    case "setClipContent": {
+      const sn = await resolveScene(target);
+      if ("clipsContent" in sn) (sn as FrameNode).clipsContent = Boolean(params.value);
+      return serialize(sn);
     }
-    case 'setConstraints': {
-      if (sn && 'constraints' in sn) {
-        (sn as any).constraints = params.constraints;
+    case "setConstraints": {
+      const sn = await resolveScene(target);
+      if ("constraints" in sn) {
+        (sn as unknown as { constraints: unknown }).constraints = params.constraints;
       }
-      return sn ? serialize(sn) : null;
+      return serialize(sn);
     }
-    case 'clone': {
-      if (sn) {
-        const cloned = sn.clone();
-        if (params.x !== undefined) cloned.x = params.x;
-        if (params.y !== undefined) cloned.y = params.y;
-        const parent = params.parent ? resolve(params.parent) : sn.parent;
-        if (parent && 'appendChild' in parent) (parent as any).appendChild(cloned);
-        return serialize(cloned);
+    case "clone": {
+      const sn = await resolveScene(target);
+      const cloned = sn.clone();
+      if (params.x !== undefined) cloned.x = Number(params.x);
+      if (params.y !== undefined) cloned.y = Number(params.y);
+      if (params.parent) {
+        const parent = await resolve(params.parent as string);
+        if ("appendChild" in parent) (parent as ChildrenMixin).appendChild(cloned);
       }
-      return null;
+      return serialize(cloned);
     }
-    case 'remove': {
-      if (sn) sn.remove();
-      return { status: 'removed' };
+    case "remove": {
+      const sn = await resolveScene(target);
+      sn.remove();
+      return { status: "removed", id: sn.id };
     }
-    case 'append': {
-      const parent = target ? resolve(target) : figma.currentPage;
-      const child = asScene(resolve(params.child));
-      if ('appendChild' in parent) {
-        (parent as any).appendChild(child);
-      }
+    case "append": {
+      const parent = target ? await resolve(target) : figma.currentPage;
+      const child = await resolveScene(params.child as string);
+      if ("appendChild" in parent) (parent as ChildrenMixin).appendChild(child);
       return serialize(child);
     }
-    case 'rename': {
-      if (sn) sn.name = params.name;
-      return sn ? serialize(sn) : null;
+    case "rename": {
+      const sn = await resolveScene(target);
+      sn.name = String(params.name);
+      return serialize(sn, { detail: "summary" });
     }
-    case 'insertChild': {
-      const parent = target ? resolve(target) : figma.currentPage;
-      const child = asScene(resolve(params.child));
-      if ('insertChild' in parent) {
-        (parent as any).insertChild(params.index, child);
-      }
+    case "insertChild": {
+      const parent = target ? await resolve(target) : figma.currentPage;
+      const child = await resolveScene(params.child as string);
+      if ("insertChild" in parent) (parent as ChildrenMixin).insertChild(Number(params.index), child);
       return serialize(child);
     }
   }

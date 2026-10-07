@@ -446,9 +446,48 @@ for an always-on instance.
 | `create_design` | Low-level primitive operations |
 | `modify_design` | Change existing nodes by real Figma id |
 | `undo_last_operation` | Revert the last committed transaction |
+| `figdes_use_figma` | Native execution: a controlled script against the native design API |
+| `figdes_read_context` | Read the file before changing it: metadata, design context, libraries, components, one node |
+| `figdes_inspect_visual` | Structural evidence plus a screenshot, with an explicit render status |
+| `compare_visuals` | Measurable before/after evidence plus both screenshots |
 
 Every tool takes an optional `sessionId`. If more than one Figma file has the
 plugin open, tools **fail** and list the candidates rather than guessing.
+
+### Native mode
+
+`figdes_use_figma` runs a controlled script against a `fig` API that wraps the
+Figma Plugin API. It is not eval and it does not expose the raw `figma` global —
+only `fig`, `Math`, `JSON`, `Date` and `console` are in scope. Every call is:
+
+- **Validated** against a strict per-action schema. An unknown action or a
+  misspelled parameter is rejected with the supported names, not forwarded to
+  Figma to fail obscurely.
+- **Transactional.** One script is one undo step. A failure rolls back and the
+  document is left unchanged.
+- **Time-bounded.** A hard wall-clock budget covers awaited work, not just
+  synchronous execution, so a script cannot hang on a slow RPC.
+- **Serialized per session.** Two native scripts can never interleave their
+  transactions on the same file.
+- **Explicit about rollback state.** A rollback only undoes the transaction that
+  is actually open and that actually made a change; it never triggers a blind
+  undo that could hit a previous operation.
+
+Every mutation returns a rich node summary (geometry, layout, paints, styles,
+text, component state), so the next call can operate from evidence instead of
+guessing. Failures come back classified (`NODE_NOT_FOUND`, `INVALID_PARAMETERS`,
+`ABORTED`, …) with a recovery step.
+
+`figdes_read_context` is the read half: file metadata, a bounded design-context
+summary, library collections, local components, or one node's full state — so
+the agent can reuse what already exists before building.
+
+The visual loop is `inspect → render → critique → modify → render → compare`:
+`figdes_inspect_visual` returns structural evidence plus a screenshot and an
+explicit `renderStatus` (a failed render is reported, never silently skipped),
+and `compare_visuals` returns measured before/after deltas and both images. It
+deliberately never fabricates an `improved: true` verdict — the measured deltas
+are evidence, the judgement is the model's.
 
 `design_runtime`, `compile_ir`, `create_design` and `modify_design` accept
 `dryRun: true`, which validates the whole plan and returns the operation trace

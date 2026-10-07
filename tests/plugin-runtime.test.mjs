@@ -1279,3 +1279,178 @@ test("setEffect refuses an unknown target", async () => {
   });
   assert.equal(reply.data.status, "failed");
 });
+
+/* -------------------------------------------------------------------------- */
+/* Native execution: validation, transaction state, richer results             */
+/* -------------------------------------------------------------------------- */
+
+test("native_design rejects an unknown action with the known list", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", { action: "deleteEverything" });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /Unknown native action/);
+  assert.match(reply.error, /createFrame/, "the error names what is supported");
+});
+
+test("native_design rejects an unknown parameter instead of ignoring it", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", { action: "createFrame", width: 100, height: 100, banana: true });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /Invalid parameters for createFrame/);
+});
+
+test("native createFrame returns a rich, bounded node summary", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", {
+    action: "createFrame",
+    name: "Card",
+    width: 200,
+    height: 120,
+    layoutMode: "VERTICAL",
+    itemSpacing: 8,
+    fill: "#FFFFFF",
+  });
+  assert.equal(reply.ok, true, reply.error);
+  assert.equal(reply.data.type, "FRAME");
+  assert.equal(reply.data.layoutMode, "VERTICAL");
+  assert.equal(reply.data.itemSpacing, 8);
+  assert.equal(Array.isArray(reply.data.fills), true);
+  assert.equal(reply.data.fills[0].color, "#ffffff", "a hex string becomes a real solid paint");
+  assert.ok(reply.data.absoluteBoundingBox, "committed geometry is reported");
+});
+
+test("a native transaction commits and reports how many mutations landed", async () => {
+  const { figma: f } = loadPlugin();
+  const begin = await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "t1" });
+  assert.equal(begin.data.state, "open");
+  await ask(f, "native_design", { action: "createFrame", transactionId: "t1", width: 100, height: 100 });
+  const commit = await ask(f, "native_design", { action: "commitNativeTransaction", transactionId: "t1" });
+  assert.equal(commit.data.state, "committed");
+  assert.equal(commit.data.mutations, 1);
+});
+
+test("a second begin while one is open is refused", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "a" });
+  const second = await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "b" });
+  assert.equal(second.ok, false);
+  assert.match(second.error, /already open/);
+  await ask(f, "native_design", { action: "commitNativeTransaction", transactionId: "a" });
+});
+
+test("rollback with no open transaction is a no-op and never undoes anything", async () => {
+  const { figma: f } = loadPlugin();
+  const before = f.__undoLog.length;
+  const reply = await ask(f, "native_design", { action: "rollbackNativeTransaction", transactionId: "ghost" });
+  assert.equal(reply.data.status, "transaction-noop");
+  assert.equal(reply.data.rolledBack, false);
+  assert.equal(f.__undoLog.length, before, "no undo was triggered");
+});
+
+test("rollback refuses a transaction id that is not the open one", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "real" });
+  await ask(f, "native_design", { action: "createFrame", transactionId: "real", width: 10, height: 10 });
+  const before = f.__undoLog.length;
+  const reply = await ask(f, "native_design", { action: "rollbackNativeTransaction", transactionId: "other" });
+  assert.equal(reply.data.status, "transaction-noop");
+  assert.equal(f.__undoLog.length, before, "a mismatched rollback must not undo");
+  // Still open: a fresh begin is refused.
+  const second = await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "x" });
+  assert.equal(second.ok, false);
+});
+
+test("a mutating call is rejected after its transaction was rolled back", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "tx" });
+  await ask(f, "native_design", { action: "createFrame", transactionId: "tx", width: 50, height: 50 });
+  const rb = await ask(f, "native_design", { action: "rollbackNativeTransaction", transactionId: "tx" });
+  assert.equal(rb.data.rolledBack, true);
+
+  const late = await ask(f, "native_design", { action: "createFrame", transactionId: "tx", width: 50, height: 50 });
+  assert.equal(late.ok, false);
+  assert.match(late.error, /not open/);
+});
+
+test("a rollback with no mutations does not trigger an undo", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "empty" });
+  const before = f.__undoLog.length;
+  const rb = await ask(f, "native_design", { action: "rollbackNativeTransaction", transactionId: "empty" });
+  assert.equal(rb.data.rolledBack, false);
+  assert.equal(f.__undoLog.length, before);
+});
+
+test("getProperties returns full node state, not only geometry", async () => {
+  const { figma: f } = loadPlugin();
+  const created = await ask(f, "native_design", {
+    action: "createText",
+    name: "Label",
+    content: "Hello",
+    fontSize: 20,
+    fill: "#222222",
+  });
+  assert.equal(created.ok, true, created.error);
+  const props = await ask(f, "native_design", { action: "getProperties", target: created.data.id });
+  assert.equal(props.data.type, "TEXT");
+  assert.equal(props.data.characters, "Hello");
+  assert.equal(props.data.fontSize, 20);
+  assert.equal(props.data.fills[0].color, "#222222");
+});
+
+test("getFileInfo reports robust file metadata", async () => {
+  const { figma: f } = loadPlugin();
+  const info = await ask(f, "native_design", { action: "getFileInfo" });
+  assert.equal(info.ok, true, info.error);
+  assert.equal(info.data.fileName, "Exo Labs");
+  assert.ok(Array.isArray(info.data.pages));
+  assert.equal(typeof info.data.counts.variables, "number");
+  assert.ok(Array.isArray(info.data.libraryCollections));
+});
+
+test("getDesignContext aggregates context and points at the deeper tool", async () => {
+  const { figma: f } = loadPlugin();
+  const ctx = await ask(f, "native_design", { action: "getDesignContext", maxNodes: 200 });
+  assert.equal(ctx.ok, true, ctx.error);
+  assert.ok(ctx.data.designSystem);
+  assert.ok(Array.isArray(ctx.data.topFrames));
+  assert.match(ctx.data.note, /inspect_design_system/);
+});
+
+test("listComponents finds components across the file", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "createComponent", name: "Button" });
+  const list = await ask(f, "native_design", { action: "listComponents" });
+  assert.equal(list.ok, true, list.error);
+  assert.ok(list.data.some((c) => c.name === "Button"));
+});
+
+test("targetless native actions are not mis-resolved as paint targets", async () => {
+  // Regression: handlePaint used to resolve its target before checking whether
+  // it owned the action, so getPages/createPage threw "Expected a SceneNode".
+  const { figma: f } = loadPlugin();
+
+  const pages = await ask(f, "native_design", { action: "getPages" });
+  assert.equal(pages.ok, true, pages.error);
+  assert.ok(Array.isArray(pages.data));
+
+  const created = await ask(f, "native_design", { action: "createPage", name: "Native Page", makeCurrent: false });
+  assert.equal(created.ok, true, created.error);
+  assert.equal(created.data.name, "Native Page");
+
+  const switched = await ask(f, "native_design", { action: "setCurrentPage", target: created.data.id });
+  assert.equal(switched.ok, true, switched.error);
+  assert.equal(switched.data.name, "Native Page");
+});
+
+test("native resolves nodes through the async accessor, not the sync one", async () => {
+  // dynamic-page mode throws on `figma.getNodeById`; the native layer must use
+  // `getNodeByIdAsync`. This mock has no sync accessor at all, so any regression
+  // fails here instead of only on a real file.
+  const { figma: f } = loadPlugin();
+  const created = await ask(f, "native_design", { action: "createFrame", name: "Resolve", width: 40, height: 40 });
+  assert.equal(created.ok, true, created.error);
+  const node = await ask(f, "native_design", { action: "getNode", target: created.data.id });
+  assert.equal(node.ok, true, node.error);
+  assert.equal(node.data.name, "Resolve");
+});

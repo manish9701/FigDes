@@ -853,7 +853,9 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       const existing = findVariable(collection, op.name);
       const resolvedType =
         op.variableType === "color" ? "COLOR" : op.variableType === "number" ? "FLOAT" : op.variableType === "string" ? "STRING" : "BOOLEAN";
-      const variable = existing ?? figma.variables.createVariable(op.name, collection, resolvedType);
+      // The real API takes a collection *id*, not the collection object. Passing
+      // the object worked only against the test mock; on a real file it throws.
+      const variable = existing ?? figma.variables.createVariable(op.name, collection.id, resolvedType);
 
       if (op.description !== undefined) variable.description = op.description;
       if (op.scopes !== undefined) {

@@ -1004,6 +1004,7 @@ export const TOOL_NAMES = [
   "undo_last_operation",
   "figdes_use_figma",
   "figdes_inspect_visual",
+  "figdes_read_context",
   "compare_visuals",
 ] as const;
 

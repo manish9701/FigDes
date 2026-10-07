@@ -493,6 +493,7 @@ async function main() {
         "diff_design",
         "export_code",
         "figdes_inspect_visual",
+        "figdes_read_context",
         "figdes_use_figma",
         "figma_status",
         "final_qa",

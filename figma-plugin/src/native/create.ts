@@ -10,7 +10,7 @@ function applyCommonSceneProps(node: SceneNode, params: any) {
   if (params.name) node.name = String(params.name);
   if (params.x !== undefined) node.x = Number(params.x);
   if (params.y !== undefined) node.y = Number(params.y);
-  if (params.width !== undefined && params.height !== undefined) node.resize(Number(params.width), Number(params.height));
+  if (params.width !== undefined && params.height !== undefined && "resize" in node) (node as any).resize(Number(params.width), Number(params.height));
   if (params.opacity !== undefined && "opacity" in node) (node as any).opacity = Number(params.opacity);
   if (params.visible !== undefined && "visible" in node) (node as any).visible = Boolean(params.visible);
   if (params.rotation !== undefined && "rotation" in node) node.rotation = Number(params.rotation);
@@ -67,7 +67,7 @@ export async function handleCreate(action: string, params: any) {
         createStar: () => figma.createStar(),
         createLine: () => figma.createLine(),
       };
-      const node = factory[action]();
+      const node = (factory as any)[action]();
       appendToParent(node, params.parent);
       applyCommonSceneProps(node, params);
 
@@ -102,7 +102,7 @@ export async function handleCreate(action: string, params: any) {
       if (children.length === 0) throw new Error("Cannot create empty group.");
       const parent = params.parent ? resolve(params.parent) : children[0]?.parent ?? figma.currentPage;
       if (!parent || !("appendChild" in parent)) throw new Error("Group parent cannot contain children.");
-      const group = figma.group(children, parent as ChildrenMixin);
+      const group = figma.group(children, parent as any);
       if (params.name) group.name = String(params.name);
       if (params.x !== undefined) group.x = Number(params.x);
       if (params.y !== undefined) group.y = Number(params.y);

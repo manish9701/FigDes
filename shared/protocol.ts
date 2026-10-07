@@ -415,6 +415,8 @@ export const CreateGroupOp = z.object({
 export const CreateComponentOp = z.object({
   ...createBase,
   type: z.literal("createComponent"),
+  width: z.number().finite().optional(),
+  height: z.number().finite().optional(),
 });
 
 export const CreateInstanceOp = z.object({

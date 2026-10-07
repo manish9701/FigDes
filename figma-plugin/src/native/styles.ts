@@ -1,7 +1,7 @@
 import { resolve, serialize } from "./utils";
 
 function findStyle(idOrName: string, kind?: "paint" | "text" | "effect") {
-  const groups: Record<string, any[]> = {
+  const groups = {
     paint: figma.getLocalPaintStyles(),
     text: figma.getLocalTextStyles(),
     effect: figma.getLocalEffectStyles()

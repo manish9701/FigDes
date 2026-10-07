@@ -31,7 +31,7 @@ export async function handleTypography(action: string, target: any, params: any)
       if (sn.type !== "TEXT") throw new Error("setTextContent requires a TEXT target.");
       const textNode = sn as TextNode;
       const fontName = textNode.fontName;
-      if (fontName && typeof fontName === "object" && fontName !== figma.mixed) {
+      if (fontName && fontName !== figma.mixed) {
         await figma.loadFontAsync(fontName as FontName);
       } else {
         await figma.loadFontAsync({ family: "Inter", style: "Regular" });

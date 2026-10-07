@@ -698,7 +698,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
 
     case "createInstance": {
       const parent = await resolveParent(ctx, op.parent, index, op.type);
-      const componentNode = await resolveNode(ctx, op.componentId, index, op.type);
+      const componentNode = await resolve(ctx, op.componentId, index, op.type);
       if (componentNode.type !== "COMPONENT" && componentNode.type !== "COMPONENT_SET") {
         throw new OperationError(`Node ${op.componentId} is not a Component`, index, op.type);
       }
@@ -1009,9 +1009,14 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       }
       const instance = node as InstanceNode;
       // We need to merge with existing properties
-      const newProps = { ...instance.componentProperties };
+      const newProps: { [propertyName: string]: string | boolean | VariableAlias } = {};
+      for (const [k, prop] of Object.entries(instance.componentProperties)) {
+         if (prop.value !== undefined && typeof prop.value !== "object") {
+            newProps[k] = prop.value as string | boolean;
+         }
+      }
       for (const [k, v] of Object.entries(op.variant)) {
-        newProps[k] = { type: "VARIANT", value: String(v) };
+        newProps[k] = String(v);
       }
       instance.setProperties(newProps);
       return instance.id;

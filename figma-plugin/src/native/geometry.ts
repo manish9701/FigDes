@@ -34,7 +34,7 @@ export function handleGeometry(action: string, target: any, params: any) {
     }
     case 'setRotation': {
       const sn = asScene(resolve(target));
-      sn.rotation = params.rotation;
+      if ('rotation' in sn) (sn as any).rotation = params.rotation;
       return serialize(sn);
     }
     case 'setCornerRadius': {

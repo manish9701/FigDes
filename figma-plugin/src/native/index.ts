@@ -13,7 +13,7 @@ import { serialize, resolve, asScene } from "./utils";
 export async function executeNativeCall(payload: any): Promise<any> {
   const { action, target, ...params } = payload;
   try {
-    let res = handleCreate(action, params);
+    let res = await handleCreate(action, params);
     if (res !== null) return res;
     res = handleComponents(action, target, params);
     if (res !== null) return res;

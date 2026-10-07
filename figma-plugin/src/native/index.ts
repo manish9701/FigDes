@@ -34,6 +34,15 @@ export async function executeNativeCall(payload: any): Promise<any> {
     res = handleVectors(action, target, params);
     if (res !== null) return res;
     switch (action) {
+      case "beginNativeTransaction":
+        figma.commitUndo();
+        return { status: "transaction-open" };
+      case "commitNativeTransaction":
+        figma.commitUndo();
+        return { status: "transaction-committed" };
+      case "rollbackNativeTransaction":
+        figma.triggerUndo();
+        return { status: "transaction-rolled-back" };
       case "setIsMask": {
         const node = asScene(resolve(target)) as any;
         if (!("isMask" in node)) throw new Error("Target does not support masks.");

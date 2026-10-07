@@ -1152,7 +1152,7 @@ inputSchema: CompileArgs,
   {
     name: "figdes_use_figma",
     title: "Native Execution Tool",
-    description: "Execute controlled Figma-native code/operations against the connected document. Do not route Native Mode back through the existing small primitive compiler. Supported features: pages, frames, groups, text, vectors, components, variants, variables, styles, effects, auto-layout, etc. Every mutation is transactional and returns real state. Use fig.page(), fig.frame(), etc. helpers.",
+    description: "Execute controlled JavaScript against the native FigDes Figma API. Supports native creation, inspection, geometry, paint, typography, vectors, auto layout, constraints, components, variants, variables, styles, masks and undo-safe script transactions. It does not expose the raw global figma object. All fig.* calls are asynchronous and must be awaited.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
       const parsed = UseFigmaArgs.parse(args ?? {});
@@ -1163,7 +1163,7 @@ inputSchema: CompileArgs,
   {
     name: "figdes_inspect_visual",
     title: "Lightweight visual inspection",
-    description: "Create a lightweight visual-summary read tool that reports: canvas dimensions, largest objects, focal candidates, text hierarchy, surface count, card-like surfaces, color distribution, whitespace distribution, alignment groups, visual layers, component usage.",
+    description: "Inspect a Figma node using structural metrics plus a rendered screenshot when a valid scene node is available. Returns heuristic focal candidates, text hierarchy, surface/card analysis and the image so the model can make the actual visual judgement.",
     inputSchema: InspectVisualArgs,
     handler: async (args, registry) => {
       const parsed = InspectVisualArgs.parse(args ?? {});
@@ -1174,18 +1174,89 @@ inputSchema: CompileArgs,
   {
     name: "compare_visuals",
     title: "Compare two visual states",
-    description: "Compare two nodes visually to determine if the changes improved hierarchy, contrast, and balance.",
+    description: "Render two Figma nodes and return structural deltas plus both screenshots. The tool never claims that one version is visually better automatically; use the images and measured deltas for the judgement.",
     inputSchema: CompareVisualsArgs,
     handler: async (args, registry) => {
       const parsed = CompareVisualsArgs.parse(args);
-      // For now, return a generic struct indicating a comparison request
-      // Ideally we would fetch metrics for both and diff them here.
-      return {
-        improved: true,
-        confidence: 0.85,
-        changes: ["Comparison simulated. Run manual visual check on snapshots."]
+      const session = registry.resolve(parsed.sessionId);
+
+      const [beforeMetrics, afterMetrics] = await Promise.all([
+        session.request("collect_metrics", { target: parsed.beforeNodeId }),
+        session.request("collect_metrics", { target: parsed.afterNodeId }),
+      ]) as [MetricsReport, MetricsReport];
+
+      const render = async (nodeId: string) => {
+        try {
+          return await session.request("render_node", {
+            nodeId,
+            maxWidth: 1024,
+            detail: "low",
+          }) as any;
+        } catch {
+          return null;
+        }
       };
-    }
+
+      const [beforeRender, afterRender] = await Promise.all([
+        render(parsed.beforeNodeId),
+        render(parsed.afterNodeId),
+      ]);
+
+      const summarize = (report: MetricsReport) => ({
+        nodes: report.nodeCount,
+        truncated: report.truncated,
+        frames: report.nodes.filter((n) => n.type === "FRAME").length,
+        instances: report.nodes.filter((n) => n.type === "INSTANCE").length,
+        texts: report.nodes.filter((n) => n.type === "TEXT").length,
+        visibleArea: report.nodes
+          .filter((n) => n.visible)
+          .reduce((sum, n) => sum + n.w * n.h, 0),
+        filledSurfaces: report.nodes.filter((n) => Boolean(n.fill)).length,
+        roundedSurfaces: report.nodes.filter((n) => (n.radius ?? 0) > 0).length,
+      });
+
+      const before = summarize(beforeMetrics);
+      const after = summarize(afterMetrics);
+
+      const delta = {
+        nodes: after.nodes - before.nodes,
+        frames: after.frames - before.frames,
+        instances: after.instances - before.instances,
+        texts: after.texts - before.texts,
+        visibleArea: after.visibleArea - before.visibleArea,
+        filledSurfaces: after.filledSurfaces - before.filledSurfaces,
+        roundedSurfaces: after.roundedSurfaces - before.roundedSurfaces,
+      };
+
+      const content: any[] = [{
+        type: "text",
+        text: JSON.stringify({
+          status: "comparison-ready",
+          before,
+          after,
+          delta,
+          judgement: "Human/model visual judgement is required. The tool intentionally does not fabricate an improved=true result.",
+          focalOnly: parsed.focalOnly ?? false,
+        }, null, 2),
+      }];
+
+      if (beforeRender?.data) {
+        content.push({
+          type: "text",
+          text: "BEFORE screenshot",
+        });
+        content.push({ type: "image", data: beforeRender.data, mimeType: "image/png" });
+      }
+      if (afterRender?.data) {
+        content.push({
+          type: "text",
+          text: "AFTER screenshot",
+        });
+        content.push({ type: "image", data: afterRender.data, mimeType: "image/png" });
+      }
+
+      return { content };
+    },
   },
 
   {

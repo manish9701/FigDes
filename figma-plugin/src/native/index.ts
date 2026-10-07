@@ -34,6 +34,20 @@ export async function executeNativeCall(payload: any): Promise<any> {
     res = handleVectors(action, target, params);
     if (res !== null) return res;
     switch (action) {
+      case "getPages":
+        return figma.root.children.map((page) => ({ id: page.id, name: page.name }));
+      case "createPage": {
+        const page = figma.createPage();
+        if (params.name) page.name = String(params.name);
+        if (params.makeCurrent !== false) figma.currentPage = page;
+        return { id: page.id, type: page.type, name: page.name };
+      }
+      case "setCurrentPage": {
+        const page = resolve(target);
+        if (page.type !== "PAGE") throw new Error("setCurrentPage requires a PAGE target.");
+        figma.currentPage = page as PageNode;
+        return { id: page.id, type: page.type, name: page.name };
+      }
       case "beginNativeTransaction":
         figma.commitUndo();
         return { status: "transaction-open" };

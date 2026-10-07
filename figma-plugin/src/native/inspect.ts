@@ -9,6 +9,7 @@ export function handleInspect(action: string, target: any, params: any) {
       const nodes = (root as any).findAll((n: any) => {
         if (query.name && !n.name.includes(query.name)) return false;
         if (query.type && n.type !== query.type) return false;
+        if (query.text && n.type === "TEXT" && !String(n.characters ?? "").toLowerCase().includes(String(query.text).toLowerCase())) return false;
         return true;
       });
       return nodes.map(serialize);

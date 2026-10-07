@@ -510,6 +510,8 @@ function describe(op: Parsed): string {
       return `${op.name} ${op.fontSize}px`;
     case "createPaintStyle":
       return `${op.name} ${op.color}`;
+    case "prototypeLink":
+      return `${op.from} -> ${op.to}`;
     case "renameNode":
       return op.name;
     case "setSize":
@@ -808,6 +810,39 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.y !== undefined) copy.y = op.y;
 
       return register(ctx, op.id, copy, index, op.type);
+    }
+
+    case "prototypeLink": {
+      const from = requireScene(await resolve(ctx, op.from, index, op.type), index, op.type);
+      const to = requireScene(await resolve(ctx, op.to, index, op.type), index, op.type);
+
+      const reactive = from as SceneNode & {
+        reactions?: readonly unknown[];
+        setReactionsAsync?: (reactions: unknown[]) => Promise<void>;
+      };
+      if (typeof reactive.setReactionsAsync !== "function") {
+        throw new OperationError(`${from.type} nodes cannot carry prototype interactions.`, index, op.type);
+      }
+
+      const transition =
+        op.transition === "none"
+          ? null
+          : op.transition === "smart-animate"
+            ? { type: "SMART_ANIMATE", easing: { type: "EASE_IN_AND_OUT", duration: 300 } }
+            : { type: "DISSOLVE", easing: { type: "EASE_IN", duration: 200 } };
+
+      // Append, never replace: a flow added by the agent must not destroy
+      // hand-built prototyping already on the node.
+      const existing = Array.isArray(reactive.reactions) ? [...reactive.reactions] : [];
+      await reactive.setReactionsAsync([
+        ...existing,
+        {
+          trigger: { type: op.trigger },
+          actions: [{ type: "NODE", destinationId: to.id, navigation: "NAVIGATE", transition }],
+        },
+      ]);
+
+      return from.id;
     }
 
     /* ------------------------------ mutate ------------------------------ */

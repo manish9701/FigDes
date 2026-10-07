@@ -79,6 +79,12 @@ function mixin(node) {
     node.__bound = { ...(node.__bound ?? {}), [field]: variable ? variable.id : null };
   };
 
+  // Prototype reactions. Appended, never replaced, mirroring the plugin.
+  node.reactions = [];
+  node.setReactionsAsync = async (reactions) => {
+    node.reactions = [...reactions];
+  };
+
   node.clone = () => {
     const copy = JSON.parse(
       JSON.stringify(node, (k, v) => (k === "parent" || k === "children" || typeof v === "function" ? undefined : v)),

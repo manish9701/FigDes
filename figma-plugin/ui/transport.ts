@@ -66,6 +66,11 @@ export interface TransportOptions {
 
   /** Called once the server has accepted the registration. */
   onRegistered?: (sessionId: string) => void;
+  /**
+   * Called for every server notification (agent activity, render previews).
+   * Defaults to logging, so headless transports record the stream for free.
+   */
+  onNotify?: (msg: Extract<ServerMessage, { type: "notify" }>) => void;
 }
 
 export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
@@ -112,6 +117,7 @@ export function createTransport(options: TransportOptions): Transport {
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     heartbeatMs = DEFAULT_HEARTBEAT_MS,
     onRegistered = () => {},
+    onNotify = (msg) => log("info", msg.kind === "activity" ? msg.text : `preview: ${msg.label}`),
   } = options;
 
   let socket: SocketLike | null = null;
@@ -239,6 +245,13 @@ export function createTransport(options: TransportOptions): Transport {
         socket?.close(1000, msg.reason);
         setState("disconnected");
         onFatal(msg.reason);
+        break;
+      }
+
+      case "notify": {
+        // One-way by contract: nothing to answer, just surface. The callback
+        // defaults to the log so a headless transport still records the stream.
+        onNotify(msg);
         break;
       }
     }

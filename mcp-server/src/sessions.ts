@@ -62,6 +62,21 @@ export class Session {
     this.socket.send(JSON.stringify(msg));
   }
 
+  /**
+   * Pushes a one-way notification to the plugin panel.
+   *
+   * Fire-and-forget by design: a panel that is closed or on an old bundle
+   * version drops unknown frames silently, and a notification must never fail
+   * the tool call that triggered it.
+   */
+  notify(msg: Extract<ServerMessage, { type: "notify" }>): void {
+    try {
+      this.send({ ...msg, at: Date.now() });
+    } catch {
+      /* best-effort */
+    }
+  }
+
   register(msg: Extract<ClientMessage, { type: "register" }>): void {
     this.fileKey = msg.fileKey;
     this.fileName = msg.fileName || "Unknown file";

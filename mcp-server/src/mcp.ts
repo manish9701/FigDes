@@ -103,6 +103,16 @@ const INSTRUCTIONS = [
   "   builds a titled slide with background and speaker notes in one transaction.",
   "   plan_screen accepts format:'deck' so plan and build agree.",
   "",
+  "Components and targeting: find_component before building anything repeated; find_node",
+  "   (by screen, role, name or text) before modify_design instead of reusing stale ids.",
+  "   Promote repeats with create_component, group variants with create_component_set, switch",
+  "   with set_variant, edit masters with update_component. Audit with audit_components;",
+  "   migrate hardcoded fills to tokens with migrate_to_tokens.",
+  "",
+  "Flows and handoff: link screens with prototype_flow so the deck clicks through. Export",
+  "   a frame with export_code when the job is code, not canvas - React + Tailwind, deterministic.",
+  "",
+  "",
   "Logos: never hand-write mark geometry. Use the logoMark primitive (ring, orbit,",
   "   chevron, hex, bars, prism, wave, grid) plus a text wordmark in caps with",
   "   letterSpacing. For custom geometry use shape polygon/star with sides, or a vector",
@@ -175,6 +185,10 @@ function buildServer(registry: SessionRegistry): McpServer {
               ? ` -> ${String((data as { status: unknown }).status)}`
               : "";
           console.log(`${stamp()} OK   ${tool.name}${status}`);
+          // The panel is a status light: every completed tool call narrates
+          // itself there in one line, so the user watches the work stream by
+          // instead of wondering whether anything is happening.
+          announce(registry, tool.name, summarize(data));
           return {
             content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }],
             structuredContent: wrapStructured(data),
@@ -182,6 +196,7 @@ function buildServer(registry: SessionRegistry): McpServer {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           console.log(`${stamp()} ERR  ${tool.name}: ${message}`);
+          announce(registry, tool.name, `failed: ${message.slice(0, 120)}`);
           return {
             isError: true,
             content: [{ type: "text" as const, text: message }],
@@ -201,6 +216,37 @@ function buildServer(registry: SessionRegistry): McpServer {
 function wrapStructured(data: unknown): Record<string, unknown> {
   if (data && typeof data === "object" && !Array.isArray(data)) return data as Record<string, unknown>;
   return { result: data };
+}
+
+/**
+ * Broadcasts a one-line activity note to every connected plugin panel.
+ *
+ * Best-effort and terse: the panel shows the latest line, so each announcement
+ * must stand alone in under a breath. Anything over ~140 characters is detail
+ * that belongs in the tool result, not on the glass.
+ */
+function announce(registry: SessionRegistry, tool: string, detail: string): void {
+  const text = detail ? `${tool} — ${detail}` : tool;
+  for (const session of registry.alive()) {
+    session.notify({ type: "notify", kind: "activity", text: text.slice(0, 140), at: Date.now() });
+  }
+}
+
+/** One breath of result summary for the activity line. */
+function summarize(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const d = data as Record<string, unknown>;
+  if (typeof d.verdict === "string") return `verdict: ${d.verdict}`;
+  if (typeof d.overall === "number") return `scored ${d.overall}/10`;
+  if (typeof d.status === "string" && d.status !== "ok") return String(d.status);
+  if (Array.isArray(d.findings)) return `${(d.findings as unknown[]).length} finding(s)`;
+  if (Array.isArray(d.matches)) return `${(d.matches as unknown[]).length} match(es)`;
+  if (typeof d.operationCount === "number") return `${String(d.operationCount)} ops`;
+  if (d.stats && typeof d.stats === "object") {
+    const s = d.stats as Record<string, unknown>;
+    if (typeof s.operationCount === "number") return `${String(s.operationCount)} ops`;
+  }
+  return "";
 }
 
 export function createMcpHandler(registry: SessionRegistry): McpHandle {

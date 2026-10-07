@@ -58,6 +58,8 @@ figma-design-agent/
 │       │   ├── rules.ts      the deterministic critic (+a11y rules)
 │       │   ├── score.ts      0-10 composition scoring from measurements
 │       │   └── workflow.ts   score/refine/diff tools
+│       ├── code/
+│       │   └── export.ts     frame to React + Tailwind, deterministic
 │       ├── tokens/
 │       │   └── exo.ts        the canonical exo token set
 │       ├── memory/
@@ -87,12 +89,13 @@ figma-design-agent/
 │   └── path.ts               SVG path parser + bbox normalisation
 ├── .memory/                  durable per-project design memory (committed)
 └── tests/
-    ├── smoke.mjs             54 end-to-end checks with a mock plugin
+    ├── smoke.mjs             59 end-to-end checks with a mock plugin
     ├── review.test.mjs       31 tests over the critic
-    ├── ui.test.mjs           4 checks: UI/HTML agreement, minimal panel, progress wiring
+    ├── code.test.mjs         9 tests over the React + Tailwind exporter
+    ├── ui.test.mjs           5 checks: UI/HTML agreement, minimal panel, progress + stream wiring
     ├── runtime.test.mjs + plan.test.mjs  183 tests over runtime, planner, solver, gates, templates, slides, marks, scoring
-    ├── plugin-runtime.test.mjs  81 tests against the real bundled plugin
-    └── plugin-e2e.test.mjs   13 checks: real bundle + real server over a real socket
+    ├── plugin-runtime.test.mjs  89 tests against the real bundled plugin
+    └── plugin-e2e.test.mjs   15 checks: real bundle + real server over a real socket, incl. live stream
 ```
 
 `tests/plugin-harness.mjs` loads the actual `dist/code.js` against a mock Figma
@@ -104,7 +107,7 @@ was ChatGPT reporting something vague.
 ```bash
 npm install
 npm run build        # bundles the plugin (figma-plugin/dist) and the server
-npm test             # 366 checks: critic, UI, runtime/planner, plugin runtime, smoke, e2e
+npm test             # 391 checks: critic, code, UI, runtime/planner, plugin runtime, smoke, e2e
 ```
 
 ## Run it
@@ -339,7 +342,12 @@ for an always-on instance.
 | `find_node` | Find a node by screen, role, name or text instead of a raw id |
 | `set_variant` | Switch an instance to another variant of its set |
 | `update_component` | Edit a component master so every instance follows |
+| `create_component_set` | Combine components or frames into a variant set |
 | `seed_exo_system` | Create the canonical exo token set in one transaction |
+| `migrate_to_tokens` | Bind hardcoded fills to matching variables |
+| `audit_components` | Report unused and duplicated components |
+| `prototype_flow` | Link frames into a clickable prototype flow |
+| `export_code` | Export a frame as React + Tailwind |
 | `score_design` | Score a program 0-10 per dimension with evidence |
 | `refine_screen` | Run the review-fix loop to convergence |
 | `diff_design` | Structural before/after delta between two snapshots |
@@ -651,6 +659,26 @@ directly, so the model never retypes geometry it already approved. Everyday
 patterns also ship as built-in content templates (`page-header`, `field-row`,
 `action-row`, `section`, `empty-state`, `error-state`); a program template with
 the same name replaces the built-in silently.
+
+### Code, flows and system hygiene
+
+`export_code` turns the selection into React + Tailwind — flex from auto-layout,
+headed tags from type, colours as CSS custom properties — deterministically, so
+regenerating diffs cleanly. `prototype_flow` links frames into a clickable flow,
+appending reactions rather than replacing hand-built ones. `migrate_to_tokens`
+sweeps hardcoded fills into variable bindings on exact hex matches (approximate
+colours are left alone), and `audit_components` reports unused and duplicated
+components with the evidence for a human decision.
+
+### Watching it work — the live stream
+
+Two things used to be invisible: what the agent is doing right now, and what it
+just saw. Every tool call now narrates itself to the panel in one line
+(`review_design — 3 finding(s)`), and every render pushes its thumbnail there
+with no second render cost. The screen itself lands region by region — large
+programs yield between chunks so the canvas repaints instead of appearing all
+at once — while a slim bar narrates the commit. Nothing to click, nothing to
+configure: the panel stays a status light that happens to show the work.
 
 ### Seeing the result — `render_design`
 

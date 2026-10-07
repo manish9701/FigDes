@@ -1140,3 +1140,76 @@ test("create_component_set refuses members that do not exist", async () => {
   assert.equal(reply.ok, false);
   assert.match(reply.error, /Member not found/i);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Prototype links                                                             */
+/* -------------------------------------------------------------------------- */
+
+test("prototypeLink connects two frames on click", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "home", name: "Home", width: 1440, height: 900 },
+      { type: "createFrame", id: "detail", name: "Detail", width: 1440, height: 900 },
+    ],
+  });
+  const ids = Object.fromEntries(built.data.createdNodes.filter((n) => n.temporaryId).map((n) => [n.temporaryId, n.figmaNodeId]));
+
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "prototypeLink", from: ids.home, to: ids.detail }],
+  });
+  assert.equal(reply.data.status, "success", `failed: ${JSON.stringify(reply.data.error ?? {})}`);
+
+  const home = f.__node(ids.home);
+  assert.equal(home.reactions.length, 1);
+  assert.equal(home.reactions[0].trigger.type, "ON_CLICK");
+  assert.equal(home.reactions[0].actions[0].destinationId, ids.detail);
+  assert.equal(home.reactions[0].actions[0].navigation, "NAVIGATE");
+});
+
+test("prototypeLink appends without destroying existing reactions", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "a", width: 100, height: 100 },
+      { type: "createFrame", id: "b", width: 100, height: 100 },
+      { type: "createFrame", id: "c", width: 100, height: 100 },
+    ],
+  });
+  const ids = Object.fromEntries(built.data.createdNodes.filter((n) => n.temporaryId).map((n) => [n.temporaryId, n.figmaNodeId]));
+
+  await ask(f, "create_design", { operations: [{ type: "prototypeLink", from: ids.a, to: ids.b }] });
+  await ask(f, "create_design", { operations: [{ type: "prototypeLink", from: ids.a, to: ids.c }] });
+
+  assert.equal(f.__node(ids.a).reactions.length, 2);
+});
+
+test("prototypeLink fails loudly for a missing frame", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "prototypeLink", from: "ghost", to: "alsoghost" }],
+  });
+  assert.equal(reply.data.status, "failed");
+  assert.match(reply.data.error.message, /not found/i);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Variable listing                                                            */
+/* -------------------------------------------------------------------------- */
+
+test("list_variables reports names with resolved default values", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "create_design", {
+    operations: [
+      { type: "createVariable", name: "surface", variableType: "color", collection: "exo", values: { default: "#FFFDF9" } },
+      { type: "createVariable", name: "gap", variableType: "number", values: { default: 24 } },
+    ],
+  });
+
+  const reply = await ask(f, "list_variables", {});
+  assert.equal(reply.ok, true);
+  const byName = Object.fromEntries(reply.data.variables.map((v) => [v.name, v]));
+  assert.equal(byName.surface.value, "#FFFDF9");
+  assert.equal(byName.surface.collection, "exo");
+  assert.equal(byName.gap.value, 24);
+});

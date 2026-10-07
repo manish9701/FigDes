@@ -397,6 +397,24 @@ export const BindVariableOp = z.object({
 });
 
 /**
+ * Links two frames with a prototype interaction.
+ *
+ * Flows are what turn screens into a product: without them every screen is an
+ * island and the only way to experience the design is to squint at thumbnails.
+ * Reactions append to any the source already has rather than replacing them, so
+ * adding a flow never destroys hand-built prototyping.
+ */
+export const PrototypeLinkOp = z.object({
+  type: z.literal("prototypeLink"),
+  /** The frame (or node) carrying the interaction. */
+  from: RefSchema,
+  /** Destination frame id. */
+  to: RefSchema,
+  trigger: z.enum(["ON_CLICK", "ON_HOVER", "ON_PRESS"]).default("ON_CLICK"),
+  /** Omit for an instant cut. */
+  transition: z.enum(["none", "dissolve", "smart-animate"]).default("dissolve"),
+});
+/**
  * Creates a slide (Figma Slides only).
  *
  * A slide is a fixed 1920x1080 frame that must live inside a slide row.
@@ -496,6 +514,7 @@ export const OperationSchema = z.discriminatedUnion("type", [
   CreateTextOp,
   CreateVectorOp,
   CreateSlideOp,
+  PrototypeLinkOp,
   CreateVariableOp,
   CreateTextStyleOp,
   CreatePaintStyleOp,
@@ -837,7 +856,20 @@ export interface DisconnectMessage {
   reason: string;
 }
 
-export type ServerMessage = WelcomeMessage | RequestMessage | DisconnectMessage;
+/**
+ * A one-way server-to-plugin notification.
+ *
+ * Requests demand answers; notifications do not. This is the live-streaming
+ * channel: agent activity ("review_design found 3 findings") and render
+ * previews flow to the panel as they happen, so the user watches the work
+ * instead of wondering whether anything is happening. Dropped silently by
+ * older clients that do not know the type.
+ */
+export type NotifyMessage =
+  | { type: "notify"; kind: "activity"; text: string; at: number }
+  | { type: "notify"; kind: "preview"; label: string; mimeType: string; data: string; at: number };
+
+export type ServerMessage = WelcomeMessage | RequestMessage | DisconnectMessage | NotifyMessage;
 export type ClientMessage = RegisterMessage | StateMessage | ResultMessage;
 
 /* -------------------------------------------------------------------------- */
@@ -874,6 +906,9 @@ export const TOOL_NAMES = [
   "refine_screen",
   "diff_design",
   "export_code",
+  "migrate_to_tokens",
+  "audit_components",
+  "prototype_flow",
   "project_memory",
   "design_guard",
   "plan_screen",
@@ -909,6 +944,7 @@ export const PLUGIN_TOOL_NAMES = [
   "set_variant",
   "update_component",
   "create_component_set",
+  "list_variables",
   "create_design",
   "modify_design",
   "undo_last_operation",

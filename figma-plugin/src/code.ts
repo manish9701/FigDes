@@ -218,6 +218,9 @@ async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> 
       });
     }
 
+    case "list_variables":
+      return listVariables();
+
     case "create_design":
       return createDesign(payload);
 
@@ -424,6 +427,52 @@ async function modifyDesign(payload: unknown): Promise<TransactionResult> {
 function clamp(n: number, lo: number, hi: number): number {
   if (!Number.isFinite(n)) return lo;
   return Math.min(hi, Math.max(lo, Math.round(n)));
+}
+
+/**
+ * Lists local variables with their default-mode values resolved.
+ *
+ * The design-system report carries names but not values; migration needs both.
+ * Colours come back as hex so a hardcoded fill can be matched by string
+ * comparison, which is exact rather than approximate.
+ */
+async function listVariables(): Promise<{
+  variables: Array<{ collection: string; name: string; type: string; value: string | number | boolean | null; modes: number }>;
+}> {
+  const collections = await figma.variables.getLocalVariableCollectionsAsync();
+
+  const out: Array<{ collection: string; name: string; type: string; value: string | number | boolean | null; modes: number }> = [];
+  for (const collection of collections) {
+    for (const variableId of collection.variableIds) {
+      const variable = figma.variables.getVariableById(variableId);
+      if (!variable) continue;
+      const modeId = collection.modes[0]?.modeId;
+      const raw = modeId ? variable.valuesByMode[modeId] : undefined;
+      out.push({
+        collection: collection.name,
+        name: variable.name,
+        type: variable.resolvedType,
+        value: serializeVariableValue(raw),
+        modes: collection.modes.length,
+      });
+    }
+  }
+  return { variables: out };
+}
+
+/** Serialises one variable value for the wire. Aliases stay references. */
+function serializeVariableValue(raw: unknown): string | number | boolean | null {
+  if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") return raw;
+  if (raw && typeof raw === "object") {
+    const o = raw as Record<string, unknown>;
+    if (typeof o.r === "number" && typeof o.g === "number" && typeof o.b === "number") {
+      const hex = (v: number): string => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0");
+      const base = `#${hex(o.r)}${hex(o.g)}${hex(o.b)}`.toUpperCase();
+      return typeof o.a === "number" && o.a < 1 ? `${base}${hex(o.a)}` : base;
+    }
+    if (o.type === "VARIABLE_ALIAS" && o.id !== undefined) return null;
+  }
+  return null;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -52,6 +52,17 @@ export async function renderDesign(session: Session, args: RenderArgs): Promise<
     { type: "text", text: describe(result) },
   ];
 
+  // The panel shows what the agent just saw. Same bytes, no extra render cost:
+  // the user watches the visual loop instead of discovering it afterwards.
+  session.notify({
+    type: "notify",
+    kind: "preview",
+    label: `"${result.nodeName}" (${result.nodeType}) at ${result.width}x${result.height}`,
+    mimeType: MIME[result.format as "png" | "jpg"] ?? "image/png",
+    data: result.data,
+    at: Date.now(),
+  });
+
   return { content };
 }
 

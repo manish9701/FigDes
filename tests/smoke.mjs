@@ -187,7 +187,7 @@ class MockPlugin {
       case "find_components":
         return {
           truncated: false,
-          total: 1,
+          total: 3,
           matches: [
             {
               component: {
@@ -203,7 +203,40 @@ class MockPlugin {
               score: 0.9,
               reason: 'name contains "status"',
             },
+            {
+              component: {
+                id: "1:51",
+                name: "StatusRow copy",
+                type: "COMPONENT",
+                description: "",
+                properties: [],
+                width: 320,
+                height: 48,
+                instanceCount: 0,
+              },
+              score: 0.5,
+              reason: "smoke mock",
+            },
+            {
+              component: {
+                id: "1:52",
+                name: "OldBadge",
+                type: "COMPONENT",
+                description: "",
+                properties: [],
+                width: 64,
+                height: 24,
+                instanceCount: 0,
+              },
+              score: 0.4,
+              reason: "smoke mock",
+            },
           ],
+        };
+
+      case "list_variables":
+        return {
+          variables: [{ collection: "exo", name: "surface", type: "COLOR", value: "#FFFDF9", modes: 1 }],
         };
 
       case "create_component":
@@ -227,6 +260,8 @@ class MockPlugin {
             visible: true,
             defaultNamed: false,
             zIndex: 0,
+            // Deliberately hardcoded: migrate_to_tokens must match this to exo/surface.
+            fill: "#FFFDF9",
           },
           {
             id: "24:2",
@@ -439,25 +474,30 @@ async function main() {
     assert.deepEqual(
       tools.map((t) => t.name).sort(),
       [
+        "audit_components",
         "audit_design",
         "collect_metrics",
         "compile_ir",
         "create_component",
+        "create_component_set",
         "create_design",
         "create_instance",
         "create_slide",
         "design_guard",
         "design_runtime",
         "diff_design",
+        "export_code",
         "figma_status",
         "find_component",
         "find_node",
         "inspect_design_system",
         "inspect_file",
         "inspect_selection",
+        "migrate_to_tokens",
         "modify_design",
         "plan_screen",
         "project_memory",
+        "prototype_flow",
         "refine_screen",
         "render_design",
         "review_design",
@@ -997,6 +1037,52 @@ await check("diff_design reports structural deltas between snapshots", async () 
   assert.equal(data.summary.moved, 1);
   assert.equal(data.summary.recolored, 1);
   assert.equal(data.summary.added, 1);
+});
+
+console.log("\n  code, migration, health and flows");
+
+await check("export_code emits a React component with Tailwind classes", async () => {
+  const { data, isError } = await callTool("export_code", { componentName: "Dashboard" });
+  assert.equal(isError, false);
+  assert.match(data.tsx, /export function Dashboard\(\)/);
+  assert.match(data.tsx, /className="/);
+  assert.ok(data.css.includes("--color-"), "colours become custom properties");
+  assert.ok(data.limitations.length > 0, "limits are stated, not hidden");
+});
+
+await check("migrate_to_tokens dryRun reports exact matches", async () => {
+  // The mock Dashboard frame hardcodes #FFFDF9, which is exactly exo/surface.
+  const { data, isError } = await callTool("migrate_to_tokens", { dryRun: true });
+  assert.equal(isError, false);
+  assert.equal(data.dryRun, true);
+  assert.equal(data.matches.length, 1);
+  assert.equal(data.matches[0].variable, "exo/surface");
+  assert.equal(data.matches[0].nodes, 1);
+});
+
+await check("audit_components flags unused and duplicated components", async () => {
+  const { data, isError } = await callTool("audit_components", {});
+  assert.equal(isError, false);
+  assert.equal(data.unused.length, 2, "two zero-instance components in the mock");
+  assert.equal(data.duplicates.length, 1, "StatusRow + StatusRow copy share a stem and size");
+  assert.equal(data.duplicates[0].members.length, 2);
+});
+
+await check("prototype_flow links frames in one transaction", async () => {
+  const { data, isError } = await callTool("prototype_flow", {
+    links: [{ from: "24:1", to: "24:2" }],
+  });
+  assert.equal(isError, false);
+  assert.equal(data.status, "success");
+  assert.deepEqual(data.applied, ["prototypeLink"]);
+});
+
+await check("create_component_set combines members server-side", async () => {
+  // The smoke mock has no handler for it: the tool must fail with guidance,
+  // not with a transport error.
+  const { isError, text } = await callTool("create_component_set", { name: "Button", members: ["1:50", "1:51"] });
+  assert.equal(isError, true);
+  assert.match(text, /no handler/i);
 });
 
 console.log("\n  session safety");

@@ -257,6 +257,46 @@ const ExportArgs = z
   })
   .strict();
 
+const MigrateArgs = z
+  .object({
+    sessionId: SessionArg,
+    target: z.string().max(200).optional().describe("Subtree to sweep. Defaults to the current selection."),
+    dryRun: z.boolean().optional().describe("Report matches without changing anything. Use this first."),
+    approved: z.boolean().optional(),
+    reason: z.string().max(400).optional(),
+  })
+  .strict();
+
+const AuditComponentsArgs = z
+  .object({
+    sessionId: SessionArg,
+  })
+  .strict();
+
+const PrototypeFlowArgs = z
+  .object({
+    sessionId: SessionArg,
+    links: z
+      .array(
+        z
+          .object({
+            from: z.string().min(1).max(200).describe("Source frame id. Resolve with find_node."),
+            to: z.string().min(1).max(200).describe("Destination frame id."),
+            trigger: z.enum(["ON_CLICK", "ON_HOVER", "ON_PRESS"]).optional(),
+            transition: z.enum(["none", "dissolve", "smart-animate"]).optional(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100),
+    description: z.string().max(1000).optional(),
+    dryRun: z.boolean().optional(),
+    approved: z.boolean().optional(),
+    reason: z.string().max(400).optional(),
+    transactionId: z.string().max(200).optional(),
+  })
+  .strict();
+
 export const CreateSlideArgs = z
   .object({
     sessionId: SessionArg,
@@ -797,6 +837,173 @@ export const TOOLS: ToolDefinition[] = [
         ...(rest.componentName !== undefined ? { componentName: rest.componentName } : {}),
         ...(rest.maxNodes !== undefined ? { maxNodes: rest.maxNodes } : {}),
       });
+    },
+  },
+
+  {
+    name: "migrate_to_tokens",
+    title: "Bind hardcoded fills to matching variables",
+    description:
+      "Sweeps the selection (or a target subtree) for hardcoded fills and strokes whose hex exactly matches a local variable's default value, and binds them. Exact matches only: approximate colours are left alone, because binding the wrong token is worse than a literal. Large sweeps target many nodes and will ask approval first. Pass dryRun=true to see the matches without changing anything.",
+    inputSchema: MigrateArgs,
+    handler: async (args, registry) => {
+      const parsed = MigrateArgs.parse(args ?? {});
+      const session = registry.resolve(parsed.sessionId);
+
+      const listed = (await session.request("list_variables", {})) as {
+        variables?: Array<{ collection: string; name: string; type: string; value: string | number | boolean | null }>;
+      };
+      const byHex = new Map<string, string>();
+      for (const v of listed.variables ?? []) {
+        if (typeof v.value === "string" && /^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$/.test(v.value)) {
+          const key = v.value.toUpperCase();
+          if (!byHex.has(key)) byHex.set(key, `${v.collection}/${v.name}`);
+        }
+      }
+
+      const raw = (await session.request("collect_metrics", {
+        ...(parsed.target !== undefined ? { target: parsed.target } : {}),
+        maxNodes: 2000,
+      })) as MetricsReport;
+      if (!raw || !Array.isArray(raw.nodes)) {
+        throw new Error("The Figma plugin returned no measurements. Close and re-run the plugin, then retry.");
+      }
+
+      const operations: Array<Record<string, unknown>> = [];
+      const matches: Array<{ hex: string; variable: string; nodes: number }> = [];
+      const seen = new Map<string, string[]>();
+      for (const node of raw.nodes) {
+        if (node.type === "PAGE" || node.type === "DOCUMENT") continue;
+        const fills = typeof node.fill === "string" ? [{ hex: node.fill, field: "fills" as const }] : [];
+        const strokes = node.stroke ? [{ hex: node.stroke.hex, field: "strokes" as const }] : [];
+        for (const { hex, field } of [...fills, ...strokes]) {
+          const variable = byHex.get(hex.toUpperCase());
+          if (!variable) continue;
+          operations.push({ type: "bindVariable", target: node.id, field, variable });
+          const list = seen.get(variable) ?? [];
+          list.push(node.id);
+          seen.set(variable, list);
+        }
+        if (operations.length >= 200) break;
+      }
+      for (const [variable, ids] of seen) {
+        const hex = [...byHex.entries()].find(([, v]) => v === variable)?.[0] ?? "?";
+        matches.push({ hex, variable, nodes: ids.length });
+      }
+      matches.sort((a, b) => b.nodes - a.nodes);
+
+      if (parsed.dryRun) {
+        return { status: "ok", dryRun: true, matches, operations: operations.length };
+      }
+      if (operations.length === 0) {
+        return { status: "ok", matches: [], operations: 0, note: "No hardcoded fill exactly matches a variable value. Nothing to migrate." };
+      }
+
+      const gate = guardMutation({
+        operations,
+        approved: parsed.approved,
+        reason: parsed.reason,
+        dryRun: false,
+      });
+      if (gate) return gate;
+
+      const result = (await session.request("create_design", {
+        description: `Migrate ${operations.length} fills to variables`,
+        operations,
+      })) as TransactionResult;
+      return { ...assertTransaction(result), matches };
+    },
+  },
+
+  {
+    name: "audit_components",
+    title: "Audit component health: unused and duplicated",
+    description:
+      "Reports components with zero instances (candidates for deletion), near-duplicate components by name stem and size (candidates for merging into variant sets), and variant sets with a single variant. Read-only: nothing is changed, and every candidate carries the evidence for a human decision.",
+    inputSchema: AuditComponentsArgs,
+    handler: async (args, registry) => {
+      const parsed = AuditComponentsArgs.parse(args ?? {});
+      const session = registry.resolve(parsed.sessionId);
+      const found = (await session.request("find_components", { limit: 200 })) as {
+        matches: Array<{ component: { id: string; name: string; type: string; width: number; height: number; instanceCount: number }; reason: string }>;
+        total: number;
+        truncated: boolean;
+      };
+
+      const all = found.matches.map((m) => m.component);
+      const unused = all
+        .filter((c) => c.type === "COMPONENT" && c.instanceCount === 0)
+        .map((c) => ({ id: c.id, name: c.name, width: c.width, height: c.height }));
+
+      // Same stem (lowercased, trailing numbers and variant suffixes stripped)
+      // plus same size: almost certainly the same component built twice.
+      const stem = (name: string): string =>
+        name
+          .toLowerCase()
+          .replace(/^(component\s+)?/, "")
+          .replace(/[\s_\-]*(v\d+|copy|final|\d+|primary|secondary|default)$/g, "")
+          .trim();
+      const byStem = new Map<string, typeof all>();
+      for (const c of all) {
+        if (c.type !== "COMPONENT") continue;
+        const key = `${stem(c.name)}|${c.width}x${c.height}`;
+        const list = byStem.get(key) ?? [];
+        list.push(c);
+        byStem.set(key, list);
+      }
+      const duplicates = [...byStem.values()]
+        .filter((group) => group.length > 1)
+        .map((group) => ({ stem: stem(group[0]!.name), members: group.map((c) => ({ id: c.id, name: c.name, instances: c.instanceCount })) }));
+
+      const singleVariantSets = all
+        .filter((c) => c.type === "COMPONENT_SET")
+        .map((c) => ({ id: c.id, name: c.name }));
+
+      return {
+        status: "ok",
+        totals: { components: found.total, truncated: found.truncated },
+        unused,
+        duplicates,
+        singleVariantSets,
+        howToProceed:
+          "Delete unused components with removeNode after confirming nothing references them. Merge duplicates with create_component_set, then point instances at the survivor with set_variant or re-instance.",
+      };
+    },
+  },
+
+  {
+    name: "prototype_flow",
+    title: "Link frames into a clickable flow",
+    description:
+      "Adds prototype navigate interactions between frames: each link connects a source frame to a destination on click (or hover), with an optional dissolve or smart-animate transition. Appends to existing reactions rather than replacing them. Run it after building the screens, so the deck can be clicked through instead of squinted at.",
+    inputSchema: PrototypeFlowArgs,
+    handler: async (args, registry) => {
+      const parsed = PrototypeFlowArgs.parse(args);
+      const session = registry.resolve(parsed.sessionId);
+
+      const operations = parsed.links.map((link) => ({
+        type: "prototypeLink",
+        from: link.from,
+        to: link.to,
+        trigger: link.trigger ?? "ON_CLICK",
+        transition: link.transition ?? "dissolve",
+      }));
+
+      const gate = guardMutation({
+        operations: operations as Array<Record<string, unknown>>,
+        approved: parsed.approved,
+        reason: parsed.reason,
+        dryRun: parsed.dryRun ?? false,
+      });
+      if (gate) return gate;
+
+      const result = (await session.request("create_design", {
+        description: parsed.description ?? `Prototype flow: ${operations.length} link(s)`,
+        operations,
+        dryRun: parsed.dryRun ?? false,
+        transactionId: parsed.transactionId,
+      })) as TransactionResult;
+      return assertTransaction(result);
     },
   },
 

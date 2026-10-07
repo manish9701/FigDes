@@ -64,3 +64,15 @@ test("the progress indicator is wired end to end", () => {
     assert.equal(uiTs.includes(`"${id}"`), true, `ui.ts must address #${id}`);
   }
 });
+
+test("the live stream is wired: activity line plus preview thumbnail", () => {
+  // Agent activity and render previews stream into the panel as they happen.
+  // Text is assigned, never interpolated: activity lines describe tool calls,
+  // and tool output is untrusted the same way layer names are.
+  for (const id of ["activity", "preview"]) {
+    assert.equal(html.includes(`id="${id}"`), true, `index.html must define #${id}`);
+    assert.equal(uiTs.includes(`"${id}"`), true, `ui.ts must address #${id}`);
+  }
+  assert.equal(uiTs.includes("renderNotify"), true, "notifications need a dedicated renderer");
+  assert.equal(uiTs.includes("textContent = msg.text"), true, "activity text must be assigned, not interpolated");
+});

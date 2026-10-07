@@ -33,6 +33,8 @@ let server;
 let plugin;
 let transport;
 let registeredSessionId = null;
+/** Every server notification pushed during the run, in arrival order. */
+const notifications = [];
 
 /* -------------------------------------------------------------------------- */
 /* Harness                                                                     */
@@ -79,6 +81,9 @@ async function connectRealPlugin(wsUrl) {
     onRegistered: (sessionId) => {
       registeredSessionId = sessionId;
     },
+    // The live stream under test: every notification the server pushes lands
+    // here, exactly as the shipped panel receives it.
+    onNotify: (msg) => notifications.push(msg),
     // Fast heartbeat so the session's liveness is exercised without a 5s wait.
     heartbeatMs: 150,
     requestTimeoutMs: 8000,
@@ -370,6 +375,45 @@ test("an approved destructive change is actually applied", async () => {
 });
 
 test("no unexpected error reached the plugin's log", async () => {
-  const errors = plugin.figma.__logs.filter((l) => l.level === "error");
+  const errors = plugin.logs.filter((l) => l.level === "error");
   assert.deepEqual(errors, [], `plugin logged errors: ${JSON.stringify(errors)}`);
+});
+
+test("agent activity streams into the panel as tools run", async () => {
+  notifications.length = 0;
+  await callTool("figma_status");
+
+  // Heartbeats also run, so filter to activity frames.
+  const activity = notifications.filter((n) => n.kind === "activity");
+  assert.ok(activity.length >= 1, "at least one activity line must arrive per tool call");
+  assert.match(activity[activity.length - 1].text, /figma_status/);
+  assert.ok(activity.every((n) => n.text.length <= 140), "activity lines stay one breath long");
+});
+
+test("a render pushes its preview to the panel with no extra cost", async () => {
+  notifications.length = 0;
+  // Build a fresh frame rather than trusting the selection: an earlier test
+  // deletes the selected node, and depending on selection state would make this
+  // test assert on Figma's error handling instead of the preview channel.
+  const built = await callTool("design_runtime", {
+    description: "preview target",
+    program: {
+      canvas: { name: "Preview", width: 400, height: 300, grid: 8 },
+      regions: [{ fn: "frame", id: "stage", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "shape", id: "dot", parent: "stage", args: { shape: "ellipse", fill: "#F2C94C" } }],
+    },
+  });
+  assert.equal(built.isError, false);
+  const frameId = built.data.transaction.createdNodes.find((n) => n.name === "Stage").figmaNodeId;
+
+  const { data, isError } = await callTool("render_design", { nodeId: frameId, maxWidth: 512, detail: "low" });
+  assert.equal(isError, false, `render failed: ${JSON.stringify(data).slice(0, 300)}`);
+
+  const previews = notifications.filter((n) => n.kind === "preview");
+  assert.equal(previews.length, 1, "exactly one preview per render");
+
+  const image = data.content?.find((c) => c.type === "image");
+  assert.equal(previews[0].data, image.data, "the panel shows the same bytes the model judges");
+  assert.equal(previews[0].mimeType, image.mimeType);
+  assert.match(previews[0].label, /Stage.*400x300/);
 });

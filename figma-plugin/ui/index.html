@@ -110,6 +110,18 @@
         margin-top: 5px;
       }
 
+      #save-status {
+        min-height: 14px;
+      }
+
+      #save-status.ok {
+        color: var(--green);
+      }
+
+      #save-status.err {
+        color: var(--red);
+      }
+
       #progress {
         height: 3px;
         border-radius: 2px;
@@ -135,6 +147,24 @@
         overflow: hidden;
         text-overflow: ellipsis;
         visibility: hidden;
+      }
+
+      /* The live stream: what the agent just did, and what it just saw. One
+         line and one thumbnail, never a feed to scroll. */
+      #activity {
+        color: var(--text-2);
+        font-size: 10px;
+        margin-top: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #preview {
+        width: 100%;
+        border-radius: 5px;
+        border: 1px solid var(--border);
+        margin-top: 6px;
       }
 
       /* ------------------------------- details ---------------------------- */
@@ -198,6 +228,8 @@
     </header>
     <div id="progress"><div id="progress-bar"></div></div>
     <div id="progress-label"></div>
+    <div id="activity"></div>
+    <img id="preview" alt="" style="display: none;" />
 
     <details id="settings" style="margin-bottom: 8px">
       <summary>Server connection</summary>
@@ -208,7 +240,8 @@
       <div class="row">
         <input id="secret" type="password" placeholder="PLUGIN_SECRET (if required)" spellcheck="false" />
       </div>
-      <div class="note">ChatGPT uses the public tunnel URL printed by `npm start`, not this localhost address.</div>
+      <div id="save-status" class="note" aria-live="polite"></div>
+      <div class="note">ChatGPT connects to https://figdes.onrender.com/mcp. This panel connects the plugin to that same server.</div>
     </details>
 
     <details id="logdetails">

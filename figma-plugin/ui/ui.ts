@@ -60,14 +60,29 @@ const versionEl = el<HTMLSpanElement>("version");
 const logEl = el<HTMLDivElement>("log");
 const urlInput = el<HTMLInputElement>("url");
 const secretInput = el<HTMLInputElement>("secret");
+const saveBtn = el<HTMLButtonElement>("save");
+const saveStatusEl = el<HTMLDivElement>("save-status");
 const progressEl = el<HTMLDivElement>("progress");
 const progressBarEl = el<HTMLDivElement>("progress-bar");
 const progressLabelEl = el<HTMLDivElement>("progress-label");
+const activityEl = el<HTMLDivElement>("activity");
+const previewEl = el<HTMLImageElement>("preview");
 
 type Status = "connected" | "connecting" | "disconnected" | "error";
 
 function setState(status: Status): void {
   dot.className = `dot ${status}`;
+}
+
+/** Apply-button feedback: instant "Saved" cue plus connection outcome. */
+function setSaveBusy(busy: boolean): void {
+  saveBtn.disabled = busy;
+  saveBtn.textContent = busy ? "Applying…" : "Apply";
+}
+
+function setSaveStatus(kind: "ok" | "err" | "info", message: string): void {
+  saveStatusEl.textContent = message;
+  saveStatusEl.className = `note${kind === "ok" ? " ok" : kind === "err" ? " err" : ""}`;
 }
 
 function appendLog(level: string, message: string): void {
@@ -117,6 +132,24 @@ function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
   const ratio = msg.total > 0 ? Math.min(1, msg.done / msg.total) : 0;
   progressBarEl.style.width = `${Math.round(ratio * 100)}%`;
   progressLabelEl.textContent = msg.total > 0 ? `${msg.done}/${msg.total} - ${msg.label}` : msg.label;
+}
+
+/**
+ * Renders a server notification: agent activity or a render preview.
+ *
+ * Text is assigned, never interpolated into HTML: activity lines describe
+ * tool calls, and tool output is untrusted the same way layer names are.
+ */
+function renderNotify(msg: Extract<ServerMessage, { type: "notify" }>): void {
+  if (msg.kind === "activity") {
+    activityEl.textContent = msg.text;
+    return;
+  }
+
+  previewEl.src = `data:${msg.mimeType};base64,${msg.data}`;
+  previewEl.alt = msg.label;
+  previewEl.title = msg.label;
+  previewEl.style.display = "";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -241,6 +274,7 @@ function connect(): void {
     if (!isCurrent()) return;
     setState("error");
     appendLog("error", "Socket error. Is the Design Agent server running?");
+    if (saveBtn.disabled) setSaveStatus("err", "✗ Could not reach server – check the URL, then Apply.");
   };
 
   socket.onclose = (ev: CloseEvent) => {
@@ -255,16 +289,21 @@ function connect(): void {
     if (ev.code === 4401 || ev.code === 4403) {
       setState("error");
       appendLog("error", `${ev.reason} Check PLUGIN_SECRET in the field above, then Apply.`);
+      setSaveBusy(false);
+      setSaveStatus("err", "✗ Wrong secret – check PLUGIN_SECRET, then Apply.");
       return;
     }
     if (ev.code === 4002) {
       setState("error");
       appendLog("error", "Connected but never registered. Close and re-run the plugin in Figma.");
+      setSaveBusy(false);
+      setSaveStatus("err", "✗ Server rejected registration – re-open the plugin.");
       return;
     }
 
     setState("connecting");
     appendLog("warn", `Socket closed (code ${ev.code}). Retrying…`);
+    if (saveBtn.disabled) setSaveStatus("info", "Connecting… (retrying)");
     scheduleReconnect();
   };
 }
@@ -369,6 +408,9 @@ function route(msg: ServerMessage): void {
 
       toMain({ kind: "connected", status: "connected", sessionId: msg.sessionId });
       appendLog("info", `Registered — session ${msg.sessionId}`);
+      const justApplied = saveBtn.disabled;
+      setSaveBusy(false);
+      setSaveStatus("ok", justApplied ? "✓ Connected – settings saved." : "✓ Connected.");
       startHeartbeat();
       break;
     }
@@ -403,6 +445,11 @@ function route(msg: ServerMessage): void {
       haltReconnect = true;
       ws?.close(1000, msg.reason);
       setState("disconnected");
+      break;
+    }
+
+    case "notify": {
+      renderNotify(msg);
       break;
     }
   }
@@ -461,11 +508,13 @@ function refreshPanel(): void {
 el<HTMLButtonElement>("save").addEventListener("click", () => {
   if (!config) {
     appendLog("error", "No server config received yet from the plugin host.");
+    setSaveStatus("err", "✗ Not ready yet – wait a second, then Apply.");
     return;
   }
   const raw = urlInput.value.trim();
   if (!raw) {
     appendLog("error", "Server URL is empty.");
+    setSaveStatus("err", "✗ Server URL is empty.");
     return;
   }
   const { base, secret } = splitSecret(raw);
@@ -473,6 +522,9 @@ el<HTMLButtonElement>("save").addEventListener("click", () => {
   const changed = base !== config.url || secret !== config.secret;
   config = { ...config, url: base, secret };
   toMain({ kind: "config", url: base, secret });
+
+  setSaveBusy(true);
+  setSaveStatus("info", "Saving… connecting…");
 
   // The connection header is independent of document state, but repaint anyway
   // so the panel never shows a stale file name after a switch.

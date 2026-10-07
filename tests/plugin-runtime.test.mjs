@@ -1091,3 +1091,52 @@ test("a uniform radius binds all four corners", async () => {
     assert.ok(panel.__bound[corner] !== undefined, `${corner} must be bound, not just one of them`);
   }
 });
+
+/* -------------------------------------------------------------------------- */
+/* Variant sets                                                                */
+/* -------------------------------------------------------------------------- */
+
+test("create_component_set combines two components into a set", async () => {
+  const { figma: f } = loadPlugin();
+  const a = await ask(f, "create_component", { name: "Button A" });
+  const b = await ask(f, "create_component", { name: "Button B" });
+
+  const reply = await ask(f, "create_component_set", {
+    name: "Button",
+    members: [a.data.componentId, b.data.componentId],
+  });
+
+  assert.equal(reply.ok, true, `failed: ${reply.error ?? ""}`);
+  assert.equal(reply.data.name, "Button");
+  assert.equal(reply.data.variantIds.length, 2);
+});
+
+test("create_component_set promotes frames without rebuilding them", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "f1", name: "Primary", width: 120, height: 40 },
+      { type: "createFrame", id: "f2", name: "Secondary", width: 120, height: 40 },
+    ],
+  });
+  const ids = built.data.createdNodes.filter((n) => n.temporaryId === "f1" || n.temporaryId === "f2").map((n) => n.figmaNodeId);
+
+  const reply = await ask(f, "create_component_set", { name: "Button", members: ids });
+  assert.equal(reply.ok, true, `failed: ${reply.error ?? ""}`);
+  assert.deepEqual(reply.data.variantNames, ["Primary", "Secondary"]);
+});
+
+test("create_component_set refuses fewer than two members", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "create_component_set", { name: "Button", members: ["99:1"] });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /at least two/i);
+});
+
+test("create_component_set refuses members that do not exist", async () => {
+  const { figma: f } = loadPlugin();
+  const real = await ask(f, "create_component", { name: "Real" });
+  const reply = await ask(f, "create_component_set", { name: "Button", members: [real.data.componentId, "made-up"] });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /Member not found/i);
+});

@@ -557,6 +557,28 @@ getLocalVariablesAsync: async () => [
       return addInstanceFactory(c);
     },
 
+    /**
+     * Combines components into a set. Members are reparented under the new set,
+     * mirroring the real API's reparenting behaviour closely enough that order
+     * and membership assertions hold.
+     */
+    combineAsVariants: (nodes, parent) => {
+      const set = frame({ name: "Set" });
+      set.type = "COMPONENT_SET";
+      set.description = "";
+      for (const node of nodes) {
+        if (node.parent?.children) {
+          const i = node.parent.children.indexOf(node);
+          if (i >= 0) node.parent.children.splice(i, 1);
+        }
+        node.parent = set;
+        set.children.push(node);
+      }
+      (parent ?? doc.page).children.push(set);
+      set.parent = parent ?? doc.page;
+      return set;
+    },
+
     // test-only introspection
     __posted: posted,
     __logs: logs,

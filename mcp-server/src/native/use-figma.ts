@@ -31,6 +31,9 @@ export async function figdesUseFigmaHandler(session: Session, args: unknown) {
   const fig = {
     page: async () => rpc("getNode", { target: "page" }),
     currentPage: async () => rpc("getNode", { target: "page" }),
+    getPages: async () => rpc("getPages"),
+    createPage: async (params: any = {}) => rpc("createPage", params),
+    setCurrentPage: async (target: any) => rpc("setCurrentPage", { target: target?.id || target }),
     createFrame: async (params: any) => rpc("createFrame", params),
     createRectangle: async (params: any) => rpc("createRectangle", params),
     createEllipse: async (params: any) => rpc("createEllipse", params),

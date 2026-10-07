@@ -38,6 +38,14 @@ export const PlanScreenArgs = z
     desiredComposition: z.enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial"]).optional(),
     name: z.string().max(120).optional(),
     /**
+     * Visual direction in words ("technical-editorial", "instrument"...).
+     *
+     * Recorded on the plan and carried into design_runtime as intent style,
+     * where the runtime's presets turn it into spacing, rhythm, alignment and
+     * contrast mechanics. A direction that never reaches geometry is decoration.
+     */
+    visualDirection: z.string().max(120).optional().describe("Visual manner in words. Travels with the plan into the build."),
+    /**
      * A known screen archetype ("model-fit", "topology", "runtime"...).
      *
      * Inherits the archetype's objective, decision and template instead of
@@ -108,6 +116,12 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
   }
 
   const plan = planScreen(intent);
+
+  // The direction travels with the plan: the program it returns carries the
+  // style into design_runtime, which applies its preset mechanics.
+  if (args.visualDirection !== undefined) {
+    (plan.program.visualIntent as Record<string, unknown>).style = args.visualDirection;
+  }
 
   // Composition variants: the recommendation plus full structural siblings,
   // each recomputed rather than described. Comparing real geometry is what

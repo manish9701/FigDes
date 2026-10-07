@@ -74,7 +74,11 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
     },
     primaryObject: primary !== undefined ? { id: primary.id, why: primary.why } : null,
     secondaryInformation: secondary.map((s) => ({ id: s.id, why: s.why })),
-    visualDirection: args.visualDirection ?? "technical-editorial",
+    visualDirection: args.visualDirection ?? null,
+    visualDirectionNote:
+      args.visualDirection !== undefined
+        ? "Pass this to plan_screen as visualDirection; it travels into the build as intent style."
+        : "No direction stated, and none invented — ask for one or plan_screen proceeds with the system default.",
     visualHierarchy: plan.artDirection.hierarchy,
     focal: focal ?? { id: "(none)", why: "No region earns focal status; reconsider whether one should." },
     template: { name: template.name, why: template.why },
@@ -85,7 +89,7 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
     designRisks: plan.artDirection.designRisks,
     warnings: plan.warnings,
     howToProceed:
-      "Hand the decision, template and available information to plan_screen for geometry and passes. The brief is the why; the plan is the where.",
+      "Hand the decision, template, available information and visualDirection to plan_screen for geometry and passes. The brief is the why; the plan is the where.",
   };
 }
 

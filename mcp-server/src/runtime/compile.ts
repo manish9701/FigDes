@@ -16,7 +16,8 @@ import { normalizePath } from "../../../shared/path";
 import { solveConstraints, type PlacedBox } from "./constraints";
 import { routeConnector } from "./connectors";
 import { coerceLogoMark, logoMarkPath, polygonPath, starPath } from "./marks";
-import { inferComposition, packContent, planLayout, radial, forceDirected } from "./layout";
+import { resolveStyleTokens } from "./visual-presets";
+import { inferComposition, packContent, planLayout, radial, forceDirected, defaultGutter } from "./layout";
 import { runAlgorithm } from "./algorithms";
 
 /* -------------------------------------------------------------------------- */
@@ -28,8 +29,11 @@ import { runAlgorithm } from "./algorithms";
  *
  * Sizes step geometrically so hierarchy reads without the model having to
  * invent one per screen. `ratio` is the multiplier between steps.
+ *
+ * Exported so the interpreter can compute emphasis against the same numbers
+ * the compiler will use. Two sources of truth for type sizes would drift.
  */
-const TYPE_SCALE: Record<string, { size: number; weight: number; family?: string }> = {
+export const TYPE_SCALE: Record<string, { size: number; weight: number; family?: string }> = {
   eyebrow: { size: 11, weight: 600, family: "Inter" },
   title: { size: 32, weight: 600, family: "Inter" },
   subtitle: { size: 18, weight: 500, family: "Inter" },
@@ -39,6 +43,68 @@ const TYPE_SCALE: Record<string, { size: number; weight: number; family?: string
   caption: { size: 11, weight: 400, family: "Inter" },
   code: { size: 12, weight: 400, family: "JetBrains Mono" },
 };
+
+/* -------------------------------------------------------------------------- */
+/* Style look (FigDes §26)                                                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What a style preset changes in emitted operations.
+ *
+ * Identity-driven choices (nav tracking and case, value size, header scale)
+ * key off the preset NAME, because "quiet-instrument" promising uppercase
+ * tracked-out nav is the preset's manner, not a combinable mechanic. Everything
+ * else keys off merged mechanics so compounds and bare directives work: warm
+ * paper, mono-first numbers, generous padding, semibold body. Defaults reproduce
+ * current behaviour exactly, so omitting style changes nothing.
+ */
+export interface StyleLook {
+  navTracking: number;
+  navUpper: boolean;
+  valueMono: boolean;
+  valueSize: number;
+  headerScale: number;
+  panelPaddingScale: number;
+  bodyWeight: number;
+  rootFill?: string;
+}
+
+const DEFAULT_LOOK: StyleLook = {
+  navTracking: 0,
+  navUpper: false,
+  valueMono: false,
+  valueSize: 28,
+  headerScale: 1,
+  panelPaddingScale: 1,
+  bodyWeight: 400,
+};
+
+export function styleLook(raw: string | string[] | undefined): StyleLook {
+  if (raw === undefined) return { ...DEFAULT_LOOK };
+  const { preset, mechanics } = resolveStyleTokens(raw);
+  const look: StyleLook = { ...DEFAULT_LOOK };
+  const name = preset?.name;
+
+  if (name === "quiet-instrument") {
+    look.navTracking = 50;
+    look.navUpper = true;
+    look.valueSize = 32;
+  } else if (name === "technical-editorial" || name === "gallery-warm") {
+    look.navTracking = 20;
+  }
+
+  if (mechanics.numbers === "mono-first") look.valueMono = true;
+  if (name === "technical-editorial" || name === "gallery-warm") look.headerScale = 1.15;
+  if (mechanics.spacing === "12px-loose") look.panelPaddingScale = 1.5;
+  if (mechanics.contrast === "bold") look.bodyWeight = 600;
+
+  // Warmth tints the canvas when the program states no fill of its own. Named
+  // paper tones, documented here: warm paper, blue-grey paper, otherwise unset.
+  if (mechanics.warmth === "warm") look.rootFill = "#FAF6EF";
+  else if (mechanics.warmth === "cool") look.rootFill = "#F0F3F5";
+
+  return look;
+}
 
 /* -------------------------------------------------------------------------- */
 /* Optical correction (FigDes §10)                                           */
@@ -100,7 +166,41 @@ export function compileIR(ir: DesignIR): CompileResult {
 
   const canvas = ir.canvas;
   const composition = inferComposition(ir.regions);
-  let regions = planLayout(ir);
+
+  /**
+   * Intent mechanics that live in the compiler rather than the interpreter.
+   *
+   * The interpreter already applied density (grid scale) and weight/focal
+   * (growth). What remains is presentation: rhythm scales gutters but not the
+   * spacing system; strong alignment snaps regions to the grid; bold contrast
+   * lifts display type; depth elevates chrome regions. Each is one multiplier
+   * in one place, reported nowhere because the geometry speaks for itself —
+   * except in tests, where the numbers are asserted directly.
+   */
+  const intent = ir.visualIntent;
+  const look = styleLook(ir.visualIntent?.style);
+  const rhythmScale = intent?.rhythm === "generous" ? 1.25 : intent?.rhythm === "tight" ? 0.75 : 1;
+  const titleScale =
+    intent?.contrast === "bold" ? 1.15 : intent?.contrast === "muted" ? 0.9 : 1;
+  const alignGrid = intent?.alignment === "strong" ? Math.max(1, Math.round(canvas.grid)) : 0;
+
+  let regions = planLayout(ir, defaultGutter(canvas.grid) * rhythmScale);
+  if (alignGrid > 0) {
+    regions = regions.map((r) => ({
+      ...r,
+      x: Math.round(r.x / alignGrid) * alignGrid,
+      y: Math.round(r.y / alignGrid) * alignGrid,
+      w: Math.max(alignGrid, Math.round(r.w / alignGrid) * alignGrid),
+      h: Math.max(alignGrid, Math.round(r.h / alignGrid) * alignGrid),
+    }));
+  }
+  if (intent?.depth === "layered" || intent?.depth === "subtle") {
+    const chrome = new Set(["secondary", "inspector"]);
+    if (intent.depth === "layered") chrome.add("panel");
+    regions = regions.map((r) =>
+      chrome.has(r.role) && r.elevation === 0 ? { ...r, elevation: 1 } : r,
+    );
+  }
   const regionIds = new Set(ir.regions.map((r) => r.id));
   let reflowed = 0;
 
@@ -141,7 +241,9 @@ export function compileIR(ir: DesignIR): CompileResult {
         name: canvas.name,
         width: canvas.width,
         height: canvas.height,
-        ...(canvas.fill !== undefined ? { fill: resolveToken(canvas.fill) } : {}),
+        // Warmth tints the canvas only when the program states no fill: an
+        // explicit fill always wins over manner.
+        ...(canvas.fill !== undefined ? { fill: resolveToken(canvas.fill) } : look.rootFill !== undefined ? { fill: look.rootFill } : {}),
       }),
     );
 
@@ -174,6 +276,21 @@ export function compileIR(ir: DesignIR): CompileResult {
           ...(region.radius !== undefined ? { cornerRadius: region.radius } : {}),
         }),
       );
+      // Elevation is depth you can see: a soft shadow on the region frame.
+      // Kept subtle by construction (12px blur per level, low opacity) because
+      // the identity forbids heavy shadow texture.
+      if (region.elevation > 0) {
+        operations.push(
+          op({
+            type: "setEffect",
+            target: region.id,
+            effect: "drop-shadow",
+            offsetY: 4 * region.elevation,
+            radius: 12 * region.elevation,
+            opacity: 0.12,
+          }),
+        );
+      }
     }
   }
 
@@ -200,7 +317,7 @@ export function compileIR(ir: DesignIR): CompileResult {
       h: Math.max(0, region.h - pad.top - pad.bottom),
     };
 
-    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale });
+    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look });
     if (used) algorithms[region.id] = used;
   }
 
@@ -554,8 +671,12 @@ function emitContent(args: {
   boxes: Map<string, PlacedBox>;
   /** Multiplier for type and hug-measured components. 1 outside deck mode. */
   typeScale: number;
+  /** Contrast-intent multiplier for display type. 1 unless contrast is bold/muted. */
+  titleScale: number;
+  /** Preset look: nav voice, value numerals, header scale, panel padding. */
+  look: StyleLook;
 }): string | undefined {
-  const { ir, region, content, inner, gap, operations, composition, algorithms, boxes, typeScale } = args;
+  const { ir, region, content, inner, gap, operations, composition, algorithms, boxes, typeScale, titleScale, look } = args;
   const grid = ir.canvas.grid;
 
   const textItems = content.filter((c) => c.kind === "text");
@@ -633,7 +754,7 @@ function emitContent(args: {
       // so connectors, relations and the returned geometry all agree.
       const placed: ResolvedBox = devicePlacementBox(box, spec);
       boxes.set(spec.id, { id: spec.id, ...placed });
-      if (spec.kind === "component") emitComponent(spec, region, placed, operations, grid, typeScale);
+      if (spec.kind === "component") emitComponent(spec, region, placed, operations, grid, typeScale, look);
       else if (spec.kind === "shape" || spec.kind === "vector") emitGraphic(spec, region, placed, operations);
     }
   } else if (graphics.length > 0) {
@@ -690,7 +811,7 @@ function emitContent(args: {
     if (requested === "masonry") {
       const points = runAlgorithm(
         "masonry",
-        flow.map((c, i) => ({ id: c.id, order: i, height: estimateHeight(c, inner.w, typeScale) })),
+        flow.map((c, i) => ({ id: c.id, order: i, height: estimateHeight(c, inner.w, typeScale, titleScale) })),
         [],
         { bounds: inner, gap, columns: flowColumns },
       ).points;
@@ -699,15 +820,15 @@ function emitContent(args: {
         const at = points.get(spec.id);
         if (!at) continue;
         const w = (inner.w - gap * (flowColumns - 1)) / flowColumns;
-        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale) }, spec);
+        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale) }, spec);
         boxes.set(spec.id, { id: spec.id, ...box });
-        if (spec.kind === "text") emitText(spec, region, box, operations, typeScale);
-        else emitComponent(spec, region, box, operations, grid, typeScale);
+        if (spec.kind === "text") emitText(spec, region, box, operations, typeScale, titleScale, look);
+        else emitComponent(spec, region, box, operations, grid, typeScale, look);
       }
     } else {
       const placed = packContent({
         region: inner,
-        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale) })),
+        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale) })),
         gap,
         columns: flowColumns,
       });
@@ -717,8 +838,8 @@ function emitContent(args: {
         if (!box) continue;
         const final: ResolvedBox = devicePlacementBox(box, spec);
         boxes.set(spec.id, { id: spec.id, ...final });
-        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale);
-        else emitComponent(spec, region, final, operations, grid, typeScale);
+        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
     }
   }
@@ -737,8 +858,17 @@ function emitText(
   box: ResolvedBox,
   operations: Operation[],
   typeScale = 1,
+  titleScale = 1,
+  look: StyleLook = DEFAULT_LOOK,
 ): void {
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
+  // Display roles answer contrast intent: bold contrast lifts headlines, muted
+  // contrast quiets them. Body text is never touched — emphasis that moves
+  // everything moves nothing.
+  const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
+  // A bold-contrast preset sets body in semibold: load-bearing words read as
+  // load-bearing. Display roles keep their scale voice; only body moves.
+  const weight = spec.weight ?? (spec.role === "body" && look.bodyWeight === 600 ? 600 : scale.weight);
 
   operations.push(
     op({
@@ -750,10 +880,10 @@ function emitText(
       y: box.y,
       content: spec.text,
       family: spec.family ?? scale.family ?? "Inter",
-      style: weightToStyle(spec.weight ?? scale.weight),
+      style: weightToStyle(weight),
       // Slides are 1920 wide against a 1440 design canvas; unscaled type reads as
       // fine print from the back of the room.
-      fontSize: Math.round((spec.size ?? scale.size) * typeScale),
+      fontSize: Math.round((spec.size ?? scale.size) * typeScale * display),
       ...(spec.letterSpacing !== undefined ? { letterSpacing: spec.letterSpacing } : {}),
       ...(spec.fill !== undefined ? { fill: resolveToken(spec.fill) } : {}),
       width: Math.max(40, Math.round(spec.maxWidth ?? box.w)),
@@ -848,6 +978,7 @@ function emitComponent(
   operations: Operation[],
   grid: number,
   typeScale = 1,
+  look: StyleLook = DEFAULT_LOOK,
 ): void {
   const p = spec.props;
   /** Components are created inside their region unless they declare elsewhere. */
@@ -868,7 +999,9 @@ function emitComponent(
       // A metric is a container plus three text layers: label, value, delta.
       // `valueStyle: "technical"` (or mono:true) sets the value in a monospaced
       // face: machine figures should read as machine figures, not marketing type.
-      const technical = p.mono === true || (typeof p.valueStyle === "string" && p.valueStyle.toLowerCase() === "technical");
+      // A mono-first preset forces tabular numerals everywhere, because an
+      // instrument that mixes proportional and tabular figures looks broken.
+      const technical = look.valueMono || p.mono === true || (typeof p.valueStyle === "string" && p.valueStyle.toLowerCase() === "technical");
       operations.push(
         op({
           type: "createFrame",
@@ -893,7 +1026,7 @@ function emitComponent(
           parent: spec.id,
           name: "Value",
           content: str("value", "0"),
-          fontSize: fs(28),
+          fontSize: fs(look.valueSize),
           weight: 600,
           ...(technical ? { family: "JetBrains Mono" } : {}),
           fill: "#242521",
@@ -977,9 +1110,15 @@ function emitComponent(
       // `state: "active"` (or active:true) is the wayfinding signal: a filled
       // marker the eye finds without reading. Disabled items fade but stay
       // legible, so the rail still communicates the full structure.
+      // A preset's typography reaches nav labels as tracking and case: an
+      // instrument shouts in tracked-out capitals, an editorial murmurs in
+      // sentence case. An explicit letterSpacing on the call would already have
+      // been a text primitive; nav items take their voice from the preset.
       const state = typeof p.state === "string" ? p.state.toLowerCase() : p.active === true ? "active" : "default";
       const active = state === "active";
       const disabled = state === "disabled";
+      const rawLabel = str("label", "Item");
+      const displayLabel = look.navUpper ? rawLabel.toUpperCase() : rawLabel;
       operations.push(
         op({
           type: "createFrame",
@@ -988,7 +1127,7 @@ function emitComponent(
           name: str("label", "Nav item"),
           x: box.x,
           y: box.y,
-          width: hugWidth(str("label", "Item"), { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
+          width: hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
           height: 36,
           fill: active ? "#F2C94C" : str("surface", "transparent"),
           radius: grid / 2,
@@ -1002,9 +1141,10 @@ function emitComponent(
           type: "createText",
           parent: spec.id,
           name: "Label",
-          content: str("label", "Item"),
+          content: displayLabel,
           fontSize: fs(14),
           ...(active ? { weight: 600 } : {}),
+          ...(look.navTracking > 0 ? { letterSpacing: look.navTracking } : {}),
           fill: active ? "#242521" : str("color", "#6F716A"),
         }),
       );
@@ -1069,7 +1209,9 @@ function emitComponent(
 
     case "sectionHeader": {
       const title = str("title", "Section");
-      operations.push(op({ type: "createText", id: spec.id, parent: parentHint, name: title, x: box.x, y: box.y, content: title, fontSize: fs(18), weight: 600, fill: "#242521" }));
+      // Editorial presets give headers a larger voice: the section title is
+      // the decision stated, and it should read as one.
+      operations.push(op({ type: "createText", id: spec.id, parent: parentHint, name: title, x: box.x, y: box.y, content: title, fontSize: fs(Math.round(18 * look.headerScale)), weight: 600, fill: "#242521" }));
       // An action ("View all") right-aligns in the same band, so the header
       // carries its own navigation instead of needing a second row.
       if (str("action")) {
@@ -1332,7 +1474,10 @@ function emitComponent(
       // Generic container. A topology map is emitted as a titled region so the
       // node structure stays semantic and editable rather than baked pixels.
       // `tone` tints the surface without needing a second primitive.
+      // Panels are already borderless by construction, so an open/borderless
+      // preset changes nothing here; generous spacing widens the padding.
       const surface = p.surface !== undefined ? str("surface", "#FFFDF9") : p.tone !== undefined ? toneFor(p.tone).bg : "#FFFDF9";
+      const pad = Math.round(grid * 2 * look.panelPaddingScale);
       operations.push(
         op({
           type: "createFrame",
@@ -1346,7 +1491,7 @@ function emitComponent(
           fill: surface,
           radius: num("radius", grid),
           layoutMode: "VERTICAL",
-          padding: grid * 2,
+          padding: pad,
           itemSpacing: grid,
         }),
       );
@@ -1610,13 +1755,14 @@ function weightToStyle(weight: number): string {
  * only needs to be close enough for the layout to look right. Reported
  * characters-per-line assumes the region's width.
  */
-function estimateHeight(spec: ContentSpec, width: number, typeScale = 1): number {
+function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1): number {
   if (spec.kind !== "text") {
     return spec.kind === "component" ? Math.round(90 * typeScale) : 32;
   }
 
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
-  const size = (spec.size ?? scale.size) * typeScale;
+  const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
+  const size = (spec.size ?? scale.size) * typeScale * display;
   const usable = Math.max(40, spec.maxWidth ?? width);
   const charsPerLine = Math.max(8, Math.floor(usable / (size * 0.55)));
   const lines = Math.max(1, Math.ceil(spec.text.length / charsPerLine));

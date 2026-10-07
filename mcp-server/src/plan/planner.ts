@@ -463,6 +463,15 @@ export interface ScreenPlan {
   program: {
     canvas: { name: string; width: number; height: number; grid: number };
     regions: Array<{ fn: string; id: string; args: Record<string, unknown> }>;
+    /**
+     * The art director's taste, in the runtime's own vocabulary.
+     *
+     * Focal region plus hierarchy-derived weights, so a plan built from this
+     * program inherits the plan's visual decisions instead of re-deriving (or
+     * losing) them. Density is deliberately unset: it is a manner choice for
+     * the author or the visualDirection, not something to infer from geometry.
+     */
+    visualIntent: { focal?: string; visualWeight: Record<string, number>; style?: string };
   };
 }
 
@@ -562,6 +571,51 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
 
   const artDirection = directArt(intent, decisionKind, boxes, regions, guardPreview, warnings);
 
+  // The program carries visualIntent (focal + weights) that the runtime turns
+  // into growth — `Math.round(weight * 2)` when it beats declared grow, focal
+  // forced to at least 2. A preview that ignores that growth is not a preview,
+  // so the final geometry is resolved WITH the overlay the build will apply.
+  // The formula mirrors the interpreter exactly; if either changes, the
+  // plan/build agreement test fails and says so.
+  const grownRegions = regions.map((r) => {
+    const rank = artDirection.hierarchy.find((h) => h.id === r.id)?.rank ?? 3;
+    const chrome = r.role === "navigation" || r.role === "header" || r.role === "footer" || r.role === "status-rail";
+    const weight = chrome ? 0.15 : rank === 1 ? 0.9 : rank === 2 ? 0.6 : 0.35;
+    let grow = r.grow;
+    const inferred = Math.round(weight * 2);
+    if (inferred > grow) grow = inferred;
+    if (artDirection.focal?.id === r.id && grow < 2) grow = 2;
+    return { ...r, grow };
+  });
+  const relaid = layoutRegions({
+    regions: grownRegions.map((r) => ({
+      id: r.id,
+      role: r.role,
+      composition: r.composition,
+      width: r.width,
+      height: r.height,
+      grow: r.grow,
+      children: [] as string[],
+      gap: r.gap,
+      padding: r.padding,
+    })) as Region[],
+    canvasW: width,
+    canvasH: height,
+    gutter,
+  });
+  const relayedById = new Map(relaid.map((r) => [r.id, r]));
+  const finalBoxes: CompositionBox[] = grownRegions.map((r) => {
+    const box = relayedById.get(r.id);
+    return {
+      name: r.id,
+      x: box?.x ?? 0,
+      y: box?.y ?? 0,
+      w: Math.round(box?.w ?? 0),
+      h: Math.round(box?.h ?? 0),
+      why: r.because,
+    };
+  });
+
   const compositionCandidates = [
     { composition, recommended: true, why: `Inferred from the ${decisionKind} decision: ${artDirection.focal ? `built around '${artDirection.focal.id}'` : "no single focal region"}.` },
     ...alternatives.map((a) => ({ composition: a.composition, recommended: false, why: a.trade })),
@@ -577,7 +631,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     },
     composition,
     template: templateFor(decisionKind),
-    boxes,
+    boxes: finalBoxes,
     regions,
     passes,
     artDirection,
@@ -599,6 +653,19 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
           composition: r.composition,
         },
       })),
+      visualIntent: {
+        ...(artDirection.focal !== null ? { focal: artDirection.focal.id } : {}),
+        // Rank sets the weight, but chrome never grows no matter its rank: a
+        // navigation rail absorbing slack is a layout bug wearing taste as a
+        // disguise.
+        visualWeight: Object.fromEntries(
+          artDirection.hierarchy.map((h) => {
+            const role = regions.find((r) => r.id === h.id)?.role;
+            const chrome = role === "navigation" || role === "header" || role === "footer" || role === "status-rail";
+            return [h.id, chrome ? 0.15 : h.rank === 1 ? 0.9 : h.rank === 2 ? 0.6 : 0.35];
+          }),
+        ),
+      },
     },
   };
 }

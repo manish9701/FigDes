@@ -35,8 +35,11 @@ import {
   type DesignIR,
   type VisualIntent,
 } from "../../../shared/ir";
-import { compileIR } from "./compile";
+import { compileIR, TYPE_SCALE } from "./compile";
 import { parseConstraint } from "./constraints";
+import { compileVisual } from "./visual";
+import { resolveStyleTokens, presetAlignment } from "./visual-presets";
+import { VisualConceptSchema } from "../../../shared/ir";
 
 /* -------------------------------------------------------------------------- */
 /* The runtime vocabulary                                                      */
@@ -379,6 +382,12 @@ export const RuntimeProgramSchema = z.object({
    * at taste is worse than defaulting to it.
    */
   visualIntent: z.record(z.unknown()).optional(),
+  /**
+   * Visual IR concepts: focal, anchor, cluster, field, stage, lens, trace,
+   * layer, orbit, zone. Each entry is validated individually; bad entries warn
+   * and skip while the rest compile.
+   */
+  visual: z.array(z.record(z.unknown())).max(100).default([]),
   constraints: DesignIRSchema.shape.constraints,
 });
 
@@ -447,23 +456,57 @@ export function executeRuntime(input: unknown): RuntimeResult {
   // that is not a valid region call is reported and skipped, never trusted.
   const planRegions = extractPlanRegions(parsedProgram.plan, warnings);
   const regionCalls = [...planRegions, ...parsedProgram.regions];
+  const planIntent = parsedProgram.visualIntent === undefined ? extractPlanIntent(parsedProgram.plan, warnings) : undefined;
 
   // Visual intent is parsed strictly but applied leniently: an uninterpretable
   // intent warns once and is ignored, because guessing at taste is worse than
-  // defaulting to it.
+  // defaulting to it. The plan's intent applies only when the program states
+  // none of its own.
   let intent: VisualIntent | undefined;
-  if (parsedProgram.visualIntent !== undefined) {
-    const parsed = VisualIntentSchema.safeParse(parsedProgram.visualIntent);
+  const intentSource = parsedProgram.visualIntent !== undefined ? parsedProgram.visualIntent : planIntent;
+  if (intentSource !== undefined) {
+    const parsed = VisualIntentSchema.safeParse(intentSource);
     if (parsed.success) {
       intent = parsed.data;
+      if (parsedProgram.visualIntent === undefined && planIntent !== undefined) {
+        intentNotes.push("Visual intent inherited from the plan; stating visualIntent overrides it wholesale.");
+      }
     } else {
       warnings.push(`Visual intent ignored: ${parsed.error.issues[0]?.message}. The program builds with default taste.`);
     }
   }
 
+  // Style presets: named manners that fill in whatever the intent leaves unset.
+  // An explicit field always wins over its preset — presets are defaults with
+  // opinions, not overrides. The registry lives in visual-presets.ts: curated
+  // presets, accordion shorthands ("compact" expands to "dense, quiet"), and
+  // compound directives ("dense, warm"). Contradictory pairs ("airy" with
+  // "dense") are rejected with a warning and default taste, because building
+  // the average of two opposing manners would be guessing. Unknown names are
+  // reported, never guessed at.
+  if (intent?.style !== undefined) {
+    const resolved = resolveStyleTokens(intent.style);
+    for (const note of resolved.notes) intentNotes.push(note);
+    for (const warning of resolved.warnings) warnings.push(warning);
+    // Only intent-native mechanics fill intent fields, and only when unset.
+    // Presentation mechanics (spacing, align, typography, surfaces, numbers,
+    // shape, sizing, warmth, contentDensity, colorUsage) travel with the IR
+    // style value into the compiler, which applies them in builders.
+    if (typeof resolved.mechanics.density === "string" && (intent as Record<string, unknown>).density === undefined) {
+      (intent as Record<string, unknown>).density = resolved.mechanics.density;
+    }
+    if (typeof resolved.mechanics.contrast === "string" && (intent as Record<string, unknown>).contrast === undefined) {
+      (intent as Record<string, unknown>).contrast = resolved.mechanics.contrast;
+    }
+    if (resolved.mechanics.align !== undefined && (intent as Record<string, unknown>).alignment === undefined) {
+      const bridged = presetAlignment(resolved.mechanics.align);
+      if (bridged !== undefined) (intent as Record<string, unknown>).alignment = bridged;
+    }
+  }
   // Density rescales the spacing system. Airy means roomier gutters, padding and
   // gaps everywhere; dense tightens them. One multiplier keeps every derived
   // measurement consistent instead of special-casing each one.
+  // (Style presets above may have filled density in; explicit still won.)
   const GAP_SCALE: Record<string, number> = { airy: 1.5, calm: 1.25, balanced: 1, dense: 0.75 };
   const gapScale = intent?.density ? (GAP_SCALE[intent.density] ?? 1) : 1;
   const baseGrid = typeof rawCanvas?.grid === "number" && rawCanvas.grid > 0 ? rawCanvas.grid : 8;
@@ -548,6 +591,7 @@ regions.push({
       ...(args.padding !== undefined ? { padding: coercePadding(args.padding) } : {}),
       ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
       ...(args.radius !== undefined ? { radius: coerceNumber(args.radius, 0, 0, 200) } : {}),
+      elevation: 0,
       children: [],
     });
   }
@@ -556,10 +600,68 @@ regions.push({
     throw new Error("A runtime program needs at least one region primitive (frame, navigation, header, hero, inspector).");
   }
 
+  // Visual IR concepts compile here, after regions exist and before content is
+  // parented. Concepts that create regions append them (grow and validation
+  // below then see the full set); member claims reparent content calls; traces
+  // append connector calls; focal feeds intent. Template-expanded items cannot
+  // be targeted — their ids are namespaced at expansion — so visual references
+  // the declared ids of top-level content calls.
+  const visualReparents = new Map<string, string>();
+  const visualTraceConnectors: RuntimeCall[] = [];
+  if (parsedProgram.visual.length > 0) {
+    const declaredContent = new Set(
+      parsedProgram.content.map((c, i) => (typeof c.id === "string" && c.id ? c.id : `__positional-${i}`)),
+    );
+    const concepts: Array<{ id: string; kind: string; target?: string; members?: string[]; zone?: string; from?: string; to?: string; label?: string; title?: string }> = [];
+    for (const raw of parsedProgram.visual) {
+      const parsed = VisualConceptSchema.safeParse({
+        id: typeof raw.id === "string" ? raw.id : "",
+        kind: typeof raw.kind === "string" ? raw.kind : "",
+        ...(typeof raw.target === "string" ? { target: raw.target } : {}),
+        ...(Array.isArray(raw.members) ? { members: raw.members } : {}),
+        ...(typeof raw.zone === "string" ? { zone: raw.zone } : {}),
+        ...(typeof raw.from === "string" ? { from: raw.from } : {}),
+        ...(typeof raw.to === "string" ? { to: raw.to } : {}),
+        ...(typeof raw.label === "string" ? { label: raw.label } : {}),
+        ...(typeof raw.title === "string" ? { title: raw.title } : {}),
+      });
+      if (!parsed.success) {
+        warnings.push(`Visual concept skipped: ${parsed.error.issues[0]?.message}. Concepts need an id and a known kind.`);
+        continue;
+      }
+      concepts.push(parsed.data);
+    }
+
+    const plan = compileVisual(concepts, regionIds, declaredContent);
+    warnings.push(...plan.warnings);
+    for (const region of plan.regions) {
+      regions.push(region);
+      regionIds.add(region.id);
+    }
+    for (const [contentId, regionId] of plan.reparents) visualReparents.set(contentId, regionId);
+    if (plan.focal !== undefined && intent?.focal === undefined) {
+      const base: VisualIntent = intent ?? { visualWeight: {} };
+      intent = { ...base, focal: plan.focal };
+      intentNotes.push(`Focal point '${plan.focal}' set by the visual layer.`);
+    }
+    if (plan.elevated.length > 0) {
+      intentNotes.push(`Depth: ${plan.elevated.length} region(s) carry elevation.`);
+    }
+    visualTraceConnectors.push(...plan.connectors);
+  }
+
   // Visual weight becomes growth: a region with weight 0.9 absorbs slack like
   // grow 2, weight 0.35 like grow 1, weight 0.15 like grow 0. The focal region
   // grows hardest, because the thing the eye finds first needs the room to be
   // found in. Declared grow always wins ties: explicit beats inferred.
+  //
+  // Weights may also name content objects, not just regions: the hero is often
+  // a topology or a chart *inside* a region. Content weights cannot move boxes
+  // (packing owns positions), so they become emphasis — larger, bolder type —
+  // applied when the text spec is built below. Unknown keys are validated after
+  // the content loop, once content ids actually exist.
+  const contentWeights = new Map<string, number>();
+  let contentFocal: string | undefined;
   if (intent && (Object.keys(intent.visualWeight).length > 0 || intent.focal !== undefined)) {
     for (const region of regions) {
       const weight = intent.visualWeight[region.id];
@@ -576,12 +678,10 @@ regions.push({
       }
     }
     if (intent.focal !== undefined && !regionIds.has(intent.focal)) {
-      warnings.push(`Visual intent names focal '${intent.focal}', which is not a region. The focal boost was skipped.`);
+      contentFocal = intent.focal;
     }
-    for (const key of Object.keys(intent.visualWeight)) {
-      if (!regionIds.has(key)) {
-        warnings.push(`Visual weight names '${key}', which is not a region. That weight was skipped.`);
-      }
+    for (const [key, weight] of Object.entries(intent.visualWeight)) {
+      if (!regionIds.has(key)) contentWeights.set(key, weight);
     }
   }
 
@@ -652,6 +752,10 @@ regions.push({
     pushCall(call);
   }
 
+  // Traces compiled from the visual layer join the stream like hand-written
+  // connectors, parented normally below.
+  for (const trace of visualTraceConnectors) pushCall(trace);
+
   for (const call of calls) {
     const def = RUNTIME_PRIMITIVES[call.fn];
     const id = call.id ?? `node-${content.length + 1}`;
@@ -662,6 +766,18 @@ regions.push({
     }
 
 const args = call.args as Record<string, unknown>;
+
+    // A visual claim overrides an explicit parent with exactly one warning: the
+    // visual block is authoritative for its members, but a conflict means the
+    // program disagrees with itself and the author should know.
+    let effectiveParent = call.parent;
+    if (id && visualReparents.has(id)) {
+      const claimed = visualReparents.get(id)!;
+      if (call.parent !== undefined && call.parent !== claimed) {
+        warnings.push(`'${id}' was claimed by the visual layer into '${claimed}' instead of '${call.parent}'.`);
+      }
+      effectiveParent = claimed;
+    }
 
     const stray = unknownArgs(call.fn, args);
     if (stray.length > 0) {
@@ -677,29 +793,43 @@ const args = call.args as Record<string, unknown>;
     const documentLevel = call.fn === "variable" || call.fn === "textStyle" || call.fn === "paintStyle";
 
     if (!documentLevel) {
-      const parentId = call.parent && regionIds.has(call.parent) ? call.parent : regions[0]!.id;
-      if (call.parent && !regionIds.has(call.parent)) {
-        warnings.push(`Unknown parent '${call.parent}' for '${id}'; placed in '${regions[0]!.id}'.`);
+      const parentId = effectiveParent && regionIds.has(effectiveParent) ? effectiveParent : regions[0]!.id;
+      if (effectiveParent && !regionIds.has(effectiveParent)) {
+        warnings.push(`Unknown parent '${effectiveParent}' for '${id}'; placed in '${regions[0]!.id}'.`);
       }
       regions.find((r) => r.id === parentId)!.children.push(id);
     }
 
     switch (call.fn) {
       case "text": {
+        // Content-level emphasis: a weight >= 0.7 or the focal id enlarges and
+        // emboldens this text against the same role scale the compiler uses, so
+        // estimateHeight accounts for it automatically. Below 0.7 the text is
+        // left alone: emphasis that moves everything moves nothing.
+        const emphasis = contentFocal === id || (contentWeights.get(id) ?? 0) >= 0.7;
+        const role = ((args.role as never) ?? "body") as keyof typeof TYPE_SCALE;
+        const roleSize = TYPE_SCALE[role]?.size ?? TYPE_SCALE.body!.size;
+        const roleWeight = TYPE_SCALE[role]?.weight ?? TYPE_SCALE.body!.weight;
         const parsed = TextSpecSchema.safeParse({
           id,
           kind: "text",
           text: String(args.text ?? args.content ?? ""),
           role: (args.role as never) ?? "body",
-          ...(args.size !== undefined ? { size: coerceNumber(args.size, 16, 1, 400) } : {}),
+          size: emphasis ? Math.round((typeof args.size === "number" ? args.size : roleSize) * 1.25) : args.size !== undefined ? coerceNumber(args.size, 16, 1, 400) : undefined,
           ...(args.family !== undefined ? { family: String(args.family) } : {}),
-          ...(args.weight !== undefined ? { weight: coerceNumber(args.weight, 400, 100, 900) } : {}),
+          weight: emphasis
+            ? Math.max(typeof args.weight === "number" ? args.weight : 0, roleWeight, 600)
+            : args.weight !== undefined
+              ? coerceNumber(args.weight, 400, 100, 900)
+              : undefined,
           ...(args.letterSpacing !== undefined ? { letterSpacing: coerceNumber(args.letterSpacing, 0, -100, 1000) } : {}),
           ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
           ...(args.maxWidth !== undefined ? { maxWidth: coerceNumber(args.maxWidth, 0, 1, 20000) } : {}),
         });
-        if (parsed.success) content.push(parsed.data);
-        else warnings.push(`Text '${id}' rejected: ${parsed.error.issues[0]?.message}`);
+        if (parsed.success) {
+          content.push(parsed.data);
+          if (emphasis) intentNotes.push(`Text '${id}' emphasized by visual intent (larger, bolder).`);
+        } else warnings.push(`Text '${id}' rejected: ${parsed.error.issues[0]?.message}`);
         break;
       }
 
@@ -808,9 +938,33 @@ case "shape": {
           type: componentTypeFor(call.fn),
           props: args,
         });
-        if (parsed.success) content.push(parsed.data);
-        else warnings.push(`Component '${id}' rejected: ${parsed.error.issues[0]?.message}`);
+        if (parsed.success) {
+          content.push(parsed.data);
+          // A `surface: "surface-02"` style directive is not a colour, but it
+          // still emits: the build proceeds with the literal value while the
+          // note tells the model to bind it to a style downstream.
+          const surface = (args as Record<string, unknown>).surface;
+          if (typeof surface === "string" && /^surface-\d+$/i.test(surface)) {
+            intentNotes.push(`'${surface}' is a surface directive, not a colour: emitted literally so the build proceeds; bind it to a style downstream.`);
+          }
+        } else warnings.push(`Component '${id}' rejected: ${parsed.error.issues[0]?.message}`);
         break;
+      }
+    }
+  }
+
+  // Content-level intent keys are validated now that content ids exist. A key
+  // matching neither a region nor a placed node names nothing, and is reported
+  // naming both namespaces so the fix is obvious.
+  if (contentWeights.size > 0 || contentFocal !== undefined) {
+    const placed = new Set<string>();
+    for (const region of regions) for (const child of region.children) placed.add(child);
+    if (contentFocal !== undefined && !placed.has(contentFocal)) {
+      warnings.push(`Visual intent names focal '${contentFocal}', which matches no region or content. The focal boost was skipped.`);
+    }
+    for (const key of contentWeights.keys()) {
+      if (!placed.has(key)) {
+        warnings.push(`Visual weight names '${key}', which matches no region or content. That weight was skipped.`);
       }
     }
   }
@@ -1272,6 +1426,26 @@ function extractPlanRegions(plan: Record<string, unknown> | undefined, warnings:
     out.push(parsed.data);
   });
   return out;
+}
+
+/**
+ * Reads visual intent out of a plan_screen output object.
+ *
+ * An explicit program-level visualIntent wins outright: the plan's taste is a
+ * starting point the author can override wholesale, not a layer to merge
+ * field-by-field (half-merged taste is incoherent taste).
+ */
+function extractPlanIntent(plan: Record<string, unknown> | undefined, warnings: string[]): Record<string, unknown> | undefined {
+  if (!plan) return undefined;
+  const program = plan.program;
+  if (!program || typeof program !== "object") return undefined;
+  const intent = (program as Record<string, unknown>).visualIntent;
+  if (intent === undefined) return undefined;
+  if (!intent || typeof intent !== "object" || Array.isArray(intent)) {
+    warnings.push("The plan's visual intent is not an object; it was ignored.");
+    return undefined;
+  }
+  return intent as Record<string, unknown>;
 }
 
 /**

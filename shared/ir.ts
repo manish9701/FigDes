@@ -79,6 +79,12 @@ export const RegionSchema = z
     padding: z.union([z.number().min(0), z.object({ top: z.number(), right: z.number(), bottom: z.number(), left: z.number() })]).optional(),
     fill: TokenRefSchema.optional(),
     radius: z.number().min(0).optional(),
+    /**
+     * Visual elevation 0-3. Renders as a soft drop shadow: depth you can see,
+     * not a comment about depth. Layer concepts and layered intent set this;
+     * everything else stays flat.
+     */
+    elevation: z.number().int().min(0).max(3).default(0),
     children: z.array(z.string().max(64)).default([]),
   })
   .strict();
@@ -352,8 +358,8 @@ export function canvasSize(value: unknown, fallback: number): number {
  */
 export const VisualIntentSchema = z
   .object({
-    /** Overall manner: technical-editorial, instrument, calm, dense... */
-    style: z.string().min(1).max(60).optional(),
+  /** Overall manner: a preset name, an accordion word, or a combination. */
+  style: z.union([z.string().min(1).max(120), z.array(z.string().min(1).max(60)).min(1).max(6)]).optional(),
     /** Symmetric, asymmetric, radial, editorial... */
     composition: z.string().min(1).max(60).optional(),
     /** airy | calm | balanced | dense */
@@ -374,6 +380,42 @@ export const VisualIntentSchema = z
   .strict();
 
 export type VisualIntent = z.infer<typeof VisualIntentSchema>;
+
+/**
+ * A Visual IR concept (FigDes visual layer).
+ *
+ * Semantic visual composition objects that compile into native nodes without
+ * giving the model coordinates. A focal names the hero; an anchor names what
+ * stays put; a cluster groups related objects; a field holds data readouts; a
+ * stage is the primary canvas; a lens details another object; a trace draws the
+ * path between objects; a layer groups depth; an orbit arranges around a
+ * centre; a zone declares comparison or context areas.
+ *
+ * None of these map 1:1 to Figma nodes. They compile to regions, content,
+ * relations and links in the Design IR below — which is what keeps the model
+ * out of the geometry business while letting it think in visual terms.
+ */
+export const VisualConceptSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    kind: z.enum(["focal", "anchor", "cluster", "field", "stage", "lens", "trace", "layer", "orbit", "zone"]),
+    /** Node or region this concept refers to, where applicable. */
+    target: z.string().min(1).max(64).optional(),
+    /** Member content ids, for cluster/orbit/zone/layer. */
+    members: z.array(z.string().min(1).max(64)).max(60).default([]),
+    /** Zone kind: side-by-side comparison or a context rail. */
+    zone: z.enum(["comparison", "context"]).optional(),
+    /** Trace endpoints. */
+    from: z.string().min(1).max(64).optional(),
+    to: z.string().min(1).max(64).optional(),
+    /** Trace/zone caption. */
+    label: z.string().max(120).optional(),
+    /** Title for created regions. */
+    title: z.string().max(120).optional(),
+  })
+  .strict();
+
+export type VisualConcept = z.infer<typeof VisualConceptSchema>;
 
 /**
  * A relationship constraint (spec §18).

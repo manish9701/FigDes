@@ -30,8 +30,9 @@ import { projectKey } from "./memory/store";
 import { saveSnapshot, listSnapshots, getSnapshot } from "./snapshots/store";
 import { guardMutation, resolveExistingResources } from "./plan/gate";
 import { exoSeedOperations, exoSeedCounts } from "./tokens/exo";
-import { ScoreArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
+import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, critiqueVisualTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
 import { exportCode } from "./code/export";
+import { UseFigmaArgs, InspectVisualArgs, figdesUseFigmaHandler, figdesInspectVisualHandler } from "./native/use-figma";
 
 /* -------------------------------------------------------------------------- */
 /* Shared arg fragments                                                        */
@@ -815,6 +816,15 @@ export const TOOLS: ToolDefinition[] = [
   },
 
   {
+    name: "critique_visual",
+    title: "Judge whether a design is good, not just correct",
+    description:
+      "The aesthetic critic: evaluate a program on focal clarity, hierarchy, composition, whitespace, density, repetition, card-wall tendency, visual balance, data-visualization quality, surface hierarchy, depth, and template feel. Verdicts are PASS / WATCH / FAIL with measured evidence - never arbitrary scores. Structural issues (overflow, contrast, naming) belong to review_design and are NOT mixed in here. Deterministic and free: run it alongside score_design before presenting anything.",
+    inputSchema: CritiqueArgs,
+    handler: async (args) => critiqueVisualTool(args),
+  },
+
+  {
     name: "refine_screen",
     title: "Run the review-fix loop to convergence",
     description:
@@ -1130,6 +1140,28 @@ inputSchema: CompileArgs,
       const parsed = DesignBriefArgs.parse(args);
       return designBriefTool(registry.resolve(parsed.sessionId), parsed);
     },
+  },
+
+  {
+    name: "figdes_use_figma",
+    title: "Native Execution Tool",
+    description: "Execute controlled Figma-native code/operations against the connected document. Do not route Native Mode back through the existing small primitive compiler. Supported features: pages, frames, groups, text, vectors, components, variants, variables, styles, effects, auto-layout, etc. Every mutation is transactional and returns real state. Use fig.page(), fig.frame(), etc. helpers.",
+    inputSchema: UseFigmaArgs,
+    handler: async (args, registry) => {
+      const parsed = UseFigmaArgs.parse(args ?? {});
+      return figdesUseFigmaHandler(registry.resolve(parsed.sessionId), parsed);
+    }
+  },
+
+  {
+    name: "figdes_inspect_visual",
+    title: "Lightweight visual inspection",
+    description: "Create a lightweight visual-summary read tool that reports: canvas dimensions, largest objects, focal candidates, text hierarchy, surface count, card-like surfaces, color distribution, whitespace distribution, alignment groups, visual layers, component usage.",
+    inputSchema: InspectVisualArgs,
+    handler: async (args, registry) => {
+      const parsed = InspectVisualArgs.parse(args ?? {});
+      return figdesInspectVisualHandler(registry.resolve(parsed.sessionId), parsed);
+    }
   },
 
   {

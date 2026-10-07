@@ -24,6 +24,9 @@ import { parseSvgPath } from "../../shared/path";
 
 const MAX_CREATED_NODES = 500;
 
+/** Applied-trace lines returned per transaction; the rest is summarized. */
+const APPLIED_TRACE_CAP = 300;
+
 /**
  * Estimates the width of a hug-sized pill, button or nav item.
  *
@@ -323,8 +326,29 @@ interface Ctx {
   /** temp id -> real figma id */
   ids: Map<string, string>;
   created: CreatedNode[];
+  /** Figma ids touched by non-create operations, for evidence. */
+  modified: Set<string>;
   currentPageId: string;
   isDryRun: boolean;
+}
+
+/**
+ * Records every node a mutation addresses, resolved to its real Figma id.
+ *
+ * Runs after a successful apply, so a failed operation never pollutes the
+ * evidence: the next call operates from what actually changed, not from what
+ * was attempted. Creates record their parent (a new child modifies its
+ * container); mutations record their target, and appendChild both ends.
+ */
+function touchRefs(ctx: Ctx, op: Parsed): void {
+  const refs: string[] = [];
+  const o = op as Record<string, unknown>;
+  if (typeof o.target === "string") refs.push(o.target);
+  if (typeof o.parent === "string") refs.push(o.parent);
+  if (typeof o.child === "string") refs.push(o.child);
+  for (const ref of refs) {
+    ctx.modified.add(ctx.ids.get(ref) ?? ref);
+  }
 }
 
 /** Anything that can receive children: a page, frame, component or instance. */
@@ -414,6 +438,7 @@ export async function runTransaction(input: {
       status: "success",
       dryRun: true,
       createdNodes: [],
+      modifiedNodes: [],
       applied: parsed.map((op) => `${op.type}${describe(op)}`),
     };
   }
@@ -421,6 +446,7 @@ export async function runTransaction(input: {
   const ctx: Ctx = {
     ids: new Map(),
     created: [],
+    modified: new Set(),
     currentPageId: figma.currentPage.id,
     isDryRun: false,
   };
@@ -445,6 +471,7 @@ export async function runTransaction(input: {
       const index = parsed.indexOf(op);
       const note = await apply(ctx, op, index);
       applied.push(`${op.type}${note ? ` ${note}` : ""}`);
+      touchRefs(ctx, op);
 
       // Report roughly every 10% (and always the last op) so a 500-op build
       // narrates without flooding the iframe with 500 messages.
@@ -468,12 +495,39 @@ export async function runTransaction(input: {
     /* ignore */
   }
 
+  // Evidence: committed bounds for everything created, read after the dust
+  // settles so auto-layout shifts are included. A node removed later in the
+  // same transaction simply carries no bounds rather than failing the report.
+  for (const entry of ctx.created) {
+    try {
+      const node = await figma.getNodeByIdAsync(entry.figmaNodeId);
+      if (node && "x" in node && "width" in node) {
+        const b = node as SceneNode & { x: number; y: number; width: number; height: number };
+        entry.bounds = {
+          x: Math.round(b.x),
+          y: Math.round(b.y),
+          width: Math.round(b.width),
+          height: Math.round(b.height),
+        };
+      }
+    } catch {
+      /* gone: no bounds, still reported as created */
+    }
+  }
+
+  // The trace is evidence, not a log file: cap it so a 2000-op construction
+  // does not flood the model with 2000 lines.
+  const trace = applied.length > APPLIED_TRACE_CAP
+    ? [...applied.slice(0, APPLIED_TRACE_CAP), `… and ${applied.length - APPLIED_TRACE_CAP} more operations applied.`]
+    : applied;
+
   return {
     transactionId: input.transactionId,
     status: "success",
     dryRun: false,
     createdNodes: ctx.created,
-    applied,
+    modifiedNodes: [...ctx.modified],
+    applied: trace,
   };
 }
 
@@ -485,7 +539,9 @@ function isCreateOp(op: Parsed): boolean {
     op.type === "createText" ||
     op.type === "createVector" ||
     op.type === "createSlide" ||
-    op.type === "cloneNode"
+    op.type === "cloneNode" ||
+    op.type === "createComponent" ||
+    op.type === "createInstance"
   );
 }
 
@@ -502,6 +558,10 @@ function describe(op: Parsed): string {
       return "vector";
     case "createSlide":
       return `${op.name ?? "Slide"} 1920x1080`;
+    case "createComponent":
+      return `Component ${op.name ?? ""}`;
+    case "createInstance":
+      return `Instance ${op.name ?? ""}`;
     case "createVariable":
       return `${op.name} (${op.variableType})`;
     case "bindVariable":
@@ -516,6 +576,10 @@ function describe(op: Parsed): string {
       return op.name ?? "Group";
     case "setEffect":
       return op.effect;
+    case "setVariant":
+      return JSON.stringify(op.variant);
+    case "setConstraints":
+      return `${op.horizontal} / ${op.vertical}`;
     case "renameNode":
       return op.name;
     case "setSize":
@@ -613,6 +677,39 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.y !== undefined) ell.y = op.y;
 
       return register(ctx, op.id, ell, index, op.type);
+    }
+
+    case "createComponent": {
+      const parent = await resolveParent(ctx, op.parent, index, op.type);
+      const comp = figma.createComponent();
+      comp.name = op.name ?? "Component";
+      if (op.width !== undefined && op.height !== undefined) {
+        comp.resize(op.width, op.height);
+      }
+      parent.appendChild(comp);
+
+      comp.fills = toPaints(op.fill ?? []);
+      if (op.opacity !== undefined) comp.opacity = op.opacity;
+      if (op.x !== undefined) comp.x = op.x;
+      if (op.y !== undefined) comp.y = op.y;
+
+      return register(ctx, op.id, comp, index, op.type);
+    }
+
+    case "createInstance": {
+      const parent = await resolveParent(ctx, op.parent, index, op.type);
+      const componentNode = await resolveNode(ctx, op.componentId, index, op.type);
+      if (componentNode.type !== "COMPONENT" && componentNode.type !== "COMPONENT_SET") {
+        throw new OperationError(`Node ${op.componentId} is not a Component`, index, op.type);
+      }
+      const instance = (componentNode as ComponentNode).createInstance();
+      instance.name = op.name ?? instance.name;
+      parent.appendChild(instance);
+
+      if (op.x !== undefined) instance.x = op.x;
+      if (op.y !== undefined) instance.y = op.y;
+
+      return register(ctx, op.id, instance, index, op.type);
     }
 
     case "createText": {
@@ -905,6 +1002,21 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       return `-> ${op.name}`;
     }
 
+    case "setVariant": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (node.type !== "INSTANCE") {
+        throw new OperationError(`setVariant target must be an INSTANCE. Got ${node.type}`, index, op.type);
+      }
+      const instance = node as InstanceNode;
+      // We need to merge with existing properties
+      const newProps = { ...instance.componentProperties };
+      for (const [k, v] of Object.entries(op.variant)) {
+        newProps[k] = { type: "VARIANT", value: String(v) };
+      }
+      instance.setProperties(newProps);
+      return instance.id;
+    }
+
     case "setPosition": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
       if (op.x !== undefined) node.x = op.x;
@@ -1092,6 +1204,24 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       }
       page.appendChild(node);
       return `-> ${page.name}`;
+    }
+
+    case "setConstraints": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (!("constraints" in node)) {
+        throw new OperationError(`${node.type} does not support constraints`, index, op.type);
+      }
+      if (op.horizontal === undefined && op.vertical === undefined) {
+        throw new OperationError("setConstraints needs at least one of horizontal or vertical", index, op.type);
+      }
+      const current = node.constraints;
+      // Constraints is readonly as a whole, so this is a deliberate widening:
+      // the Figma schema is authoritative at runtime.
+      (node as SceneNode & { constraints: Constraints }).constraints = {
+        horizontal: op.horizontal ?? current.horizontal,
+        vertical: op.vertical ?? current.vertical,
+      };
+      return `${op.horizontal ?? current.horizontal}/${op.vertical ?? current.vertical}`;
     }
 
     default: {

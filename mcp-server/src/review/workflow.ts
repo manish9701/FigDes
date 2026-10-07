@@ -19,6 +19,7 @@ import { inferComposition } from "../runtime/layout";
 import { canvasSize } from "../../../shared/ir";
 import { runRules } from "./rules";
 import { scoreDesign } from "./score";
+import { critiqueVisual } from "./critique";
 import { guardMutation } from "../plan/gate";
 import type { Session } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
@@ -65,6 +66,42 @@ export function scoreDesignTool(rawArgs: unknown): unknown {
       "structural QA (review_design on the live file)": false,
       "rendered and visually reviewed": false,
     },
+    warnings: result.warnings,
+    violations: result.violations,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* critique_visual                                                           */
+/* -------------------------------------------------------------------------- */
+
+export const CritiqueArgs = z
+  .object({
+    sessionId: z.string().max(200).optional(),
+    program: z.unknown().describe("The declarative program to critique aesthetically. Compiled and judged without touching Figma."),
+  })
+  .strict();
+
+export function critiqueVisualTool(rawArgs: unknown): unknown {
+  const args = CritiqueArgs.parse(rawArgs);
+  const result = executeRuntime(args.program);
+
+  const report = critiqueVisual({
+    boxes: result.boxes,
+    operations: result.operations as never,
+    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+    composition: inferComposition(result.ir.regions),
+    canvasW: canvasSize(result.ir.canvas.width, 1440),
+    canvasH: canvasSize(result.ir.canvas.height, 900),
+    links: result.ir.links,
+    ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
+  });
+
+  return {
+    status: "ok",
+    verdict: report.verdict,
+    dimensions: report.dimensions,
+    watchList: report.watchList,
     warnings: result.warnings,
     violations: result.violations,
   };

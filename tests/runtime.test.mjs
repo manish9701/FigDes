@@ -19,6 +19,8 @@ import { routeConnector } from "../mcp-server/dist-test/runtime/connectors.js";
 import { normalizePath, parseSvgPath } from "../mcp-server/dist-test/shared/path.js";
 import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { LOGO_MARKS, coerceLogoMark, logoMarkPath, polygonPath, ringPath, starPath } from "../mcp-server/dist-test/runtime/marks.js";
+import { STYLES, ACCORDION } from "../mcp-server/dist-test/runtime/visual-presets.js";
+import { critiqueVisual } from "../mcp-server/dist-test/review/critique.js";
 import { OperationSchema } from "../mcp-server/dist-test/shared/protocol.js";
 
 const DASHBOARD = {
@@ -1977,4 +1979,178 @@ test("device states map onto health vocabulary", () => {
   const frames = result.operations.filter((o) => o.type === "createFrame" && o.id.startsWith("n1-"));
   assert.equal(frames.length, 3);
   assert.equal(frames.find((f) => f.id === "n1-offline").stroke, "#A32A12");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Visual style presets (FigDes section 26): same layout, different feel        */
+/* -------------------------------------------------------------------------- */
+
+test("a style preset is recorded and travels into the build", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: "technical-editorial" },
+  });
+  assert.equal(result.ir.visualIntent.style, "technical-editorial");
+  assert.ok(result.intentNotes.some((n) => /Technical editorial/.test(n)));
+});
+
+test("the same content renders differently under different presets", () => {
+  const program = (style) => ({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "navigation", id: "nav", args: { width: 240 } }],
+    content: [{ fn: "navItem", id: "home", parent: "nav", args: { label: "Home" } }],
+    visualIntent: { style },
+  });
+  const editorial = executeRuntime(program("technical-editorial"));
+  const instrument = executeRuntime(program("quiet-instrument"));
+  assert.notDeepEqual(editorial.operations, instrument.operations);
+  const editorialLabel = editorial.operations.find((o) => o.type === "createText");
+  const instrumentLabel = instrument.operations.find((o) => o.type === "createText");
+  assert.equal(editorialLabel.letterSpacing, 20);
+  assert.equal(instrumentLabel.letterSpacing, 50);
+  assert.equal(instrumentLabel.content, "HOME");
+  assert.equal(editorialLabel.content, "Home");
+});
+
+test("a preset name that matches nothing warns instead of inventing", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: "moist" },
+  });
+  assert.equal(result.warnings.some((w) => /not a known preset/.test(w)), true);
+  assert.equal(result.ir.canvas.grid, 8);
+});
+
+test("accordion shorthands expand; unknown ones warn", () => {
+  assert.deepEqual(ACCORDION.compact, ["dense", "quiet"]);
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: "compact" },
+  });
+  assert.ok(result.intentNotes.some((n) => /dense.*quiet|quiet.*dense/.test(n)));
+
+  const bad = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: "squishy" },
+  });
+  assert.equal(bad.warnings.some((w) => /squishy/.test(w)), true);
+});
+
+test("compound directives combine but contradictory pairs are rejected", () => {
+  const ok = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: ["compact", "warm"] },
+  });
+  assert.equal(ok.warnings.length, 0);
+
+  const clash = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { style: ["compact", "airy"] },
+  });
+  assert.equal(clash.warnings.some((w) => /opposite directions/.test(w)), true);
+});
+
+test("registered presets all resolve to real mechanics", () => {
+  for (const name of Object.keys(STYLES)) {
+    const preset = STYLES[name];
+    assert.ok(preset.density && preset.spacing && preset.align && preset.contrast && preset.typography,
+      `${name} must define all five mechanics`);
+  }
+});
+
+test("a surface directive passes through and is flagged for style binding", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "panel", id: "p1", parent: "main", args: { title: "Card", surface: "surface-02" } }],
+  });
+  const frame = result.operations.find((o) => o.type === "createFrame" && o.id === "p1");
+  // Non-colour fills become variable bindings: the literal clears, a bind
+  // carries the directive, and the note says what to do with it.
+  assert.deepEqual(frame.fill, []);
+  const bind = result.operations.find((o) => o.type === "bindVariable" && o.target === "p1");
+  assert.equal(bind.variable, "surface-02");
+  assert.ok(result.intentNotes.some((n) => /surface-02.*bind/i.test(n)));
+});
+
+/* -------------------------------------------------------------------------- */
+/* The aesthetic critic (FigDes section 16.2)                                    */
+/* -------------------------------------------------------------------------- */
+
+function critiqueOf(result, extra = {}) {
+  return critiqueVisual({
+    boxes: result.boxes,
+    operations: result.operations,
+    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+    composition: inferComposition(result.ir.regions),
+    canvasW: 1440,
+    canvasH: 900,
+    ...extra,
+  });
+}
+
+test("the critic names twelve dimensions with verdicts, never numbers", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "navigation", id: "nav", args: { width: 240 } },
+      { fn: "hero", id: "hero", args: { grow: 2 } },
+    ],
+    visualIntent: { focal: "hero" },
+  });
+  const report = critiqueOf(result, { focal: "hero" });
+  assert.equal(report.dimensions.length, 12);
+  for (const d of report.dimensions) {
+    assert.ok(["PASS", "WATCH", "FAIL"].includes(d.verdict), `${d.dimension} needs a verdict`);
+    assert.ok(d.evidence.length > 0, `${d.dimension} needs evidence`);
+    assert.equal("score" in d, false, `${d.dimension} must not carry a numeric score`);
+  }
+});
+
+test("three stamped bordered cards read as repetition and card-wall", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "frame", id: "a", args: { width: 440, height: 800 } },
+      { fn: "frame", id: "b", args: { width: 440, height: 800 } },
+      { fn: "frame", id: "c", args: { width: 440, height: 800 } },
+      { fn: "frame", id: "d", args: { width: 440, height: 800 } },
+    ],
+  });
+  const report = critiqueOf(result);
+  const repetition = report.dimensions.find((d) => d.dimension === "Repetition");
+  assert.equal(repetition.verdict, "WATCH");
+  assert.ok(report.watchList.length > 0);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Measured contrast in scoring (FigDes section 16.1)                           */
+/* -------------------------------------------------------------------------- */
+
+test("text measured against its parent background fails honestly when dark-on-dark", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill", fill: "#111111" } }],
+    content: [{ fn: "text", id: "t", parent: "main", args: { text: "Hi", fill: "#222222" } }],
+  });
+  const report = scoreOf2(result, undefined);
+  const hierarchy = report.dimensions.find((d) => d.dimension === "Hierarchy");
+  assert.match(hierarchy.evidence, /contrast 0\/1 passing AA/);
+});
+
+test("light text on a dark surface passes the measured check", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill", fill: "#111111" } }],
+    content: [{ fn: "text", id: "t", parent: "main", args: { text: "Hi", fill: "#FFFFFF" } }],
+  });
+  const report = scoreOf2(result, undefined);
+  const hierarchy = report.dimensions.find((d) => d.dimension === "Hierarchy");
+  assert.match(hierarchy.evidence, /contrast 1\/1 passing AA/);
 });

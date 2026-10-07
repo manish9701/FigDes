@@ -20,7 +20,7 @@
  * Each dimension is 0-10. The overall is the mean, rounded to one decimal.
  */
 import type { PlacedBox } from "../../../shared/ir";
-import type { Operation } from "../../../shared/protocol";
+import { parseColor, type Operation } from "../../../shared/protocol";
 
 export interface DimensionScore {
   dimension: string;
@@ -42,11 +42,19 @@ interface Ctx {
   boxes: Array<{ id: string; x: number; y: number; w: number; h: number }>;
   regions: Array<{ id: string; role: string }>;
   composition: string;
-  texts: Array<{ content: string; fontSize: number; family: string }>;
+  texts: Array<{ content: string; fontSize: number; family: string; color?: string; background?: string }>;
   fills: string[];
   strokes: string[];
   canvasW: number;
   canvasH: number;
+  /** Text colors resolved against their parent frame's fill, where measurable. */
+  measuredContrast: Array<{ ratio: number; passes: boolean }>;
+  /** Distinct high-salience (saturated, bright) colours in use. */
+  salientColors: string[];
+  /** Total stroke weight laid down, a proxy for visual noise. */
+  strokeWeightTotal: number;
+  /** Node count: raw visual complexity. */
+  nodeCount: number;
 }
 
 const clampScore = (n: number): number => Math.max(0, Math.min(10, Math.round(n * 10) / 10));
@@ -95,24 +103,68 @@ function buildContext(input: {
   composition: string;
   canvasW: number;
   canvasH: number;
+  focal?: string;
 }): Ctx {
   const texts: Ctx["texts"] = [];
   const fills: string[] = [];
   const strokes: string[] = [];
+  const parentFill = new Map<string, string>();
+  let strokeWeightTotal = 0;
+  let nodeCount = 0;
 
   for (const op of input.operations) {
     const o = op as Record<string, unknown>;
+    if (typeof o.id === "string" && typeof o.fill === "string" && (o.type === "createFrame" || o.type === "createRectangle" || o.type === "createEllipse")) {
+      parentFill.set(o.id, o.fill);
+    }
     if (o.type === "createText") {
+      const parent = typeof o.parent === "string" ? parentFill.get(o.parent) : undefined;
       texts.push({
         content: typeof o.content === "string" ? o.content : "",
         fontSize: typeof o.fontSize === "number" ? o.fontSize : 16,
         family: typeof o.family === "string" ? o.family : "Inter",
+        color: typeof o.fill === "string" ? o.fill : undefined,
+        background: parent,
       });
       if (typeof o.fill === "string") fills.push(o.fill);
+      nodeCount += 1;
     }
     if (typeof o.fill === "string" && o.type !== "createText") fills.push(o.fill);
-    if (typeof o.stroke === "string") strokes.push(o.stroke);
+    if (typeof o.stroke === "string") {
+      strokes.push(o.stroke);
+      if (typeof o.strokeWeight === "number") strokeWeightTotal += o.strokeWeight;
+    }
+    if (o.type === "createFrame" || o.type === "createRectangle" || o.type === "createEllipse" || o.type === "createVector") {
+      nodeCount += 1;
+    }
   }
+
+  // Real contrast where both sides are measurable: text colour against the
+  // parent frame's fill. Unmeasurable pairs are simply absent, never guessed.
+  const measuredContrast: Ctx["measuredContrast"] = [];
+  for (const t of texts) {
+    if (t.color === undefined || t.background === undefined) continue;
+    try {
+      const ratio = contrastRatio(parseColor(t.color), parseColor(t.background));
+      measuredContrast.push({ ratio: Math.round(ratio * 100) / 100, passes: ratio >= 4.5 });
+    } catch {
+      /* non-literal on either side: unmeasurable, skip */
+    }
+  }
+
+  // Salience: saturated, bright colours shout. One or two are accents; five is
+  // a rainbow. Measured in HSL-ish terms from the same parse the plugin uses.
+  const salientColors = [...new Set(fills)].filter((hex) => {
+    try {
+      const c = parseColor(hex);
+      const max = Math.max(c.r, c.g, c.b);
+      const min = Math.min(c.r, c.g, c.b);
+      const saturation = max < 1e-6 ? 0 : (max - min) / max;
+      return saturation > 0.5 && max > 0.5;
+    } catch {
+      return false;
+    }
+  });
 
   return {
     boxes: [...input.boxes.values()].map((b) => ({ ...b })),
@@ -123,7 +175,22 @@ function buildContext(input: {
     strokes,
     canvasW: input.canvasW,
     canvasH: input.canvasH,
+    measuredContrast,
+    salientColors,
+    strokeWeightTotal: Math.round(strokeWeightTotal * 10) / 10,
+    nodeCount,
   };
+}
+
+/** WCAG relative luminance ratio between two parsed colours. */
+function contrastRatio(a: { r: number; g: number; b: number }, b: { r: number; g: number; b: number }): number {
+  const luminance = (c: { r: number; g: number; b: number }): number => {
+    const channel = (v: number): number => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+    return 0.2126 * channel(c.r) + 0.7152 * channel(c.g) + 0.0722 * channel(c.b);
+  };
+  const l1 = luminance(a);
+  const l2 = luminance(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -164,6 +231,22 @@ function scoreComposition(ctx: Ctx): DimensionScore {
     notes.push(`composition: ${ctx.composition}`);
   }
 
+  // Whitespace isolation: the margin around the largest region, as a share of
+  // the smaller canvas dimension. A hero with room to breathe reads as
+  // intentional; one wedged edge-to-edge reads as cramped whatever the gaps say.
+  const largest = [...ctx.boxes]
+    .filter((b) => ctx.regions.some((r) => r.id === b.id))
+    .sort((a, b) => b.w * b.h - a.w * a.h)[0];
+  if (largest) {
+    const margins = [largest.x, largest.y, ctx.canvasW - (largest.x + largest.w), ctx.canvasH - (largest.y + largest.h)];
+    const isolation = Math.max(0, Math.min(...margins)) / Math.max(1, Math.min(ctx.canvasW, ctx.canvasH));
+    notes.push(`largest region isolated by ${Math.round(isolation * 100)}%`);
+    if (isolation < 0.02 && ctx.boxes.length > 1) {
+      score -= 1;
+      improve = (improve ? `${improve} ` : "") + "The largest region touches a canvas edge with no breathing room.";
+    }
+  }
+
   return { dimension: "Composition", score: clampScore(score), evidence: notes.join("; "), ...(improve ? { improve } : {}) };
 }
 
@@ -202,6 +285,20 @@ function scoreHierarchy(ctx: Ctx): DimensionScore {
     notes.push(`${mono} technical value(s) in mono`);
   }
 
+  // Measured contrast, not assumed: text colours resolved against their parent
+  // fills. Unmeasurable pairs are absent from the count, never counted as passes.
+  if (ctx.measuredContrast.length > 0) {
+    const passing = ctx.measuredContrast.filter((m) => m.passes).length;
+    const rate = passing / ctx.measuredContrast.length;
+    notes.push(`contrast ${passing}/${ctx.measuredContrast.length} passing AA`);
+    if (rate < 1) {
+      score -= 2;
+      improve = (improve ? `${improve} ` : "") + `${ctx.measuredContrast.length - passing} text layer(s) fail AA against their backgrounds.`;
+    } else {
+      score += 1;
+    }
+  }
+
   return { dimension: "Hierarchy", score: clampScore(score), evidence: notes.join("; "), ...(improve ? { improve } : {}) };
 }
 
@@ -228,9 +325,16 @@ function scoreDensity(ctx: Ctx): DimensionScore {
     improve = "One undifferentiated surface. Chrome and content deserve separation.";
   } else {
     score = 4;
-    evidence = `${n} regions fragment the canvas (${Math.round(ratio * 100)}% nominal coverage)`;
+    evidence = `${n} regions fragment the canvas`;
     improve = "Merge regions until the screen has at most five jobs.";
   }
+
+  // Stroke weight laid down across the screen is visual noise made measurable:
+  // hairlines vanish, heavy borders shout.
+  if (ctx.strokeWeightTotal > 0) {
+    evidence += `; ${ctx.strokeWeightTotal}px of stroke in play`;
+  }
+  evidence += `; ${ctx.nodeCount} node(s) drawn`;
 
   return { dimension: "Information density", score, evidence, ...(improve ? { improve } : {}) };
 }
@@ -288,6 +392,16 @@ function scoreConsistency(ctx: Ctx): DimensionScore {
   } else {
     score -= 1;
     improve = (improve ? `${improve} ` : "") + `${families.size} typefaces compete. Body plus mono is the whole vocabulary.`;
+  }
+
+  // Salience: saturated bright colours shout. One or two are accents making a
+  // point; five is a rainbow making noise.
+  if (ctx.salientColors.length <= 2) {
+    score += 1;
+    if (ctx.salientColors.length > 0) notes.push(`accents: ${ctx.salientColors.join(", ")}`);
+  } else {
+    score -= 2;
+    improve = (improve ? `${improve} ` : "") + `${ctx.salientColors.length} high-salience colours (${ctx.salientColors.join(", ")}). Keep one action colour and one health colour; mute the rest.`;
   }
 
   return { dimension: "Visual consistency", score: clampScore(score), evidence: notes.join("; "), ...(improve ? { improve } : {}) };

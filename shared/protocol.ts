@@ -412,6 +412,27 @@ export const CreateGroupOp = z.object({
   parent: RefSchema.optional(),
 });
 
+export const CreateComponentOp = z.object({
+  ...createBase,
+  type: z.literal("createComponent"),
+});
+
+export const CreateInstanceOp = z.object({
+  type: z.literal("createInstance"),
+  id: z.string().min(1).max(64).optional(),
+  name: z.string().max(500).optional(),
+  parent: RefSchema.optional(),
+  componentId: RefSchema,
+  x: z.number().finite().optional(),
+  y: z.number().finite().optional(),
+});
+
+export const SetVariantOp = z.object({
+  type: z.literal("setVariant"),
+  target: RefSchema,
+  variant: z.record(z.string()),
+});
+
 /**
  * Sets a drop shadow or layer blur on a node.
  *
@@ -538,6 +559,20 @@ export const SetPageOp = z.object({
 });
 
 /**
+ * Explicit resize constraints (MIN | CENTER | MAX | STRETCH | SCALE per axis).
+ *
+ * Auto-layout covers containers; this covers everything else: a hero that must
+ * stretch with its frame, a rail pinned left, an overlay centred. Without it
+ * native composition cannot express responsive intent.
+ */
+export const SetConstraintsOp = z.object({
+  type: z.literal("setConstraints"),
+  target: RefSchema,
+  horizontal: z.enum(["MIN", "CENTER", "MAX", "STRETCH", "SCALE"]).optional(),
+  vertical: z.enum(["MIN", "CENTER", "MAX", "STRETCH", "SCALE"]).optional(),
+});
+
+/**
  * The allowlist. Adding a case here is the ONLY way to give the model new
  * power over the document — there is no eval / dynamic dispatch path.
  */
@@ -572,6 +607,10 @@ export const OperationSchema = z.discriminatedUnion("type", [
   SetTextContentOp,
   SetVisibleOp,
   SetPageOp,
+  SetConstraintsOp,
+  CreateComponentOp,
+  CreateInstanceOp,
+  SetVariantOp,
 ] as const);
 
 export type Operation = z.infer<typeof OperationSchema>;
@@ -602,6 +641,8 @@ export interface CreatedNode {
   figmaNodeId: string;
   type: string;
   name: string;
+  /** Committed geometry, read after the transaction lands. Absent when the node is gone or has no bounds. */
+  bounds?: { x: number; y: number; width: number; height: number };
 }
 
 export interface TransactionSuccess {
@@ -609,6 +650,8 @@ export interface TransactionSuccess {
   status: "success";
   dryRun: boolean;
   createdNodes: CreatedNode[];
+  /** Figma ids touched by non-create operations, so the next call operates from evidence instead of guessing. */
+  modifiedNodes?: string[];
   /** Human-readable trace, one line per applied operation. */
   applied: string[];
 }
@@ -939,6 +982,7 @@ export const TOOL_NAMES = [
   "create_component_set",
   "seed_exo_system",
   "score_design",
+  "critique_visual",
   "refine_screen",
   "diff_design",
   "final_qa",
@@ -954,7 +998,10 @@ export const TOOL_NAMES = [
   "create_slide",
   "create_design",
   "modify_design",
+  "native_design",
   "undo_last_operation",
+  "figdes_use_figma",
+  "figdes_inspect_visual",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];
@@ -986,6 +1033,7 @@ export const PLUGIN_TOOL_NAMES = [
   "list_variables",
   "create_design",
   "modify_design",
+  "native_design",
   "undo_last_operation",
 ] as const;
 

@@ -13,6 +13,7 @@ import { classifyDecision, planScreen, planPasses, templateFor } from "../mcp-se
 import { evaluateCheckpoints, CheckpointLedger, DEFAULT_DESTRUCTIVE_THRESHOLD } from "../mcp-server/dist-test/plan/checkpoints.js";
 import { guardMutation, summarizeOperations, resetApprovals } from "../mcp-server/dist-test/plan/gate.js";
 import { buildPlan } from "../mcp-server/dist-test/plan/tools.js";
+import { buildBrief } from "../mcp-server/dist-test/plan/brief.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
 /* -------------------------------------------------------------------------- */
@@ -564,4 +565,30 @@ test("an unknown archetype fails with the known list", () => {
 
 test("planning without a decision or archetype refuses", () => {
   assert.throws(() => buildPlan({ availableInformation: ["a"] }), /primaryDecision/);
+});
+
+test("a visual direction travels with the plan into the build", () => {
+  const out = buildPlan({ primaryDecision: "monitor cluster health", visualDirection: "quiet-instrument" });
+  assert.equal(out.program.visualIntent.style, "quiet-instrument");
+
+  // The style survives the handoff: the built program applies its mechanics
+  // (dense shrinks the spacing system) and says so.
+  const built = executeRuntime(out.program);
+  assert.equal(built.ir.visualIntent.style, "quiet-instrument");
+  assert.ok(built.intentNotes.some((n) => /Quiet instrument/.test(n)));
+  assert.ok(built.ir.canvas.grid < 8, "dense preset must tighten the grid");
+});
+
+test("no visual direction means no invented style", () => {
+  const out = buildPlan({ primaryDecision: "monitor cluster health" });
+  assert.equal(out.program.visualIntent.style, undefined);
+});
+
+test("a brief records a stated direction and invents none", () => {
+  const stated = buildBrief({ primaryDecision: "monitor cluster health", visualDirection: "gallery-warm" });
+  assert.equal(stated.visualDirection, "gallery-warm");
+
+  const unstated = buildBrief({ primaryDecision: "monitor cluster health" });
+  assert.equal(unstated.visualDirection, null);
+  assert.match(unstated.visualDirectionNote, /none invented/);
 });

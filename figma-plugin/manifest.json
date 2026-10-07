@@ -7,7 +7,7 @@
   "editorType": ["figma", "slides"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["https://figdes.onrender.com"],
+    "allowedDomains": ["https://figdes.onrender.com", "wss://figdes.onrender.com"],
     "devAllowedDomains": ["http://localhost:8787", "ws://localhost:8787"],
     "reasoning": "The plugin iframe opens a WebSocket to the hosted Design Agent server at https://figdes.onrender.com (production) or http://localhost:8787 (local dev), to receive schema-validated design operations and return Figma document state."
   },

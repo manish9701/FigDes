@@ -71,6 +71,38 @@
         max-width: 130px;
       }
 
+      #conn-text {
+        font-weight: 600;
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      #conn-text.connected {
+        color: var(--green);
+      }
+
+      #conn-text.connecting {
+        color: #b26a00;
+      }
+
+      #conn-text.error,
+      #conn-text.disconnected {
+        color: var(--red);
+      }
+
+      #latest {
+        color: var(--text-2);
+        font-size: 10px;
+        margin-bottom: 9px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #latest.err {
+        color: var(--red);
+      }
+
       #page {
         color: var(--text-3);
         white-space: nowrap;
@@ -221,11 +253,13 @@
   <body>
     <header>
       <span id="dot" class="dot"></span>
+      <span id="conn-text">Connecting…</span>
       <span id="file">Loading...</span>
       <span id="page"></span>
       <span class="spacer"></span>
       <span id="version" style="color: var(--text-3)"></span>
     </header>
+    <div id="latest" aria-live="polite">Starting…</div>
     <div id="progress"><div id="progress-bar"></div></div>
     <div id="progress-label"></div>
     <div id="activity"></div>

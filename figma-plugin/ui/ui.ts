@@ -53,6 +53,8 @@ function el<T extends HTMLElement>(id: string): T {
 }
 
 const dot = el<HTMLSpanElement>("dot");
+const connTextEl = el<HTMLSpanElement>("conn-text");
+const latestEl = el<HTMLDivElement>("latest");
 const fileEl = el<HTMLSpanElement>("file");
 const pageEl = el<HTMLSpanElement>("page");
 const versionEl = el<HTMLSpanElement>("version");
@@ -72,6 +74,16 @@ type Status = "connected" | "connecting" | "disconnected" | "error";
 
 function setState(status: Status): void {
   dot.className = `dot ${status}`;
+  connTextEl.textContent =
+    status === "connected"
+      ? "Connected"
+      : status === "connecting"
+        ? "Connecting…"
+        : status === "disconnected"
+          ? "Disconnected"
+          : "Error";
+  connTextEl.className = status;
+  connTextEl.id = "conn-text";
 }
 
 /** Apply-button feedback: instant "Saved" cue plus connection outcome. */
@@ -93,6 +105,10 @@ function appendLog(level: string, message: string): void {
   line.textContent = `${ts}  ${message}`;
   logEl.prepend(line);
   while (logEl.childElementCount > 60) logEl.lastElementChild?.remove();
+  // Always-visible latest line on top: one message, no need to open the log.
+  latestEl.textContent = message;
+  latestEl.className = level === "error" ? "err" : "";
+  latestEl.id = "latest";
 }
 
 function toMain(msg: UiToMain): void {

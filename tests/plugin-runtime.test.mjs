@@ -1454,3 +1454,120 @@ test("native resolves nodes through the async accessor, not the sync one", async
   assert.equal(node.ok, true, node.error);
   assert.equal(node.data.name, "Resolve");
 });
+
+/* -------------------------------------------------------------------------- */
+/* Native batch execution: one round-trip, local refs, compact evidence        */
+/* -------------------------------------------------------------------------- */
+
+test("executeBatch creates and styles nodes through batch-local refs in one call", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", {
+    action: "executeBatch",
+    operations: [
+      { action: "createFrame", params: { name: "Card", width: 320, height: 200 }, ref: "card" },
+      { action: "createText", params: { parent: "$card", content: "Hello" }, ref: "label" },
+      { action: "setFill", target: "$card", params: { paint: "#FFFFFF" } },
+    ],
+  });
+  assert.equal(reply.ok, true, reply.error);
+  assert.equal(reply.data.opCount, 3);
+  assert.equal(reply.data.results.length, 3);
+  assert.ok(typeof reply.data.pluginMs === "number");
+  const [card, label] = reply.data.results;
+  assert.equal(card.ref, "card");
+  assert.equal(card.type, "FRAME");
+  assert.ok(card.id, "compact results carry the created id");
+  assert.ok(!("fills" in card), "compact results omit paints by default");
+  const labelNode = f.__node(label.id);
+  assert.equal(labelNode.parent.id, card.id, "the text landed inside the batch-created frame without re-resolving its id");
+});
+
+test("executeBatch reports the failing operation index", async () => {
+  const { figma: f } = loadPlugin();
+  await ask(f, "native_design", { action: "beginNativeTransaction", transactionId: "batch-t1" });
+  const reply = await ask(f, "native_design", {
+    action: "executeBatch",
+    transactionId: "batch-t1",
+    operations: [
+      { action: "createFrame", params: { width: 50, height: 50 } },
+      { action: "setFill", target: "9999:9999", params: { paint: "#FFFFFF" } },
+    ],
+  });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /Batch op 1 \(setFill\) failed/);
+  await ask(f, "native_design", { action: "rollbackNativeTransaction", transactionId: "batch-t1" });
+});
+
+test("executeBatch validates nested parameters strictly", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", {
+    action: "executeBatch",
+    operations: [{ action: "createFrame", params: { width: 100, height: 100, banana: true } }],
+  });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /Batch op 0 \(createFrame\) failed: Invalid parameters/);
+});
+
+test("readonly scripts refuse mutations instead of landing them unprotected", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "native_design", { action: "createFrame", readonly: true, width: 10, height: 10 });
+  assert.equal(reply.ok, false);
+  assert.match(reply.error, /readonly/);
+  const batch = await ask(f, "native_design", {
+    action: "executeBatch",
+    readonly: true,
+    operations: [{ action: "getFileInfo", params: {} }, { action: "createFrame", params: { width: 10, height: 10 } }],
+  });
+  assert.equal(batch.ok, false);
+  assert.match(batch.error, /Batch op 1 \(createFrame\).*readonly/);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Layout grids (report section 10: SetGrid)                                   */
+/* -------------------------------------------------------------------------- */
+
+test("setLayoutGrid appends a columns grid to a frame", async () => {
+  const { figma: f } = loadPlugin();
+  // One transaction, temp-id reference: the exact shape the runtime compiler emits.
+  const reply = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "gridhost", name: "Grid host", width: 1200, height: 800 },
+      { type: "setLayoutGrid", target: "gridhost", pattern: "COLUMNS", count: 12, gutter: 24 },
+    ],
+  });
+  assert.equal(reply.data.status, "success", JSON.stringify(reply.data.error ?? {}));
+  const frame = f.__node(reply.data.createdNodes[0].figmaNodeId);
+  assert.equal(frame.layoutGrids.length, 1);
+  assert.equal(frame.layoutGrids[0].pattern, "COLUMNS");
+  assert.equal(frame.layoutGrids[0].count, 12);
+  assert.equal(frame.layoutGrids[0].gutterSize, 24);
+  assert.equal(frame.layoutGrids[0].visible, false, "guides stay hidden so renders stay clean");
+});
+
+test("setLayoutGrid refuses a node without grid support", async () => {
+  const { figma: f } = loadPlugin();
+  const made = await ask(f, "create_design", {
+    operations: [{ type: "createText", id: "t", content: "Hi" }],
+  });
+  assert.equal(made.data.status, "success");
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "setLayoutGrid", target: made.data.createdNodes[0].figmaNodeId, pattern: "COLUMNS", count: 6 }],
+  });
+  assert.equal(reply.data.status, "failed");
+  assert.match(reply.data.error.message, /does not support layout grids/);
+});
+
+test("native setLayoutGrid appends through the native bridge", async () => {
+  const { figma: f } = loadPlugin();
+  const made = await ask(f, "native_design", { action: "createFrame", name: "Native grid", width: 800, height: 600 });
+  assert.equal(made.ok, true, made.error);
+  const reply = await ask(f, "native_design", {
+    action: "setLayoutGrid",
+    target: made.data.id,
+    pattern: "COLUMNS",
+    count: 6,
+    gutter: 16,
+  });
+  assert.equal(reply.ok, true, reply.error);
+  assert.equal(f.__node(made.data.id).layoutGrids.length, 1);
+});

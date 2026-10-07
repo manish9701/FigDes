@@ -276,3 +276,40 @@ export function serialize(n: BaseNode, opts: SerializeOptions = {}): Record<stri
 
 /** Re-exported so context.ts and inspect.ts share one node shape. */
 export type { InspectedNode };
+
+/* -------------------------------------------------------------------------- */
+/* Batch-local node references                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resolves `$ref` local references inside a batch operation's arguments.
+ *
+ * A batch stores newly created node ids under caller-chosen names (`ref`), and
+ * later operations address them as `"$name"` strings or `{ $ref: "name" }`
+ * objects — without another RPC round-trip to resolve the Figma id. Unknown
+ * `$`-names pass through untouched so a literal string is never rewritten; the
+ * subsequent resolve then fails loudly with the batch index attached.
+ */
+export function resolveBatchRefs(value: unknown, refs: Map<string, string>): unknown {
+  if (typeof value === "string") {
+    if (value.startsWith("$") && value.length > 1) {
+      const hit = refs.get(value.slice(1));
+      if (hit !== undefined) return hit;
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map((v) => resolveBatchRefs(v, refs));
+  if (value !== null && typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    const keys = Object.keys(o);
+    if (keys.length === 1 && typeof o.$ref === "string") {
+      const hit = refs.get(o.$ref);
+      if (hit === undefined) throw new Error(`Unknown batch ref '${o.$ref}'. Declare it with ref on an earlier operation.`);
+      return hit;
+    }
+    const out: Record<string, unknown> = {};
+    for (const k of keys) out[k] = resolveBatchRefs(o[k], refs);
+    return out;
+  }
+  return value;
+}

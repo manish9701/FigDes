@@ -592,3 +592,26 @@ test("a brief records a stated direction and invents none", () => {
   assert.equal(unstated.visualDirection, null);
   assert.match(unstated.visualDirectionNote, /none invented/);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Deck narrative: a sequence with an arc, not N copies of one layout          */
+/* -------------------------------------------------------------------------- */
+
+test("deck format plans a five-act narrative with varied compositions", async () => {
+  const { planDeckNarrative } = await import("../mcp-server/dist-test/plan/planner.js");
+  const { acts, regions } = planDeckNarrative({ primaryDecision: "raise the seed round" });
+  assert.equal(acts.length, 5);
+  assert.equal(regions.length, 5);
+  const compositions = new Set(regions.map((r) => r.composition));
+  assert.ok(compositions.size >= 4, `slides must vary, got ${[...compositions].join(",")}`);
+  assert.ok(regions.every((r) => r.role === "slide"));
+});
+
+test("buildPlan deck mode carries deck:true and slide regions", () => {
+  const plan = buildPlan({ primaryDecision: "raise the seed round", format: "deck" });
+  assert.equal(plan.program.canvas.deck, true);
+  assert.equal(plan.program.regions.length, 5);
+  assert.ok(plan.deckOutline.length === 5);
+  const fns = new Set(plan.program.regions.map((r) => r.fn));
+  assert.ok(fns.has("slide"));
+});

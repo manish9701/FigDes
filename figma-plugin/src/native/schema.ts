@@ -36,13 +36,18 @@ const Paints = z.array(Paint).max(64);
 
 const PathPoint = z
   .object({
-    command: z.enum(["M", "L", "C", "Q", "Z"]),
+    command: z.enum(["M", "L", "H", "V", "C", "S", "Q", "T", "A", "Z"]),
     x: Num.optional(),
     y: Num.optional(),
     x1: Num.optional(),
     y1: Num.optional(),
     x2: Num.optional(),
     y2: Num.optional(),
+    rx: Num.optional(),
+    ry: Num.optional(),
+    rotation: Num.optional(),
+    largeArc: Bool.optional(),
+    sweep: Bool.optional(),
   })
   .strict();
 const Path = z.array(PathPoint).min(1).max(5000);
@@ -169,6 +174,19 @@ export const NATIVE_ACTIONS: Record<string, NativeAction> = {
 
   /* ---- layout ---- */
   setAutoLayout: A(z.object({ direction: AutoLayoutMode.optional(), primaryAxisSizing: SizingMode.optional(), counterAxisSizing: SizingMode.optional(), primaryAxisAlignItems: AxisAlign.optional(), counterAxisAlignItems: CounterAlign.optional(), itemSpacing: Num.optional(), paddingTop: Num.optional(), paddingRight: Num.optional(), paddingBottom: Num.optional(), paddingLeft: Num.optional(), layoutWrap: z.enum(["NO_WRAP", "WRAP"]).optional(), counterAxisAlignContent: z.string().max(30).optional() }).strict(), true, "Configure auto layout."),
+  setLayoutGrid: A(
+    z.object({
+      pattern: z.enum(["COLUMNS", "ROWS", "GRID"]).optional(),
+      count: Num.int().min(1).max(24).optional(),
+      gutter: Num.min(0).max(400).optional(),
+      offset: Num.min(0).max(1000).optional(),
+      sectionSize: Num.positive().max(100000).optional(),
+      visible: Bool.optional(),
+      color: Color.optional(),
+    }).strict(),
+    true,
+    "Append a layout grid (columns, rows, or square module) to a frame.",
+  ),
   clone: A(z.object({ x: Num.optional(), y: Num.optional(), parent: ShortStr.optional() }).strict(), true, "Clone a node."),
   remove: A(Empty, true, "Remove a node."),
   append: A(z.object({ child: ShortStr }).strict(), true, "Append a child to a parent."),
@@ -181,6 +199,36 @@ export const NATIVE_ACTIONS: Record<string, NativeAction> = {
 
   /* ---- vectors ---- */
   setPathData: A(z.object({ path: Path }).strict(), true, "Replace a vector's path."),
+  getVectorPath: A(Empty, false, "Read a vector's path data, winding rules and vertex counts."),
+  booleanOperation: A(
+    z.object({ operation: z.enum(["union", "subtract", "intersect", "exclude"]), targets: z.array(ShortStr).min(2).max(50), name: Str.optional() }).strict(),
+    true,
+    "Combine 2+ sibling nodes with a native boolean operation.",
+  ),
+  outlineStroke: A(z.object({ name: Str.optional() }).strict(), true, "Convert a vector/shape stroke into filled outline geometry."),
+  mirrorNode: A(z.object({ axis: z.enum(["horizontal", "vertical"]) }).strict(), true, "Mirror a node across its own centre."),
+
+  /* ---- batch execution ---- */
+  executeBatch: A(
+    z.object({
+      operations: z
+        .array(
+          z.object({
+            action: z.string().min(1).max(80),
+            target: z.union([ShortStr, z.object({ $ref: z.string().min(1).max(64) }).strict()]).optional(),
+            params: z.record(z.string(), z.unknown()).default({}),
+            /** Stores this operation's node id for later ops as `$ref` / `{ $ref }`. */
+            ref: z.string().min(1).max(64).optional(),
+          }).strict(),
+        )
+        .min(1)
+        .max(200),
+      /** Compact id+bounds results (default) versus full node summaries. */
+      compact: Bool.optional(),
+    }).strict(),
+    true,
+    "Execute many native actions locally in one round-trip, with batch-local $refs. Prefer this over N sequential calls.",
+  ),
 
   /* ---- components ---- */
   listComponents: A(Empty, false, "Local components and component sets."),

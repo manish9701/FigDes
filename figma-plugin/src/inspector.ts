@@ -50,6 +50,44 @@ function serialize(node: SceneNode, depth: number, opts: InspectOptions, budget:
     out.fontName = typeof t.fontName === "object" ? `${t.fontName.family} ${t.fontName.style}` : "mixed";
   }
 
+  if (node.type === "VECTOR" || node.type === "BOOLEAN_OPERATION" || node.type === "STAR" || node.type === "POLYGON") {
+    const v = node as VectorNode;
+    try {
+      const paths = v.vectorPaths ?? [];
+      let curves = 0;
+      for (const p of paths) {
+        const d = p.data;
+        for (let i = 0; i < d.length; i++) {
+          const ch = d[i];
+          if (ch === "C" || ch === "Q") curves += 1;
+        }
+      }
+      (out as InspectedNode & { vector?: unknown }).vector = {
+        subpathCount: paths.length,
+        curveCount: curves,
+        winding: paths.map((p) => p.windingRule),
+        // Path data is evidence for revision, capped so a dense logo does not
+        // flood the model with geometry on every inspect.
+        data: paths.map((p) => (p.data.length > 1000 ? `${p.data.slice(0, 1000)}…` : p.data)),
+      };
+    } catch {
+      /* vectorPaths can throw on unusual nodes; inspect must not fail for it */
+    }
+    if ("strokes" in node && Array.isArray((node as VectorNode).strokes)) {
+      try {
+        const strokes = (node as VectorNode).strokes;
+        const weight = (node as VectorNode).strokeWeight;
+        (out as InspectedNode & { vector?: Record<string, unknown> }).vector = {
+          ...(((out as InspectedNode & { vector?: Record<string, unknown> }).vector ?? {}) as Record<string, unknown>),
+          ...(typeof weight === "number" ? { strokeWeight: weight } : {}),
+          strokeCount: strokes.length,
+        };
+      } catch {
+        /* best-effort */
+      }
+    }
+  }
+
   let left = budget - 1;
 
   if ("children" in node && node.children.length > 0) {

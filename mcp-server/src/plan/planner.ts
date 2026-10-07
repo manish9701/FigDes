@@ -521,7 +521,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   // the roles in play. Overriding to `canvas` for a topology screen would produce
   // a map with no room for it.
   const inferred = inferComposition(regions.map((r) => ({ role: r.role, composition: r.composition, width: r.width, grow: r.grow })));
-  const viable = new Set<Composition>(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial"]);
+  const viable = new Set<Composition>(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison"]);
   const requested = intent.desiredComposition;
 
   const composition: Composition = requested && viable.has(requested) && requested !== "canvas" ? requested : inferred;
@@ -779,9 +779,54 @@ function primitiveFor(role: Region["role"]): string {
       return "hero";
     case "inspector":
       return "inspector";
+    case "slide":
+      return "slide";
+    case "stage":
+      return "stage";
+    case "column":
+      return "column";
     default:
       return "frame";
   }
+}
+
+/**
+ * Deck narrative: a sequence with an arc, not N copies of one layout.
+ *
+ * Five acts, each with its own composition so consecutive slides never repeat:
+ * a title hook (editorial), the context (split-view), the core idea as a
+ * diagram (diagram), the evidence as data (comparison), and the action as a
+ * sequence (sequence). The planner names the arc; design_runtime builds one
+ * 1920x1080 slide per region; deckOutline keeps the arc visible in the file.
+ */
+export interface DeckAct {
+  id: string;
+  title: string;
+  composition: Composition;
+  why: string;
+}
+
+export function planDeckNarrative(intent: ScreenIntent): { acts: DeckAct[]; regions: PlannedRegion[] } {
+  const decision = intent.primaryDecision;
+  const acts: DeckAct[] = [
+    { id: "s1-hook", title: `Hook: ${decision}`, composition: "editorial", why: "the promise, stated large enough to read from the back of the room" },
+    { id: "s2-context", title: "Context", composition: "split-view", why: "where things stand, two subjects side by side so the gap reads" },
+    { id: "s3-idea", title: "Core idea", composition: "diagram", why: "the mechanism as a diagram: boxes and arrows, not paragraphs" },
+    { id: "s4-proof", title: "Evidence", composition: "comparison", why: "the numbers that make the idea believable, compared rather than listed" },
+    { id: "s5-action", title: "Action", composition: "sequence", why: "what happens next, ordered so the order is the message" },
+  ];
+  const regions: PlannedRegion[] = acts.map((a) => ({
+    id: a.id,
+    role: "slide",
+    composition: a.composition,
+    width: 1920,
+    height: 1080,
+    grow: 0,
+    gap: 32,
+    padding: 96,
+    because: `${a.title}: ${a.why}`,
+  }));
+  return { acts, regions };
 }
 
 /**

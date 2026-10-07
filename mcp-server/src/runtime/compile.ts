@@ -12,10 +12,10 @@
 import { OperationSchema, parseColor, type Operation } from "../../../shared/protocol";
 import type { CompileResult, ContentSpec, DesignIR, ResolvedBox, ResolvedRegion } from "../../../shared/ir";
 import { canvasSize } from "../../../shared/ir";
-import { normalizePath } from "../../../shared/path";
+import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, type PlacedBox } from "./constraints";
 import { routeConnector } from "./connectors";
-import { coerceLogoMark, logoMarkPath, polygonPath, starPath } from "./marks";
+import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
 import { inferComposition, packContent, planLayout, radial, forceDirected, defaultGutter } from "./layout";
 import { runAlgorithm } from "./algorithms";
@@ -288,6 +288,21 @@ export function compileIR(ir: DesignIR): CompileResult {
             offsetY: 4 * region.elevation,
             radius: 12 * region.elevation,
             opacity: 0.12,
+          }),
+        );
+      }
+      // A declared columns grid gives the region an alignment structure
+      // without hand-placed gutters. Hidden so renders stay clean; the
+      // designer toggles visibility in Figma when constructing.
+      if (region.gridColumns !== undefined) {
+        operations.push(
+          op({
+            type: "setLayoutGrid",
+            target: region.id,
+            pattern: "COLUMNS",
+            count: region.gridColumns,
+            gutter: region.gridGutter ?? canvas.grid * 3,
+            visible: false,
           }),
         );
       }
@@ -952,7 +967,21 @@ function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, r
   }
 
   // Vectors compile to a frame plus a vector child; the path data is carried
-  // through as a validated operation rather than executed as code.
+  // through as a validated operation rather than executed as code. Beziers
+  // survive via the preserving normaliser; arc-bearing paths fall back to the
+  // flattened pipeline (correct, denser) because arcs are outside Figma's
+  // vector-path grammar.
+  let vectorPath = spec.path;
+  try {
+    const normalized = normalizeVectorPath(spec.path);
+    vectorPath = normalized.path;
+  } catch {
+    try {
+      vectorPath = normalizePath(spec.path).path;
+    } catch {
+      vectorPath = spec.path;
+    }
+  }
   operations.push(
     op({
       type: "createVector",
@@ -963,10 +992,15 @@ function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, r
       y: box.y,
       width: Math.max(1, Math.round(box.w)),
       height: Math.max(1, Math.round(box.h)),
-      path: spec.path,
+      path: vectorPath,
       stroke: spec.stroke !== undefined ? resolveToken(spec.stroke) : "#111111",
       strokeWeight: spec.strokeWeight,
       fill: spec.fill !== undefined ? resolveToken(spec.fill) : [],
+      ...(spec.windingRule !== undefined ? { windingRule: spec.windingRule } : {}),
+      ...(spec.strokeCap !== undefined ? { strokeCap: spec.strokeCap } : {}),
+      ...(spec.strokeJoin !== undefined ? { strokeJoin: spec.strokeJoin } : {}),
+      ...(spec.closed !== undefined ? { closed: spec.closed } : {}),
+      ...(spec.dashPattern !== undefined ? { dashPattern: spec.dashPattern } : {}),
     }),
   );
 }
@@ -1227,10 +1261,12 @@ function emitComponent(
     case "logoMark": {
       // A deterministic geometric mark, centred in its box.
       //
-      // `mark` names one of eight marks drawn on a shared optical grid; `size`
+      // `mark` names one of twelve marks drawn on a shared optical grid; `size`
       // is a fraction of the box (1 fills it). The wordmark is a separate text
       // primitive with letterSpacing -- a mark plus tracked-out capitals is the
       // whole logo, and keeping the two apart means either can be refined alone.
+      // Bezier shoulders (shield, lens, arc) survive via the preserving
+      // normaliser; arc-heavy marks (ring, orbit, grid) flatten correctly.
       const mark = coerceLogoMark(p.mark);
       const fraction = typeof p.size === "number" ? Math.min(1, Math.max(0.1, p.size)) : 0.8;
       const r = (Math.min(box.w, box.h) / 2) * fraction;
@@ -1239,13 +1275,17 @@ function emitComponent(
 
       let normalized;
       try {
-        normalized = normalizePath(logoMarkPath(mark, cx, cy, r));
+        try {
+          normalized = normalizeVectorPath(logoMarkPath(mark, cx, cy, r));
+        } catch {
+          normalized = normalizePath(logoMarkPath(mark, cx, cy, r));
+        }
       } catch {
         break;
       }
 
-      // Open-subpath marks (chevron, wave) are strokes; closed ones fill.
-      const stroked = mark === "chevron" || mark === "wave";
+      // Open-subpath marks (chevron, wave, arc) are strokes; closed ones fill.
+      const stroked = mark === "chevron" || mark === "wave" || mark === "arc";
       operations.push(
         op({
           type: "createVector",
@@ -1263,6 +1303,517 @@ function emitComponent(
           fillArrows: !stroked,
         }),
       );
+      break;
+    }
+
+    case "logoGrid": {
+      // Construction guides: grid lines plus bounding square on a hairline
+      // stroke, so the mark's proportions are inspectable rather than asserted.
+      const fraction = typeof p.size === "number" ? Math.min(1, Math.max(0.1, p.size)) : 0.8;
+      const r = (Math.min(box.w, box.h) / 2) * fraction;
+      const cx = box.x + box.w / 2;
+      const cy = box.y + box.h / 2;
+      const divisions = typeof p.divisions === "number" ? Math.max(2, Math.min(12, Math.round(p.divisions))) : 4;
+      let gpath: string;
+      try {
+        gpath = logoConstructionGrid(0, 0, r, divisions);
+        const n = normalizeVectorPath(gpath);
+        gpath = n.path;
+        operations.push(
+          op({
+            type: "createVector",
+            id: spec.id,
+            parent: parentHint,
+            name: "Logo grid",
+            x: cx - r,
+            y: cy - r,
+            width: Math.max(1, Math.round(r * 2)),
+            height: Math.max(1, Math.round(r * 2)),
+            path: gpath,
+            stroke: str("color", "#0D99FF"),
+            strokeWeight: 1,
+            fill: [],
+            dashPattern: [4, 4],
+          }),
+        );
+      } catch {
+        break;
+      }
+      break;
+    }
+
+    case "logoLockup": {
+      // A complete lockup: mark above, tracked-out wordmark below, optically
+      // aligned. Round marks overshoot so they read at cap height.
+      const mark = coerceLogoMark(p.mark);
+      const wordmark = str("wordmark", str("title", str("text", "EXO")));
+      const markR = Math.min(box.w, box.h * 0.6) / 2;
+      const cx = box.x + box.w / 2;
+      const cy = box.y + markR + grid;
+      const kind = mark === "prism" ? "pointed" : mark === "bars" || mark === "chevron" ? "flat" : "round";
+      const dy = opticalAlignDy(kind, markR);
+      let normalized;
+      try {
+        try {
+          normalized = normalizeVectorPath(logoMarkPath(mark, cx, cy + dy, markR));
+        } catch {
+          normalized = normalizePath(logoMarkPath(mark, cx, cy + dy, markR));
+        }
+      } catch {
+        break;
+      }
+      const stroked = mark === "chevron" || mark === "wave" || mark === "arc";
+      operations.push(
+        op({
+          type: "createVector",
+          id: `${spec.id}-mark`,
+          parent: parentHint,
+          name: `Logo ${mark}`,
+          x: normalized.x,
+          y: normalized.y,
+          width: normalized.width,
+          height: normalized.height,
+          path: normalized.path,
+          stroke: str("color", "#242521"),
+          strokeWeight: num("strokeWeight", Math.max(1, Math.round(grid / 4))),
+          fill: stroked ? [] : str("surface", "#242521"),
+          fillArrows: !stroked,
+        }),
+      );
+      operations.push(
+        op({
+          type: "createText",
+          parent: parentHint,
+          name: "Wordmark",
+          content: wordmark.toUpperCase(),
+          fontSize: fs(Math.max(12, Math.round(markR * 0.45))),
+          weight: 600,
+          letterSpacing: Math.round(markR * 0.18),
+          textAlignHorizontal: "CENTER",
+          fill: str("color", "#242521"),
+        }),
+      );
+      break;
+    }
+
+    case "vectorPlan": {
+      // A constructed path from plan steps: silhouette -> cutout -> mirror ->
+      // refine. Operands compose here; boolean subtraction itself runs in
+      // Figma via booleanGroup so the cut stays editable.
+      const rawSteps: unknown[] = Array.isArray(p.steps) ? (p.steps as unknown[]) : [];
+      const steps: LogoPlanStep[] = [];
+      for (const raw of rawSteps.slice(0, 24)) {
+        if (!raw || typeof raw !== "object") continue;
+        const s = raw as Record<string, unknown>;
+        if (s.op === "silhouette" && typeof s.mark === "string") {
+          steps.push({
+            op: "silhouette",
+            mark: coerceLogoMark(s.mark),
+            cx: typeof s.cx === "number" ? s.cx : box.x + box.w / 2,
+            cy: typeof s.cy === "number" ? s.cy : box.y + box.h / 2,
+            r: typeof s.r === "number" ? s.r : Math.min(box.w, box.h) / 2,
+          });
+        } else if (s.op === "path" && typeof s.path === "string") {
+          steps.push({ op: "path", path: s.path });
+        } else if (s.op === "cutout" && typeof s.path === "string") {
+          steps.push({ op: "cutout", path: s.path });
+        } else if (s.op === "mirror") {
+          steps.push({ op: "mirror", axis: s.axis === "horizontal" ? "horizontal" : "vertical", center: typeof s.center === "number" ? s.center : box.x + box.w / 2 });
+        } else if (s.op === "translate") {
+          steps.push({ op: "translate", dx: typeof s.dx === "number" ? s.dx : 0, dy: typeof s.dy === "number" ? s.dy : 0 });
+        } else if (s.op === "snap") {
+          steps.push({ op: "snap", grid: typeof s.grid === "number" ? s.grid : 4 });
+        }
+      }
+      if (steps.length === 0) break;
+      let result;
+      try {
+        result = executeLogoPlan(steps);
+      } catch {
+        break;
+      }
+      let vpath = result.path;
+      try {
+        vpath = normalizeVectorPath(result.path).path;
+      } catch {
+        try {
+          vpath = normalizePath(result.path).path;
+        } catch {
+          break;
+        }
+      }
+      const b = { x: box.x, y: box.y, w: Math.max(1, Math.round(box.w)), h: Math.max(1, Math.round(box.h)) };
+      operations.push(
+        op({
+          type: "createVector",
+          id: spec.id,
+          parent: parentHint,
+          name: "Vector plan",
+          x: b.x,
+          y: b.y,
+          width: b.w,
+          height: b.h,
+          path: vpath,
+          stroke: str("color", "#242521"),
+          strokeWeight: num("strokeWeight", 1.5),
+          fill: str("surface", "#242521"),
+          fillArrows: true,
+        }),
+      );
+      break;
+    }
+
+    case "booleanGroup": {
+      // Native boolean of already-emitted siblings. Targets name content ids
+      // in the same program; the two-pass executor resolves forward refs, and
+      // Figma refuses loudly when a target is missing or unparented.
+      const operation = p.operation === "subtract" || p.operation === "intersect" || p.operation === "exclude" ? p.operation : "union";
+      const targets: string[] = Array.isArray(p.targets) ? (p.targets as unknown[]).filter((t): t is string => typeof t === "string").slice(0, 50) : [];
+      if (targets.length < 2) break;
+      operations.push(
+        op({
+          type: "booleanOperation",
+          id: spec.id,
+          name: str("title", `${operation} ${targets.length}`),
+          operation,
+          targets,
+        }),
+      );
+      break;
+    }
+
+    case "flowNode": {
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: str("label", str("title", "Step")),
+          x: box.x,
+          y: box.y,
+          width: Math.max(120, Math.round(box.w)),
+          height: Math.max(48, Math.round(box.h || grid * 9)),
+          fill: str("surface", "#FFFFFF"),
+          stroke: str("color", "#0D99FF"),
+          strokeWeight: 1.5,
+          radius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: 2,
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Label", content: str("label", str("title", "Step")), fontSize: fs(14), weight: 600, fill: "#242521" }));
+      if (str("detail", str("body"))) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: str("detail", str("body")), fontSize: fs(12), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "decisionDiamond": {
+      const cx = box.x + box.w / 2;
+      const cy = box.y + (box.h || grid * 12) / 2;
+      const w = Math.max(60, box.w / 2);
+      const h = Math.max(40, (box.h || grid * 12) / 2);
+      const diamond = `M ${f1(cx)} ${f1(cy - h / 2)} L ${f1(cx + w / 2)} ${f1(cy)} L ${f1(cx)} ${f1(cy + h / 2)} L ${f1(cx - w / 2)} ${f1(cy)} Z`;
+      let dpath = diamond;
+      try {
+        dpath = normalizeVectorPath(diamond).path;
+      } catch {
+        /* absolute fallback is already canonical */
+      }
+      operations.push(
+        op({
+          type: "createVector",
+          id: `${spec.id}-diamond`,
+          parent: parentHint,
+          name: "Decision",
+          x: Math.round(cx - w / 2),
+          y: Math.round(cy - h / 2),
+          width: Math.round(w),
+          height: Math.round(h),
+          path: dpath,
+          stroke: str("color", "#FF8A00"),
+          strokeWeight: 1.5,
+          fill: str("surface", "#FFFBEB"),
+        }),
+      );
+      operations.push(op({ type: "createText", parent: parentHint, name: "Question", content: str("label", str("title", "Decide")), fontSize: fs(13), weight: 600, fill: "#242521" }));
+      break;
+    }
+
+    case "timelineEvent": {
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: str("date", "Event"),
+          x: box.x,
+          y: box.y,
+          width: Math.max(160, Math.round(box.w)),
+          height: Math.max(48, Math.round(box.h || grid * 9)),
+          fill: "#00000000",
+          layoutMode: "VERTICAL",
+          padding: 0,
+          itemSpacing: 2,
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Date", content: str("date", "Now"), fontSize: fs(11), weight: 600, family: "JetBrains Mono", fill: "#0D99FF" }));
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: str("title", str("label", "Milestone")), fontSize: fs(14), weight: 600, fill: "#242521" }));
+      if (str("body", str("detail"))) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Body", content: str("body", str("detail")), fontSize: fs(12), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "chartBar":
+    case "chartLine":
+    case "chartPie": {
+      // Chart scaffolds: axes plus geometry from labelled values. Values are
+      // flat numbers; shares are { label, value } rows. Editable vectors and
+      // text, never baked images.
+      const title = str("title", str("label", "Chart"));
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: title,
+          x: box.x,
+          y: box.y,
+          width: Math.max(200, Math.round(box.w)),
+          height: Math.max(120, Math.round(box.h || grid * 24)),
+          fill: str("surface", "#FFFFFF"),
+          stroke: "#E8E6DF",
+          strokeWeight: 1,
+          radius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: grid,
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: title, fontSize: fs(14), weight: 600, fill: "#242521" }));
+      const values: number[] = Array.isArray(p.values)
+        ? (p.values as unknown[]).filter((v): v is number => typeof v === "number").slice(0, 24)
+        : Array.isArray(p.shares)
+          ? (p.shares as unknown[])
+              .map((r) => (r && typeof r === "object" ? (r as Record<string, unknown>).value : undefined))
+              .filter((v): v is number => typeof v === "number")
+              .slice(0, 12)
+          : [4, 7, 5, 9];
+      const labels: string[] = Array.isArray(p.labels) ? (p.labels as unknown[]).filter((l): l is string => typeof l === "string").slice(0, values.length) : [];
+      const max = Math.max(1, ...values);
+      const chartW = Math.max(160, Math.round(box.w) - grid * 3);
+      const chartH = 120;
+      if (spec.type === "chartBar") {
+        const n = Math.max(1, values.length);
+        const bw = Math.max(8, Math.floor(chartW / n) - 8);
+        values.forEach((v, i) => {
+          const h = Math.max(4, Math.round((v / max) * chartH));
+          operations.push(
+            op({
+              type: "createRectangle",
+              parent: spec.id,
+              name: labels[i] ?? `Bar ${i + 1}`,
+              width: bw,
+              height: h,
+              fill: i === values.indexOf(max) ? str("accent", "#0D99FF") : "#DCEBFF",
+              cornerRadius: 3,
+            }),
+          );
+        });
+      } else if (spec.type === "chartLine") {
+        const pts = values.map((v, i) => {
+          const x = values.length === 1 ? chartW / 2 : (chartW * i) / (values.length - 1);
+          const y = chartH - (v / max) * chartH;
+          return `${i === 0 ? "M" : "L"} ${Math.round(x)} ${Math.round(y)}`;
+        });
+        operations.push(
+          op({
+            type: "createVector",
+            parent: spec.id,
+            name: "Series",
+            x: box.x,
+            y: box.y,
+            width: chartW,
+            height: chartH,
+            path: pts.join(" "),
+            stroke: str("accent", "#0D99FF"),
+            strokeWeight: 2,
+            fill: [],
+          }),
+        );
+      } else {
+        const total = values.reduce((a, b) => a + b, 0) || 1;
+        let acc = 0;
+        const palette = ["#0D99FF", "#FF8A00", "#16A34A", "#A855F7", "#F43F5E", "#6F716A"];
+        values.forEach((v, i) => {
+          const share = Math.round((v / total) * 100);
+          acc += share;
+          operations.push(
+            op({
+              type: "createText",
+              parent: spec.id,
+              name: `Share ${i + 1}`,
+              content: `${labels[i] ?? `Slice ${i + 1}`} · ${share}%`,
+              fontSize: fs(12),
+              family: "JetBrains Mono",
+              fill: palette[i % palette.length]!,
+            }),
+          );
+        });
+      }
+      if (str("caption")) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Caption", content: str("caption"), fontSize: fs(11), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "callout":
+    case "annotation": {
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: spec.type === "callout" ? "Callout" : "Annotation",
+          x: box.x,
+          y: box.y,
+          width: Math.max(140, Math.round(box.w)),
+          height: Math.max(40, Math.round(box.h || grid * 8)),
+          fill: spec.type === "callout" ? "#FFF7E5" : "#F0F7FF",
+          stroke: spec.type === "callout" ? "#FF8A00" : "#0D99FF",
+          strokeWeight: 1,
+          radius: num("radius", grid / 2),
+          layoutMode: "VERTICAL",
+          padding: grid,
+          itemSpacing: 2,
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Text", content: str("text", str("body", str("label", "Note"))), fontSize: fs(spec.type === "callout" ? 13 : 12), weight: spec.type === "callout" ? 600 : 400, fill: "#242521" }));
+      if (str("detail")) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: str("detail"), fontSize: fs(11), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "sectionDivider": {
+      operations.push(op({ type: "createText", parent: parentHint, name: "Section", content: str("title", str("label", "Section")).toUpperCase(), fontSize: fs(11), weight: 600, letterSpacing: 2, fill: "#6F716A" }));
+      operations.push(
+        op({
+          type: "createRectangle",
+          parent: parentHint,
+          name: "Rule",
+          width: Math.max(80, Math.round(box.w)),
+          height: 1,
+          fill: "#E8E6DF",
+        }),
+      );
+      break;
+    }
+
+    case "quoteBlock": {
+      operations.push(op({ type: "createText", parent: parentHint, name: "Quote", content: `“${str("quote", str("text", str("body", "Design is intelligence made visible.")))}”`, fontSize: fs(28), weight: 600, fill: "#242521" }));
+      if (str("author", str("caption"))) {
+        operations.push(op({ type: "createText", parent: parentHint, name: "Attribution", content: `— ${str("author", str("caption"))}`, fontSize: fs(13), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "imageFrame": {
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: str("caption", str("alt", "Image")),
+          x: box.x,
+          y: box.y,
+          width: Math.max(160, Math.round(box.w)),
+          height: Math.max(120, Math.round(box.h || grid * 24)),
+          fill: "#EDEBE4",
+          radius: num("radius", grid),
+          clipsContent: true,
+          layoutMode: "VERTICAL",
+          padding: 0,
+          itemSpacing: 0,
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Placeholder", content: str("alt", "Image") + (str("src") ? ` · ${str("src")}` : ""), fontSize: fs(12), family: "JetBrains Mono", fill: "#6F716A" }));
+      if (str("caption")) {
+        operations.push(op({ type: "createText", parent: parentHint, name: "Caption", content: str("caption"), fontSize: fs(11), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "slideMaster": {
+      // A reusable master: background, title slot, footer. Stamped as a
+      // component so slides built from it stay in sync.
+      operations.push(
+        op({
+          type: "createComponent",
+          id: spec.id,
+          parent: parentHint,
+          name: str("title", str("name", "Slide master")),
+          width: 1920,
+          height: 1080,
+          fill: str("background", "#FFFFFF"),
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title slot", content: str("title", "Title"), fontSize: fs(72), weight: 700, fill: "#242521" }));
+      if (str("footer")) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Footer", content: str("footer"), fontSize: fs(20), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "deckOutline": {
+      // A narrative outline rendered as an inspectable list. The planner turns
+      // acts into differently-composed slides; this keeps the arc visible in
+      // the file so a deck reads as a sequence, not N copies of one layout.
+      const acts: string[] = Array.isArray(p.acts) ? (p.acts as unknown[]).filter((a): a is string => typeof a === "string").slice(0, 12) : [];
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: str("title", "Deck outline"),
+          x: box.x,
+          y: box.y,
+          width: Math.max(200, Math.round(box.w)),
+          height: Math.max(80, Math.round(box.h || grid * (8 + acts.length * 4))),
+          fill: "#00000000",
+          layoutMode: "VERTICAL",
+          padding: 0,
+          itemSpacing: grid / 2,
+        }),
+      );
+      if (str("title")) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: str("title"), fontSize: fs(14), weight: 600, fill: "#242521" }));
+      }
+      acts.forEach((act, i) => {
+        operations.push(op({ type: "createText", parent: spec.id, name: `Act ${i + 1}`, content: `${i + 1}. ${act}`, fontSize: fs(13), fill: "#242521" }));
+      });
+      break;
+    }
+
+    case "stat": {
+      operations.push(op({ type: "createText", parent: parentHint, name: "Number", content: str("value", str("number", "42")), fontSize: fs(64), weight: 700, fill: str("color", "#242521") }));
+      if (str("label")) {
+        operations.push(op({ type: "createText", parent: parentHint, name: "Label", content: str("label"), fontSize: fs(14), fill: "#6F716A" }));
+      }
+      break;
+    }
+
+    case "bullets": {
+      const items: string[] = Array.isArray(p.items) ? (p.items as unknown[]).filter((i): i is string => typeof i === "string").slice(0, 12) : [];
+      const title = str("title");
+      if (title) {
+        operations.push(op({ type: "createText", parent: parentHint, name: "Title", content: title, fontSize: fs(20), weight: 600, fill: "#242521" }));
+      }
+      for (const item of items) {
+        operations.push(op({ type: "createText", parent: parentHint, name: "Bullet", content: `•  ${item}`, fontSize: fs(16), fill: "#242521" }));
+      }
       break;
     }
 
@@ -1693,6 +2244,11 @@ function patchPosition(operations: Operation[], id: string, x: number, y: number
 function hugWidth(text: string, { fontSize, paddingX }: { fontSize: number; paddingX: number }): number {
   const charWidth = fontSize * 0.56;
   return Math.ceil(Math.max(1, text.length) * charWidth + paddingX * 2);
+}
+
+/** Two-decimal coordinate formatting for computed diagram geometry. */
+function f1(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /**

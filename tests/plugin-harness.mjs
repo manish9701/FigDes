@@ -212,6 +212,9 @@ function frame(props = {}) {
     children: props.children ?? [],
     parent: props.parent ?? null,
     key: "k",
+    // Real frames always expose layoutGrids (default []); the mock mirrors
+    // that so grid tests exercise the append path instead of the refusal path.
+    layoutGrids: props.layoutGrids ?? [],
     ...props.extra,
   });
 }

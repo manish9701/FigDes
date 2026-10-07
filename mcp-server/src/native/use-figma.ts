@@ -54,8 +54,15 @@ export const UseFigmaArgs = z
       .string()
       .max(MAX_SCRIPT_SIZE)
       .describe(
-        "Controlled JavaScript executed against the FigDes native Figma API. Only the exposed fig API, Math, JSON, Date and console are available. All fig.* calls are async and must be awaited.",
+        "Controlled JavaScript executed against the FigDes native Figma API. Only the exposed fig API, Math, JSON, Date and console are available. All fig.* calls are async and must be awaited. Prefer fig.batch([...]) with $refs over N sequential awaits: one round-trip instead of N. Keep construction scripts render-free and run render/visual review only at checkpoints.",
       ),
+    /**
+     * Read-only inspection scripts skip the session lock and the native
+     * transaction entirely, so they run concurrently with nothing to roll
+     * back. The plugin refuses any mutating action in a readonly script rather
+     * than landing it unprotected.
+     */
+    readonly: z.boolean().optional().describe("Inspection only: skip the lock and transaction so reads run concurrently. Mutations are refused."),
   })
   .strict();
 
@@ -81,8 +88,8 @@ export const ReadContextArgs = z
       .default("file")
       .describe("What to read: file metadata, design context, library collections, local components, or one node."),
     target: z.string().max(200).optional().describe("Node id. Required for scope 'node'."),
-    maxNodes: z.number().int().min(50).max(6000).optional().describe("Scan budget for scope 'design-system'."),
-    depth: z.number().int().min(1).max(6).optional().describe("Frame depth for scope 'design-system'."),
+    maxNodes: z.number().int().min(50).max(6000).optional().describe("Scan budget for scope 'design-system'. Defaults to a lightweight 800; escalate only when the summary shows truncation."),
+    depth: z.number().int().min(1).max(6).optional().describe("Frame depth for scope 'design-system'. Defaults to 2; deeper scans cost time."),
   })
   .strict();
 
@@ -100,11 +107,14 @@ export async function figdesReadContextHandler(session: Session, args: unknown):
     throw new Error("figdes_read_context(scope:'node') needs a target node id.");
   }
   const action = CONTEXT_SCOPE_ACTION[parsed.scope]!;
+  // Lightweight summaries by default: a bounded design-system snapshot first,
+  // the full scan only when the caller names a bigger budget. Deep scans on
+  // every pass are what make the agent feel slow before it draws anything.
   const data = await session.request("native_design", {
     action,
     ...(parsed.target !== undefined ? { target: parsed.target } : {}),
-    ...(parsed.maxNodes !== undefined ? { maxNodes: parsed.maxNodes } : {}),
-    ...(parsed.depth !== undefined ? { depth: parsed.depth } : {}),
+    ...(parsed.maxNodes !== undefined ? { maxNodes: parsed.maxNodes } : parsed.scope === "design-system" ? { maxNodes: 800 } : {}),
+    ...(parsed.depth !== undefined ? { depth: parsed.depth } : parsed.scope === "design-system" ? { depth: 2 } : {}),
   });
   return { status: "ok", scope: parsed.scope, data };
 }
@@ -195,6 +205,7 @@ function createFigApi(rpc: Rpc): Record<string, unknown> {
 
     /* layout */
     setAutoLayout: (target: unknown, params: Record<string, unknown>) => rpc("setAutoLayout", { target: ref(target), ...params }),
+    setLayoutGrid: (target: unknown, params: Record<string, unknown> = {}) => rpc("setLayoutGrid", { target: ref(target), ...params }),
     setClipContent: (target: unknown, params: Record<string, unknown>) => rpc("setClipContent", { target: ref(target), ...params }),
     setConstraints: (target: unknown, params: Record<string, unknown>) => rpc("setConstraints", { target: ref(target), ...params }),
 
@@ -217,6 +228,31 @@ function createFigApi(rpc: Rpc): Record<string, unknown> {
     setIsMask: (target: unknown, params: Record<string, unknown>) => rpc("setIsMask", { target: ref(target), ...params }),
     setOverflowDirection: (target: unknown, params: Record<string, unknown>) => rpc("setOverflowDirection", { target: ref(target), ...params }),
     setPathData: (target: unknown, params: Record<string, unknown>) => rpc("setPathData", { target: ref(target), ...params }),
+    getVectorPath: (target: unknown) => rpc("getVectorPath", { target: ref(target) }),
+    booleanOperation: (params: Record<string, unknown>) => rpc("booleanOperation", params),
+    outlineStroke: (target: unknown, params: Record<string, unknown> = {}) => rpc("outlineStroke", { target: ref(target), ...params }),
+    mirrorNode: (target: unknown, params: Record<string, unknown>) => rpc("mirrorNode", { target: ref(target), ...params }),
+
+    /* batch execution: many related operations, one round-trip.
+       Prefer this over N sequential awaits: the whole batch executes locally
+       inside the plugin and returns compact id+bounds evidence per operation.
+       Later operations address earlier ones as "$ref" / { $ref } without
+       re-resolving Figma ids. Returns { results, opCount, pluginMs }.
+       Example:
+         const { results } = await fig.batch([
+           { action: "createFrame", params: { name: "Card", width: 320, height: 200 }, ref: "card" },
+           { action: "createText", params: { parent: "$card", content: "Hello" } },
+           { action: "setFill", target: "$card", params: { paint: "#FFFFFF" } },
+         ]); */
+    batch: (operations: Array<{ action: string; target?: unknown; params?: Record<string, unknown>; ref?: string }>) =>
+      rpc("executeBatch", {
+        operations: operations.map((item) => ({
+          action: item.action,
+          ...(item.target !== undefined ? { target: ref(item.target) } : {}),
+          params: item.params ?? {},
+          ...(item.ref !== undefined ? { ref: item.ref } : {}),
+        })),
+      }),
 
     /* structure */
     clone: (target: unknown, params: Record<string, unknown> = {}) => rpc("clone", { target: ref(target), ...params }),
@@ -262,7 +298,7 @@ function recoveryFor(code: string): string {
     case "ABORTED":
       return "The script was stopped and rolled back. Split the work into smaller scripts and inspect before retrying; do not blindly repeat it.";
     case "RPC_LIMIT":
-      return "Batch related work into fewer fig.* calls, or build the screen in semantic mode and refine natively.";
+      return "Use fig.batch([...]) with $refs to run related operations in one round-trip, or build the screen in semantic mode and refine natively.";
     case "NODE_NOT_FOUND":
       return "Re-inspect to get current node ids, then address a node that exists.";
     case "INVALID_NODE_TYPE":
@@ -274,13 +310,19 @@ function recoveryFor(code: string): string {
   }
 }
 
-async function runNativeScript(session: Session, script: string): Promise<unknown> {
+async function runNativeScript(session: Session, script: string, opts: { readonly?: boolean } = {}): Promise<unknown> {
   const budgetMs = scriptTimeoutMs();
+  const readonlyMode = opts.readonly === true;
   const transactionId = `ntx_${randomUUID()}`;
   const startedAt = Date.now();
   const deadline = startedAt + budgetMs;
   let aborted = false;
   let rpcCalls = 0;
+  // Execution telemetry: RPC count, batch operations executed inside the
+  // plugin, and plugin-side milliseconds, so a slow pass can be attributed to
+  // transport round-trips versus actual Figma work instead of guessed at.
+  let batchOps = 0;
+  let pluginMs = 0;
 
   const rpc: Rpc = async (action, payload = {}) => {
     if (aborted) {
@@ -289,19 +331,37 @@ async function runNativeScript(session: Session, script: string): Promise<unknow
     rpcCalls += 1;
     const limit = maxRpcCalls();
     if (rpcCalls > limit) {
-      throw new Error(`Native RPC limit exceeded (${limit}). Batch related work into fewer calls.`);
+      throw new Error(`Native RPC limit exceeded (${limit}). Use fig.batch([...]) with $refs to run related operations in one round-trip.`);
     }
     const remaining = deadline - Date.now();
     if (remaining <= 0) {
       throw new Error(`Native execution aborted: the ${budgetMs}ms budget was exhausted.`);
     }
-    return session.request("native_design", { action, transactionId, ...payload }, Math.min(RPC_TIMEOUT_MS, remaining));
+    const res = (await session.request(
+      "native_design",
+      readonlyMode
+        ? { action, readonly: true, ...payload }
+        : { action, transactionId, ...payload },
+      Math.min(RPC_TIMEOUT_MS, remaining),
+    )) as Record<string, unknown>;
+    if (action === "executeBatch" && res !== null && typeof res === "object") {
+      if (typeof res.opCount === "number") batchOps += res.opCount;
+      if (typeof res.pluginMs === "number") pluginMs += res.pluginMs;
+    }
+    return res;
   };
+
+  const telemetry = (): Record<string, number> => ({
+    rpcCalls,
+    batchOps,
+    pluginMs,
+    totalMs: Date.now() - startedAt,
+  });
 
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   try {
-    await rpc("beginNativeTransaction", {});
+    if (!readonlyMode) await rpc("beginNativeTransaction", {});
 
     const fig = createFigApi(rpc);
 
@@ -319,12 +379,24 @@ async function runNativeScript(session: Session, script: string): Promise<unknow
     // eventual rejection so it never surfaces as an unhandled rejection.
     scriptPromise.catch(() => {});
 
-    await Promise.race([scriptPromise, hardTimeout]);
+    const result = await Promise.race([scriptPromise, hardTimeout]);
+
+    if (readonlyMode) {
+      return {
+        status: "success",
+        readonly: true,
+        result,
+        telemetry: telemetry(),
+        message: "Readonly native script executed successfully.",
+      };
+    }
 
     const transaction = await rpc("commitNativeTransaction", {});
     return {
       status: "success",
       transactionId,
+      result,
+      telemetry: telemetry(),
       rpcCalls,
       durationMs: Date.now() - startedAt,
       message: "Native script executed successfully.",
@@ -335,10 +407,20 @@ async function runNativeScript(session: Session, script: string): Promise<unknow
     aborted = true;
     const msg = message(err);
     const code = classify(msg);
+    if (readonlyMode) {
+      return {
+        status: "failed",
+        readonly: true,
+        telemetry: telemetry(),
+        timedOut: code === "ABORTED",
+        error: { code, message: msg, recovery: recoveryFor(code) },
+      };
+    }
     const rollback = await safeRollback(session, transactionId);
     return {
       status: "failed",
       transactionId,
+      telemetry: telemetry(),
       rpcCalls,
       durationMs: Date.now() - startedAt,
       timedOut: code === "ABORTED",
@@ -353,7 +435,11 @@ async function runNativeScript(session: Session, script: string): Promise<unknow
 
 export async function figdesUseFigmaHandler(session: Session, args: unknown): Promise<unknown> {
   const parsed = UseFigmaArgs.parse(args ?? {});
-  // Serialized per session: two native scripts must never interleave transactions.
+  if (parsed.readonly === true) {
+    // Inspection runs free: no lock, no transaction, nothing to roll back.
+    return runNativeScript(session, parsed.script, { readonly: true });
+  }
+  // Serialized per session: two mutating scripts must never interleave transactions.
   return withSessionLock(session.id, () => runNativeScript(session, parsed.script));
 }
 

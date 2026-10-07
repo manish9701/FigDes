@@ -534,3 +534,51 @@ test("summarise counts by rule and by band", () => {
 test("empty input is handled without throwing", () => {
   assert.deepEqual(runRules(metrics([]), "review"), []);
 });
+/* -------------------------------------------------------------------------- */
+/* Governance: font families and button overload (report section 18)           */
+/* -------------------------------------------------------------------------- */
+
+function textNode(id, family, parentId = null) {
+  return node({ id, parentId, type: "TEXT", name: `Text ${id}`, text: { content: "Hello", size: 14, family, style: "Regular", color: "#111111" } });
+}
+
+test("flags more than three font families exactly once", () => {
+  const nodes = [textNode("1:1", "Inter"), textNode("1:2", "Roboto"), textNode("1:3", "Georgia"), textNode("1:4", "JetBrains Mono")];
+  const findings = find(runRules(metrics(nodes), "review"), "font-family-count");
+  assert.equal(findings.length, 1, "one file-level finding, not one per text node");
+  assert.equal(findings[0].confidence, "high");
+  assert.match(findings[0].title, /4 font families/);
+});
+
+test("three font families are a system, not a finding", () => {
+  const nodes = [textNode("1:1", "Inter"), textNode("1:2", "Roboto"), textNode("1:3", "JetBrains Mono")];
+  assert.equal(find(runRules(metrics(nodes), "review"), "font-family-count").length, 0);
+});
+
+function buttonScreen(count) {
+  const root = node({ id: "0:1", name: "Screen" });
+  const kids = [];
+  for (let i = 0; i < count; i++) {
+    kids.push(node({ id: `2:${i}`, parentId: "0:1", name: `Button ${i}`, w: 120, h: 40 }));
+  }
+  return [root, ...kids];
+}
+
+test("flags more than five buttons on one screen", () => {
+  const findings = find(runRules(metrics(buttonScreen(6)), "review"), "button-overload");
+  assert.equal(findings.length, 1, "one finding per screen, not per button");
+  assert.match(findings[0].title, /6 buttons/);
+});
+
+test("five buttons are fine", () => {
+  assert.equal(find(runRules(metrics(buttonScreen(5)), "review"), "button-overload").length, 0);
+});
+
+test("button variants inside a component set are not screen buttons", () => {
+  const set = node({ id: "0:9", name: "Button set", type: "COMPONENT_SET" });
+  const kids = [];
+  for (let i = 0; i < 6; i++) {
+    kids.push(node({ id: `3:${i}`, parentId: "0:9", type: "COMPONENT", name: `Button variant ${i}` }));
+  }
+  assert.equal(find(runRules(metrics([set, ...kids]), "review"), "button-overload").length, 0);
+});

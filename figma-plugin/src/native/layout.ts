@@ -1,4 +1,4 @@
-import { serialize, resolve, resolveScene } from "./utils";
+import { serialize, resolve, resolveScene, hexToRgb } from "./utils";
 
 export async function handleLayout(
   action: string,
@@ -71,6 +71,34 @@ export async function handleLayout(
       const child = await resolveScene(params.child as string);
       if ("insertChild" in parent) (parent as ChildrenMixin).insertChild(Number(params.index), child);
       return serialize(child);
+    }
+    case "setLayoutGrid": {
+      const sn = await resolveScene(target);
+      if (!("layoutGrids" in sn)) throw new Error(`${sn.type} does not support layout grids. Target a frame or component.`);
+      const pattern = String(params.pattern ?? "COLUMNS") as "COLUMNS" | "ROWS" | "GRID";
+      const holder = sn as SceneNode & { layoutGrids: LayoutGrid[] };
+      const grid: LayoutGrid =
+        pattern === "GRID"
+          ? {
+              pattern: "GRID",
+              sectionSize: typeof params.sectionSize === "number" ? params.sectionSize : 8,
+              visible: params.visible === true,
+            }
+          : {
+              pattern,
+              alignment: "STRETCH",
+              gutterSize: typeof params.gutter === "number" ? params.gutter : 24,
+              count: typeof params.count === "number" ? params.count : 12,
+              ...(typeof params.offset === "number" ? { offset: params.offset } : {}),
+              visible: params.visible === true,
+            };
+      if (typeof params.color === "string") {
+        const rgb = hexToRgb(params.color);
+        if (!rgb) throw new Error(`Unrecognized grid color: ${params.color}.`);
+        (grid as { color?: RGBA }).color = { r: rgb.r, g: rgb.g, b: rgb.b, a: rgb.a };
+      }
+      holder.layoutGrids = [...(holder.layoutGrids ?? []), grid];
+      return serialize(sn, { detail: "summary" });
     }
   }
   return null;

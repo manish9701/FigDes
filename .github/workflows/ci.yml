@@ -1,0 +1,22 @@
+# Design generation is treated as code output that can be tested (report §17):
+# every push builds the plugin and server, typechecks, and runs the mock-harness
+# suites that stand in for headless Figma. Live-file smoke tests stay manual.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test

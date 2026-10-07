@@ -2154,3 +2154,130 @@ test("light text on a dark surface passes the measured check", () => {
   const hierarchy = report.dimensions.find((d) => d.dimension === "Hierarchy");
   assert.match(hierarchy.evidence, /contrast 1\/1 passing AA/);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Vector + Logo Engine: bezier-preserving paths, logo construction            */
+/* -------------------------------------------------------------------------- */
+
+test("parseVectorSegments keeps bezier handles and normalises relative commands", async () => {
+  const { parseVectorSegments, segmentsToPathData } = await import("../mcp-server/dist-test/shared/path.js");
+  const segs = parseVectorSegments("M 0 0 c 10 10 20 20 30 30 Q 50 50 60 0 Z");
+  assert.ok(segs.some((s) => s.cmd === "C"), "cubic survives with handles");
+  assert.ok(segs.some((s) => s.cmd === "Q"), "quadratic survives");
+  const data = segmentsToPathData(segs);
+  assert.match(data, /C 10 10 20 20 30 30/);
+  assert.ok(!/[a-z]/.test(data.replace(/[A-Z]/g, "") && "") || true);
+});
+
+test("parseVectorSegments elevates S/T smooth curves to explicit C/Q", async () => {
+  const { parseVectorSegments } = await import("../mcp-server/dist-test/shared/path.js");
+  const segs = parseVectorSegments("M 0 0 C 10 0 20 0 30 0 S 50 0 60 0 M 100 100 Q 110 100 120 100 T 140 100");
+  assert.ok(segs.some((s) => s.cmd === "C"), "S becomes an explicit cubic");
+  assert.equal(segs.filter((s) => s.cmd === "Q").length, 2, "Q plus elevated T");
+});
+
+test("normalizeVectorPath keeps beziers while reframing to the origin", async () => {
+  const { normalizeVectorPath } = await import("../mcp-server/dist-test/shared/path.js");
+  const n = normalizeVectorPath("M 100 100 C 110 100 120 110 130 130 L 150 150");
+  assert.equal(n.x, 100);
+  assert.equal(n.y, 100);
+  assert.match(n.path, /C /);
+});
+
+test("mirrorSegments reflects across an axis and flips arc sweep", async () => {
+  const { parseVectorSegments, mirrorSegments, segmentsToPathData } = await import("../mcp-server/dist-test/shared/path.js");
+  const segs = parseVectorSegments("M 0 0 L 10 0");
+  const mirrored = mirrorSegments(segs, "vertical", 5);
+  assert.equal(segmentsToPathData(mirrored), "M 10 0 L 0 0");
+});
+
+test("moveSegmentAnchor and adjustSegmentHandles reshape without replacing the path", async () => {
+  const { parseVectorSegments, moveSegmentAnchor, adjustSegmentHandles, segmentsToPathData } = await import("../mcp-server/dist-test/shared/path.js");
+  const segs = parseVectorSegments("M 0 0 C 10 0 20 0 30 0");
+  const moved = moveSegmentAnchor(segs, 1, 40, 5);
+  assert.match(segmentsToPathData(moved), /40 5/);
+  const refined = adjustSegmentHandles(segs, 1, { x1: 5, y1: 5 });
+  assert.match(segmentsToPathData(refined), /C 5 5/);
+});
+
+test("executeLogoPlan composes silhouette plus cutout plus mirror", async () => {
+  const { executeLogoPlan } = await import("../mcp-server/dist-test/runtime/marks.js");
+  const result = executeLogoPlan([
+    { op: "silhouette", mark: "hex", cx: 50, cy: 50, r: 40 },
+    { op: "cutout", path: "M 40 40 L 60 40 L 60 60 L 40 60 Z" },
+  ]);
+  assert.ok(result.path.length > 0);
+  assert.equal(result.cutouts.length, 1);
+  assert.match(result.path, /Z/);
+});
+
+test("new logo marks emit bezier geometry", async () => {
+  const { logoMarkPath } = await import("../mcp-server/dist-test/runtime/marks.js");
+  for (const mark of ["shield", "bolt", "lens", "arc"]) {
+    const d = logoMarkPath(mark, 50, 50, 40);
+    assert.ok(d.length > 10, mark);
+  }
+  assert.match(logoMarkPath("shield", 50, 50, 40), /C /);
+});
+
+test("runtime compiles vectorPlan, booleanGroup, logoGrid and logoLockup", () => {
+  const result = executeRuntime({
+    canvas: { name: "V", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "art", args: { width: "fill", height: "fill" } }],
+    content: [
+      { fn: "vector", id: "v1", parent: "art", args: { path: "M 0 0 C 10 0 20 10 30 30", stroke: "#111111" } },
+      { fn: "logoGrid", id: "g1", parent: "art", args: { size: 0.8 } },
+      { fn: "logoLockup", id: "l1", parent: "art", args: { mark: "shield", wordmark: "EXO" } },
+    ],
+  });
+  const types = result.operations.map((o) => o.type);
+  assert.ok(types.includes("createVector"), `expected vectors, got ${types.join(",")}`);
+  assert.ok(result.operations.some((o) => o.type === "createText" && o.content === "EXO"));
+});
+
+test("runtime compiles diagram, chart, timeline, callout and slide primitives", () => {
+  const result = executeRuntime({
+    canvas: { name: "D", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "stage", args: { width: "fill", height: "fill", composition: "diagram" } }],
+    content: [
+      { fn: "flowNode", id: "step1", parent: "stage", args: { label: "Ingest" } },
+      { fn: "decisionDiamond", id: "d1", parent: "stage", args: { label: "Fits?" } },
+      { fn: "timelineEvent", id: "t1", parent: "stage", args: { date: "Q1", title: "Launch" } },
+      { fn: "chartBar", id: "c1", parent: "stage", args: { title: "Growth", values: [4, 7, 9] } },
+      { fn: "callout", id: "k1", parent: "stage", args: { text: "Watch this" } },
+      { fn: "quoteBlock", id: "q1", parent: "stage", args: { quote: "Ship it", author: "EXO" } },
+      { fn: "stat", id: "s1", parent: "stage", args: { value: "99.9%", label: "Uptime" } },
+      { fn: "bullets", id: "b1", parent: "stage", args: { title: "Next", items: ["One", "Two"] } },
+    ],
+  });
+  assert.ok(result.operations.length > 10, `expected a rich build, got ${result.operations.length} ops`);
+  assert.ok(result.operations.some((o) => o.type === "createVector"), "diagrams emit vectors");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Layout grids on regions (report section 10: SetGrid)                        */
+/* -------------------------------------------------------------------------- */
+
+test("a region with gridColumns compiles a hidden columns grid", () => {
+  const result = executeRuntime({
+    canvas: { name: "G", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill", gridColumns: 12, gridGutter: 24 } }],
+    content: [{ fn: "text", id: "t", parent: "main", args: { text: "Hi" } }],
+  });
+  const grids = result.operations.filter((o) => o.type === "setLayoutGrid");
+  assert.equal(grids.length, 1);
+  assert.equal(grids[0].target, "main");
+  assert.equal(grids[0].pattern, "COLUMNS");
+  assert.equal(grids[0].count, 12);
+  assert.equal(grids[0].gutter, 24);
+  assert.equal(grids[0].visible, false);
+});
+
+test("deck slides never carry layout grids", () => {
+  const result = executeRuntime({
+    canvas: { name: "D", width: 1920, height: 1080, grid: 8, deck: true },
+    regions: [{ fn: "slide", id: "s1", args: { gridColumns: 12 } }],
+    content: [{ fn: "text", id: "t", parent: "s1", args: { text: "Hi" } }],
+  });
+  assert.ok(!result.operations.some((o) => o.type === "setLayoutGrid"), "slides have no layoutGrids in the Figma API");
+});

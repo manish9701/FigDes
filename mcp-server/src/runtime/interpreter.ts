@@ -58,6 +58,9 @@ export const RUNTIME_PRIMITIVES = {
     kind: "canvas" as const,
   },
   frame: { description: "A rectangular region.", kind: "region" as const },
+  slide: { description: "One slide in a deck: a full-bleed 1920x1080 visual composition.", kind: "region" as const },
+  stage: { description: "The primary visual stage inside a slide: the focal artifact.", kind: "region" as const },
+  column: { description: "One column inside a multi-column composition.", kind: "region" as const },
   navigation: { description: "A side or top navigation rail.", kind: "region" as const },
   header: { description: "A page header band.", kind: "region" as const },
   hero: { description: "The primary visual region.", kind: "region" as const },
@@ -66,7 +69,9 @@ export const RUNTIME_PRIMITIVES = {
   grid: { description: "A multi-column group.", kind: "region" as const },
   text: { description: "A text layer.", kind: "content" as const },
   shape: { description: "A rectangle, ellipse or line.", kind: "content" as const },
-  vector: { description: "A path with custom geometry.", kind: "content" as const },
+  vector: { description: "A bezier path with custom geometry: M/L/C/Q/S/T/A/Z, beziers preserved.", kind: "content" as const },
+  vectorPlan: { description: "A constructed logo path: silhouette -> cutout -> mirror -> refine, executed as geometry.", kind: "content" as const },
+  booleanGroup: { description: "A native boolean combination (union, subtract, intersect, exclude) of sibling shapes.", kind: "content" as const },
   metric: { description: "A labelled metric with a value and optional delta.", kind: "content" as const },
   statusPill: { description: "A small status badge.", kind: "content" as const },
   deviceNode: { description: "A machine in a topology map.", kind: "content" as const },
@@ -75,6 +80,7 @@ export const RUNTIME_PRIMITIVES = {
   button: { description: "A primary action.", kind: "content" as const },
   divider: { description: "A hairline rule.", kind: "content" as const },
   sectionHeader: { description: "A section title.", kind: "content" as const },
+  sectionDivider: { description: "A labelled section divider for decks and editorial layouts.", kind: "content" as const },
   modelRow: { description: "A row in a model table.", kind: "content" as const },
   topologyMap: { description: "A node-link visualization region.", kind: "content" as const },
   placementMap: { description: "A model-to-machine placement diagram: model requirement, machines, shard assignments.", kind: "content" as const },
@@ -82,7 +88,23 @@ export const RUNTIME_PRIMITIVES = {
   memoryBudget: { description: "A used/total memory bar with a mono readout.", kind: "content" as const },
   fitGauge: { description: "A fits-or-not verdict pill for a model against cluster memory.", kind: "content" as const },
   compatibilityMatrix: { description: "Model-by-machine fit rows with verdicts.", kind: "content" as const },
-  logoMark: { description: "A deterministic geometric logo mark: ring, orbit, chevron, hex, bars, prism, wave or grid.", kind: "content" as const },
+  logoMark: { description: "A deterministic geometric logo mark: ring, orbit, chevron, hex, bars, prism, wave, grid, shield, bolt, lens, arc.", kind: "content" as const },
+  logoGrid: { description: "Construction grid + clearspace guides for a logo mark.", kind: "content" as const },
+  logoLockup: { description: "A complete logo: mark plus tracked-out wordmark, optically aligned.", kind: "content" as const },
+  flowNode: { description: "One step box in a flow/process diagram.", kind: "content" as const },
+  decisionDiamond: { description: "A decision diamond in a flow diagram.", kind: "content" as const },
+  timelineEvent: { description: "One dated event on a timeline.", kind: "content" as const },
+  chartBar: { description: "A bar-chart scaffold from labelled values.", kind: "content" as const },
+  chartLine: { description: "A line-chart scaffold from an ordered series.", kind: "content" as const },
+  chartPie: { description: "A pie/donut scaffold from labelled shares.", kind: "content" as const },
+  callout: { description: "An annotation callout pointing at a feature.", kind: "content" as const },
+  annotation: { description: "A small captioned annotation.", kind: "content" as const },
+  quoteBlock: { description: "A large typographic statement with attribution.", kind: "content" as const },
+  imageFrame: { description: "An image placeholder frame with crop and caption.", kind: "content" as const },
+  slideMaster: { description: "A reusable slide master: background, title slot and footer.", kind: "content" as const },
+  deckOutline: { description: "A deck narrative outline: acts that become differently-composed slides.", kind: "content" as const },
+  stat: { description: "A large-number stat for slides and infographics.", kind: "content" as const },
+  bullets: { description: "A bullet list for slides.", kind: "content" as const },
   template: { description: "An instance of a user-defined template from the program's templates list.", kind: "content" as const },
   connector: { description: "A routed line between two nodes, with an optional label.", kind: "content" as const },
   variable: { description: "A reusable design token (colour, number, string or boolean).", kind: "content" as const },
@@ -121,6 +143,8 @@ const REGION_ARGS = new Set([
   "composition",
   "layout",
   "columns",
+  "gridColumns",
+  "gridGutter",
 ]);
 const CONTENT_ARGS = new Set([
   "text",
@@ -138,6 +162,19 @@ const CONTENT_ARGS = new Set([
   "opacity",
   "shape",
   "path",
+  // Vector geometry: beziers preserved, booleans native.
+  "windingRule",
+  "strokeCap",
+  "strokeJoin",
+  "closed",
+  "axis",
+  "operation",
+  "targets",
+  "steps",
+  "cutout",
+  "grid",
+  "wordmark",
+  "optical",
   // Shape geometry
   "sides",
   "innerRatio",
@@ -201,6 +238,25 @@ const CONTENT_ARGS = new Set([
   "arrowEnd",
   "curvature",
   "dashPattern",
+  // Visualization + deck args
+  "subtitle",
+  "body",
+  "items",
+  "values",
+  "labels",
+  "series",
+  "shares",
+  "date",
+  "quote",
+  "author",
+  "caption",
+  "src",
+  "alt",
+  "acts",
+  "background",
+  "footer",
+  "accent",
+  "number",
   // Token / style args
   "name",
   "type",
@@ -591,6 +647,8 @@ regions.push({
       ...(args.padding !== undefined ? { padding: coercePadding(args.padding) } : {}),
       ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
       ...(args.radius !== undefined ? { radius: coerceNumber(args.radius, 0, 0, 200) } : {}),
+      ...(args.gridColumns !== undefined ? { gridColumns: Math.max(1, Math.min(24, Math.round(Number(args.gridColumns) || 12))) } : {}),
+      ...(args.gridGutter !== undefined ? { gridGutter: coerceNumber(args.gridGutter, 24, 0, 400) } : {}),
       elevation: 0,
       children: [],
     });
@@ -858,6 +916,12 @@ case "shape": {
           path: String(args.path ?? ""),
           ...(args.stroke !== undefined ? { stroke: coerceToken(args.stroke) } : {}),
           ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
+          ...(args.strokeWeight !== undefined ? { strokeWeight: coerceNumber(args.strokeWeight, 1, 0, 64) } : {}),
+          ...(typeof args.windingRule === "string" && ["NONE", "NONZERO", "EVENODD"].includes(args.windingRule) ? { windingRule: args.windingRule } : {}),
+          ...(typeof args.strokeCap === "string" ? { strokeCap: args.strokeCap } : {}),
+          ...(typeof args.strokeJoin === "string" ? { strokeJoin: args.strokeJoin } : {}),
+          ...(args.closed !== undefined ? { closed: args.closed === true } : {}),
+          ...(Array.isArray(args.dashPattern) ? { dashPattern: args.dashPattern as number[] } : {}),
         });
         if (parsed.success) content.push(parsed.data);
         else warnings.push(`Vector '${id}' rejected: ${parsed.error.issues[0]?.message}`);
@@ -1599,12 +1663,15 @@ function coerceRole(fn: PrimitiveName): DesignIR["regions"][number]["role"] {
     header: "header",
     hero: "hero",
     inspector: "inspector",
+    slide: "slide",
+    stage: "stage",
+    column: "column",
   };
   return map[fn] ?? "custom";
 }
 
 function coerceComposition(v: unknown): DesignIR["regions"][number]["composition"] {
-  const allowed = ["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial"] as const;
+  const allowed = ["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison"] as const;
   return typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as never) : "auto";
 }
 
@@ -1622,11 +1689,14 @@ function coerceLayout(v: unknown, compositionHint: string): DesignIR["regions"][
 
   switch (compositionHint) {
     case "topology":
+    case "diagram":
       return "topology";
     case "table":
     case "instrument":
+    case "comparison":
       return "grid";
     case "timeline":
+    case "sequence":
       return "timeline";
     default:
       return "flow";
@@ -1726,6 +1796,25 @@ function componentTypeFor(fn: PrimitiveName): DesignIR["content"][number] extend
     fitGauge: "fitGauge",
     compatibilityMatrix: "compatibilityMatrix",
     logoMark: "logoMark",
+    logoGrid: "logoGrid",
+    logoLockup: "logoLockup",
+    vectorPlan: "vectorPlan",
+    booleanGroup: "booleanGroup",
+    flowNode: "flowNode",
+    decisionDiamond: "decisionDiamond",
+    timelineEvent: "timelineEvent",
+    chartBar: "chartBar",
+    chartLine: "chartLine",
+    chartPie: "chartPie",
+    callout: "callout",
+    annotation: "annotation",
+    sectionDivider: "sectionDivider",
+    quoteBlock: "quoteBlock",
+    imageFrame: "imageFrame",
+    slideMaster: "slideMaster",
+    deckOutline: "deckOutline",
+    stat: "stat",
+    bullets: "bullets",
   };
   return (map[fn] ?? "panel") as never;
 }

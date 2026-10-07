@@ -14,7 +14,7 @@
  * happens in a call that costs one message, not an undo.
  */
 import { z } from "zod";
-import { classifyDecision, planScreen, archetypeFor, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
+import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import type { Composition } from "../runtime/layout";
 import type { Session } from "../sessions";
@@ -35,7 +35,7 @@ export const PlanScreenArgs = z
     audience: z.enum(["developer", "operator", "engineer", "leadership", "general"]).optional(),
     availableInformation: z.array(z.string().max(120)).max(30).optional().describe("Data you actually have. Named, not assumed."),
     existingPatterns: z.array(z.string().max(120)).max(20).optional().describe("Patterns the file already uses."),
-    desiredComposition: z.enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial"]).optional(),
+    desiredComposition: z.enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison"]).optional(),
     name: z.string().max(120).optional(),
     /**
      * Visual direction in words ("technical-editorial", "instrument"...).
@@ -162,8 +162,21 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
 
   // The program must carry deck:true so design_runtime builds slides. Without
   // it the plan would preview slides and the build would produce frames.
+  // Deck mode also replaces the screen shells with the narrative arc: five
+  // acts, each its own composition, so consecutive slides never repeat a
+  // layout and the deck reads as a sequence with a beginning and an end.
   if (args.format === "deck") {
     (plan.program.canvas as Record<string, unknown>).deck = true;
+    const narrative = planDeckNarrative(intent);
+    plan.regions = narrative.regions as typeof plan.regions;
+    plan.boxes = narrative.regions.map((r) => ({ name: r.id, x: 0, y: 0, w: 1920, h: 1080, why: r.because }));
+    plan.composition = "editorial";
+    (plan.program as Record<string, unknown>).regions = narrative.regions.map((r) => ({
+      fn: "slide",
+      id: r.id,
+      args: { composition: r.composition, gap: r.gap, padding: r.padding },
+    }));
+    ((plan as unknown as Record<string, unknown>).deckOutline as unknown) = narrative.acts;
   }
 
   const alternatives = (args.alsoConsider ?? []).map((decision) => {
@@ -265,6 +278,10 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(alternatives.length > 0 ? { alsoConsider: alternatives } : {}),
 
     ...(wantVariants ? { variants, variantsNote: "Build the strongest, compare renders, then commit. A single composition is never final without seeing its siblings." } : {}),
+
+    ...((plan as unknown as Record<string, unknown>).deckOutline !== undefined
+      ? { deckOutline: (plan as unknown as Record<string, unknown>).deckOutline }
+      : {}),
 
     warnings: [...(archetype !== undefined ? archetype.antiPatterns.map((a) => `Archetype '${archetype.name}' forbids: ${a}.`) : []), ...plan.warnings],
 

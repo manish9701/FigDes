@@ -53,12 +53,15 @@ export const RegionSchema = z
         "inspector",
         "status-rail",
         "footer",
+        "slide",
+        "stage",
+        "column",
         "custom",
       ])
       .default("custom"),
     /** Composition hint. The layout engine uses it; it is never drawn. */
     composition: z
-      .enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "auto"])
+      .enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison", "auto"])
       .default("auto"),
     /**
      * How this region's children are arranged (spec §17).
@@ -79,6 +82,14 @@ export const RegionSchema = z
     padding: z.union([z.number().min(0), z.object({ top: z.number(), right: z.number(), bottom: z.number(), left: z.number() })]).optional(),
     fill: TokenRefSchema.optional(),
     radius: z.number().min(0).optional(),
+    /**
+     * Layout grid for the region (report §10: SetGrid).
+     *
+     * A columns grid gives children an alignment structure without the model
+     * hand-placing gutters. Emitted as a hidden guide so renders stay clean.
+     */
+    gridColumns: z.number().int().min(1).max(24).optional(),
+    gridGutter: z.number().min(0).max(400).optional(),
     /**
      * Visual elevation 0-3. Renders as a soft drop shadow: depth you can see,
      * not a comment about depth. Layer concepts and layered intent set this;
@@ -150,10 +161,15 @@ export const VectorSpecSchema = z
   .object({
     id: z.string().min(1).max(64),
     kind: z.literal("vector"),
-    path: z.string().min(1).max(4000).describe("SVG path data: M, L, C, Q, Z. Absolute coordinates only."),
+    path: z.string().min(1).max(8000).describe("SVG path data: M, L, C, Q, S, T, A, Z. Absolute preferred; relative normalised."),
     fill: TokenRefSchema.optional(),
     stroke: TokenRefSchema.optional(),
     strokeWeight: z.number().min(0).max(64).default(1),
+    windingRule: z.enum(["NONE", "NONZERO", "EVENODD"]).optional(),
+    strokeCap: z.enum(["NONE", "ROUND", "SQUARE", "ARROW_LINES", "ARROW_EQUILATERAL"]).optional(),
+    strokeJoin: z.enum(["MITER", "BEVEL", "ROUND"]).optional(),
+    closed: z.boolean().optional(),
+    dashPattern: z.array(z.number().min(0).max(64)).max(8).optional(),
   })
   .strict();
 
@@ -178,11 +194,31 @@ export const ComponentSpecSchema = z
         "button",
         "divider",
         "logoMark",
+        "logoGrid",
+        "logoLockup",
+        "vectorPlan",
+        "booleanGroup",
         "placementMap",
         "shardBlock",
         "memoryBudget",
         "fitGauge",
         "compatibilityMatrix",
+        // Visualization + presentation engine: diagrams, charts, decks.
+        "flowNode",
+        "decisionDiamond",
+        "timelineEvent",
+        "chartBar",
+        "chartLine",
+        "chartPie",
+        "callout",
+        "annotation",
+        "sectionDivider",
+        "quoteBlock",
+        "imageFrame",
+        "slideMaster",
+        "deckOutline",
+        "stat",
+        "bullets",
       ])
       .default("panel"),
     props: z

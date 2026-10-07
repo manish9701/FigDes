@@ -20,7 +20,7 @@ import { handleVectors } from "./vectors";
 import { handleComponents } from "./components";
 import { handleVariables } from "./variables";
 import { handleStyles } from "./styles";
-import { resolve, serialize, asScene } from "./utils";
+import { resolve, serialize, asScene, resolveBatchRefs } from "./utils";
 import { NATIVE_ACTIONS, NATIVE_ACTION_NAMES } from "./schema";
 import {
   assertOpen,
@@ -36,7 +36,9 @@ export interface NativeCallResult {
 
 export async function executeNativeCall(payload: unknown): Promise<unknown> {
   const raw = (payload ?? {}) as Record<string, unknown>;
-  const { action, target, transactionId, ...rest } = raw;
+  // `readonly` is a transport-level execution flag, not an action parameter:
+  // strip it before strict schema validation so it is never mistaken for one.
+  const { action, target, transactionId, readonly, ...rest } = raw;
 
   if (typeof action !== "string" || action.length === 0) {
     throw new Error("A native call needs an `action`.");
@@ -76,10 +78,110 @@ export async function executeNativeCall(payload: unknown): Promise<unknown> {
     assertOpen(txnId);
   }
 
+  // Read-only scripts opt out of the transaction entirely so inspection can run
+  // concurrently with nothing to roll back. A mutation smuggled into a
+  // readonly script is refused here rather than landing unprotected. Batches
+  // pass through to per-operation checks so a batch of pure reads still runs.
+  const readonlyMode = readonly === true;
+  if (readonlyMode && def.mutates && action !== "executeBatch") {
+    throw new Error(`Native action ${action} mutates the document and is refused in a readonly script. Run it without readonly instead.`);
+  }
+
+  if (action === "executeBatch") {
+    return executeBatchOps(
+      params.operations as Array<{ action: string; target?: string | { $ref: string }; params?: Record<string, unknown>; ref?: string }>,
+      txnId,
+      params.compact !== false,
+      readonlyMode,
+    );
+  }
+
   const result = await dispatch(action, target as string | undefined, params);
 
   if (def.mutates && txnId !== undefined) noteMutation();
   return result;
+}
+
+/**
+ * Native Batch Execution: many actions, one round-trip.
+ *
+ * Every operation runs locally inside the plugin through the same
+ * validate-then-dispatch path as an individual call, so the allowlist,
+ * parameter validation and transaction gating are identical — only the
+ * WebSocket/postMessage round-trips collapse from N to 1. `ref` names on
+ * creation operations become `$ref` addresses for later operations in the same
+ * batch, so create → style → resize → parent → align chains resolve locally.
+ *
+ * The batch inherits the caller's native transaction: a failure at any index
+ * throws with the index attached and the surrounding rollback restores the
+ * document, exactly as if the operations had arrived one by one.
+ */
+async function executeBatchOps(
+  operations: Array<{ action: string; target?: string | { $ref: string }; params?: Record<string, unknown>; ref?: string }>,
+  txnId: string | undefined,
+  compact: boolean,
+  readonly: boolean,
+): Promise<{ results: Array<Record<string, unknown>>; opCount: number; pluginMs: number }> {
+  const started = Date.now();
+  const refs = new Map<string, string>();
+  const results: Array<Record<string, unknown>> = [];
+
+  for (let i = 0; i < operations.length; i++) {
+    const item = operations[i]!;
+    const def = NATIVE_ACTIONS[item.action];
+    if (!def) {
+      throw new Error(`Batch op ${i} failed: unknown native action '${item.action}'. Known actions: ${NATIVE_ACTION_NAMES.join(", ")}.`);
+    }
+    if (readonly && def.mutates) {
+      throw new Error(`Batch op ${i} (${item.action}) mutates the document and is refused in a readonly batch.`);
+    }
+    let target: string | undefined;
+    try {
+      const resolved = resolveBatchRefs(
+        { target: item.target ?? null, params: item.params ?? {} },
+        refs,
+      ) as { target: unknown; params: Record<string, unknown> };
+      target = typeof resolved.target === "string" ? resolved.target : undefined;
+      const parsed = def.params.safeParse(resolved.params);
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0];
+        const path = issue?.path.join(".") ?? "";
+        throw new Error(`Invalid parameters for ${item.action}${path ? ` (${path})` : ""}: ${issue?.message ?? "schema mismatch"}.`);
+      }
+      if (def.mutates && txnId !== undefined) assertOpen(txnId);
+      const res = await dispatch(item.action, target, parsed.data as Record<string, unknown>);
+      if (def.mutates && txnId !== undefined) noteMutation();
+      else if (def.mutates) noteMutation();
+      const entry = compactResult(item.ref, res, compact);
+      if (item.ref) {
+        const id = (entry as Record<string, unknown>).id;
+        if (typeof id === "string") refs.set(item.ref, id);
+      }
+      results.push(entry);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      throw new Error(`Batch op ${i} (${item.action}) failed: ${msg}`);
+    }
+  }
+
+  return { results, opCount: operations.length, pluginMs: Date.now() - started };
+}
+
+/** Compact id+bounds evidence for fast mutation mode; full summaries on demand. */
+function compactResult(ref: string | undefined, res: unknown, compact: boolean): Record<string, unknown> {
+  const base: Record<string, unknown> = ref !== undefined ? { ref } : {};
+  if (!compact) return { ...base, value: res };
+  if (res !== null && typeof res === "object" && !Array.isArray(res)) {
+    const o = res as Record<string, unknown>;
+    if (typeof o.id === "string") {
+      for (const k of ["id", "type", "name", "x", "y", "width", "height", "childCount"]) {
+        if (o[k] !== undefined) base[k] = o[k];
+      }
+      return base;
+    }
+  }
+  const text = JSON.stringify(res);
+  return { ...base, value: text.length > 500 ? `${text.slice(0, 500)}…` : text };
 }
 
 async function dispatch(action: string, target: string | undefined, params: Record<string, unknown>): Promise<unknown> {

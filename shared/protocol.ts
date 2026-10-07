@@ -265,16 +265,20 @@ export const CreateVectorOp = z.object({
   width: z.number().positive().max(100000),
   height: z.number().positive().max(100000),
   /**
-   * SVG path data. This is DATA, never code: it is parsed into polylines and
-   * converted to vectors. Nothing here is executed, and the grammar is limited
-   * to absolute M/L/H/V/C/Q/Z commands so no relative-path or arc logic is
-   * reachable from model input.
+   * SVG path data. This is DATA, never code: it is parsed into vectors and
+   * converted to native nodes. Nothing here is executed. The bezier-preserving
+   * pipeline keeps absolute M/L/C/Q/A/S/T/Z (plus relative spellings, which are
+   * normalised to absolute); the legacy flattening path still accepts M/L/H/V/C/Q/A/Z.
    */
-  path: z.string().min(1).max(4000),
+  path: z.string().min(1).max(8000),
   stroke: z.string().optional(),
   strokeWeight: z.number().min(0).max(64).optional(),
+  strokeAlign: z.enum(["INSIDE", "OUTSIDE", "CENTER"]).optional(),
+  strokeCap: z.enum(["NONE", "ROUND", "SQUARE", "ARROW_LINES", "ARROW_EQUILATERAL"]).optional(),
+  strokeJoin: z.enum(["MITER", "BEVEL", "ROUND"]).optional(),
   /** Fill rule for closed subpaths. */
   closed: z.boolean().optional(),
+  windingRule: z.enum(["NONE", "NONZERO", "EVENODD"]).optional(),
   /**
    * Dashed stroke, e.g. `[4, 4]`. Used by connectors to distinguish a data flow
    * from a control path without a second node.
@@ -287,6 +291,68 @@ export const CreateVectorOp = z.object({
    * path as the line, so it must fill while the line only strokes.
    */
   fillArrows: z.boolean().optional(),
+});
+
+/**
+ * Boolean combination of 2+ sibling shapes/vectors (union, subtract,
+ * intersect, exclude). Executes Figma's native boolean ops so the result is a
+ * real editable boolean group, not a flattened picture of one.
+ */
+export const BooleanOperationOp = z.object({
+  type: z.literal("booleanOperation"),
+  id: z.string().min(1).max(64).optional(),
+  name: z.string().max(500).optional(),
+  operation: z.enum(["union", "subtract", "intersect", "exclude"]),
+  /** At least two nodes sharing a parent. First entry is the base for subtract. */
+  targets: z.array(RefSchema).min(2).max(50),
+  parent: RefSchema.optional(),
+});
+
+/** Converts a vector/shape stroke into filled outline geometry. */
+export const OutlineStrokeOp = z.object({
+  type: z.literal("outlineStroke"),
+  target: RefSchema,
+  id: z.string().min(1).max(64).optional(),
+  name: z.string().max(500).optional(),
+});
+
+/** Replaces a vector's path in place, preserving beziers and fill rule. */
+export const SetVectorPathOp = z.object({
+  type: z.literal("setVectorPath"),
+  target: RefSchema,
+  path: z.string().min(1).max(8000),
+  windingRule: z.enum(["NONE", "NONZERO", "EVENODD"]).optional(),
+});
+
+/** Mirrors a node across its own vertical or horizontal centre. */
+export const MirrorNodeOp = z.object({
+  type: z.literal("mirrorNode"),
+  target: RefSchema,
+  axis: z.enum(["horizontal", "vertical"]),
+});
+
+/**
+ * Appends a layout grid to a frame (report §10: SetGrid).
+ *
+ * Columns/rows for alignment structure, GRID for a baseline square module.
+ * Appends rather than replaces so a columns grid and a rows grid can coexist.
+ * Hidden by default: guides are construction aids, and a red overlay on every
+ * region would pollute render-based visual review.
+ */
+export const SetLayoutGridOp = z.object({
+  type: z.literal("setLayoutGrid"),
+  target: RefSchema,
+  pattern: z.enum(["COLUMNS", "ROWS", "GRID"]).default("COLUMNS"),
+  /** Section count for COLUMNS/ROWS (12 is the classic grid). */
+  count: z.number().int().min(1).max(24).default(12),
+  /** Gutter between sections, in px. */
+  gutter: z.number().min(0).max(400).default(24),
+  /** Margin offset for COLUMNS/ROWS. */
+  offset: z.number().min(0).max(1000).optional(),
+  /** Cell size for the GRID pattern. */
+  sectionSize: z.number().positive().max(100000).optional(),
+  visible: z.boolean().default(false),
+  color: z.string().optional(),
 });
 
 /**
@@ -584,6 +650,11 @@ export const OperationSchema = z.discriminatedUnion("type", [
   CreateEllipseOp,
   CreateTextOp,
   CreateVectorOp,
+  BooleanOperationOp,
+  OutlineStrokeOp,
+  SetVectorPathOp,
+  MirrorNodeOp,
+  SetLayoutGridOp,
   CreateSlideOp,
   PrototypeLinkOp,
   CreateGroupOp,
@@ -695,6 +766,15 @@ export interface InspectedNode {
   characters?: string;
   fontSize?: number;
   fontName?: string;
+  /** Vector structure: subpath/curve counts plus capped path data for revision. */
+  vector?: {
+    subpathCount?: number;
+    curveCount?: number;
+    winding?: string[];
+    data?: string[];
+    strokeWeight?: number;
+    strokeCount?: number;
+  };
   children?: InspectedNode[];
   /** Set when the subtree was cut off by depth or budget limits. */
   truncated?: boolean;
@@ -813,6 +893,8 @@ export interface NodeMetrics {
   background?: string;
   stroke?: { hex: string; weight: number };
   radius?: number;
+  /** Vector artwork structure: subpath and bezier counts for logo/diagram review. */
+  vector?: { subpathCount: number; curveCount: number };
 
   layoutMode?: "NONE" | "HORIZONTAL" | "VERTICAL";
   itemSpacing?: number;

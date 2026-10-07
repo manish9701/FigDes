@@ -59,6 +59,10 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "color-only-state", fn: colorOnlyState },
   { name: "tiny-technical-text", fn: tinyTechnicalText },
   { name: "card-wall", fn: cardWall },
+  { name: "vector-stroke-system", fn: vectorStrokeSystem },
+  { name: "repeating-slide-layout", fn: repeatingSlideLayout },
+  { name: "font-family-count", fn: fontFamilyCount },
+  { name: "button-overload", fn: buttonOverload },
 ];
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
@@ -537,6 +541,162 @@ function duplicateSiblings(n: NodeMetrics, c: Ctx): Finding[] {
     });
   }
   return out;
+}
+
+/**
+ * Inconsistent stroke weights across sibling vector artwork.
+ *
+ * A logo family or diagram set drawn on one stroke system uses one or two
+ * weights; five distinct hairlines across six siblings reads as accidental.
+ * Parent-level (runs once per parent with 2+ stroked vectors) so a single
+ * finding names the family, not six findings naming six vectors.
+ */
+function vectorStrokeSystem(n: NodeMetrics, c: Ctx): Finding[] {
+  const siblings = c.childrenOf.get(n.id);
+  if (!siblings) return [];
+  const stroked = siblings.filter(
+    (s) => (s.type === "VECTOR" || s.type === "BOOLEAN_OPERATION") && typeof s.stroke?.weight === "number",
+  );
+  if (stroked.length < 2) return [];
+  const weights = [...new Set(stroked.map((s) => Math.round((s.stroke?.weight ?? 0) * 100) / 100))].sort((a, b) => a - b);
+  if (weights.length <= 2) return [];
+  return [
+    {
+      rule: "vector-stroke-system",
+      confidence: "medium",
+      severity: "minor",
+      title: `${stroked.length} sibling vectors use ${weights.length} stroke weights (${weights.join(", ")})`,
+      evidence: { vectors: stroked.length, weights: weights.join(", "), parentName: n.name },
+      nodeIds: stroked.map((s) => s.id),
+      guidance:
+        "Unify the family on one stroke system (e.g. grid/4 regular, grid/8 hairline). Consistent strokes are what make separate marks read as one logo.",
+    },
+  ];
+}
+
+/**
+ * Repeating slide-sized siblings with identical child counts.
+ *
+ * A deck where every 1920x1080 sibling holds the same structure is N copies
+ * of one layout, not a narrative. Fires once per parent of slide-sized frames
+ * so the fix is aimed at the deck, not at one slide.
+ */
+function repeatingSlideLayout(n: NodeMetrics, c: Ctx): Finding[] {
+  const siblings = c.childrenOf.get(n.id);
+  if (!siblings) return [];
+  const slides = siblings.filter((s) => (s.type === "FRAME" || s.type === "SLIDE") && Math.abs(s.w - 1920) < 4 && Math.abs(s.h - 1080) < 4);
+  if (slides.length < 3) return [];
+  const childCounts = slides.map((s) => c.childrenOf.get(s.id)?.length ?? 0);
+  const first = childCounts[0];
+  if (first === undefined || !childCounts.every((v) => v === first)) return [];
+  return [
+    {
+      rule: "repeating-slide-layout",
+      confidence: "low",
+      severity: "minor",
+      title: `${slides.length} slides share the same structure (${first} children each)`,
+      evidence: { slides: slides.length, childrenEach: first },
+      nodeIds: slides.map((s) => s.id),
+      guidance:
+        "Vary the compositions across the arc: title, split, diagram, evidence, action. A deck is a sequence, and repetition flattens the narrative.",
+    },
+  ];
+}
+
+/**
+ * More than three font families in one file (report §18 governance).
+ *
+ * A file-wide finding carried once by the first text node in document order:
+ * three families is a system, four is the start of drift. Mixed-font nodes are
+ * skipped rather than counted as a family, because "mixed" is a measurement
+ * limit, not a typeface.
+ */
+function fontFamilyCount(n: NodeMetrics, c: Ctx): Finding[] {
+  if (n.type !== "TEXT") return [];
+  const byFamily = new Map<string, string[]>();
+  for (const [id, m] of c.byId) {
+    if (m.type !== "TEXT" || !m.text?.family) continue;
+    if (m.text.family === "mixed") continue;
+    const list = byFamily.get(m.text.family) ?? [];
+    if (list.length < 12) list.push(id);
+    byFamily.set(m.text.family, list);
+  }
+  if (byFamily.size <= 3) return [];
+  const first = [...c.byId.values()].find((m) => m.type === "TEXT");
+  if (!first || first.id !== n.id) return [];
+  return [
+    {
+      rule: "font-family-count",
+      confidence: "high",
+      severity: "minor",
+      title: `${byFamily.size} font families in one file (${[...byFamily.keys()].join(", ")})`,
+      evidence: { families: [...byFamily.keys()].join(", "), count: byFamily.size },
+      nodeIds: [...byFamily.values()].flat().slice(0, 12),
+      guidance:
+        "Consolidate on at most three families (display, body, mono). Extra families are usually pasted-in components that never got re-styled.",
+    },
+  ];
+}
+
+/** True when the node is a button by name or by component ancestry. */
+function isButtonLike(m: NodeMetrics, c: Ctx): boolean {
+  if (/button/i.test(m.name)) return true;
+  if (m.type === "INSTANCE" && m.instanceOf) {
+    const main = c.byId.get(m.instanceOf);
+    if (main && /button/i.test(main.name) && (main.type === "COMPONENT" || main.type === "COMPONENT_SET")) return true;
+  }
+  return false;
+}
+
+/** True when a component-set (variants, not screen buttons) sits overhead. */
+function insideComponentSet(m: NodeMetrics, c: Ctx): boolean {
+  let current: NodeMetrics | undefined = m;
+  const seen = new Set<string>();
+  while (current?.parentId && !seen.has(current.parentId)) {
+    seen.add(current.parentId);
+    const parent = c.byId.get(current.parentId);
+    if (!parent) break;
+    if (parent.type === "COMPONENT_SET") return true;
+    current = parent;
+  }
+  return false;
+}
+
+/**
+ * More than five buttons on one screen (report §18 governance).
+ *
+ * Emitted once per topmost scanned tree so a six-button screen yields one
+ * finding, not six. Variant sets are excluded: six variants of one button are
+ * a component, not six competing actions.
+ */
+function buttonOverload(n: NodeMetrics, c: Ctx): Finding[] {
+  let top: NodeMetrics = n;
+  const seen = new Set<string>();
+  while (top.parentId && c.byId.has(top.parentId) && !seen.has(top.parentId)) {
+    seen.add(top.parentId);
+    top = c.byId.get(top.parentId)!;
+  }
+  if (top.id !== n.id) return [];
+
+  const buttons: string[] = [];
+  const visit = (m: NodeMetrics): void => {
+    if (isButtonLike(m, c) && !insideComponentSet(m, c) && buttons.length < 12) buttons.push(m.id);
+    for (const child of c.childrenOf.get(m.id) ?? []) visit(child);
+  };
+  visit(top);
+  if (buttons.length <= 5) return [];
+  return [
+    {
+      rule: "button-overload",
+      confidence: "medium",
+      severity: "minor",
+      title: `${buttons.length} buttons compete on "${top.name}"`,
+      evidence: { buttons: buttons.length, screenName: top.name },
+      nodeIds: buttons,
+      guidance:
+        "More than five buttons on one screen means no clear primary action. Promote one to primary, demote the rest to quiet links, or move secondary actions behind the primary flow.",
+    },
+  ];
 }
 
 /**

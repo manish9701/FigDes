@@ -101,6 +101,9 @@ export type Composition =
   | "timeline"
   | "split-view"
   | "spatial"
+  | "diagram"
+  | "sequence"
+  | "comparison"
   | "auto";
 
 /**

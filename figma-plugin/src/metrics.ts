@@ -163,6 +163,27 @@ function measure(node: BaseNode, depth: number): NodeMetrics {
   const stroke = primaryStroke(node);
   if (stroke) m.stroke = { hex: stroke.hex, weight: stroke.weight };
 
+  /* vector structure: subpath/curve counts for logo/diagram artwork review */
+  if (node.type === "VECTOR" || node.type === "BOOLEAN_OPERATION" || node.type === "STAR" || node.type === "POLYGON") {
+    try {
+      const paths = (node as VectorNode).vectorPaths ?? [];
+      let curves = 0;
+      for (const p of paths) {
+        const d = p.data;
+        for (let i = 0; i < d.length; i++) {
+          const ch = d[i];
+          if (ch === "C" || ch === "Q") curves += 1;
+        }
+      }
+      (m as NodeMetrics & { vector?: { subpathCount: number; curveCount: number } }).vector = {
+        subpathCount: paths.length,
+        curveCount: curves,
+      };
+    } catch {
+      /* vectorPaths can throw; metrics must not fail for it */
+    }
+  }
+
   /* radius */
   const radius = (node as SceneNode & { cornerRadius?: number | symbol }).cornerRadius;
   if (typeof radius === "number") m.radius = radius;

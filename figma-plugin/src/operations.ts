@@ -20,7 +20,7 @@ import {
   type TransactionFailure,
   type TransactionResult,
 } from "../../shared/protocol";
-import { parseSvgPath } from "../../shared/path";
+import { parseSvgPath, parseVectorSegments, segmentsToPathData } from "../../shared/path";
 
 const MAX_CREATED_NODES = 500;
 
@@ -538,6 +538,8 @@ function isCreateOp(op: Parsed): boolean {
     op.type === "createEllipse" ||
     op.type === "createText" ||
     op.type === "createVector" ||
+    op.type === "booleanOperation" ||
+    op.type === "outlineStroke" ||
     op.type === "createSlide" ||
     op.type === "cloneNode" ||
     op.type === "createComponent" ||
@@ -556,6 +558,16 @@ function describe(op: Parsed): string {
       return `"${op.content.slice(0, 32)}"`;
     case "createVector":
       return "vector";
+    case "booleanOperation":
+      return op.operation;
+    case "outlineStroke":
+      return "outline";
+    case "setVectorPath":
+      return "path";
+    case "mirrorNode":
+      return op.axis;
+    case "setLayoutGrid":
+      return `${op.count}x${op.pattern}`;
     case "createSlide":
       return `${op.name ?? "Slide"} 1920x1080`;
     case "createComponent":
@@ -598,6 +610,52 @@ function toVectorPathData(points: Array<{ x: number; y: number }>): VectorPath {
   let d = `M ${points[0]!.x} ${points[0]!.y}`;
   for (let i = 1; i < points.length; i++) d += ` L ${points[i]!.x} ${points[i]!.y}`;
   return { windingRule: "NONE", data: `${d} Z` };
+}
+
+/**
+ * Bezier-preserving vector paths for Figma's VectorNode.
+ *
+ * The legacy pipeline flattens every curve to polylines. This keeps M/L/C/Q
+ * intact so curve handles survive. Arcs (A) are not in Figma's vector-path
+ * grammar, so a path containing one falls back to the flattened pipeline —
+ * correct geometry at a higher point count rather than a refused logo.
+ * Subpaths after the first become EVENODD fill regions (rings, cutouts,
+ * letterform counters) unless the caller names another winding rule.
+ */
+function toBezierVectorPaths(d: string, windingRule: "NONE" | "NONZERO" | "EVENODD"): VectorPath[] {
+  const segments = parseVectorSegments(d);
+  const subpaths: string[][] = [];
+  let current: string[] = [];
+  for (const s of segments) {
+    if (s.cmd === "M") {
+      if (current.length > 0) subpaths.push(current);
+      current = [`M ${s.x} ${s.y}`];
+    } else if (s.cmd === "L") {
+      current.push(`L ${s.x} ${s.y}`);
+    } else if (s.cmd === "C") {
+      current.push(`C ${s.x1} ${s.y1} ${s.x2} ${s.y2} ${s.x} ${s.y}`);
+    } else if (s.cmd === "Q") {
+      current.push(`Q ${s.x1} ${s.y1} ${s.x} ${s.y}`);
+    } else if (s.cmd === "Z") {
+      current.push("Z");
+      subpaths.push(current);
+      current = [];
+    } else {
+      // A should have been screened out by the caller; refuse loudly rather
+      // than emitting a command Figma would misread.
+      throw new Error("Arc segments need the flattened pipeline; call with an arc-free path.");
+    }
+  }
+  if (current.length > 0) subpaths.push(current);
+  if (subpaths.length === 0) throw new Error("Path produced no drawable geometry.");
+  return subpaths.map((parts, i) => ({
+    windingRule: i === 0 ? windingRule : "EVENODD",
+    data: parts.join(" "),
+  }));
+}
+
+function hasArcCommand(d: string): boolean {
+  return /(^|[\s,])A(?=[\s,]|$)/.test(d) || /(^|[\s,])a(?=[\s,]|$)/.test(d);
 }
 
 async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
@@ -754,20 +812,40 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       const node = figma.createVector();
       node.name = op.name ?? "Vector";
 
-      // Path data is parsed into polylines; nothing from the model is executed.
-      const parsed = parseSvgPath(op.path);
-      const vectorPaths: VectorPath[] = [toVectorPathData(parsed.winding)];
-      // Subpaths after the first become fill regions, so a path like a ring or a
-      // letterform renders as one shape with a hole rather than overlapping strokes.
-      for (const region of parsed.regions) {
-        vectorPaths.push({ windingRule: "EVENODD", data: toVectorPathData(region).data });
+      // Bezier-preserving pipeline: C/Q handles survive to the VectorNode.
+      // Arc-bearing paths fall back to the flattened pipeline (correct, denser).
+      const winding = op.windingRule ?? "NONE";
+      if (hasArcCommand(op.path)) {
+        const parsed = parseSvgPath(op.path);
+        const vectorPaths: VectorPath[] = [{ ...toVectorPathData(parsed.winding), windingRule: winding }];
+        for (const region of parsed.regions) {
+          vectorPaths.push({ windingRule: "EVENODD", data: toVectorPathData(region).data });
+        }
+        node.vectorPaths = vectorPaths;
+      } else {
+        node.vectorPaths = toBezierVectorPaths(op.path, winding);
       }
-      node.vectorPaths = vectorPaths;
 
       parent.appendChild(node);
 
       node.strokes = [solid(op.stroke ?? "#000000")];
       node.strokeWeight = op.strokeWeight ?? 1;
+      if (op.strokeAlign) node.strokeAlign = op.strokeAlign;
+      if (op.strokeCap) {
+        const cap = op.strokeCap as StrokeCap;
+        try {
+          node.strokeCap = cap;
+        } catch {
+          throw new OperationError(`This Figma version does not support stroke cap '${op.strokeCap}'.`, index, op.type);
+        }
+      }
+      if (op.strokeJoin) {
+        try {
+          (node as VectorNode & { strokeJoin: unknown }).strokeJoin = op.strokeJoin;
+        } catch {
+          throw new OperationError(`This Figma version does not support stroke join '${op.strokeJoin}'.`, index, op.type);
+        }
+      }
       if (op.dashPattern !== undefined && op.dashPattern.length > 0) node.dashPattern = op.dashPattern;
 
       // A connector's arrowheads are closed subpaths in the same path as the
@@ -786,6 +864,123 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.y !== undefined) node.y = op.y;
 
       return register(ctx, op.id, node, index, op.type);
+    }
+
+    case "booleanOperation": {
+      const nodes: SceneNode[] = [];
+      for (const ref of op.targets) {
+        nodes.push(requireScene(await resolve(ctx, ref, index, op.type), index, op.type));
+      }
+      const firstParent = nodes[0]!.parent;
+      for (const n of nodes.slice(1)) {
+        if (n.parent !== firstParent) {
+          throw new OperationError(
+            "All boolean targets must share a parent. Reparent them first, or combine per-parent clusters instead.",
+            index,
+            op.type,
+          );
+        }
+      }
+      const parent: ParentNode = op.parent
+        ? await resolveParent(ctx, op.parent, index, op.type)
+        : ((firstParent as unknown as ParentNode) ?? figma.currentPage);
+      const api = figma as PluginAPI & {
+        union?: (nodes: SceneNode[], parent: ParentNode) => BooleanOperationNode;
+        subtract?: (nodes: SceneNode[], parent: ParentNode) => BooleanOperationNode;
+        intersect?: (nodes: SceneNode[], parent: ParentNode) => BooleanOperationNode;
+        exclude?: (nodes: SceneNode[], parent: ParentNode) => BooleanOperationNode;
+      };
+      const fn = op.operation === "union" ? api.union : op.operation === "subtract" ? api.subtract : op.operation === "intersect" ? api.intersect : api.exclude;
+      if (typeof fn !== "function") {
+        throw new OperationError(`This Figma version does not expose boolean '${op.operation}'.`, index, op.type);
+      }
+      const result = fn.bind(figma)(nodes, parent);
+      result.name = op.name ?? `${op.operation} ${nodes.length}`;
+      return register(ctx, op.id, result, index, op.type);
+    }
+
+    case "outlineStroke": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (!("outlineStroke" in node) || typeof (node as VectorNode).outlineStroke !== "function") {
+        throw new OperationError(`${node.type} does not support outlineStroke in this Figma version.`, index, op.type);
+      }
+      const outlined = (node as VectorNode).outlineStroke();
+      if (!outlined) {
+        throw new OperationError("outlineStroke produced no geometry: the node may have no stroke.", index, op.type);
+      }
+      if (op.name !== undefined) outlined.name = op.name;
+      return register(ctx, op.id, outlined, index, op.type);
+    }
+
+    case "setVectorPath": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (node.type !== "VECTOR") {
+        throw new OperationError(`setVectorPath requires a VECTOR node, got ${node.type}`, index, op.type);
+      }
+      const winding = op.windingRule ?? "NONE";
+      if (hasArcCommand(op.path)) {
+        const parsed = parseSvgPath(op.path);
+        const vectorPaths: VectorPath[] = [{ ...toVectorPathData(parsed.winding), windingRule: winding }];
+        for (const region of parsed.regions) {
+          vectorPaths.push({ windingRule: "EVENODD", data: toVectorPathData(region).data });
+        }
+        (node as VectorNode).vectorPaths = vectorPaths;
+      } else {
+        (node as VectorNode).vectorPaths = toBezierVectorPaths(op.path, winding);
+      }
+      return node.id;
+    }
+
+    case "mirrorNode": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (op.axis === "vertical") {
+        node.relativeTransform = [
+          [-1, 0, node.x * 2 + node.width],
+          [0, 1, 0],
+        ] as unknown as typeof node.relativeTransform;
+      } else {
+        node.relativeTransform = [
+          [1, 0, 0],
+          [0, -1, node.y * 2 + node.height],
+        ] as unknown as typeof node.relativeTransform;
+      }
+      return node.id;
+    }
+
+    case "setLayoutGrid": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (!("layoutGrids" in node)) {
+        throw new OperationError(`${node.type} does not support layout grids. Target a frame or component.`, index, op.type);
+      }
+      let color: RGBA | undefined;
+      if (op.color !== undefined) {
+        try {
+          const c = parseColor(op.color);
+          color = { r: c.r, g: c.g, b: c.b, a: c.a };
+        } catch {
+          throw new OperationError(`Unrecognized grid color: ${op.color}. Use #RRGGBB.`, index, op.type);
+        }
+      }
+      const holder = node as SceneNode & { layoutGrids: LayoutGrid[] };
+      const grid: LayoutGrid =
+        op.pattern === "GRID"
+          ? {
+              pattern: "GRID",
+              sectionSize: op.sectionSize ?? 8,
+              visible: op.visible,
+              ...(color !== undefined ? { color } : {}),
+            }
+          : {
+              pattern: op.pattern,
+              alignment: "STRETCH",
+              gutterSize: op.gutter,
+              count: op.count,
+              ...(op.offset !== undefined ? { offset: op.offset } : {}),
+              visible: op.visible,
+              ...(color !== undefined ? { color } : {}),
+            };
+      holder.layoutGrids = [...(holder.layoutGrids ?? []), grid];
+      return `${op.pattern} x${op.count}`;
     }
 
     case "createSlide": {

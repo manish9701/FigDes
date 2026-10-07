@@ -247,3 +247,93 @@ test("inspect_visual includes the image block when a render succeeds", async () 
   assert.equal(visualPayload(res).renderStatus, "ok");
   assert.ok(res.content.some((c) => c.type === "image"), "the screenshot must be a real image block");
 });
+
+/* -------------------------------------------------------------------------- */
+/* Batch execution + readonly fast-path + telemetry                            */
+/* -------------------------------------------------------------------------- */
+
+test("a successful script returns its value with execution telemetry", async () => {
+  const session = makeSession();
+  const res = await figdesUseFigmaHandler(session, { script: "return 42;" });
+  assert.equal(res.status, "success");
+  assert.equal(res.result, 42);
+  assert.ok(res.telemetry, "telemetry is always reported");
+  assert.equal(res.telemetry.rpcCalls, 2, "begin + commit only");
+  assert.equal(res.telemetry.batchOps, 0);
+  assert.ok(res.telemetry.totalMs >= 0);
+});
+
+test("fig.batch runs many operations in one RPC and reports batch telemetry", async () => {
+  const session = makeSession({
+    onRequest: (tool, payload) => {
+      if (payload?.action === "beginNativeTransaction") return { status: "transaction-open" };
+      if (payload?.action === "commitNativeTransaction") return { status: "transaction-committed", mutations: 3 };
+      if (payload?.action === "executeBatch") {
+        assert.equal(payload.operations.length, 3);
+        assert.equal(payload.operations[1].params.parent, "$card", "refs cross as $names, not resolved ids");
+        return { results: [{ ref: "card", id: "1:1" }], opCount: 3, pluginMs: 12 };
+      }
+      return { id: "1:1", type: "FRAME", name: "Frame" };
+    },
+  });
+  const res = await figdesUseFigmaHandler(session, {
+    script: `const { results } = await fig.batch([
+      { action: "createFrame", params: { name: "Card", width: 10, height: 10 }, ref: "card" },
+      { action: "createText", params: { parent: "$card", content: "Hi" } },
+      { action: "setFill", target: "$card", params: { paint: "#FFFFFF" } },
+    ]); return results.length;`,
+  });
+  assert.equal(res.status, "success");
+  assert.equal(res.result, 1);
+  assert.equal(res.telemetry.rpcCalls, 3, "begin + batch + commit: N operations, one round-trip");
+  assert.equal(res.telemetry.batchOps, 3);
+  assert.equal(res.telemetry.pluginMs, 12);
+});
+
+test("readonly scripts skip the transaction and the session lock", async () => {
+  const session = makeSession({
+    onRequest: (tool, payload) => {
+      if (payload?.action === "beginNativeTransaction") throw new Error("readonly must not open a transaction");
+      if (payload?.action === "commitNativeTransaction") throw new Error("readonly must not commit");
+      assert.equal(payload.readonly, true, "every RPC carries the readonly flag");
+      return { fileName: "F" };
+    },
+  });
+  const before = lockedSessions().includes(session.id);
+  const res = await figdesUseFigmaHandler(session, { script: `return (await fig.getFileInfo()).fileName;`, readonly: true });
+  assert.equal(before, false);
+  assert.equal(res.status, "success");
+  assert.equal(res.readonly, true);
+  assert.equal(res.result, "F");
+  assert.ok(!session.calls.some((c) => c.payload.action === "beginNativeTransaction"));
+  assert.equal(lockedSessions().includes(session.id), false, "reads never hold the lock");
+});
+
+test("a readonly script that fails reports no rollback", async () => {
+  const session = makeSession({
+    onRequest: () => {
+      throw new Error("Node 9:9 not found");
+    },
+  });
+  const res = await figdesUseFigmaHandler(session, { script: `await fig.getNode("9:9");`, readonly: true });
+  assert.equal(res.status, "failed");
+  assert.equal(res.readonly, true);
+  assert.equal(res.error.code, "NODE_NOT_FOUND");
+  assert.ok(!("rolledBack" in res), "nothing was open, so there is nothing to roll back");
+});
+
+test("figdes_read_context defaults to a lightweight design-system snapshot", async () => {
+  const seen = [];
+  const session = makeSession({
+    onRequest: (tool, payload) => {
+      seen.push(payload);
+      return { ok: true };
+    },
+  });
+  await figdesReadContextHandler(session, { scope: "design-system" });
+  assert.equal(seen[0].maxNodes, 800, "bounded snapshot first, not the 3000-node full scan");
+  assert.equal(seen[0].depth, 2);
+  await figdesReadContextHandler(session, { scope: "design-system", maxNodes: 4000, depth: 5 });
+  assert.equal(seen[1].maxNodes, 4000, "an explicit budget still wins");
+  assert.equal(seen[1].depth, 5);
+});

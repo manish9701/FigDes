@@ -484,6 +484,7 @@ window.addEventListener("message", (ev: MessageEvent<{ pluginMessage: MainToUi }
       const { base, secret } = splitSecret(msg.url);
       config = { url: base, secret: secret ?? msg.secret, pluginVersion: msg.pluginVersion };
       urlInput.value = base;
+      secretInput.value = config.secret ?? "";
       versionEl.textContent = `v${msg.pluginVersion}`;
       appendLog("info", `Server config received: ${base}`);
       connect();
@@ -533,7 +534,12 @@ el<HTMLButtonElement>("save").addEventListener("click", () => {
     setSaveStatus("err", "✗ Server URL is empty.");
     return;
   }
-  const { base, secret } = splitSecret(raw);
+  const { base, secret: querySecret } = splitSecret(raw);
+  // The dedicated secret field is the primary source; ?secret= in the URL is
+  // the legacy single-field style. Previously the field was never read, so a
+  // server with PLUGIN_SECRET set could never connect (HTTP 401 -> code 1006).
+  const fieldSecret = secretInput.value.trim() || undefined;
+  const secret = querySecret ?? fieldSecret;
 
   const changed = base !== config.url || secret !== config.secret;
   config = { ...config, url: base, secret };

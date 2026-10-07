@@ -4,7 +4,7 @@ import { type Session } from "../sessions";
 
 export const UseFigmaArgs = z.object({
   sessionId: z.string().max(200).optional(),
-  script: z.string().describe("JavaScript to execute in the sandboxed native environment. Exposes a `fig` object."),
+  script: z.string().describe("JavaScript to execute in the sandboxed native environment. Exposes a `fig` object. IMPORTANT: All fig.* methods are async and must be awaited."),
 });
 
 export const InspectVisualArgs = z.object({
@@ -14,104 +14,45 @@ export const InspectVisualArgs = z.object({
 
 export async function figdesUseFigmaHandler(session: Session, args: unknown) {
   const parsed = UseFigmaArgs.parse(args ?? {});
-  const operations: any[] = [];
-  let nextTempId = 1;
 
-  function genId(prefix: string) {
-    return `${prefix}_${nextTempId++}`;
-  }
+  const rpc = async (action: string, payload: any = {}) => {
+    return session.request("native_design", { action, ...payload });
+  };
 
   const fig = {
-    page: () => ({ id: "page" }),
-    frame: (params: any) => {
-      const id = genId("frame");
-      operations.push({ type: "createFrame", id, ...params });
-      return { id };
-    },
-    rectangle: (params: any) => {
-      const id = genId("rect");
-      operations.push({ type: "createRectangle", id, ...params });
-      return { id };
-    },
-    ellipse: (params: any) => {
-      const id = genId("ellipse");
-      operations.push({ type: "createEllipse", id, ...params });
-      return { id };
-    },
-    text: (params: any) => {
-      const id = genId("text");
-      operations.push({ type: "createText", id, ...params });
-      return { id };
-    },
-    vector: (params: any) => {
-      const id = genId("vector");
-      operations.push({ type: "createVector", id, ...params });
-      return { id };
-    },
-    group: (params: any) => {
-      const id = genId("group");
-      operations.push({ type: "createGroup", id, ...params });
-      return { id };
-    },
-    variable: (params: any) => {
-      const id = genId("variable");
-      operations.push({ type: "createVariable", id, ...params });
-      return { id };
-    },
-    style: (params: any) => {
-      const id = genId("style");
-      if (params.color) {
-        operations.push({ type: "createPaintStyle", id, ...params });
-      } else {
-        operations.push({ type: "createTextStyle", id, ...params });
-      }
-      return { id };
-    },
-    effect: (params: any) => {
-      operations.push({ type: "setEffect", ...params });
-    },
-    autoLayout: (params: any) => {
-      operations.push({ type: "setAutoLayout", ...params });
-    },
-    append: (parent: any, child: any) => {
-      operations.push({ type: "appendChild", parent: parent?.id || parent, child: child?.id || child });
-    },
-    remove: (target: any) => {
-      operations.push({ type: "removeNode", target: target?.id || target });
-    },
-    clone: (target: any, params: any) => {
-      const id = genId("clone");
-      operations.push({ type: "cloneNode", id, target: target?.id || target, ...params });
-      return { id };
-    },
-    bounds: (target: any, params: any) => {
-      operations.push({ type: "setPosition", target: target?.id || target, x: params.x, y: params.y });
-      operations.push({ type: "setSize", target: target?.id || target, width: params.width, height: params.height });
-    },
+    page: async () => rpc("resolve", { target: "page" }),
+    createFrame: async (params: any) => rpc("createFrame", params),
+    createRectangle: async (params: any) => rpc("createRectangle", params),
+    createText: async (params: any) => rpc("createText", params),
+    createComponent: async (params: any) => rpc("createComponent", params),
+    createInstance: async (params: any) => rpc("createInstance", params),
+    find: async (query: any, root?: any) => rpc("find", { query, root: root?.id || root }),
+    getSelection: async () => rpc("getSelection"),
+    getNode: async (target: any) => rpc("getNode", { target: target?.id || target }),
+    getChildren: async (target: any) => rpc("getChildren", { target: target?.id || target }),
+    getBounds: async (target: any) => rpc("getBounds", { target: target?.id || target }),
+    setPosition: async (target: any, params: any) => rpc("setPosition", { target: target?.id || target, ...params }),
+    setSize: async (target: any, params: any) => rpc("setSize", { target: target?.id || target, ...params }),
+    setAutoLayout: async (target: any, params: any) => rpc("setAutoLayout", { target: target?.id || target, ...params }),
+    setFill: async (target: any, params: any) => rpc("setFill", { target: target?.id || target, ...params }),
+    setStroke: async (target: any, params: any) => rpc("setStroke", { target: target?.id || target, ...params }),
+    setEffect: async (target: any, params: any) => rpc("setEffect", { target: target?.id || target, ...params }),
+    setTypography: async (target: any, params: any) => rpc("setTypography", { target: target?.id || target, ...params }),
+    setVariable: async (target: any, params: any) => rpc("setVariable", { target: target?.id || target, ...params }),
+    setStyle: async (target: any, params: any) => rpc("setStyle", { target: target?.id || target, ...params }),
+    clone: async (target: any, params: any) => rpc("clone", { target: target?.id || target, ...params }),
+    remove: async (target: any) => rpc("remove", { target: target?.id || target }),
+    append: async (parent: any, child: any) => rpc("append", { parent: parent?.id || parent, child: child?.id || child }),
   };
 
   const context = vm.createContext({ fig, console });
   try {
-    vm.runInContext(parsed.script, context, { timeout: 3000 });
+    const wrapped = `(async () => { ${parsed.script} })()`;
+    await vm.runInContext(wrapped, context, { timeout: 30000 });
+    return { status: "success", message: "Native script executed successfully." };
   } catch (err: any) {
     throw new Error(`Native execution failed: ${err.message}`);
   }
-
-  if (operations.length === 0) {
-    return { status: "ok", message: "Script executed successfully but produced no operations." };
-  }
-
-  const result = await session.request("create_design", {
-    description: "Native Execution (figdes_use_figma)",
-    operations,
-    dryRun: false,
-  }) as any;
-
-  if (result.status === "failed") {
-    throw new Error(`Transaction failed: ${result.error?.message}`);
-  }
-
-  return result;
 }
 
 export async function figdesInspectVisualHandler(session: Session, args: unknown) {

@@ -69,6 +69,22 @@ export const PlanScreenArgs = z
       .optional(),
 
     /** Plan several decision kinds and compare the resulting compositions. */
+    artDirection: z.object({
+      visualCharacter: z.string().describe("Character of the design (e.g. premium, dense, airy)"),
+      primaryFocalObject: z.string(),
+      secondaryFocalObject: z.string().optional(),
+      density: z.enum(["low", "medium", "high"]),
+      gridStrategy: z.string(),
+      spatialRhythm: z.string(),
+      surfaceStrategy: z.string(),
+      typographyHierarchy: z.string(),
+      colorStrategy: z.string(),
+      depthStrategy: z.string(),
+      interactionEmphasis: z.string(),
+      compositionType: z.string().describe("Describe relationships not templates. e.g. 'hero dominates 55%, secondary on vertical axis'"),
+      rejectGenericDashboard: z.boolean().describe("If true, explicitly rejects conventional SaaS dashboard layouts if they lack strong product reason."),
+    }).optional().describe("Explicit Art Director stage to determine visual relationships and style before layout generation."),
+
     alsoConsider: z.array(z.string().min(2).max(200)).max(3).optional().describe("Other plausible primary decisions, to compare compositions."),
     /**
      * Return full structural variants alongside the recommendation (FigDes §6).

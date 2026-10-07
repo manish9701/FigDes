@@ -22,6 +22,7 @@ import {
   type UiToMain,
 } from "../../shared/protocol";
 import { undoLastOperation, runTransaction, type UndoResult } from "./operations";
+import { executeNativeCall } from "./nativeExecutor";
 import { countByType, DEFAULT_INSPECT, inspectNodes, inspectTopLevelFrames, listPages } from "./inspector";
 import { allPages } from "./cache";
 import { DEFAULT_EXTRACT, extractDesignSystem as extract } from "./design-system";
@@ -226,6 +227,9 @@ async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> 
 
     case "modify_design":
       return modifyDesign(payload);
+
+    case "native_design":
+      return executeNativeCall(payload);
 
     case "undo_last_operation":
       return undoLastOperation();

@@ -17,6 +17,7 @@ import { tree, masonry, timeline, cluster, runAlgorithm } from "../mcp-server/di
 import { solveConstraints } from "../mcp-server/dist-test/runtime/constraints.js";
 import { routeConnector } from "../mcp-server/dist-test/runtime/connectors.js";
 import { normalizePath, parseSvgPath } from "../mcp-server/dist-test/shared/path.js";
+import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { LOGO_MARKS, coerceLogoMark, logoMarkPath, polygonPath, ringPath, starPath } from "../mcp-server/dist-test/runtime/marks.js";
 import { OperationSchema } from "../mcp-server/dist-test/shared/protocol.js";
 
@@ -1722,7 +1723,7 @@ function scoreOf(program) {
 test("a composed screen scores well with evidence", () => {
   const report = scoreOf(SCORED);
   assert.ok(report.overall >= 7, `expected 7+, got ${report.overall}: ${JSON.stringify(report.dimensions)}`);
-  assert.equal(report.dimensions.length, 6);
+  assert.equal(report.dimensions.length, 7);
   for (const dimension of report.dimensions) {
     assert.ok(dimension.evidence.length > 0, `${dimension.dimension} has no evidence`);
   }
@@ -1761,4 +1762,219 @@ test("one-size-fits-all type loses hierarchy points", () => {
 
 test("scoring is deterministic across runs", () => {
   assert.equal(scoreOf(SCORED).overall, scoreOf(SCORED).overall);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Visual intent (FigDes section 4)                                            */
+/* -------------------------------------------------------------------------- */
+
+test("visual weight becomes growth", () => {
+  const result = executeRuntime({
+    canvas: { name: "Intent", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "frame", id: "topology", args: { width: 800, height: "fill" } },
+      { fn: "frame", id: "metrics", args: { width: 320, height: "fill" } },
+    ],
+    visualIntent: { visualWeight: { topology: 0.9, metrics: 0.35 } },
+  });
+
+  const byId = Object.fromEntries(result.ir.regions.map((r) => [r.id, r]));
+  assert.equal(byId.topology.grow, 2, "weight 0.9 must grow like 2");
+  assert.equal(byId.metrics.grow, 1, "weight 0.35 must grow like 1");
+  assert.ok(result.intentNotes.some((n) => /topology.*0\.9/.test(n)));
+});
+
+test("the focal region absorbs slack first", () => {
+  const result = executeRuntime({
+    canvas: { name: "Intent", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "frame", id: "map", args: { width: 800, height: "fill" } },
+      { fn: "frame", id: "side", args: { width: 320, height: "fill" } },
+    ],
+    visualIntent: { focal: "map" },
+  });
+
+  assert.equal(result.ir.regions.find((r) => r.id === "map").grow, 2);
+  assert.ok(result.intentNotes.some((n) => /focal point/i.test(n)));
+});
+
+test("density rescales the spacing system", () => {
+  const airy = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { density: "airy" },
+  });
+  const dense = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { density: "dense" },
+  });
+
+  assert.equal(airy.ir.canvas.grid, 12);
+  assert.equal(dense.ir.canvas.grid, 6);
+});
+
+test("declared grow beats inferred weight", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill", grow: 3 } }],
+    visualIntent: { visualWeight: { main: 0.1 } },
+  });
+  assert.equal(result.ir.regions[0].grow, 3);
+});
+
+test("a focal id that matches nothing warns instead of guessing", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { focal: "ghost" },
+  });
+  assert.equal(result.warnings.some((w) => /focal.*ghost/i.test(w)), true);
+});
+
+test("a garbage intent warns once and builds with default taste", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: { density: "moist", visualWeight: "all of it" },
+  });
+  assert.equal(result.warnings.some((w) => /Visual intent ignored/i.test(w)), true);
+  assert.equal(result.ir.canvas.grid, 8);
+});
+
+test("omitting intent changes nothing", () => {
+  const plain = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+  });
+  const withEmpty = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    visualIntent: {},
+  });
+  assert.deepEqual(withEmpty.operations, plain.operations);
+  assert.deepEqual(withEmpty.intentNotes, []);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Focus scoring (FigDes section 19)                                           */
+/* -------------------------------------------------------------------------- */
+
+test("a declared focal region holding attention scores high", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "navigation", id: "nav", args: { width: 240 } },
+      { fn: "hero", id: "hero", args: { grow: 2 } },
+    ],
+    visualIntent: { focal: "hero" },
+  });
+  const report = scoreOf2(result, "hero");
+  const focus = report.dimensions.find((d) => d.dimension === "Focus");
+  assert.ok(focus.score >= 7, `focal hero should hold attention: ${JSON.stringify(focus)}`);
+});
+
+test("a focal region losing to chrome scores low with a fix", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "navigation", id: "nav", args: { width: 1000 } },
+      { fn: "hero", id: "hero", args: { width: 200 } },
+    ],
+    visualIntent: { focal: "hero" },
+  });
+  const report = scoreOf2(result, "hero");
+  const focus = report.dimensions.find((d) => d.dimension === "Focus");
+  assert.ok(focus.score < 7, `a 200px hero cannot hold focus against 1000px chrome: ${JSON.stringify(focus)}`);
+  assert.ok(focus.improve.length > 10);
+});
+
+function scoreOf2(result, focal) {
+  return scoreDesign({
+    boxes: result.boxes,
+    operations: result.operations,
+    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+    composition: inferComposition(result.ir.regions),
+    canvasW: 1440,
+    canvasH: 900,
+    focal,
+  });
+}
+
+/* -------------------------------------------------------------------------- */
+/* Card-wall rule (FigDes section 21)                                           */
+/* -------------------------------------------------------------------------- */
+
+test("three bordered cards covering the screen warn", () => {
+  const card = (id, x) => ({
+    id, parentId: "1:0", type: "FRAME", name: `Card ${id}`, depth: 1,
+    x, y: 0, w: 400, h: 800, visible: true, defaultNamed: false, zIndex: 0,
+    fill: "#FFFFFF", stroke: { hex: "#E0E0E0", weight: 1 }, radius: 8,
+  });
+  const root = {
+    id: "1:0", parentId: null, type: "FRAME", name: "Screen", depth: 0,
+    x: 0, y: 0, w: 1440, h: 900, visible: true, defaultNamed: false, zIndex: 0,
+  };
+  const findings = runRules(
+    { target: null, scope: "test", nodes: [root, card("1:1", 0), card("1:2", 480), card("1:3", 960)], nodeCount: 4, truncated: false, scanBudget: 100, scan: { pageLoads: 0, pagesCached: true } },
+    "review",
+  );
+  const wall = findings.find((f) => f.rule === "card-wall");
+  assert.ok(wall, "three full-height bordered cards must trip the rule");
+  assert.match(wall.guidance, /visual field|topology|open composition/);
+});
+
+test("two cards do not trip the rule", () => {
+  const card = (id, x) => ({
+    id, parentId: "1:0", type: "FRAME", name: `Card ${id}`, depth: 1,
+    x, y: 0, w: 400, h: 800, visible: true, defaultNamed: false, zIndex: 0,
+    fill: "#FFFFFF", stroke: { hex: "#E0E0E0", weight: 1 }, radius: 8,
+  });
+  const root = {
+    id: "1:0", parentId: null, type: "FRAME", name: "Screen", depth: 0,
+    x: 0, y: 0, w: 1440, h: 900, visible: true, defaultNamed: false, zIndex: 0,
+  };
+  const findings = runRules(
+    { target: null, scope: "test", nodes: [root, card("1:1", 0), card("1:2", 480)], nodeCount: 3, truncated: false, scanBudget: 100, scan: { pageLoads: 0, pagesCached: true } },
+    "review",
+  );
+  assert.equal(findings.some((f) => f.rule === "card-wall"), false);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Interaction states (FigDes section 28)                                       */
+/* -------------------------------------------------------------------------- */
+
+test("states expand to one sibling per state", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "button", id: "cta", parent: "main", args: { label: "Deploy", states: ["default", "hover", "disabled", "loading"] } }],
+  });
+
+  assert.deepEqual(result.warnings, []);
+  assert.deepEqual(result.ir.regions[0].children, ["cta-default", "cta-hover", "cta-disabled", "cta-loading"]);
+  const labels = result.operations.filter((o) => o.type === "createText" && o.name === "Label").map((o) => o.content);
+  assert.deepEqual(labels, ["Deploy", "Deploy", "Deploy", "Deploy…"]);
+});
+
+test("unknown states warn and skip instead of inventing", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "button", id: "cta", parent: "main", args: { label: "Go", states: ["default", "teleport"] } }],
+  });
+  assert.equal(result.warnings.some((w) => /State .teleport. is not defined/i.test(w)), true);
+  assert.deepEqual(result.ir.regions[0].children, ["cta-default"]);
+});
+
+test("device states map onto health vocabulary", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "deviceNode", id: "n1", parent: "main", args: { label: "node-01", states: ["running", "deploying", "offline"] } }],
+  });
+  const frames = result.operations.filter((o) => o.type === "createFrame" && o.id.startsWith("n1-"));
+  assert.equal(frames.length, 3);
+  assert.equal(frames.find((f) => f.id === "n1-offline").stroke, "#A32A12");
 });

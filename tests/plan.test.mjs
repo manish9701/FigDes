@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { classifyDecision, planScreen, planPasses, templateFor } from "../mcp-server/dist-test/plan/planner.js";
 import { evaluateCheckpoints, CheckpointLedger, DEFAULT_DESTRUCTIVE_THRESHOLD } from "../mcp-server/dist-test/plan/checkpoints.js";
 import { guardMutation, summarizeOperations, resetApprovals } from "../mcp-server/dist-test/plan/gate.js";
+import { buildPlan } from "../mcp-server/dist-test/plan/tools.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
 /* -------------------------------------------------------------------------- */
@@ -498,4 +499,69 @@ test("a malformed plan warns instead of failing the program", () => {
   });
   assert.equal(built.warnings.some((w) => /not a valid region call/i.test(w)), true);
   assert.deepEqual(built.ir.regions.map((r) => r.id), ["main"]);
+});
+
+test("art direction names the focal region and ranks the rest", () => {
+  const plan = planScreen({ primaryDecision: "select a model", availableInformation: ["a"] });
+  assert.ok(plan.artDirection.focal !== null, "a select screen must have a focal region");
+  assert.equal(plan.artDirection.hierarchy[0].rank, 1);
+  assert.deepEqual(
+    plan.artDirection.hierarchy.map((h) => h.rank),
+    [1, 2, 3, 4],
+  );
+  assert.ok(plan.artDirection.componentStrategy.length > 20);
+  assert.ok(plan.artDirection.visualizationStrategy.length > 20);
+  assert.ok(plan.artDirection.interactionStates.includes("empty"), "pass 4 states must appear");
+  assert.ok(plan.artDirection.interactionStates.includes("error"));
+});
+
+test("topology decisions get EXO runtime states", () => {
+  const plan = planScreen({ primaryDecision: "show network topology", availableInformation: ["nodes"] });
+  assert.ok(plan.artDirection.interactionStates.includes("cluster degraded"));
+  assert.ok(plan.artDirection.interactionStates.includes("model fitting"));
+});
+
+test("composition candidates lead with the recommendation", () => {
+  const plan = planScreen({ primaryDecision: "select a model", availableInformation: ["a"] });
+  assert.equal(plan.compositionCandidates[0].recommended, true);
+  assert.equal(plan.compositionCandidates[0].composition, plan.composition);
+  assert.ok(plan.compositionCandidates.length >= 1);
+});
+
+test("variants are full structural siblings, not descriptions", () => {
+  const out = buildPlan({ primaryDecision: "monitor cluster health", availableInformation: ["cpu"] });
+  assert.ok(out.variants.length >= 1 && out.variants.length <= 2);
+  for (const variant of out.variants) {
+    assert.ok(variant.regions.length > 0);
+    assert.ok(variant.boxes.length === variant.regions.length);
+    assert.notEqual(variant.composition, out.decision.composition);
+  }
+});
+
+test("variants can be switched off", () => {
+  const out = buildPlan({ primaryDecision: "monitor cluster health", availableInformation: ["cpu"], variants: false });
+  assert.equal(out.variants, undefined);
+});
+
+test("an archetype presets decision, template and anti-patterns", () => {
+  const out = buildPlan({ archetype: "model-fit", availableInformation: ["a"] });
+  assert.equal(out.decision.primaryDecision, "run vs change model");
+  assert.equal(out.template.name, "list-detail");
+  assert.equal(out.archetype.name, "model-fit");
+  assert.equal(out.archetype.objective, "Decide whether a model runs here");
+  assert.ok(out.warnings.some((w) => /manual shard dragging/.test(w)), "anti-patterns must surface as warnings");
+});
+
+test("an explicit decision wins over the archetype", () => {
+  const out = buildPlan({ archetype: "model-fit", primaryDecision: "monitor cluster health", availableInformation: ["a"] });
+  assert.equal(out.decision.primaryDecision, "monitor cluster health");
+  assert.equal(out.archetype.name, "model-fit");
+});
+
+test("an unknown archetype fails with the known list", () => {
+  assert.throws(() => buildPlan({ archetype: "starship-bridge" }), /Unknown archetype.*model-fit/);
+});
+
+test("planning without a decision or archetype refuses", () => {
+  assert.throws(() => buildPlan({ availableInformation: ["a"] }), /primaryDecision/);
 });

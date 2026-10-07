@@ -45,6 +45,7 @@ export function scoreDesignTool(rawArgs: unknown): unknown {
     composition: inferComposition(result.ir.regions),
     canvasW: canvasSize(result.ir.canvas.width, 1440),
     canvasH: canvasSize(result.ir.canvas.height, 900),
+    ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
   });
 
   return {
@@ -208,8 +209,103 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
 }
 
 /* -------------------------------------------------------------------------- */
-/* diff_design                                                                 */
+/* final_qa                                                                  */
 /* -------------------------------------------------------------------------- */
+
+export const FinalQaArgs = z
+  .object({
+    sessionId: z.string().max(200).optional(),
+    /** Score and guard this program offline. */
+    program: z.unknown().optional(),
+    /** Also review the live selection (or nodeId) for the technical checks. */
+    target: z.record(z.unknown()).optional(),
+    nodeId: z.string().max(200).optional(),
+    project: z.string().max(200).optional(),
+  })
+  .strict();
+
+interface ChecklistItem {
+  area: "PRODUCT" | "COMPOSITION" | "SYSTEM" | "VISUAL" | "TECHNICAL";
+  check: string;
+  pass: boolean | null;
+  detail: string;
+}
+
+/**
+ * The §33 quality gate: one checklist, five areas, one verdict.
+ *
+ * Each item is measured or explicitly marked unmeasurable — never guessed. A
+ * null pass means "needs the live file", which is itself the instruction. The
+ * generation fails (verdict FAIL) only on measured critical misses; everything
+ * else is a warning or a pending live check.
+ */
+export async function finalQaTool(session: Session | null, rawArgs: unknown): Promise<unknown> {
+  const args = FinalQaArgs.parse(rawArgs);
+  const items: ChecklistItem[] = [];
+
+  if (args.program !== undefined) {
+    const scored = scoreDesignTool({ program: args.program }) as {
+      overall: number;
+      dimensions: Array<{ dimension: string; score: number }>;
+      weakSpots: string[];
+    };
+    const dimension = (name: string): number => scored.dimensions.find((d) => d.dimension === name)?.score ?? 0;
+
+    items.push(
+      { area: "PRODUCT", check: "primary user decision is obvious", pass: dimension("Composition") >= 7, detail: `composition ${dimension("Composition")}/10` },
+      { area: "COMPOSITION", check: "one dominant focal point", pass: dimension("Focus") >= 6, detail: `focus ${dimension("Focus")}/10` },
+      { area: "COMPOSITION", check: "visual hierarchy is intentional", pass: dimension("Hierarchy") >= 7, detail: `hierarchy ${dimension("Hierarchy")}/10` },
+      { area: "COMPOSITION", check: "whitespace is intentional", pass: dimension("Information density") >= 6, detail: `density ${dimension("Information density")}/10` },
+      { area: "SYSTEM", check: "type scale consistent", pass: dimension("Visual consistency") >= 6, detail: `consistency ${dimension("Visual consistency")}/10` },
+      { area: "VISUAL", check: "supporting content does not compete", pass: dimension("Hierarchy") >= 7 && dimension("Focus") >= 6, detail: "hierarchy and focus agree" },
+      { area: "VISUAL", check: "screen does not feel template-generated", pass: null, detail: "needs human eyes: does any region feel stamped?" },
+    );
+
+    const guarded = (await import("../memory/tools").then((m) =>
+      m.designGuardTool(session, { ...(args.project !== undefined ? { project: args.project } : {}), program: args.program }),
+    )) as { verdict?: string; findings?: Array<{ verdict?: string; rule?: string }> };
+    const failed = (guarded.findings ?? []).filter((f) => f.verdict === "FAIL");
+    items.push({
+      area: "PRODUCT",
+      check: "no product-truth violations",
+      pass: failed.length === 0,
+      detail: failed.length === 0 ? `guard: ${guarded.verdict ?? "PASS"}` : `failing rules: ${failed.map((f) => f.rule).join(", ")}`,
+    });
+  }
+
+  if (session && (args.target !== undefined || args.nodeId !== undefined)) {
+    const target = args.target ?? (args.nodeId !== undefined ? { nodeId: args.nodeId } : {});
+    const raw = (await session.request("collect_metrics", target)) as MetricsReport;
+    const findings = runRules(raw, "review");
+    const high = findings.filter((f) => f.confidence === "high");
+    const cardWall = findings.some((f) => f.rule === "card-wall");
+    items.push(
+      { area: "TECHNICAL", check: "no overflow or broken structure", pass: high.length === 0, detail: high.length === 0 ? "no high-confidence findings" : `${high.length} high-confidence: ${high.map((f) => f.rule).join(", ")}` },
+      { area: "COMPOSITION", check: "no accidental card wall", pass: !cardWall, detail: cardWall ? "card-wall rule fired" : "no card wall detected" },
+      { area: "TECHNICAL", check: "render succeeds", pass: null, detail: "render the selection at low detail to confirm" },
+    );
+  } else {
+    items.push(
+      { area: "TECHNICAL", check: "no overflow or broken structure", pass: null, detail: "needs the live file: run review_design" },
+      { area: "TECHNICAL", check: "render succeeds", pass: null, detail: "needs the live file: render at low detail" },
+    );
+  }
+
+  const failed = items.filter((i) => i.pass === false);
+  const pending = items.filter((i) => i.pass === null);
+
+  return {
+    status: "ok",
+    verdict: failed.length > 0 ? "FAIL" : "PASS WITH LIVE CHECKS PENDING",
+    checklist: items,
+    failed: failed.map((i) => `${i.area}: ${i.check} — ${i.detail}`),
+    pendingLiveChecks: pending.map((i) => `${i.area}: ${i.check} — ${i.detail}`),
+    howToProceed:
+      failed.length > 0
+        ? "Fix every failed item, then re-run. A screen that misses critical criteria is not finished."
+        : "Clear the pending live checks (review_design, one low-detail render, design_guard with inspect:true), then call it done.",
+  };
+}
 
 export const DiffArgs = z
   .object({

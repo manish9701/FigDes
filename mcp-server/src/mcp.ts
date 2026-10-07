@@ -28,6 +28,8 @@ const INSTRUCTIONS = [
   "   decision, infers the composition, and returns a 2D composition model, an ordered region list where",
   "   every region says why it exists, and a five-pass build plan. It creates nothing, so a wrong",
   "   composition costs one message instead of an undo. Never open a screen with create_design.",
+  "   For a fuller intake use design_brief first, then hand its decision to plan_screen.",
+  "   Compare plan_screen's structural variants before committing to one composition.",
   "1. Call figma_status first. If connected is false, stop and tell the user to open the plugin.",
   "2. Call inspect_design_system before creating anything. It reports the colours, type ramp, spacing",
   "   scale, radii, components, variables and styles the project already uses. Reusing those is the",

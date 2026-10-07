@@ -1213,3 +1213,69 @@ test("list_variables reports names with resolved default values", async () => {
   assert.equal(byName.surface.collection, "exo");
   assert.equal(byName.gap.value, 24);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Groups and effects                                                          */
+/* -------------------------------------------------------------------------- */
+
+test("createGroup groups nodes that share a parent", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "a", name: "A", width: 100, height: 100 },
+      { type: "createFrame", id: "b", name: "B", width: 100, height: 100 },
+    ],
+  });
+  const ids = built.data.createdNodes.filter((n) => n.temporaryId).map((n) => n.figmaNodeId);
+
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "createGroup", id: "g", name: "Pair", children: ids }],
+  });
+  assert.equal(reply.data.status, "success", `failed: ${JSON.stringify(reply.data.error ?? {})}`);
+
+  const group = f.__node(reply.data.createdNodes.find((n) => n.temporaryId === "g").figmaNodeId);
+  assert.equal(group.type, "GROUP");
+  assert.equal(group.children.length, 2);
+});
+
+test("createGroup refuses nodes with different parents", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "outer", width: 400, height: 400 },
+      { type: "createText", id: "inner", parent: "outer", content: "nested" },
+      { type: "createFrame", id: "sibling", width: 100, height: 100 },
+    ],
+  });
+  const ids = Object.fromEntries(built.data.createdNodes.filter((n) => n.temporaryId).map((n) => [n.temporaryId, n.figmaNodeId]));
+
+  // "inner" lives inside "outer"; "sibling" lives on the page. Grouping across
+  // parents would silently reparent, so it refuses with directions instead.
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "createGroup", children: [ids.inner, ids.sibling] }],
+  });
+  assert.equal(reply.data.status, "failed");
+  assert.match(reply.data.error.message, /share a parent/i);
+});
+
+test("setEffect applies a drop shadow", async () => {
+  const { figma: f } = loadPlugin();
+  const built = await ask(f, "create_design", {
+    operations: [{ type: "createFrame", id: "card", width: 200, height: 100 }],
+  });
+  const id = built.data.createdNodes.find((n) => n.temporaryId === "card").figmaNodeId;
+
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "setEffect", target: id, effect: "drop-shadow", offsetY: 8, radius: 24 }],
+  });
+  assert.equal(reply.data.status, "success", `failed: ${JSON.stringify(reply.data.error ?? {})}`);
+  assert.equal(f.__node(id).effects[0].type, "DROP_SHADOW");
+});
+
+test("setEffect refuses an unknown target", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "create_design", {
+    operations: [{ type: "setEffect", target: "ghost", effect: "blur" }],
+  });
+  assert.equal(reply.data.status, "failed");
+});

@@ -67,11 +67,14 @@ figma-design-agent/
 │       │   ├── rules-exo.ts   the EXO product truths as checkable data
 │       │   ├── guard.ts       PASS / WARNING / FAIL with evidence
 │       │   └── tools.ts       project_memory + design_guard
+│       ├── snapshots/
+│       │   └── store.ts       V1/V2/V3 checkpoints with programs
 │       ├── plan/
 │       │   ├── planner.ts      decision -> composition + five passes
+│       │   ├── brief.ts        design_brief: goal, object, hierarchy, risks
 │       │   ├── checkpoints.ts  human approval rules
 │       │   ├── gate.ts         mutating-tool refusal + approvals
-│       │   └── tools.ts        plan_screen
+│       │   └── tools.ts        plan_screen (+variants, archetypes, deck)
 │       └── runtime/
 │           ├── interpreter.ts  primitives -> Design IR (no eval)
 │           ├── layout.ts       solveAxis / radial / force / pack
@@ -89,12 +92,12 @@ figma-design-agent/
 │   └── path.ts               SVG path parser + bbox normalisation
 ├── .memory/                  durable per-project design memory (committed)
 └── tests/
-    ├── smoke.mjs             59 end-to-end checks with a mock plugin
+    ├── smoke.mjs             65 end-to-end checks with a mock plugin
     ├── review.test.mjs       31 tests over the critic
     ├── code.test.mjs         9 tests over the React + Tailwind exporter
     ├── ui.test.mjs           5 checks: UI/HTML agreement, minimal panel, progress + stream wiring
-    ├── runtime.test.mjs + plan.test.mjs  183 tests over runtime, planner, solver, gates, templates, slides, marks, scoring
-    ├── plugin-runtime.test.mjs  89 tests against the real bundled plugin
+    ├── runtime.test.mjs + plan.test.mjs  206 tests over runtime, intent, planner, solver, gates, templates, slides, marks, scoring
+    ├── plugin-runtime.test.mjs  93 tests against the real bundled plugin
     └── plugin-e2e.test.mjs   15 checks: real bundle + real server over a real socket, incl. live stream
 ```
 
@@ -107,7 +110,7 @@ was ChatGPT reporting something vague.
 ```bash
 npm install
 npm run build        # bundles the plugin (figma-plugin/dist) and the server
-npm test             # 391 checks: critic, code, UI, runtime/planner, plugin runtime, smoke, e2e
+npm test             # 424 checks: critic, code, UI, runtime/planner, plugin runtime, smoke, e2e
 ```
 
 ## Run it
@@ -142,6 +145,81 @@ npm run watch:plugin            # rebuild the plugin on save
 npm start -- --provider=tailscale   # stable hostname, free, no domain
 npm start -- --provider=ngrok        # stable hostname via ngrok's free dev domain
 ```
+
+## More agents on the same server
+
+Yes — ChatGPT, Claude, Antigravity and anything else can connect at once. The
+server is stateless per request and shares one session registry, so concurrent
+clients are safe by construction. Two honest caveats: agents editing the *same*
+file interleave at transaction granularity (last writer wins per transaction —
+give them different areas, or preview with `dryRun` first), and they share one
+render budget per open file.
+
+Local clients need no tunnel — they reach the server directly:
+
+| Client | Where | URL |
+|---|---|---|
+| ChatGPT | Connector URL | the `trycloudflare.com/mcp` address from `npm start` |
+| Claude Code | `claude mcp add --transport http figma-design-agent <url>` | `http://127.0.0.1:8787/mcp` |
+| Antigravity | `mcp_config.json` (below) | `http://127.0.0.1:8787/mcp` |
+| Cursor / VS Code / Windsurf | MCP settings, Streamable HTTP | `http://127.0.0.1:8787/mcp` |
+
+### Antigravity setup
+
+No tunnel, no account, no auth to configure — Antigravity runs on your machine,
+so it talks to the server over localhost:
+
+1. Start the server once: `npm run start:local` (leave it running).
+2. Open the agent side panel → `…` → **MCP Servers** → **Manage MCP Servers** →
+   **View raw config**. Or edit the file directly:
+   - global (all workspaces): `~/.gemini/config/mcp_config.json`
+   - this workspace only: `.agents/mcp_config.json`
+3. Add:
+   ```json
+   { "mcpServers": { "figma-design-agent": { "serverUrl": "http://127.0.0.1:8787/mcp" } } }
+   ```
+4. Restart Antigravity (or Refresh in Manage MCP Servers), then ask the agent to
+   list its tools — you should see all 33, from `plan_screen` to `export_code`.
+5. Open the Design Agent plugin in your Figma file so there is a live session to
+   drive. Then: *"Plan a topology screen for my cluster with plan_screen"* is a
+   good first prompt.
+
+Tip: if 33 tools feel like a lot of context, Antigravity supports
+`"disabledTools": [...]` on the entry to withhold the ones you never use.
+
+### Hosting the server on Render (no local terminal)
+
+Run the server on Render and drive it from anywhere. The tradeoff is auth:
+on a public host `/mcp` must have a secret, so only clients that can send a
+Bearer header work (Antigravity, Claude Code, Cursor — not the ChatGPT
+connector, which cannot).
+
+1. On Render, set two env vars (strong random strings, may be the same value)
+   and redeploy:
+   - `DESIGN_AGENT_SECRET` — guards `/mcp`
+   - `PLUGIN_SECRET` — guards `/ws` (falls back to the MCP secret if unset)
+2. Allow the Render host in `figma-plugin/manifest.json`, keeping localhost:
+   ```json
+   "networkAccess": {
+     "allowedDomains": ["https://YOUR-APP.onrender.com", "wss://YOUR-APP.onrender.com"],
+     "devAllowedDomains": ["http://localhost:8787", "ws://localhost:8787"],
+   }
+   ```
+3. In Figma, remove and re-add the dev plugin (the manifest is read at import),
+   open it, and under **Server connection** paste the public URL plus the
+   secret, then Apply. The socket line should turn green.
+4. Point agents at it:
+   - Antigravity `mcp_config.json`:
+     ```json
+     { "mcpServers": { "figma-design-agent": {
+       "serverUrl": "https://YOUR-APP.onrender.com/mcp",
+       "headers": { "Authorization": "Bearer YOUR-DESIGN-AGENT-SECRET" }
+     } } }
+     ```
+   - Claude Code: `claude mcp add --transport http --header "Authorization: Bearer ..." figma-design-agent https://YOUR-APP.onrender.com/mcp`
+
+   No tunnel, no terminal. Figma Desktop with the plugin open is still required —
+   there is no other path into the document.
 
 The tunnel URL is read out of the tunnel's own output rather than scraped from
 the terminal, because cloudflared prints it to stderr inside a box that scrolls
@@ -352,6 +430,9 @@ for an always-on instance.
 | `refine_screen` | Run the review-fix loop to convergence |
 | `diff_design` | Structural before/after delta between two snapshots |
 | `plan_screen` | Plan a screen before drawing it: decision, composition, regions, passes |
+| `design_brief` | Write the brief before the plan: goal, object, hierarchy, risks |
+| `design_snapshot` | Save, list and fetch V1/V2/V3 design checkpoints |
+| `final_qa` | Run the ship checklist across product, composition, system, visual, technical |
 | `create_slide` | Create one titled slide in Figma Slides |
 | `project_memory` | Read and record durable project design memory |
 | `design_guard` | Check a design against the project's product rules |
@@ -655,10 +736,22 @@ shard assignments, with `memoryBudget`, `fitGauge`, `shardBlock` and
 `plan_screen` names the screen template it follows (`topology`, `list-detail`,
 `model-analysis`, `runtime`, `telemetry`, `integration`) and returns a
 paste-ready `program` skeleton. `design_runtime` accepts that output as `plan:`
-directly, so the model never retypes geometry it already approved. Everyday
-patterns also ship as built-in content templates (`page-header`, `field-row`,
-`action-row`, `section`, `empty-state`, `error-state`); a program template with
-the same name replaces the built-in silently.
+directly, so the model never retypes geometry it already approved. Pass
+`archetype: 'model-fit'` (or topology, runtime, fleet...) to inherit a named
+EXO screen's objective, decision and anti-patterns. Everyday patterns also ship
+as built-in content templates (`page-header`, `field-row`, `action-row`,
+`section`, `empty-state`, `error-state`); a program template with the same name
+replaces the built-in silently.
+
+### Taste is data: visual intent and the art director
+
+Programs accept `visualIntent` — style, density, focal region, per-region
+weights — and it visibly takes effect: density rescales the spacing system,
+weights become growth, the focal region absorbs slack first, and every change
+is reported back. `plan_screen` answers the art director's questions with it:
+the focal region, ranked hierarchy, component and visualization strategy,
+relevant interaction states, design risks and composition candidates to compare.
+`design_brief` frames all of this before any geometry exists.
 
 ### Code, flows and system hygiene
 

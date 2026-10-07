@@ -29,6 +29,13 @@ const RUNTIME_GUIDE = [
   "            Built in: page-header, field-row, action-row, section, empty-state, error-state.",
   "            A program template with the same name replaces the built-in silently.",
   "",
+  "Visual intent - how the screen should be SEEN, not what it contains:",
+  "  visualIntent { style?, composition?, density?: airy|calm|balanced|dense, focal?,",
+  "                 visualWeight?: { region: 0-1 }, depth?, rhythm?, alignment?, contrast? }",
+  "              density rescales the spacing system; visualWeight becomes growth;",
+  "              the focal region absorbs slack first. Omit it freely: every field",
+  "              has a neutral default and omission degrades to current behaviour.",
+  "",
   "Reusable patterns:",
   "  define a template once in 'templates', then stamp it with",
   "  { fn: 'template', id?, parent?, args: { name, values? } }.",
@@ -131,6 +138,14 @@ export const RuntimeArgs = z
     approved: z.boolean().optional(),
     reason: z.string().max(400).optional(),
     transactionId: z.string().max(200).optional(),
+    /**
+     * Split a large build into sequential per-chunk transactions instead of one
+     * giant one (FigDes §30). Each chunk commits separately with its own
+     * rollback, temp ids remap across chunks, and a failure stops the build
+     * with per-chunk results instead of losing everything. The tradeoff is real
+     * and stated: chunked builds take one undo per chunk, not one undo total.
+     */
+    chunked: z.boolean().optional().describe("Build in sequential chunked transactions. For large programs."),
   })
   .strict();
 
@@ -155,7 +170,7 @@ export function runtimeCatalogue() {
 
 export async function runRuntimeTool(session: Session | null, args: unknown): Promise<unknown> {
   const parsed = RuntimeArgs.parse(args);
-  const { program, dryRun, description, transactionId, approved, reason } = parsed;
+  const { program, dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
   const result = executeRuntime(program);
 
@@ -180,6 +195,8 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     algorithms: result.algorithms,
     constrained: result.constrained,
     reflowed: result.reflowed,
+    /** What the visual intent changed, so taste is visible rather than silent. */
+    intentNotes: result.intentNotes,
     violations: result.violations,
     warnings: result.warnings,
     operations: result.operations,
@@ -209,6 +226,16 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
   });
   if (gate) return { ...payload, ...gate };
 
+  if (chunked === true) {
+    const built = await runChunked(session, result.operations, description);
+    return {
+      ...payload,
+      chunked: true,
+      status: built.completed ? payload.status : "completed-with-failed-chunks",
+      chunks: built.chunks,
+    };
+  }
+
   const transaction = await session.request("create_design", {
     description: description ?? "Design runtime execution",
     operations: result.operations,
@@ -216,6 +243,71 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
   });
 
   return { ...payload, transaction };
+}
+
+/** Operations per chunk. Small enough to stay well under node caps, large enough to keep chunks few. */
+const CHUNK_SIZE = 60;
+
+/** Operation fields that can hold node references needing cross-chunk remap. */
+const REF_KEYS = new Set(["parent", "target", "child"]);
+
+/**
+ * Builds a program chunk by chunk, remapping ids across chunk boundaries.
+ *
+ * Each chunk is its own transaction with its own rollback: a failure stops the
+ * build and reports per-chunk results, so a 400-op deck does not lose 399 good
+ * nodes to one bad operation. Temp ids are stable within a program run, which
+ * makes retries idempotent in the only sense that matters here: re-running the
+ * same program rebuilds the same structure rather than a different one.
+ */
+export async function runChunked(
+  session: Session,
+  operations: unknown[],
+  description: string | undefined,
+): Promise<{ chunks: Array<{ index: number; operations: number; status: string; createdNodes: unknown[]; error?: string }>; completed: boolean }> {
+  const chunks: Array<{ index: number; operations: number; status: string; createdNodes: unknown[]; error?: string }> = [];
+  const remap = new Map<string, string>();
+
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === "string" && remap.has(value)) return remap.get(value)!;
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value && typeof value === "object") {
+      const out: Record<string, unknown> = {};
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        out[key] = REF_KEYS.has(key) ? rewrite(entry) : entry;
+      }
+      return out;
+    }
+    return value;
+  };
+
+  for (let i = 0; i < operations.length; i += CHUNK_SIZE) {
+    const slice = (operations.slice(i, i + CHUNK_SIZE) as Array<Record<string, unknown>>).map(
+      (op) => rewrite(op) as Record<string, unknown>,
+    );
+    const result = (await session.request("create_design", {
+      description: `${description ?? "Design runtime execution"} (chunk ${chunks.length + 1})`,
+      operations: slice,
+    })) as { status?: string; createdNodes?: Array<{ temporaryId?: string; figmaNodeId?: string }>; error?: { message?: string } };
+
+    if (result.status === "success") {
+      for (const created of result.createdNodes ?? []) {
+        if (created.temporaryId && created.figmaNodeId) remap.set(created.temporaryId, created.figmaNodeId);
+      }
+      chunks.push({ index: chunks.length, operations: slice.length, status: "success", createdNodes: result.createdNodes ?? [] });
+    } else {
+      chunks.push({
+        index: chunks.length,
+        operations: slice.length,
+        status: "failed",
+        createdNodes: [],
+        error: result.error?.message ?? "chunk failed",
+      });
+      return { chunks, completed: false };
+    }
+  }
+
+  return { chunks, completed: true };
 }
 
 export function compileIrTool(args: unknown): unknown {

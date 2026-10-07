@@ -512,6 +512,10 @@ function describe(op: Parsed): string {
       return `${op.name} ${op.color}`;
     case "prototypeLink":
       return `${op.from} -> ${op.to}`;
+    case "createGroup":
+      return op.name ?? "Group";
+    case "setEffect":
+      return op.effect;
     case "renameNode":
       return op.name;
     case "setSize":
@@ -810,6 +814,55 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.y !== undefined) copy.y = op.y;
 
       return register(ctx, op.id, copy, index, op.type);
+    }
+
+    case "createGroup": {
+      const kids: SceneNode[] = [];
+      for (const ref of op.children) {
+        kids.push(requireScene(await resolve(ctx, ref, index, op.type), index, op.type));
+      }
+      const firstParent = kids[0]!.parent;
+      for (const kid of kids.slice(1)) {
+        if (kid.parent !== firstParent) {
+          throw new OperationError(
+            "All grouped nodes must share a parent. Reparent them first, or group per-parent clusters instead.",
+            index,
+            op.type,
+          );
+        }
+      }
+
+      const group = figma.group(
+        kids,
+        (op.parent ? await resolveParent(ctx, op.parent, index, op.type) : (firstParent as unknown as ParentNode)) ?? figma.currentPage,
+      );
+      group.name = op.name ?? "Group";
+      return register(ctx, op.id, group, index, op.type);
+    }
+
+    case "setEffect": {
+      const target = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (!("effects" in target)) {
+        throw new OperationError(`${target.type} nodes do not support effects.`, index, op.type);
+      }
+
+      const c = parseColor(op.color);
+      const paint = { r: c.r, g: c.g, b: c.b, a: op.opacity };
+      const effect =
+        op.effect === "blur"
+          ? { type: "LAYER_BLUR", radius: op.radius, visible: true }
+          : {
+              type: op.effect === "inner-shadow" ? "INNER_SHADOW" : "DROP_SHADOW",
+              color: paint,
+              offset: { x: op.offsetX, y: op.offsetY },
+              radius: op.radius,
+              spread: op.effect === "inner-shadow" ? 0 : op.spread,
+              visible: true,
+              blendMode: "NORMAL",
+            };
+
+      (target as SceneNode & { effects: unknown }).effects = [effect];
+      return target.id;
     }
 
     case "prototypeLink": {

@@ -65,6 +65,8 @@ export function scoreDesign(input: {
   composition: string;
   canvasW: number;
   canvasH: number;
+  /** Intended focus, when the program declared visual intent. */
+  focal?: string;
 }): ScoreReport {
   const ctx = buildContext(input);
   const dimensions = [
@@ -74,6 +76,7 @@ export function scoreDesign(input: {
     scoreAlignment(ctx),
     scoreConsistency(ctx),
     scoreAccessibility(ctx),
+    scoreFocus(ctx, input.focal),
   ];
 
   const overall = clampScore(dimensions.reduce((a, d) => a + d.score, 0) / dimensions.length);
@@ -310,4 +313,61 @@ function scoreAccessibility(ctx: Ctx): DimensionScore {
   if (monoTechnical > 0) notes.push("technical values monospaced");
 
   return { dimension: "Accessibility", score: clampScore(score), evidence: notes.join("; "), ...(improve ? { improve } : {}) };
+}
+
+/**
+ * Focus: where the eye lands first, estimated deterministically (FigDes §19).
+ *
+ * The model combines three measurable pulls: size (bigger wins), position
+ * (upper-centre wins — reading starts top-left and settles centre), and role
+ * (a hero outranks chrome). Each region gets a share of 1.0, so the output
+ * reads as attention, not area. When the program declared a focal region, the
+ * score is the agreement between intent and measurement; without one, a clear
+ * leader still scores well and a flat field does not.
+ */
+function scoreFocus(ctx: Ctx, focal: string | undefined): DimensionScore {
+  const regionBoxes = ctx.boxes.filter((b) => ctx.regions.some((r) => r.id === b.id));
+  if (regionBoxes.length === 0) {
+    return { dimension: "Focus", score: 5, evidence: "no regions to judge" };
+  }
+
+  const rolePull: Record<string, number> = { hero: 1.4, "primary-visual": 1.4, content: 1.0, secondary: 0.9, inspector: 0.7, header: 0.6, navigation: 0.5, "status-rail": 0.5, footer: 0.4, custom: 0.8 };
+  const cx = ctx.canvasW / 2;
+  const cy = ctx.canvasH * 0.42;
+
+  const pulls = regionBoxes.map((b) => {
+    const role = ctx.regions.find((r) => r.id === b.id)?.role ?? "custom";
+    const area = Math.max(1, b.w) * Math.max(1, b.h);
+    const dist = Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy);
+    const position = 1 / (1 + dist / Math.max(1, ctx.canvasW / 2));
+    return { id: b.id, pull: area * position * (rolePull[role] ?? 0.8) };
+  });
+
+  const total = pulls.reduce((a, p) => a + p.pull, 0) || 1;
+  const shares = pulls.map((p) => ({ ...p, share: p.pull / total })).sort((a, b) => b.share - a.share);
+  const leader = shares[0]!;
+  const summary = shares.map((s) => `${s.id} ${Math.round(s.share * 100)}%`).join(", ");
+
+  if (focal !== undefined) {
+    const focalShare = shares.find((s) => s.id === focal)?.share ?? 0;
+    if (leader.id === focal && focalShare >= 0.4) {
+      return { dimension: "Focus", score: 9, evidence: `intended focal '${focal}' holds ${Math.round(focalShare * 100)}% of attention: ${summary}` };
+    }
+    return {
+      dimension: "Focus",
+      score: clampScore(Math.round(focalShare * 10)),
+      evidence: `intended '${focal}' holds ${Math.round(focalShare * 100)}% but '${leader.id}' leads: ${summary}`,
+      improve: `The eye lands on '${leader.id}', not the intended focal '${focal}'. Grow it, move it toward the upper centre, or reconsider which region deserves focus.`,
+    };
+  }
+
+  if (leader.share >= 0.45) {
+    return { dimension: "Focus", score: 8, evidence: `clear leader '${leader.id}' at ${Math.round(leader.share * 100)}%: ${summary}` };
+  }
+  return {
+    dimension: "Focus",
+    score: 5,
+    evidence: `flat field, no region above 45%: ${summary}`,
+    improve: "Attention is spread evenly, which reads as no hierarchy. Promote one region to hero and give it the room.",
+  };
 }

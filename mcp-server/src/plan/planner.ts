@@ -241,6 +241,57 @@ export function templateFor(kind: DecisionKind): ScreenTemplate {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Screen archetypes (FigDes §23)                                              */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Named EXO screens with their product objective, decision, information
+ * priority and anti-patterns.
+ *
+ * Archetypes answer "which known screen is this" before planning starts, so a
+ * request like "design the Model Fit screen" inherits its objective, decision
+ * and template instead of re-deriving them from scratch — and inherits its
+ * anti-patterns too, which is where the value compounds.
+ */
+export interface ScreenArchetype {
+  name: string;
+  objective: string;
+  decision: string;
+  kind: DecisionKind;
+  template: string;
+  priority: string[];
+  antiPatterns: string[];
+}
+
+export const SCREEN_ARCHETYPES: ScreenArchetype[] = [
+  { name: "compute-overview", objective: "Show fleet state at a glance", decision: "where needs attention", kind: "monitor", template: "telemetry", priority: ["status rail", "primary signal", "underlying data"], antiPatterns: ["KPI card walls", "chat-first layout"] },
+  { name: "device-setup", objective: "Get a new device into the fleet", decision: "confirm the discovered device", kind: "configure", template: "runtime", priority: ["discovered device", "confirmation", "preview"], antiPatterns: ["manual pairing wizards", "QR-scan flows"] },
+  { name: "device-detail", objective: "Understand one machine", decision: "diagnose this device", kind: "inspect", template: "model-analysis", priority: ["device subject", "health context", "actions"], antiPatterns: ["raw spec dumps"] },
+  { name: "model-explorer", objective: "Choose between models", decision: "select a model", kind: "select", template: "list-detail", priority: ["comparable rows", "fit state", "detail inspector"], antiPatterns: ["marketing cards", "chat-first layout"] },
+  { name: "model-fit", objective: "Decide whether a model runs here", decision: "run vs change model", kind: "compare", template: "list-detail", priority: ["fit verdict", "requires vs available", "recommended config", "run action"], antiPatterns: ["six-card checklists", "manual shard dragging as default"] },
+  { name: "deployment", objective: "Ship a model to the fleet", decision: "confirm the rollout", kind: "configure", template: "runtime", priority: ["target selection", "preview of effect", "commit action"], antiPatterns: ["leaps of faith", "hidden consequences"] },
+  { name: "runtime", objective: "Watch inference live", decision: "intervene or let run", kind: "monitor", template: "telemetry", priority: ["live signal", "controls", "recent events"], antiPatterns: ["static dashboards pretending to be live"] },
+  { name: "topology", objective: "See how the fleet connects", decision: "find the weak link", kind: "topology", template: "topology", priority: ["relationship diagram", "selected node", "latency labels"], antiPatterns: ["node lists without edges", "unlabeled lines"] },
+  { name: "performance", objective: "Compare throughput over time", decision: "is this regressing", kind: "compare", template: "list-detail", priority: ["overlaid traces", "baseline", "regression callout"], antiPatterns: ["single numbers without history"] },
+  { name: "activity", objective: "Review what happened", decision: "what needs follow-up", kind: "explore", template: "list-detail", priority: ["filters", "dense event rows", "detail"], antiPatterns: ["undifferentiated logs"] },
+  { name: "integration", objective: "Connect an external provider", decision: "configure this provider", kind: "integration", template: "integration", priority: ["provider list with state", "endpoint detail", "credentials"], antiPatterns: ["generic settings forms", "bespoke nouns"] },
+  { name: "api", objective: "Use EXO programmatically", decision: "copy the right call", kind: "explore", template: "list-detail", priority: ["endpoint list", "code sample", "auth state"], antiPatterns: ["prose documentation pages"] },
+  { name: "fleet", objective: "Manage many machines", decision: "act on a subset", kind: "explore", template: "list-detail", priority: ["filters", "bulk selection", "group actions"], antiPatterns: ["one screen per machine"] },
+  { name: "site", objective: "Understand one location", decision: "is this site healthy", kind: "inspect", template: "model-analysis", priority: ["site subject", "device roster", "alerts"], antiPatterns: ["fleet views scoped by accident"] },
+  { name: "pool", objective: "Manage a resource pool", decision: "rebalance or hold", kind: "monitor", template: "telemetry", priority: ["capacity signal", "member list", "rebalance action"], antiPatterns: ["tables without totals"] },
+  { name: "team", objective: "Manage people and access", decision: "grant or revoke", kind: "explore", template: "list-detail", priority: ["member list", "role detail", "audit trail"], antiPatterns: ["settings mazes"] },
+  { name: "policy", objective: "Set fleet-wide rules", decision: "approve this policy", kind: "configure", template: "runtime", priority: ["rule controls", "blast-radius preview", "approve action"], antiPatterns: ["consequence-free toggles"] },
+  { name: "audit", objective: "Trace what changed", decision: "find the cause", kind: "explore", template: "list-detail", priority: ["time filters", "event rows", "actor detail"], antiPatterns: ["raw log dumps"] },
+  { name: "capacity", objective: "Plan headroom", decision: "add capacity or wait", kind: "monitor", template: "telemetry", priority: ["headroom signal", "growth trend", "recommendation"], antiPatterns: ["gauges without numbers"] },
+];
+
+/** Looks an archetype up by name (case- and separator-insensitive). */
+export function archetypeFor(name: string): ScreenArchetype | undefined {
+  const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return SCREEN_ARCHETYPES.find((a) => a.name.replace(/[^a-z0-9]+/g, "") === key);
+}
+
+/* -------------------------------------------------------------------------- */
 /* Warnings                                                                    */
 /* -------------------------------------------------------------------------- */
 
@@ -399,6 +450,10 @@ export interface ScreenPlan {
   boxes: CompositionBox[];
   regions: PlannedRegion[];
   passes: PlannedPass[];
+  /** The art director's decisions (FigDes §5): what the eye finds and why. */
+  artDirection: ArtDirection;
+  /** Compositions worth comparing, recommended first (FigDes §6). */
+  compositionCandidates: Array<{ composition: Composition; recommended: boolean; why: string }>;
   /** Rule ids the plan is likely to trip, with what to do instead. */
   guardPreview: Array<{ rule: string; therefore: string }>;
   /** Composition alternatives worth putting to the user (§38). */
@@ -409,6 +464,30 @@ export interface ScreenPlan {
     canvas: { name: string; width: number; height: number; grid: number };
     regions: Array<{ fn: string; id: string; args: Record<string, unknown> }>;
   };
+}
+
+/**
+ * What the art director decides (FigDes §5).
+ *
+ * Every field answers one of the responsibilities: what the eye sees first,
+ * what supports it, where whitespace is intentional, which object is the hero
+ * and how large it is, how data becomes visual rather than another card. All
+ * derived from the plan itself — nothing here is a guess about content that
+ * does not exist yet.
+ */
+export interface ArtDirection {
+  /** The region the eye finds first, or null when no region earns it. */
+  focal: { id: string; why: string } | null;
+  /** Regions ordered by visual priority, rank 1 first. */
+  hierarchy: Array<{ rank: number; id: string; why: string }>;
+  /** Reuse vs build guidance, grounded in the file's existing patterns. */
+  componentStrategy: string;
+  /** How this screen's data becomes visual rather than cards. */
+  visualizationStrategy: string;
+  /** States this screen must draw, including EXO runtime states where relevant. */
+  interactionStates: string[];
+  /** What could still go wrong, cheapest to hear now. */
+  designRisks: string[];
 }
 
 /**
@@ -481,6 +560,13 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
 
   const passes = planPasses(intent, regions, composition);
 
+  const artDirection = directArt(intent, decisionKind, boxes, regions, guardPreview, warnings);
+
+  const compositionCandidates = [
+    { composition, recommended: true, why: `Inferred from the ${decisionKind} decision: ${artDirection.focal ? `built around '${artDirection.focal.id}'` : "no single focal region"}.` },
+    ...alternatives.map((a) => ({ composition: a.composition, recommended: false, why: a.trade })),
+  ];
+
   return {
     intent: {
       ...(intent.goal !== undefined ? { goal: intent.goal } : {}),
@@ -494,6 +580,8 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     boxes,
     regions,
     passes,
+    artDirection,
+    compositionCandidates,
     guardPreview,
     alternatives,
     warnings,
@@ -516,6 +604,101 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
 }
 
 /* -------------------------------------------------------------------------- */
+
+/**
+ * The art director's decisions, derived from the plan itself.
+ *
+ * Nothing here guesses at content that does not exist yet: the focal region is
+ * the largest hero/primary-visual (or the largest region), the hierarchy is
+ * area order, and the strategies follow from the decision kind. A null focal
+ * is an honest answer — some screens genuinely have none — and it reads as a
+ * prompt to reconsider, not as a failure.
+ */
+function directArt(
+  intent: ScreenIntent,
+  kind: DecisionKind,
+  boxes: CompositionBox[],
+  regions: PlannedRegion[],
+  guardPreview: Array<{ rule: string; therefore: string }>,
+  warnings: string[],
+): ArtDirection {
+  const byId = new Map(boxes.map((b) => [b.name, b]));
+  const area = (id: string): number => {
+    const b = byId.get(id);
+    return b ? Math.max(0, b.w) * Math.max(0, b.h) : 0;
+  };
+
+  const heroes = regions.filter((r) => r.role === "hero" || r.role === "primary-visual");
+  const focalRegion = heroes.length > 0 ? heroes.sort((a, b) => area(b.id) - area(a.id))[0]! : [...regions].sort((a, b) => area(b.id) - area(a.id))[0];
+
+  const focal = focalRegion
+    ? {
+        id: focalRegion.id,
+        why: heroes.length > 0 ? `'${focalRegion.id}' is the hero surface and the largest of its kind.` : `'${focalRegion.id}' is simply the largest surface; consider whether one region should be promoted to hero.`,
+      }
+    : null;
+
+  const ordered = [...regions].sort((a, b) => area(b.id) - area(a.id));
+  const roleRank = (role: PlannedRegion["role"]): string => {
+    if (role === "hero" || role === "primary-visual") return "primary surface";
+    if (role === "content" || role === "secondary") return "supporting surface";
+    if (role === "inspector" || role === "status-rail") return "chrome";
+    return "chrome";
+  };
+  const hierarchy = ordered.map((r, i) => ({ rank: i + 1, id: r.id, why: `${roleRank(r.role)}: ${r.because}` }));
+
+  const patterns = intent.existingPatterns ?? [];
+  const componentStrategy =
+    patterns.length > 0
+      ? `Reuse the file's own patterns first (${patterns.slice(0, 5).join(", ")}): find_component before building, instance over rebuild, promote repeats with create_component.`
+      : "No existing patterns were named: build from semantic primitives, promote anything repeated with create_component, and never rebuild a card out of rectangles twice.";
+
+  const VISUALIZATION: Record<DecisionKind, string> = {
+    select: "Options as rows that read across, detail beside them; comparison is alignment, not decoration.",
+    compare: "Two subjects side by side on identical structure, so differences read as differences.",
+    monitor: "Instrument readouts with a status rail: state at a glance, signal large, data beneath.",
+    topology: "A node-link diagram with routed, labelled edges; the relationships are the content.",
+    configure: "Controls in one column beside a live preview, so a change is never a leap of faith.",
+    explore: "Dense scannable results under narrowing filters.",
+    inspect: "One subject given the most room, context beside it.",
+    integration: "Providers listed with connection state, endpoint detail for the selection.",
+    author: "A work surface with the actions that apply to the current selection.",
+  };
+
+  const BASE_STATES = ["default", "hover", "selected", "disabled", "loading", "empty", "error", "success"];
+  const RUNTIME_STATES = [
+    "device connecting",
+    "model downloading",
+    "model preparing",
+    "model fitting",
+    "model loading",
+    "inference running",
+    "device unavailable",
+    "cluster degraded",
+  ];
+  const interactionStates =
+    kind === "topology" || kind === "monitor"
+      ? [...BASE_STATES, ...RUNTIME_STATES]
+      : kind === "select" || kind === "explore"
+        ? [...BASE_STATES, "focused"]
+        : BASE_STATES;
+
+  const designRisks = [
+    ...guardPreview.map((g) => g.therefore),
+    ...warnings,
+    ...(focal === null ? ["No region earns focal status: the screen may read as a set of equal panels."] : []),
+    ...(regions.length > 4 ? [`${regions.length} regions compete for attention; verify each earns its surface.`] : []),
+  ];
+
+  return {
+    focal,
+    hierarchy,
+    componentStrategy,
+    visualizationStrategy: VISUALIZATION[kind],
+    interactionStates,
+    designRisks,
+  };
+}
 
 /** Maps a semantic role onto the runtime primitive that creates it. */
 function primitiveFor(role: Region["role"]): string {

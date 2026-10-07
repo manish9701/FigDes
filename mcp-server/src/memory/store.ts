@@ -63,10 +63,19 @@ function pathFor(key: string): string {
  * guard because of a stray comma is the wrong trade.
  */
 export function loadMemory(key: string): { memory: ProjectMemory; problem?: string } {
+  const fresh = (): ProjectMemory => ({
+    version: 1,
+    project: key,
+    fileKey: null,
+    notes: defaultNotes(key),
+    rules: defaultRules(),
+    updatedAt: new Date().toISOString(),
+  });
+
   const file = pathFor(key);
 
   if (!existsSync(file)) {
-    return { memory: { version: 1, project: key, fileKey: null, notes: [], rules: defaultRules(), updatedAt: new Date().toISOString() } };
+    return { memory: fresh() };
   }
 
   try {
@@ -74,17 +83,38 @@ export function loadMemory(key: string): { memory: ProjectMemory; problem?: stri
     const parsed = ProjectMemorySchema.safeParse(JSON.parse(raw));
     if (!parsed.success) {
       return {
-        memory: { version: 1, project: key, fileKey: null, notes: [], rules: defaultRules(), updatedAt: new Date().toISOString() },
+        memory: fresh(),
         problem: `Memory file for '${key}' is not valid (${parsed.error.issues[0]?.message}). Defaults were used; the file was left untouched.`,
       };
     }
     return { memory: parsed.data };
   } catch (error) {
     return {
-      memory: { version: 1, project: key, fileKey: null, notes: [], rules: defaultRules(), updatedAt: new Date().toISOString() },
+      memory: fresh(),
       problem: `Memory file for '${key}' could not be read (${(error as Error).message}). Defaults were used.`,
     };
   }
+}
+
+/**
+ * Default visual notes for a new project (FigDes §32).
+ *
+ * Only seeded when the project key suggests EXO: these are product-identity
+ * judgements (topology heroes, restrained accents, open surfaces), and imposing
+ * another product's taste on an unrelated file would be exactly the kind of
+ * silent presumption this system exists to avoid. Every one can be forgotten
+ * with project_memory forget.
+ */
+function defaultNotes(key: string): ProjectMemory["notes"] {
+  if (!key.includes("exo")) return [];
+  const at = new Date().toISOString();
+  return [
+    { id: "visual-topology-hero", note: "Prefer topology as the hero visualization on system screens.", scope: "project", tags: ["visual", "default"], recordedAt: at },
+    { id: "visual-open-surfaces", note: "Prefer open surfaces over bordered cards; avoid unnecessary card borders.", scope: "project", tags: ["visual", "default"], recordedAt: at },
+    { id: "visual-restrained-accents", note: "Use accent colour sparingly: one action yellow, one health green, nothing neon.", scope: "project", tags: ["visual", "default"], recordedAt: at },
+    { id: "visual-quiet-metrics", note: "Metrics are quiet instrument readouts, never a KPI wall.", scope: "project", tags: ["visual", "default"], recordedAt: at },
+    { id: "visual-mono-data", note: "Set identifiers, latencies and addresses in a monospaced face.", scope: "project", tags: ["visual", "default"], recordedAt: at },
+  ] as ProjectMemory["notes"];
 }
 
 export function saveMemory(key: string, memory: ProjectMemory): string {

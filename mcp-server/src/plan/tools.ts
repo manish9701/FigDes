@@ -14,7 +14,7 @@
  * happens in a call that costs one message, not an undo.
  */
 import { z } from "zod";
-import { classifyDecision, planScreen, type ScreenIntent } from "./planner";
+import { classifyDecision, planScreen, archetypeFor, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import type { Composition } from "../runtime/layout";
 import type { Session } from "../sessions";
@@ -29,7 +29,7 @@ export const PlanScreenArgs = z
      * with no decision behind it is a page, and pages are what turn into
      * dashboards.
      */
-    primaryDecision: z.string().min(2).max(200).describe("What the user decides here. A short noun phrase: 'select a model'."),
+    primaryDecision: z.string().min(2).max(200).optional().describe("What the user decides here. A short noun phrase: 'select a model'. May be omitted when archetype implies it."),
 
     goal: z.string().max(400).optional().describe("What the user is trying to accomplish, in their words."),
     audience: z.enum(["developer", "operator", "engineer", "leadership", "general"]).optional(),
@@ -37,6 +37,15 @@ export const PlanScreenArgs = z
     existingPatterns: z.array(z.string().max(120)).max(20).optional().describe("Patterns the file already uses."),
     desiredComposition: z.enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial"]).optional(),
     name: z.string().max(120).optional(),
+    /**
+     * A known screen archetype ("model-fit", "topology", "runtime"...).
+     *
+     * Inherits the archetype's objective, decision and template instead of
+     * re-deriving them — including its anti-patterns, which is where the value
+     * compounds. An explicit primaryDecision still wins; the archetype fills
+     * what is missing.
+     */
+    archetype: z.string().max(120).optional().describe("Known EXO screen archetype, e.g. 'model-fit'."),
     /**
      * `deck` plans a slide deck instead of a screen: the canvas becomes
      * 1920x1080 and every region is a slide. Passed through to design_runtime
@@ -53,6 +62,15 @@ export const PlanScreenArgs = z
 
     /** Plan several decision kinds and compare the resulting compositions. */
     alsoConsider: z.array(z.string().min(2).max(200)).max(3).optional().describe("Other plausible primary decisions, to compare compositions."),
+    /**
+     * Return full structural variants alongside the recommendation (FigDes §6).
+     *
+     * Each variant is a real plan recomputed for that composition — regions with
+     * reasons and resolved geometry — not a paragraph describing one. Build the
+     * strongest, compare, then commit. Defaults on: a single composition should
+     * never be considered final without seeing its siblings.
+     */
+    variants: z.boolean().optional().describe("Include 2-3 full structural variants to compare. Default true."),
   })
   .strict();
 
@@ -63,9 +81,18 @@ export const PlanScreenArgs = z
  * the planner is pure and should not require a live Figma connection to exercise.
  */
 export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?: string; notes?: string } = {}): unknown {
+  // An archetype presets the decision; anything stated explicitly wins. The
+  // archetype's anti-patterns join the warnings so they are seen, not buried.
+  const archetype = args.archetype !== undefined ? archetypeFor(args.archetype) : undefined;
+  if (args.archetype !== undefined && !archetype) {
+    throw new Error(
+      `Unknown archetype '${args.archetype}'. Known archetypes: ${SCREEN_ARCHETYPES.map((a) => a.name).join(", ")}.`,
+    );
+  }
+
   const intent: ScreenIntent = {
-    primaryDecision: args.primaryDecision,
-    ...(args.goal !== undefined ? { goal: args.goal } : {}),
+    primaryDecision: args.primaryDecision ?? archetype?.decision ?? "",
+    ...(args.goal !== undefined ? { goal: args.goal } : archetype?.objective !== undefined ? { goal: archetype.objective } : {}),
     ...(args.audience !== undefined ? { audience: args.audience } : {}),
     ...(args.availableInformation !== undefined ? { availableInformation: args.availableInformation } : {}),
     ...(args.existingPatterns !== undefined ? { existingPatterns: args.existingPatterns } : {}),
@@ -76,7 +103,32 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(args.format === "deck" ? { canvas: { width: 1920, height: 1080, grid: 8 } } : args.canvas !== undefined ? { canvas: args.canvas } : {}),
   };
 
+  if (!intent.primaryDecision) {
+    throw new Error("plan_screen needs a primaryDecision, or an archetype that implies one.");
+  }
+
   const plan = planScreen(intent);
+
+  // Composition variants: the recommendation plus full structural siblings,
+  // each recomputed rather than described. Comparing real geometry is what
+  // makes the choice a decision instead of a preference.
+  const wantVariants = args.variants !== false;
+  const variants = wantVariants
+    ? plan.compositionCandidates
+        .filter((c) => !c.recommended)
+        .slice(0, 2)
+        .map((candidate) => {
+          const sibling = planScreen({ ...intent, desiredComposition: candidate.composition });
+          return {
+            composition: sibling.composition,
+            template: sibling.template.name,
+            why: candidate.why,
+            regions: sibling.regions.map((r) => ({ id: r.id, role: r.role, why: r.because })),
+            boxes: sibling.boxes,
+            focal: sibling.artDirection.focal,
+          };
+        })
+    : [];
 
   // The program must carry deck:true so design_runtime builds slides. Without
   // it the plan would preview slides and the build would produce frames.
@@ -108,6 +160,17 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       ...(plan.intent.audience !== undefined ? { audience: plan.intent.audience } : {}),
     },
 
+    ...(archetype !== undefined
+      ? {
+          archetype: {
+            name: archetype.name,
+            objective: archetype.objective,
+            priority: archetype.priority,
+            antiPatterns: archetype.antiPatterns,
+          },
+        }
+      : {}),
+
     /**
      * The named screen template this plan follows.
      *
@@ -135,6 +198,12 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
 
     /** Ordered regions, each with its reason. */
     regions: plan.regions.map((r) => ({ id: r.id, role: r.role, why: r.because, grow: r.grow })),
+
+    /** The art director's decisions: focal, hierarchy, strategies, states, risks. */
+    artDirection: plan.artDirection,
+
+    /** Compositions worth comparing, recommended first. */
+    compositionCandidates: plan.compositionCandidates,
 
     /** The five-pass build order. Start at pass 1 and do not skip ahead. */
     passes: plan.passes,
@@ -165,7 +234,9 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
 
     ...(alternatives.length > 0 ? { alsoConsider: alternatives } : {}),
 
-    warnings: plan.warnings,
+    ...(wantVariants ? { variants, variantsNote: "Build the strongest, compare renders, then commit. A single composition is never final without seeing its siblings." } : {}),
+
+    warnings: [...(archetype !== undefined ? archetype.antiPatterns.map((a) => `Archetype '${archetype.name}' forbids: ${a}.`) : []), ...plan.warnings],
 
     ...(opts.notes !== undefined && opts.notes.length > 0 ? { projectMemory: opts.notes } : {}),
     ...(opts.screen !== undefined ? { screen: opts.screen } : {}),

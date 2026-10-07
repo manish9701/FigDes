@@ -58,6 +58,7 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "icon-only-control", fn: iconOnlyControl },
   { name: "color-only-state", fn: colorOnlyState },
   { name: "tiny-technical-text", fn: tinyTechnicalText },
+  { name: "card-wall", fn: cardWall },
 ];
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
@@ -438,6 +439,65 @@ function tinyTechnicalText(n: NodeMetrics): Finding[] {
       evidence: { size: n.text.size, family: n.text.family, minimum: 11, content: n.text.content.slice(0, 40) },
       nodeIds: [n.id],
       guidance: "Minimum readable technical text is 11px. Identifiers and latencies smaller than that are texture, not information.",
+    },
+  ];
+}
+
+/**
+ * The card-wall failure mode (FigDes §21).
+ *
+ * Counts bordered rectangles (frames/rectangles/components with both a fill and
+ * a stroke or a radius that reads as a card) and measures their share of the
+ * canvas. Three or more equal-weight cards, or cards covering most of the
+ * screen, trigger the warning the spec asks for: convert a cluster into a
+ * visual field, chart, topology or open composition.
+ *
+ * A warning, never a failure: sometimes the screen genuinely is a card grid,
+ * and a critic that fails those is a critic that gets ignored.
+ */
+function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
+  // One screen, one verdict: only the top-level frame is judged, so a file
+  // with five screens produces five findings, not five hundred.
+  if (n.depth !== 0 || (n.type !== "FRAME" && n.type !== "COMPONENT")) return [];
+
+  const canvasArea = Math.max(1, n.w * n.h);
+  const cards: NodeMetrics[] = [];
+  const stack: NodeMetrics[] = [n];
+  const seen = new Set<string>();
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (seen.has(current.id)) continue;
+    seen.add(current.id);
+
+    const isCard =
+      (current.type === "FRAME" || current.type === "RECTANGLE" || current.type === "COMPONENT" || current.type === "INSTANCE") &&
+      current.id !== n.id &&
+      ((current.stroke !== undefined && current.stroke !== null) || (typeof current.radius === "number" && current.radius >= 4)) &&
+      current.w > 40 &&
+      current.h > 24;
+    if (isCard) cards.push(current);
+
+    const kids = c.childrenOf.get(current.id);
+    if (kids) stack.push(...kids);
+  }
+
+  if (cards.length < 3) return [];
+
+  const cardArea = cards.reduce((a, card) => a + card.w * card.h, 0);
+  const share = cardArea / canvasArea;
+  if (share < 0.4) return [];
+
+  return [
+    {
+      rule: "card-wall",
+      confidence: "medium",
+      severity: "minor",
+      title: `${cards.length} bordered cards cover ${Math.round(share * 100)}% of the screen`,
+      evidence: { cards: cards.length, areaShare: Math.round(share * 100) },
+      nodeIds: cards.slice(0, 12).map((card) => card.id),
+      guidance:
+        "Consider converting one card cluster into a visual field, chart, topology, or open composition. Cards are containers, not content.",
     },
   ];
 }

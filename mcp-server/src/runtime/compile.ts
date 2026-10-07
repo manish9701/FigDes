@@ -41,7 +41,55 @@ const TYPE_SCALE: Record<string, { size: number; weight: number; family?: string
 };
 
 /* -------------------------------------------------------------------------- */
-/* Compiler                                                                    */
+/* Optical correction (FigDes §10)                                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Mathematical alignment is not enough: a human designer routinely applies
+ * optical corrections, and the difference between aligned and *looking*
+ * aligned is the difference between mid and pro.
+ *
+ * Two rules, both bounded and both documented, applied at placement time so
+ * relations, connectors and the returned boxes all agree with what is drawn.
+ * A post-pass that moved ops after layout would desync them, which is worse
+ * than no correction at all.
+ */
+export const OPTICAL_OVERSHOOT = 0.02;
+
+function overshoot(box: ResolvedBox): ResolvedBox {
+  const dx = Math.max(1, Math.round(box.w * OPTICAL_OVERSHOOT));
+  const dy = Math.max(1, Math.round(box.h * OPTICAL_OVERSHOOT));
+  return { x: box.x - dx, y: box.y - dy, w: box.w + dx * 2, h: box.h + dy * 2 };
+}
+
+/**
+ * A stroked frame's paint straddles its edge, so a 3px stroke eats 1px of gap
+ * on every side compared to its 1px siblings. Expanding by half the excess
+ * keeps the gap rhythm the layout computed, instead of letting heavy strokes
+ * silently tighten it.
+ */
+function strokeTrueSize(box: ResolvedBox, weight: number): ResolvedBox {
+  if (weight <= 1) return box;
+  const pad = (weight - 1) / 2;
+  return { x: box.x - pad, y: box.y - pad, w: box.w + pad * 2, h: box.h + pad * 2 };
+}
+
+/**
+ * Optical box for a device node at placement time.
+ *
+ * A selected device draws a 3px action-blue ring; without this correction the
+ * ring would eat into the computed gap. Read from the same props the emitter
+ * reads, so the recorded box and the drawn frame can never disagree.
+ */
+function devicePlacementBox(box: ResolvedBox, spec: ContentSpec): ResolvedBox {
+  if (spec.kind === "component" && spec.type === "deviceNode" && (spec.props as Record<string, unknown>).selected === true) {
+    return strokeTrueSize(box, 3);
+  }
+  return box;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
 export function compileIR(ir: DesignIR): CompileResult {
@@ -581,9 +629,12 @@ function emitContent(args: {
         w: extent.w,
         h: extent.h,
       };
-      boxes.set(spec.id, { id: spec.id, ...box });
-      if (spec.kind === "component") emitComponent(spec, region, box, operations, grid, typeScale);
-      else if (spec.kind === "shape" || spec.kind === "vector") emitGraphic(spec, region, box, operations);
+      // The recorded box and the drawn node share one optically-corrected box,
+      // so connectors, relations and the returned geometry all agree.
+      const placed: ResolvedBox = devicePlacementBox(box, spec);
+      boxes.set(spec.id, { id: spec.id, ...placed });
+      if (spec.kind === "component") emitComponent(spec, region, placed, operations, grid, typeScale);
+      else if (spec.kind === "shape" || spec.kind === "vector") emitGraphic(spec, region, placed, operations);
     }
   } else if (graphics.length > 0) {
     // Default: three or more graphics in a visual region read as a topology, so
@@ -599,7 +650,9 @@ function emitContent(args: {
       for (const spec of graphics) {
         const at = spots.get(spec.id);
         if (!at) continue;
-        const box: ResolvedBox = { x: at.x - grid * 2, y: at.y - grid * 2, w: grid * 4, h: grid * 4 };
+        // Dots overshoot their mathematical box so they read the same size as
+        // the flat-edged tiles around them.
+        const box: ResolvedBox = overshoot({ x: at.x - grid * 2, y: at.y - grid * 2, w: grid * 4, h: grid * 4 });
         boxes.set(spec.id, { id: spec.id, ...box });
         emitGraphic(spec, region, box, operations);
       }
@@ -646,7 +699,7 @@ function emitContent(args: {
         const at = points.get(spec.id);
         if (!at) continue;
         const w = (inner.w - gap * (flowColumns - 1)) / flowColumns;
-        const box: ResolvedBox = { x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale) };
+        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale) }, spec);
         boxes.set(spec.id, { id: spec.id, ...box });
         if (spec.kind === "text") emitText(spec, region, box, operations, typeScale);
         else emitComponent(spec, region, box, operations, grid, typeScale);
@@ -662,9 +715,10 @@ function emitContent(args: {
       for (const spec of flow) {
         const box = placed.get(spec.id);
         if (!box) continue;
-        boxes.set(spec.id, { id: spec.id, ...box });
-        if (spec.kind === "text") emitText(spec, region, box, operations, typeScale);
-        else emitComponent(spec, region, box, operations, grid, typeScale);
+        const final: ResolvedBox = devicePlacementBox(box, spec);
+        boxes.set(spec.id, { id: spec.id, ...final });
+        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale);
+        else emitComponent(spec, region, final, operations, grid, typeScale);
       }
     }
   }

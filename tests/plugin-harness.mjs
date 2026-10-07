@@ -478,6 +478,23 @@ getLocalVariablesAsync: async () => [
     createEllipse: () => frame({ name: "Ellipse", cornerRadius: 0 }),
     createText: () => text({ name: "Text" }),
 
+    group: (nodes, parent) => {
+      const g = frame({ name: "Group", children: [] });
+      g.type = "GROUP";
+      for (const node of nodes) {
+        if (node.parent?.children) {
+          const i = node.parent.children.indexOf(node);
+          if (i >= 0) node.parent.children.splice(i, 1);
+        }
+        node.parent = g;
+        g.children.push(node);
+      }
+      const into = parent ?? doc.page;
+      into.children.push(g);
+      g.parent = into;
+      return g;
+    },
+
     /**
      * Slides are fixed 1920x1080 frames that must live in a slide grid.
      *

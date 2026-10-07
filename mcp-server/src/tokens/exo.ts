@@ -82,24 +82,47 @@ export const EXO_TEXT_STYLES: ExoTextStyle[] = [
   { name: "exo/technical", family: "JetBrains Mono", weight: 400, fontSize: 12 },
 ];
 
+/** Dark-theme overrides: surfaces invert, intent colours hold. */
+export const DARK_OVERRIDES: Record<string, string> = {
+  canvas: "#16150F",
+  surface: "#1E1D17",
+  sidebar: "#0C0B09",
+  text: "#F2F0E8",
+  muted: "#A3A099",
+  border: "#35332B",
+  actionSoft: "#F2C94C26",
+  healthSoft: "#2D7A4D33",
+  runtime: "#000000",
+};
+
 /**
  * Builds the full seed as operations.
  *
  * Everything goes into one `exo` collection, so the file gains one source of
  * truth instead of fourteen loose variables. Idempotent by construction: every
  * op is create-or-update.
+ *
+ * `themes` adds modes beyond the default. "Dark" inverts the surfaces while
+ * keeping intent colours stable: action yellow and health green mean the same
+ * thing at night, only the canvas they sit on changes.
  */
-export function exoSeedOperations(): Array<Record<string, unknown>> {
+export function exoSeedOperations(opts: { themes?: string[] } = {}): Array<Record<string, unknown>> {
   const ops: Array<Record<string, unknown>> = [];
+  const wantsDark = (opts.themes ?? []).some((t) => t.toLowerCase() === "dark");
 
   for (const token of [...EXO_PAINT_TOKENS, ...EXO_SPACING_TOKENS, ...EXO_RADIUS_TOKENS]) {
+    const values: Record<string, string | number> = { ...token.values };
+    if (wantsDark && token.type === "color") {
+      const dark = DARK_OVERRIDES[token.name];
+      if (dark !== undefined) values.Dark = dark;
+    }
     ops.push({
       type: "createVariable",
       id: `exo-${token.name.replace(/[^a-zA-Z0-9]+/g, "-")}`,
       name: token.name,
       variableType: token.type,
       collection: "exo",
-      values: token.values,
+      values,
       ...(token.scopes !== undefined ? { scopes: token.scopes } : {}),
       ...(token.description !== undefined ? { description: token.description } : {}),
     });

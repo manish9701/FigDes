@@ -339,6 +339,43 @@ export function canvasSize(value: unknown, fallback: number): number {
 }
 
 /**
+ * A visual intent layer (FigDes §4).
+ *
+ * Primitives describe what information exists; intent describes how it should
+ * be *seen*: what the eye finds first, how dense the screen feels, whether the
+ * composition is calm or insistent. Still structured data, still no eval — but
+ * it is the difference between a UI compiler and an art director.
+ *
+ * Every field is optional and every field has a neutral default, so omitting
+ * intent degrades to current behaviour rather than failing. Intent never invents
+ * coordinates; it biases the decisions the layout engine already makes.
+ */
+export const VisualIntentSchema = z
+  .object({
+    /** Overall manner: technical-editorial, instrument, calm, dense... */
+    style: z.string().min(1).max(60).optional(),
+    /** Symmetric, asymmetric, radial, editorial... */
+    composition: z.string().min(1).max(60).optional(),
+    /** airy | calm | balanced | dense */
+    density: z.enum(["airy", "calm", "balanced", "dense"]).optional(),
+    /** Region or content id the eye should find first. */
+    focal: z.string().min(1).max(64).optional(),
+    /** Relative visual weight per region/content id, 0-1. */
+    visualWeight: z.record(z.number().min(0).max(1)).default({}),
+    /** flat | subtle | layered */
+    depth: z.enum(["flat", "subtle", "layered"]).optional(),
+    /** tight | even | generous */
+    rhythm: z.enum(["tight", "even", "generous"]).optional(),
+    /** loose | strong */
+    alignment: z.enum(["loose", "strong"]).optional(),
+    /** muted | restrained | bold */
+    contrast: z.enum(["muted", "restrained", "bold"]).optional(),
+  })
+  .strict();
+
+export type VisualIntent = z.infer<typeof VisualIntentSchema>;
+
+/**
  * A relationship constraint (spec §18).
  *
  * Kept in the IR as data, solved by `runtime/constraints.ts`. The alternative —
@@ -389,6 +426,11 @@ export const DesignIRSchema = z
       .array(z.object({ from: z.string().min(1).max(64), to: z.string().min(1).max(64), label: z.string().max(120).optional() }).strict())
       .max(400)
       .default([]),
+    /**
+     * How the screen should be seen (FigDes §4). Optional; omitting it
+     * degrades to current behaviour rather than failing.
+     */
+    visualIntent: VisualIntentSchema.optional(),
     /** Optional product constraints checked after compiling (spec §29, §51). */
     constraints: z
       .object({

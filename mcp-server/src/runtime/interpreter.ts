@@ -31,7 +31,9 @@ import {
   TextStyleSpecSchema,
   TokenSpecSchema,
   VectorSpecSchema,
+  VisualIntentSchema,
   type DesignIR,
+  type VisualIntent,
 } from "../../../shared/ir";
 import { compileIR } from "./compile";
 import { parseConstraint } from "./constraints";
@@ -186,6 +188,8 @@ const CONTENT_ARGS = new Set([
   "totalLabel",
   "unit",
   "rows",
+  // State strips: every state-capable component accepts `states: [...]`.
+  "states",
   // Connector args
   "from",
   "to",
@@ -369,6 +373,12 @@ export const RuntimeProgramSchema = z.object({
     )
     .max(400)
     .default([]),
+  /**
+   * How the screen should be seen (FigDes §4). Validated strictly but applied
+   * leniently: an uninterpretable intent warns and is ignored, because guessing
+   * at taste is worse than defaulting to it.
+   */
+  visualIntent: z.record(z.unknown()).optional(),
   constraints: DesignIRSchema.shape.constraints,
 });
 
@@ -393,6 +403,8 @@ export interface RuntimeResult {
   };
   /** Populated when a call referenced a primitive that does not apply here. */
 warnings: string[];
+  /** What the visual intent changed, in plain language. Not warnings. */
+  intentNotes: string[];
   /** Algorithms invoked per region, so the caller can see what was chosen. */
   algorithms: Record<string, string>;
   /** How many relations were applied. */
@@ -428,6 +440,7 @@ export function executeRuntime(input: unknown): RuntimeResult {
 
   const parsedProgram = program.data;
   const rawCanvas = parsedProgram.canvas as Record<string, unknown> | undefined;
+  const intentNotes: string[] = [];
 
   // A plan_screen output carries its own canvas and regions. Explicit program
   // fields win where both exist; the plan fills the gaps. Anything in the plan
@@ -435,11 +448,31 @@ export function executeRuntime(input: unknown): RuntimeResult {
   const planRegions = extractPlanRegions(parsedProgram.plan, warnings);
   const regionCalls = [...planRegions, ...parsedProgram.regions];
 
+  // Visual intent is parsed strictly but applied leniently: an uninterpretable
+  // intent warns once and is ignored, because guessing at taste is worse than
+  // defaulting to it.
+  let intent: VisualIntent | undefined;
+  if (parsedProgram.visualIntent !== undefined) {
+    const parsed = VisualIntentSchema.safeParse(parsedProgram.visualIntent);
+    if (parsed.success) {
+      intent = parsed.data;
+    } else {
+      warnings.push(`Visual intent ignored: ${parsed.error.issues[0]?.message}. The program builds with default taste.`);
+    }
+  }
+
+  // Density rescales the spacing system. Airy means roomier gutters, padding and
+  // gaps everywhere; dense tightens them. One multiplier keeps every derived
+  // measurement consistent instead of special-casing each one.
+  const GAP_SCALE: Record<string, number> = { airy: 1.5, calm: 1.25, balanced: 1, dense: 0.75 };
+  const gapScale = intent?.density ? (GAP_SCALE[intent.density] ?? 1) : 1;
+  const baseGrid = typeof rawCanvas?.grid === "number" && rawCanvas.grid > 0 ? rawCanvas.grid : 8;
+
   const canvas = {
     name: typeof rawCanvas?.name === "string" ? rawCanvas.name : "Screen",
     width: canvasSize(rawCanvas?.width, 1440),
     height: canvasSize(rawCanvas?.height, 900),
-    grid: typeof rawCanvas?.grid === "number" && rawCanvas.grid > 0 ? rawCanvas.grid : 8,
+    grid: Math.round(baseGrid * gapScale * 100) / 100,
     newPage: rawCanvas?.newPage === true,
     // Deck mode reinterprets every region as a 1920x1080 slide. It is read here
     // rather than inferred, because guessing "this looks like a deck" from the
@@ -447,6 +480,10 @@ export function executeRuntime(input: unknown): RuntimeResult {
     deck: rawCanvas?.deck === true,
     ...(rawCanvas?.fill !== undefined ? { fill: coerceToken(rawCanvas.fill) } : {}),
   };
+
+  if (intent?.density && gapScale !== 1) {
+    intentNotes.push(`Density '${intent.density}' scaled the spacing system to ${canvas.grid}px.`);
+  }
 
   if (rawCanvas && (typeof rawCanvas.width !== "number" || typeof rawCanvas.height !== "number")) {
     warnings.push(
@@ -519,6 +556,35 @@ regions.push({
     throw new Error("A runtime program needs at least one region primitive (frame, navigation, header, hero, inspector).");
   }
 
+  // Visual weight becomes growth: a region with weight 0.9 absorbs slack like
+  // grow 2, weight 0.35 like grow 1, weight 0.15 like grow 0. The focal region
+  // grows hardest, because the thing the eye finds first needs the room to be
+  // found in. Declared grow always wins ties: explicit beats inferred.
+  if (intent && (Object.keys(intent.visualWeight).length > 0 || intent.focal !== undefined)) {
+    for (const region of regions) {
+      const weight = intent.visualWeight[region.id];
+      if (weight !== undefined) {
+        const inferred = Math.round(weight * 2);
+        if (inferred > region.grow) {
+          region.grow = inferred;
+          intentNotes.push(`Region '${region.id}' grows with weight ${weight} (grow ${inferred}).`);
+        }
+      }
+      if (intent.focal === region.id && region.grow < 2) {
+        region.grow = 2;
+        intentNotes.push(`Region '${region.id}' is the focal point and absorbs slack first.`);
+      }
+    }
+    if (intent.focal !== undefined && !regionIds.has(intent.focal)) {
+      warnings.push(`Visual intent names focal '${intent.focal}', which is not a region. The focal boost was skipped.`);
+    }
+    for (const key of Object.keys(intent.visualWeight)) {
+      if (!regionIds.has(key)) {
+        warnings.push(`Visual weight names '${key}', which is not a region. That weight was skipped.`);
+      }
+    }
+  }
+
 /* ---------------------------------------------------- content --------- */
 
   const content: DesignIR["content"] = [];
@@ -570,6 +636,17 @@ regions.push({
     if (call.fn === "placementMap") {
       topologyUses += 1;
       for (const item of expandPlacementMap(call, links, topologyUses, warnings)) pushCall(item);
+      continue;
+    }
+    // Interaction states expand to one sibling per state (FigDes §28): a design
+    // is not a single screenshot, and Pass 4 needs the states drawn, not
+    // described. Each sibling carries the state in its id, so the strip reads
+    // without captions.
+    if (
+      (call.fn === "button" || call.fn === "statusPill" || call.fn === "navItem" || call.fn === "deviceNode") &&
+      Array.isArray((call.args as Record<string, unknown>).states)
+    ) {
+      for (const item of expandStates(call, warnings)) pushCall(item);
       continue;
     }
     pushCall(call);
@@ -738,7 +815,7 @@ case "shape": {
     }
   }
 
-/* ---------------------------------------------------- compile ---------- */
+  /* ---------------------------------------------------- compile ---------- */
 
   const ir: DesignIR = {
     canvas,
@@ -747,6 +824,7 @@ case "shape": {
     relations: parseRelations(parsedProgram.relations, warnings),
     tokens,
     links,
+    ...(intent !== undefined ? { visualIntent: intent } : {}),
     ...(parsedProgram.constraints ? { constraints: parsedProgram.constraints } : {}),
   };
 
@@ -769,6 +847,7 @@ case "shape": {
       semanticUnits: parsedProgram.content.filter((c) => RUNTIME_PRIMITIVES[c.fn].kind === "content").length,
     },
     warnings,
+    intentNotes,
   };
 }
 
@@ -1192,6 +1271,119 @@ function extractPlanRegions(plan: Record<string, unknown> | undefined, warnings:
     }
     out.push(parsed.data);
   });
+  return out;
+}
+
+/**
+ * Expands `states: [...]` on a state-capable component into one sibling per
+ * state.
+ *
+ * The state tables map each state name onto the component's own state
+ * vocabulary (button variant, pill tone, nav state, device health), so the
+ * strip exercises real rendering paths rather than a parallel styling system
+ * that could drift from it. Unknown states warn and skip; an empty list is a
+ * no-op that leaves the single default instance alone.
+ */
+const STATE_TABLES: Record<string, Record<string, Record<string, unknown>>> = {
+  button: {
+    default: {},
+    hover: { variant: "primary" },
+    selected: { variant: "primary" },
+    focused: { variant: "secondary" },
+    disabled: { variant: "quiet" },
+    loading: { variant: "loading" },
+    empty: { variant: "quiet" },
+    error: { variant: "destructive" },
+    success: { variant: "primary" },
+    offline: { variant: "quiet" },
+    partial: { variant: "secondary" },
+    deploying: { variant: "loading" },
+    running: { variant: "primary" },
+    paused: { variant: "quiet" },
+  },
+  statusPill: {
+    default: {},
+    hover: {},
+    selected: {},
+    focused: {},
+    disabled: { tone: "neutral" },
+    loading: { label: "Loading…", tone: "info" },
+    empty: { label: "Empty", tone: "neutral" },
+    error: { tone: "error" },
+    success: { tone: "success" },
+    offline: { tone: "error" },
+    partial: { tone: "warning" },
+    deploying: { label: "Deploying…", tone: "info" },
+    running: { tone: "success" },
+    paused: { tone: "warning" },
+  },
+  navItem: {
+    default: {},
+    hover: {},
+    selected: { state: "active" },
+    focused: {},
+    disabled: { state: "disabled" },
+    loading: { state: "disabled" },
+    empty: { state: "disabled" },
+    error: {},
+    success: { state: "active" },
+    offline: { state: "disabled" },
+    partial: {},
+    deploying: { state: "disabled" },
+    running: { state: "active" },
+    paused: { state: "disabled" },
+  },
+  deviceNode: {
+    default: {},
+    hover: {},
+    selected: { selected: true },
+    focused: {},
+    disabled: { health: "offline" },
+    loading: { health: "degraded" },
+    empty: { health: "offline" },
+    error: { health: "offline" },
+    success: { health: "healthy" },
+    offline: { health: "offline" },
+    partial: { health: "degraded" },
+    deploying: { health: "degraded" },
+    running: { health: "healthy" },
+    paused: { health: "degraded" },
+  },
+};
+
+function expandStates(call: RuntimeCall, warnings: string[]): RuntimeCall[] {
+  const args = call.args as Record<string, unknown>;
+  const table = STATE_TABLES[call.fn];
+  if (!table) return [call];
+
+  const raw = Array.isArray(args.states) ? args.states : [];
+  const states = raw.filter((s): s is string => typeof s === "string" && s.length > 0).slice(0, 14);
+  if (states.length === 0) {
+    const { states: _dropped, ...rest } = args;
+    void _dropped;
+    return [{ ...call, args: rest }];
+  }
+
+  const { states: _dropped, ...base } = args;
+  void _dropped;
+  const instanceId = call.id ?? `${call.fn}-states`;
+  const out: RuntimeCall[] = [];
+
+  for (const state of states) {
+    const key = state.toLowerCase();
+    const mapping = table[key];
+    if (!mapping) {
+      warnings.push(`State '${state}' is not defined for '${call.fn}' and was skipped.`);
+      continue;
+    }
+    out.push({
+      fn: call.fn,
+      args: { ...base, ...mapping },
+      id: `${instanceId}-${key}`,
+      ...(call.parent !== undefined ? { parent: call.parent } : {}),
+    });
+  }
+
   return out;
 }
 

@@ -25,9 +25,12 @@ import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalog
 import { renderDesign } from "./render-tool";
 import { DesignGuardArgs, ProjectMemoryArgs, designGuardTool, projectMemoryTool } from "./memory/tools";
 import { PlanScreenArgs, planScreenTool } from "./plan/tools";
+import { DesignBriefArgs, designBriefTool } from "./plan/brief";
+import { projectKey } from "./memory/store";
+import { saveSnapshot, listSnapshots, getSnapshot } from "./snapshots/store";
 import { guardMutation, resolveExistingResources } from "./plan/gate";
 import { exoSeedOperations, exoSeedCounts } from "./tokens/exo";
-import { ScoreArgs, RefineArgs, DiffArgs, scoreDesignTool, refineScreenTool, diffDesignTool } from "./review/workflow";
+import { ScoreArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
 import { exportCode } from "./code/export";
 
 /* -------------------------------------------------------------------------- */
@@ -245,6 +248,7 @@ const SeedExoArgs = z
     approved: z.boolean().optional(),
     reason: z.string().max(400).optional(),
     transactionId: z.string().max(200).optional(),
+    themes: z.array(z.string().max(40)).max(8).optional().describe("Extra modes, e.g. ['dark']."),
   })
   .strict();
 
@@ -254,6 +258,21 @@ const ExportArgs = z
     target: z.string().max(200).optional().describe("Figma node id to export. Defaults to the current selection."),
     componentName: z.string().max(120).optional().describe("Component name for the root. Defaults to the frame name."),
     maxNodes: z.number().int().min(10).max(2000).optional().describe("Max nodes converted. Default 500."),
+  })
+  .strict();
+
+const SnapshotArgs = z
+  .object({
+    sessionId: z.string().max(200).optional(),
+    project: z.string().max(200).optional().describe("Which project. Defaults to the connected file."),
+    action: z.enum(["save", "list", "get"]).optional().describe("Save a version (default), list versions, or fetch one."),
+    screen: z.string().max(200).optional().describe("Screen name. Required by save."),
+    composition: z.string().max(60).optional(),
+    overall: z.number().min(0).max(10).optional().describe("Score from score_design."),
+    findings: z.number().int().min(0).optional().describe("Open finding count from review_design."),
+    note: z.string().max(500).optional(),
+    program: z.unknown().optional().describe("The program that built this version. Enables rebuild-restore."),
+    version: z.number().int().min(1).optional().describe("Version to fetch with action:get."),
   })
   .strict();
 
@@ -700,12 +719,12 @@ export const TOOLS: ToolDefinition[] = [
     name: "seed_exo_system",
     title: "Create the canonical EXO token set",
     description:
-      "Create the exo variable collection and text styles in one idempotent transaction: warm-neutral canvas/surface/text/muted/border, yellow action, green health, warning/error, dark runtime surfaces, the 4px spacing scale, small radii, and the display-to-technical type ramp. Re-running updates values in place instead of duplicating names. Run once per file before building screens, then reference tokens by name (exo/surface) instead of hardcoding hex - fills and strokes written as token names are bound automatically.",
+      "Create the exo variable collection and text styles in one idempotent transaction: warm-neutral canvas/surface/text/muted/border, yellow action, green health, warning/error, dark runtime surfaces, the 4px spacing scale, small radii, and the display-to-technical type ramp. Pass themes:['dark'] for a Dark mode that inverts surfaces while intent colours hold. Re-running updates values in place instead of duplicating names. Run once per file before building screens, then reference tokens by name (exo/surface) instead of hardcoding hex - fills and strokes written as token names are bound automatically.",
     inputSchema: SeedExoArgs,
     handler: async (args, registry) => {
       const parsed = SeedExoArgs.parse(args ?? {});
       const session = registry.resolve(parsed.sessionId);
-      const operations = exoSeedOperations();
+      const operations = exoSeedOperations({ ...(parsed.themes !== undefined ? { themes: parsed.themes } : {}) });
       const counts = exoSeedCounts();
 
       // Seeding redefines values file-wide when the names already exist, so it
@@ -814,6 +833,55 @@ export const TOOLS: ToolDefinition[] = [
       "Answers 'what changed': pass two inspect_selection-shaped snapshots (before, after) and get added/removed/moved/resized/recolored/renamed/text-changed nodes plus an area delta. Structural, not pixels: no heatmap is claimed. Use it to verify a refinement did what it meant to and nothing else.",
     inputSchema: DiffArgs,
     handler: async (args) => diffDesignTool(args),
+  },
+
+  {
+    name: "final_qa",
+    title: "Run the ship checklist",
+    description:
+      "The quality gate before calling a screen done: PRODUCT (decision obvious, no product-truth violations), COMPOSITION (focal, hierarchy, whitespace, no card wall), SYSTEM (type scale), VISUAL (support vs compete), TECHNICAL (structure, render). Each item is measured or explicitly marked as needing the live file - never guessed. FAIL means fix and re-run; otherwise clear the pending live checks.",
+    inputSchema: FinalQaArgs,
+    handler: async (args, registry) => {
+      const parsed = FinalQaArgs.parse(args ?? {});
+      // Live checks need a session; the offline checklist does not. Resolve
+      // lazily so final_qa on a program alone works with Figma closed.
+      const session = parsed.target !== undefined || parsed.nodeId !== undefined ? registry.resolve(parsed.sessionId) : null;
+      return finalQaTool(session, parsed);
+    },
+  },
+
+  {
+    name: "design_snapshot",
+    title: "Save, list and fetch design checkpoints",
+    description:
+      "Persistent V1/V2/V3 checkpoints for a screen: program, composition, score and findings, timestamped. Compare versions without relying on memory; restore by rebuilding from the stored program (idempotent), not by rolling back the document - history remains Figma's job.",
+    inputSchema: SnapshotArgs,
+    handler: async (args, registry) => {
+      const parsed = SnapshotArgs.parse(args ?? {});
+      const session = parsed.sessionId ? registry.resolve(parsed.sessionId) : null;
+      const key = parsed.project ? projectKey(parsed.project, parsed.project) : projectKey(session?.fileKey, session?.fileName);
+
+      if (parsed.action === "list") {
+        return { status: "ok", project: key, snapshots: listSnapshots(key) };
+      }
+      if (parsed.action === "get") {
+        if (parsed.version === undefined) throw new Error("design_snapshot(action:'get') needs a version number.");
+        const entry = getSnapshot(key, parsed.version);
+        if (!entry) return { status: "not-found", project: key, version: parsed.version };
+        return { status: "ok", project: key, snapshot: entry };
+      }
+
+      if (!parsed.screen) throw new Error("design_snapshot(action:'save') needs the screen name.");
+      const { entry, file } = saveSnapshot(key, {
+        screen: parsed.screen,
+        ...(parsed.composition !== undefined ? { composition: parsed.composition } : {}),
+        ...(parsed.overall !== undefined ? { overall: parsed.overall } : {}),
+        ...(parsed.findings !== undefined ? { findings: parsed.findings } : {}),
+        ...(parsed.note !== undefined ? { note: parsed.note } : {}),
+        ...(parsed.program !== undefined ? { program: parsed.program } : {}),
+      });
+      return { status: "ok", action: "save", project: key, file, version: entry.version, at: entry.at };
+    },
   },
 
   {
@@ -1044,11 +1112,23 @@ inputSchema: CompileArgs,
     name: "plan_screen",
     title: "Plan a screen before drawing it",
     description:
-      "Start here for any new screen. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, a five-pass build plan (composition, information, visual refinement, interaction states, QA), and a preview of which product rules the plan will trip. Creates nothing, so a wrong composition costs one message instead of an undo. Also the only way to get composition alternatives worth choosing between. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
+      "Start here for any new screen. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, the art director's decisions (focal, hierarchy, strategies, states, risks), a five-pass build plan, full structural variants to compare, and a preview of which product rules the plan will trip. Accepts an archetype ('model-fit', 'topology'...) that presets objective, decision and anti-patterns. Creates nothing, so a wrong composition costs one message instead of an undo. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
     inputSchema: PlanScreenArgs,
     handler: async (args, registry) => {
       const parsed = PlanScreenArgs.parse(args);
       return planScreenTool(registry.resolve(parsed.sessionId), parsed);
+    },
+  },
+
+  {
+    name: "design_brief",
+    title: "Write the brief before the plan",
+    description:
+      "The step before plan_screen: user goal, primary decision, primary object, secondary information, visual hierarchy, focal point, screen template, composition candidates, component and visualization strategy, interaction states and design risks. Built on the same planner as plan_screen, so brief and plan can never disagree. Hand the decision, template and available information onward to plan_screen.",
+    inputSchema: DesignBriefArgs,
+    handler: async (args, registry) => {
+      const parsed = DesignBriefArgs.parse(args);
+      return designBriefTool(registry.resolve(parsed.sessionId), parsed);
     },
   },
 

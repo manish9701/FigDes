@@ -397,6 +397,40 @@ export const BindVariableOp = z.object({
 });
 
 /**
+ * Groups nodes so they move and align as one.
+ *
+ * Groups are structure, not style: the use case is selecting and aligning a
+ * cluster that the layout did not already parent together. Prefer building the
+ * hierarchy correctly over grouping afterwards.
+ */
+export const CreateGroupOp = z.object({
+  type: z.literal("createGroup"),
+  id: z.string().min(1).max(64).optional(),
+  name: z.string().max(500).optional(),
+  /** At least two nodes, sharing a parent. */
+  children: z.array(RefSchema).min(2).max(200),
+  parent: RefSchema.optional(),
+});
+
+/**
+ * Sets a drop shadow or layer blur on a node.
+ *
+ * Effects are used sparingly by identity: one soft shadow to lift a dialog or
+ * a floating panel, never texture. Anything beyond that belongs in the design,
+ * not in this operation.
+ */
+export const SetEffectOp = z.object({
+  type: z.literal("setEffect"),
+  target: RefSchema,
+  effect: z.enum(["drop-shadow", "inner-shadow", "blur"]),
+  color: z.string().min(1).max(64).default("#000000"),
+  offsetX: z.number().min(-500).max(500).default(0),
+  offsetY: z.number().min(-500).max(500).default(8),
+  radius: z.number().min(0).max(200).default(24),
+  spread: z.number().min(-200).max(200).default(0),
+  opacity: z.number().min(0).max(1).default(0.16),
+});
+/**
  * Links two frames with a prototype interaction.
  *
  * Flows are what turn screens into a product: without them every screen is an
@@ -515,6 +549,8 @@ export const OperationSchema = z.discriminatedUnion("type", [
   CreateVectorOp,
   CreateSlideOp,
   PrototypeLinkOp,
+  CreateGroupOp,
+  SetEffectOp,
   CreateVariableOp,
   CreateTextStyleOp,
   CreatePaintStyleOp,
@@ -905,13 +941,16 @@ export const TOOL_NAMES = [
   "score_design",
   "refine_screen",
   "diff_design",
+  "final_qa",
   "export_code",
   "migrate_to_tokens",
   "audit_components",
   "prototype_flow",
+  "design_snapshot",
   "project_memory",
   "design_guard",
   "plan_screen",
+  "design_brief",
   "create_slide",
   "create_design",
   "modify_design",

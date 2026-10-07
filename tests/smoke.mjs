@@ -417,8 +417,9 @@ async function main() {
       PORT: String(PORT),
       DESIGN_AGENT_SECRET: SECRET,
       NODE_ENV: "test",
-      // Memory writes must not land in the repo during a test run.
+      // Memory and snapshot writes must not land in the repo during a test run.
       DESIGN_AGENT_MEMORY_DIR: MEMORY_DIR,
+      DESIGN_AGENT_SNAPSHOT_DIR: MEMORY_DIR,
     },
     stdio: ["ignore", "ignore", "pipe"],
   });
@@ -483,11 +484,14 @@ async function main() {
         "create_design",
         "create_instance",
         "create_slide",
+        "design_brief",
         "design_guard",
         "design_runtime",
+        "design_snapshot",
         "diff_design",
         "export_code",
         "figma_status",
+        "final_qa",
         "find_component",
         "find_node",
         "inspect_design_system",
@@ -937,6 +941,36 @@ await check("plan_screen can plan a deck, not just a screen", async () => {
   assert.equal(data.program.canvas.height, 1080);
 });
 
+await check("plan_screen accepts an archetype instead of a decision", async () => {
+  const { data, isError } = await callTool("plan_screen", { archetype: "model-fit" });
+  assert.equal(isError, false);
+  assert.equal(data.decision.primaryDecision, "run vs change model");
+  assert.equal(data.archetype.name, "model-fit");
+  assert.ok(data.template.name.length > 0);
+});
+
+await check("design_runtime builds in chunks with per-chunk results", async () => {
+  const regions = [];
+  for (let i = 0; i < 8; i++) {
+    regions.push({ fn: "frame", id: `r${i}`, args: { width: "fill", height: "fill" } });
+  }
+  const content = [];
+  for (let i = 0; i < 8; i++) {
+    for (let j = 0; j < 10; j++) {
+      content.push({ fn: "text", id: `t${i}_${j}`, parent: `r${i}`, args: { text: `row ${i}.${j}` } });
+    }
+  }
+  const { data, isError } = await callTool("design_runtime", {
+    chunked: true,
+    program: { canvas: { name: "Big", width: 1440, height: 900, grid: 8 }, regions, content },
+  });
+
+  assert.equal(isError, false);
+  assert.equal(data.chunked, true);
+  assert.ok(data.chunks.length > 1, "80+ ops must split into several chunks");
+  assert.ok(data.chunks.every((c) => c.status === "success"));
+});
+
 await check("design_runtime compiles a deck without touching Figma", async () => {
   const { data, isError } = await callTool("design_runtime", {
     dryRun: true,
@@ -1010,7 +1044,7 @@ await check("score_design scores a program with evidence", async () => {
   });
 
   assert.equal(isError, false);
-  assert.equal(data.dimensions.length, 6);
+  assert.equal(data.dimensions.length, 7);
   assert.ok(data.overall >= 0 && data.overall <= 10);
   assert.ok(data.doneChecklist !== undefined, "the definition of done rides along");
 });
@@ -1083,6 +1117,83 @@ await check("create_component_set combines members server-side", async () => {
   const { isError, text } = await callTool("create_component_set", { name: "Button", members: ["1:50", "1:51"] });
   assert.equal(isError, true);
   assert.match(text, /no handler/i);
+});
+
+console.log("\n  briefs, snapshots and the ship gate");
+
+await check("design_brief frames the work before any plan", async () => {
+  const { data, isError } = await callTool("design_brief", {
+    screen: "model-fit",
+    user: "consumer",
+    goal: "decide whether a model can run locally",
+    primaryDecision: "run vs change model",
+    visualDirection: "technical-editorial",
+  });
+  assert.equal(isError, false);
+  // "run vs change model" is explicitly framed as a comparison, so the
+  // classifier reads it as one. A decision phrased with "vs" gets a
+  // side-by-side surface, which is exactly right for run-vs-change.
+  assert.equal(data.decision.kind, "compare");
+  assert.ok(data.primaryObject !== null);
+  assert.ok(data.focal !== undefined);
+  assert.ok(data.template.name.length > 0);
+  assert.ok(data.compositionCandidates.length > 0);
+  assert.ok(Array.isArray(data.interactionStates) && data.interactionStates.length > 0);
+  assert.match(data.howToProceed, /plan_screen/);
+});
+
+await check("design_snapshot saves, lists and fetches versions", async () => {
+  const saved = await callTool("design_snapshot", { project: "smoke-shots", action: "save", screen: "Home", composition: "spatial", overall: 8.2, note: "v1" });
+  assert.equal(saved.isError, false);
+  assert.equal(saved.data.version, 1);
+
+  const saved2 = await callTool("design_snapshot", { project: "smoke-shots", action: "save", screen: "Home", overall: 8.8, note: "v2" });
+  assert.equal(saved2.data.version, 2);
+
+  const listed = await callTool("design_snapshot", { project: "smoke-shots", action: "list" });
+  assert.equal(listed.data.snapshots.length, 2);
+  assert.equal(listed.data.snapshots[0].version, 2, "newest first");
+
+  const fetched = await callTool("design_snapshot", { project: "smoke-shots", action: "get", version: 1 });
+  assert.equal(fetched.data.snapshot.note, "v1");
+
+  const missing = await callTool("design_snapshot", { project: "smoke-shots", action: "get", version: 99 });
+  assert.equal(missing.data.status, "not-found");
+});
+
+await check("final_qa gates a program with a checklist", async () => {
+  const { data, isError } = await callTool("final_qa", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "QA", width: 1440, height: 900, grid: 8 },
+      regions: [
+        { fn: "navigation", id: "nav", args: { width: 240 } },
+        { fn: "hero", id: "hero", args: { grow: 2 } },
+      ],
+      content: [
+        { fn: "text", id: "t1", parent: "hero", args: { text: "Compute", role: "title" } },
+        { fn: "text", id: "t2", parent: "hero", args: { text: "online", role: "body" } },
+        { fn: "text", id: "t3", parent: "hero", args: { text: "8us", role: "caption" } },
+      ],
+    },
+  });
+  assert.equal(isError, false);
+  assert.ok(["FAIL", "PASS WITH LIVE CHECKS PENDING"].includes(data.verdict));
+  assert.ok(data.checklist.length >= 8);
+  assert.ok(data.pendingLiveChecks.length > 0, "offline-only runs must name their live checks");
+});
+
+await check("final_qa fails a screen with no focal hierarchy", async () => {
+  const { data } = await callTool("final_qa", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "Flat", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "text", id: "t", parent: "main", args: { text: "hi" } }],
+    },
+  });
+  assert.equal(data.verdict, "FAIL");
+  assert.ok(data.failed.length > 0);
 });
 
 console.log("\n  session safety");

@@ -22,7 +22,7 @@ import {
   type UiToMain,
 } from "../../shared/protocol";
 import { undoLastOperation, runTransaction, type UndoResult } from "./operations";
-import { executeNativeCall } from "./nativeExecutor";
+import { executeNativeCall } from "./native/index";
 import { countByType, DEFAULT_INSPECT, inspectNodes, inspectTopLevelFrames, listPages } from "./inspector";
 import { allPages } from "./cache";
 import { DEFAULT_EXTRACT, extractDesignSystem as extract } from "./design-system";

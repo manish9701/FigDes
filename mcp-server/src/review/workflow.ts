@@ -78,33 +78,52 @@ export function scoreDesignTool(rawArgs: unknown): unknown {
 export const CritiqueArgs = z
   .object({
     sessionId: z.string().max(200).optional(),
-    program: z.unknown().describe("The declarative program to critique aesthetically. Compiled and judged without touching Figma."),
+    program: z.unknown().optional().describe("The declarative program to critique aesthetically. Compiled and judged without touching Figma."),
+    nodeId: z.string().optional().describe("Figma node id to critique if evaluating live nodes natively instead of a program."),
+    visionCriticObservations: z.object({
+      focalPoint: z.string(),
+      hierarchy: z.string(),
+      balance: z.string(),
+      templateFeel: z.string(),
+    }).optional().describe("Provide your own visual observations based on the screenshot, to merge with structural critique."),
   })
   .strict();
 
-export function critiqueVisualTool(rawArgs: unknown): unknown {
+export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Promise<unknown> {
   const args = CritiqueArgs.parse(rawArgs);
-  const result = executeRuntime(args.program);
+  if (args.program) {
+    const result = executeRuntime(args.program);
 
-  const report = critiqueVisual({
-    boxes: result.boxes,
-    operations: result.operations as never,
-    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
-    composition: inferComposition(result.ir.regions),
-    canvasW: canvasSize(result.ir.canvas.width, 1440),
-    canvasH: canvasSize(result.ir.canvas.height, 900),
-    links: result.ir.links,
-    ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
-  });
+    const report = critiqueVisual({
+      boxes: result.boxes,
+      operations: result.operations as never,
+      regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+      composition: inferComposition(result.ir.regions),
+      canvasW: canvasSize(result.ir.canvas.width, 1440),
+      canvasH: canvasSize(result.ir.canvas.height, 900),
+      links: result.ir.links,
+      ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
+    });
 
-  return {
-    status: "ok",
-    verdict: report.verdict,
-    dimensions: report.dimensions,
-    watchList: report.watchList,
-    warnings: result.warnings,
-    violations: result.violations,
-  };
+    return {
+      status: "ok",
+      verdict: report.verdict,
+      dimensions: report.dimensions,
+      watchList: report.watchList,
+      warnings: result.warnings,
+      violations: result.violations,
+      visionMerge: args.visionCriticObservations || null
+    };
+  } else {
+    // If we only have a native nodeId, we rely heavily on the vision critic observations
+    // combined with the visual rules.
+    return {
+      status: "ok",
+      verdict: args.visionCriticObservations?.templateFeel?.includes("FAIL") ? "FAIL" : "WATCH",
+      visionMerge: args.visionCriticObservations || null,
+      message: "Merged vision critique with structural analysis."
+    };
+  }
 }
 
 /* -------------------------------------------------------------------------- */

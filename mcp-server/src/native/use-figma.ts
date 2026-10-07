@@ -64,18 +64,43 @@ export async function figdesInspectVisualHandler(session: Session, args: unknown
     throw new Error(raw?.error || "Failed to inspect visually.");
   }
 
+  // Get Screenshot
+  let imageContent = null;
+  try {
+    const renderRes = await session.request("render_node", { nodeId: parsed.target || "page", maxWidth: 1024, detail: "low" }) as any;
+    if (renderRes && typeof renderRes.data === "string") {
+      imageContent = { type: "image", data: renderRes.data, mimeType: "image/png" };
+    }
+  } catch (e) {
+    // Ignore render error, just omit image
+  }
+
   // Derive the visual summary 
   const root = raw.scan?.[0] || {};
   const canvasDimensions = { width: root.width, height: root.height };
   
   const nodes = raw.scan || [];
   
-  // largest objects
-  const largestObjects = nodes
-    .filter((n: any) => n.id !== root.id)
-    .sort((a: any, b: any) => (b.width * b.height) - (a.width * a.height))
-    .slice(0, 5)
-    .map((n: any) => ({ id: n.id, name: n.name, area: n.width * n.height }));
+  // Calculate focal scores
+  function normalize(val: number) { return val || 0; }
+  const focalCandidates = nodes
+    .filter((n: any) => n.id !== root.id && n.width > 0 && n.height > 0)
+    .map((n: any) => {
+       const areaRatio = (n.width * n.height) / (root.width * root.height || 1);
+       const textScale = n.type === 'TEXT' ? (n.style?.fontSize || 12) / 48 : 0;
+       const contrast = n.fills?.length > 0 ? 0.8 : 0.2;
+       const semanticPriority = n.type === 'INSTANCE' ? 0.7 : 0.3;
+       
+       const score = (
+         normalize(areaRatio) * 0.15 +
+         normalize(contrast) * 0.20 +
+         normalize(semanticPriority) * 0.25 +
+         normalize(textScale) * 0.10
+       );
+       return { id: n.id, name: n.name, type: n.type, score, areaRatio };
+    })
+    .sort((a: any, b: any) => b.score - a.score)
+    .slice(0, 5);
     
   // text hierarchy
   const textNodes = nodes.filter((n: any) => n.type === "TEXT");
@@ -87,14 +112,18 @@ export async function figdesInspectVisualHandler(session: Session, args: unknown
   // surface count
   const surfaces = nodes.filter((n: any) => ["FRAME", "RECTANGLE"].includes(n.type) && n.fills?.length > 0);
   
-  return {
+  const structure = {
     canvasDimensions,
-    largestObjects,
     textHierarchy,
     surfaceCount: surfaces.length,
-    focalCandidates: largestObjects, // naive for now
+    focalCandidates,
     visualLayers: surfaces.length,
     componentUsage: nodes.filter((n: any) => n.type === "INSTANCE").length,
     cardLikeSurfaces: surfaces.filter((n: any) => n.cornerRadius && n.cornerRadius > 0).length,
   };
+
+  const content: any[] = [{ type: "text", text: JSON.stringify(structure, null, 2) }];
+  if (imageContent) content.push(imageContent);
+
+  return { content };
 }

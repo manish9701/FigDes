@@ -69,8 +69,23 @@ function paint(input: string | null | undefined): any[] {
 
 function setCommon(node: AnyNode, opts: BuilderOptions): AnyNode {
   if (opts.name !== undefined) node.name = opts.name;
-  if (opts.x !== undefined) node.x = opts.x;
-  if (opts.y !== undefined) node.y = opts.y;
+
+  // Top-level Figma nodes default to (0,0). Automatically place an unpositioned
+  // root to the right of existing page content so a new screen never silently
+  // lands underneath the previous screen. Explicit x/y always win.
+  if (!opts.parent && opts.x === undefined && opts.y === undefined) {
+    const page = figmaApi.currentPage;
+    let maxX = 0;
+    for (const child of page.children ?? []) {
+      if (child.id === node.id) continue;
+      maxX = Math.max(maxX, Number(child.x || 0) + Number(child.width || 0));
+    }
+    node.x = maxX + 120;
+    node.y = 0;
+  } else {
+    if (opts.x !== undefined) node.x = opts.x;
+    if (opts.y !== undefined) node.y = opts.y;
+  }
   if (opts.width !== undefined || opts.height !== undefined) {
     const w = opts.width ?? node.width ?? 1;
     const h = opts.height ?? node.height ?? 1;

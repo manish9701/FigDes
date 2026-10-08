@@ -40,14 +40,20 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
   const transactionId = typeof input.transactionId === "string" && input.transactionId.length > 0 ? input.transactionId : `plugin_tx_${Date.now()}`;
   const readonlyMode = input.readonly === true;
   if (!readonlyMode) beginNativeTransaction(transactionId);
-  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (figmaApi: PluginAPI, math: Math, json: JSON, date: DateConstructor, consoleApi: Console) => Promise<unknown>;
+  const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor as new (...args: string[]) => (...args: unknown[]) => Promise<unknown>;
   const execute = new AsyncFunction("figma", "Math", "JSON", "Date", "console", script);
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   try {
-    const result = await Promise.race([execute(figma, Math, JSON, Date, console), new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`Figma script exceeded ${MAX_EXECUTION_MS}ms.`)), MAX_EXECUTION_MS))]);
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => reject(new Error(`Figma script exceeded ${MAX_EXECUTION_MS}ms.`)), MAX_EXECUTION_MS);
+    });
+    const result = await Promise.race([execute(figma, Math, JSON, Date, console), timeout]);
     if (!readonlyMode) return { status: "success", transactionId, result: serializable(result), transaction: commitNativeTransaction(transactionId) };
     return { status: "success", readonly: true, result: serializable(result) };
   } catch (error) {
     if (readonlyMode) return { status: "failed", readonly: true, error: { code: "FIGMA_API_ERROR", message: error instanceof Error ? error.message : String(error), recovery: "Fix the Plugin API script and retry." } };
     return rollbackResult(transactionId, error);
+  } finally {
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }

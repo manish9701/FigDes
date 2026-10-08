@@ -454,6 +454,14 @@ export interface ScreenPlan {
   artDirection: ArtDirection;
   /** Compositions worth comparing, recommended first (FigDes §6). */
   compositionCandidates: Array<{ composition: Composition; recommended: boolean; why: string }>;
+  /** Execution guidance derived from the composition, not tool convenience. */
+  execution: {
+    mode: "native" | "hybrid" | "semantic";
+    recommendedTool: "figdes_use_figma" | "design_runtime";
+    nativeRequired: boolean;
+    renderGate: boolean;
+    reason: string;
+  };
   /** Rule ids the plan is likely to trip, with what to do instead. */
   guardPreview: Array<{ rule: string; therefore: string }>;
   /** Composition alternatives worth putting to the user (§38). */
@@ -493,6 +501,10 @@ export interface ArtDirection {
   componentStrategy: string;
   /** How this screen's data becomes visual rather than cards. */
   visualizationStrategy: string;
+  /** Concrete composition constraints the builder must preserve. */
+  compositionPrinciples: string[];
+  /** Visual patterns this screen should actively reject. */
+  avoid: string[];
   /** States this screen must draw, including EXO runtime states where relevant. */
   interactionStates: string[];
   /** What could still go wrong, cheapest to hear now. */
@@ -570,6 +582,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   const passes = planPasses(intent, regions, composition);
 
   const artDirection = directArt(intent, decisionKind, boxes, regions, guardPreview, warnings);
+  const execution = executionProfile(decisionKind, composition);
 
   // The program carries visualIntent (focal + weights) that the runtime turns
   // into growth — `Math.round(weight * 2)` when it beats declared grow, focal
@@ -636,6 +649,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     passes,
     artDirection,
     compositionCandidates,
+    execution,
     guardPreview,
     alternatives,
     warnings,
@@ -762,9 +776,57 @@ function directArt(
     hierarchy,
     componentStrategy,
     visualizationStrategy: VISUALIZATION[kind],
+    compositionPrinciples: compositionPrinciples(kind),
+    avoid: compositionAvoid(kind),
     interactionStates,
     designRisks,
   };
+}
+
+
+function compositionPrinciples(kind: DecisionKind): string[] {
+  const map: Record<DecisionKind, string[]> = {
+    select: ["Make one option visually selected; use alignment for comparison, not containers.", "Keep the inspector subordinate to the option field."],
+    compare: ["Give both subjects equal structural treatment, then make the meaningful difference dominant.", "Avoid equal-weight decorative panels."],
+    monitor: ["The live signal owns the canvas; telemetry supports it.", "Use one continuous instrument surface before adding cards."],
+    topology: ["Relationships are the content: nodes, edges and state read as one spatial system.", "Use open space to separate clusters instead of boxing every node."],
+    configure: ["Keep the effect of a change visible beside the control.", "Treat the preview as a visual object, not a secondary card."],
+    explore: ["Results should scan as a field of related items.", "Use density and alignment before adding containers."],
+    inspect: ["The subject gets the largest uninterrupted surface.", "Context frames the subject instead of competing with it."],
+    integration: ["Connection state is visible in the provider field.", "Endpoint detail stays subordinate to provider choice."],
+    author: ["The work surface is the screen; controls frame it.", "Do not turn the workspace into settings cards."],
+  };
+  return map[kind];
+}
+
+function compositionAvoid(kind: DecisionKind): string[] {
+  const map: Record<DecisionKind, string[]> = {
+    select: ["marketing-card grid", "three equal KPI cards", "chat-first composition"],
+    compare: ["generic SaaS split-card template", "decorative symmetry without semantic comparison"],
+    monitor: ["KPI card wall", "static dashboard pretending to be live", "multiple competing status rails"],
+    topology: ["boxed node grid", "unlabelled connector spaghetti", "sidebar replacing the topology"],
+    configure: ["wizard-like card stack", "controls with no live consequence preview"],
+    explore: ["card gallery when rows are more scannable", "empty decorative hero"],
+    inspect: ["raw specification dump", "equal-weight side panels"],
+    integration: ["generic settings maze", "provider cards without connection state"],
+    author: ["toolbar-heavy chrome", "settings-card workspace"],
+  };
+  return map[kind];
+}
+
+function executionProfile(kind: DecisionKind, composition: Composition): ScreenPlan["execution"] {
+  const nativeKinds = new Set<DecisionKind>(["topology", "monitor", "inspect"]);
+  const hybridKinds = new Set<DecisionKind>(["compare", "select", "configure", "author"]);
+  const nativeRequired = nativeKinds.has(kind) || composition === "topology" || composition === "spatial" || composition === "diagram";
+  const mode = nativeRequired ? "native" : hybridKinds.has(kind) ? "hybrid" : "semantic";
+  const recommendedTool = mode === "semantic" ? "design_runtime" : "figdes_use_figma";
+  const renderGate = mode !== "semantic";
+  const reason = nativeRequired
+    ? "This is a composition-led " + kind + " screen: use native execution so spatial relationships survive implementation."
+    : mode === "hybrid"
+      ? "This " + kind + " screen benefits from a native composition with semantic components inside it."
+      : "This " + kind + " screen is information-led and can use semantic layout safely.";
+  return { mode, recommendedTool, nativeRequired, renderGate, reason };
 }
 
 /** Maps a semantic role onto the runtime primitive that creates it. */

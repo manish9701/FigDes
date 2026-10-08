@@ -162,6 +162,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   const args = RefineArgs.parse(rawArgs);
   const goals = args.visualGoals ?? [];
   const preserve = new Set(args.preserve);
+  const compositionLed = goals.some((g) => /topology|spatial|visual|composition|hierarchy|runtime|instrument/i.test(g));
   const iterations: RefineIteration[] = [];
 
   if (!session) {
@@ -173,6 +174,13 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
 
   // Optional build phase: the program lands first, then the loop polishes it.
   if (args.program !== undefined) {
+    if (compositionLed) {
+      return {
+        status: "native-review-required",
+        message: "Composition-led refinement cannot silently rebuild through the semantic runtime. Build the native composition first, then use refine_screen for structural fixes and render_design for visual judgement.",
+        visualGoals: goals,
+      };
+    }
     const { runRuntimeTool } = await import("../runtime/tools");
     await runRuntimeTool(session, { program: args.program, description: args.description ?? "refine_screen build phase" });
   }
@@ -259,7 +267,9 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     iterations,
     visualGoals: goals,
     howToProceed: converged
-      ? "No high-confidence findings remain. Render at low detail to judge hierarchy, then run design_guard before calling it done."
+      ? (compositionLed
+        ? "No high-confidence structural findings remain. Run a successful low-detail render and judge the image before design_guard."
+        : "No high-confidence findings remain. Render at low detail to judge hierarchy, then run design_guard before calling it done.")
       : `Still ${iterations[iterations.length - 1]?.remainingHigh ?? "?"} high-confidence finding(s) after ${args.maxIterations} iteration(s). Widen maxIterations (max 5) or fix the rest by hand.`,
   };
 }

@@ -45,7 +45,7 @@ export interface TextOptions extends BuilderOptions {
   style?: string;
   size?: number;
   weight?: number;
-  lineHeight?: number | { value: number; unit: "PIXELS" | "INTRINSIC_%"; };
+  lineHeight?: number | { value: number; unit: "PIXELS" | "PERCENT" | "AUTO"; };
   letterSpacing?: number;
   align?: "LEFT" | "CENTER" | "RIGHT" | "JUSTIFIED";
   verticalAlign?: "TOP" | "CENTER" | "BOTTOM";

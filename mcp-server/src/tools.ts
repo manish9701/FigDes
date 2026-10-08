@@ -789,7 +789,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "design_runtime",
     title: "Build a design from semantic primitives",
     description:
-      "PREFERRED over create_design for building screens. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. Pass dryRun=true first.",
+      "Use this for information-led screens. Do not use it as the primary builder when plan_screen.execution.nativeRequired=true. For composition-led screens, use figdes_use_figma for the shell and reserve this for reusable semantic content inside a Hybrid composition. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. Pass dryRun=true first.",
     inputSchema: RuntimeArgs,
     handler: async (args, registry) => {
       const parsed = RuntimeArgs.parse(args);

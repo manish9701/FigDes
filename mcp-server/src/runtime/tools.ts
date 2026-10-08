@@ -250,16 +250,22 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
   });
   if (gate) return { ...payload, ...gate };
 
-  if (chunked === true) {
+  if (chunked === true || (chunked !== false && result.operations.length > CHUNK_SIZE * 2)) {
+    // Auto-chunk large programs: a single 300-op transaction holds the socket
+    // silent for a minute+ and risks losing everything to one bad op. Chunked
+    // builds commit progressively (visible in the canvas as they land) with
+    // per-chunk rollback. Explicit chunked:false still forces one transaction.
     const built = await runChunked(session, result.operations, description);
     return {
       ...payload,
       chunked: true,
+      autoChunked: chunked !== true,
       status: built.completed ? payload.status : "completed-with-failed-chunks",
       chunks: built.chunks,
     };
   }
 
+  session.notify({ type: "notify", kind: "activity", text: `Building ${result.operations.length} ops…`, at: Date.now() });
   const transaction = await session.request("create_design", {
     description: description ?? "Design runtime execution",
     operations: result.operations,
@@ -270,7 +276,7 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
 }
 
 /** Operations per chunk. Small enough to stay well under node caps, large enough to keep chunks few. */
-const CHUNK_SIZE = 60;
+export const CHUNK_SIZE = 60;
 
 /** Operation fields that can hold node references needing cross-chunk remap. */
 const REF_KEYS = new Set(["parent", "target", "child"]);
@@ -309,8 +315,11 @@ export async function runChunked(
     const slice = (operations.slice(i, i + CHUNK_SIZE) as Array<Record<string, unknown>>).map(
       (op) => rewrite(op) as Record<string, unknown>,
     );
+    const chunkNo = chunks.length + 1;
+    const chunkTotal = Math.ceil(operations.length / CHUNK_SIZE);
+    session.notify({ type: "notify", kind: "activity", text: `Building chunk ${chunkNo}/${chunkTotal} (${slice.length} ops)…`, at: Date.now() });
     const result = (await session.request("create_design", {
-      description: `${description ?? "Design runtime execution"} (chunk ${chunks.length + 1})`,
+      description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
       operations: slice,
     })) as { status?: string; createdNodes?: Array<{ temporaryId?: string; figmaNodeId?: string }>; error?: { message?: string } };
 

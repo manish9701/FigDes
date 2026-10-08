@@ -424,6 +424,13 @@ export function makeFigma(doc) {
       setAsync: async (k, v) => storage.set(k, v),
     },
 
+    viewport: {
+      __scrolled: [],
+      scrollAndZoomIntoView: function (nodes) {
+        this.__scrolled.push((nodes ?? []).map((n) => n.id));
+      },
+    },
+
     loadAllPagesAsync: async () => {
       figma.__loadAllPagesCalls = (figma.__loadAllPagesCalls ?? 0) + 1;
     },

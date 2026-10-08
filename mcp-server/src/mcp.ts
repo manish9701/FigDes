@@ -281,6 +281,18 @@ function summarize(data: unknown): string {
   const d = data as Record<string, unknown>;
   if (typeof d.verdict === "string") return `verdict: ${d.verdict}`;
   if (typeof d.overall === "number") return `scored ${d.overall}/10`;
+  // Transactions report created nodes, not a generic status — surface the
+  // count so the panel narrates "built 42 nodes" instead of silence.
+  const txn = d.transaction as Record<string, unknown> | undefined;
+  if (txn && typeof txn === "object") {
+    if (Array.isArray(txn.createdNodes)) return `built ${txn.createdNodes.length} node(s)`;
+    if (typeof txn.status === "string" && txn.status !== "success") return String(txn.status);
+  }
+  if (Array.isArray(d.createdNodes)) return `built ${(d.createdNodes as unknown[]).length} node(s)`;
+  if (Array.isArray(d.chunks)) {
+    const ok = (d.chunks as Array<{ status?: string }>).filter((c) => c.status === "success").length;
+    return `built ${ok}/${(d.chunks as unknown[]).length} chunk(s)`;
+  }
   if (typeof d.status === "string" && d.status !== "ok") return String(d.status);
   if (Array.isArray(d.findings)) return `${(d.findings as unknown[]).length} finding(s)`;
   if (Array.isArray(d.matches)) return `${(d.matches as unknown[]).length} match(es)`;

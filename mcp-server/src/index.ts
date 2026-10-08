@@ -170,6 +170,16 @@ wss.on("connection", (ws: WebSocket) => {
         session.settleResult(msg);
         break;
 
+      case "progress": {
+        // Upstream build heartbeat: extends the request timeout (sliding
+        // window) so long builds log instead of timing out mid-apply.
+        session.touchProgress(msg.requestId, msg.done, msg.total, msg.label);
+        if (msg.phase === "failed") {
+          console.log(`[ws] ${session.id} build ${msg.phase}: ${msg.done}/${msg.total} ${msg.label}`);
+        }
+        break;
+      }
+
       default:
         console.warn(`[ws] unexpected frame type from ${session.id}: ${(msg as { type: string }).type}`);
     }

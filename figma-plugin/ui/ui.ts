@@ -24,8 +24,28 @@ import type {
 
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
+/** Default budget for fast reads. Long builds get their own (see timeoutFor). */
 const REQUEST_TIMEOUT_MS = 60000;
+/** Builds routinely exceed 60s (fonts + hundreds of ops); timing out first and
+ * committing late is the "blank, then everything pops at once" bug. */
+const LONG_BUILD_TIMEOUT_MS = 300000;
 const HEARTBEAT_MS = 5000;
+
+/** Long builds get a 5-minute budget; everything else keeps the 60s one so a
+ * dead main thread still fails fast instead of hanging the MCP call. */
+function timeoutFor(tool: string): number {
+  switch (tool) {
+    case "create_design":
+    case "modify_design":
+    case "update_component":
+    case "native_design":
+      return LONG_BUILD_TIMEOUT_MS;
+    case "render_node":
+      return 120000;
+    default:
+      return REQUEST_TIMEOUT_MS;
+  }
+}
 
 interface StatusPayload extends StatusResult {
   pageId?: string;
@@ -137,17 +157,55 @@ function render(summary: PanelSummary): void {
  * The bar is the only animation in the panel, and it exists for one reason: a
  * large program used to apply inside a single synchronous run, so the screen
  * appeared all at once with no warning. Now regions land one after another and
- * this narrates, then hides itself when the commit seals.
+ * this narrates. Terminal phases (done/failed) stay visible for a few seconds
+ * so a fast build still reads as finished instead of flashing and vanishing.
  */
+let progressHideTimer: number | undefined;
 function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
-  const show = msg.phase === "started" || msg.phase === "applying";
-  progressEl.style.visibility = show ? "visible" : "hidden";
-  progressLabelEl.style.visibility = show ? "visible" : "hidden";
-  if (!show) return;
+  if (progressHideTimer !== undefined) {
+    window.clearTimeout(progressHideTimer);
+    progressHideTimer = undefined;
+  }
+  const terminal = msg.phase === "done" || msg.phase === "failed";
+  progressEl.style.visibility = "visible";
+  progressLabelEl.style.visibility = "visible";
 
   const ratio = msg.total > 0 ? Math.min(1, msg.done / msg.total) : 0;
-  progressBarEl.style.width = `${Math.round(ratio * 100)}%`;
-  progressLabelEl.textContent = msg.total > 0 ? `${msg.done}/${msg.total} - ${msg.label}` : msg.label;
+  progressBarEl.style.width = terminal && msg.phase === "done" ? "100%" : `${Math.round(ratio * 100)}%`;
+  progressLabelEl.textContent =
+    msg.phase === "failed"
+      ? `Failed - ${msg.label}`
+      : msg.phase === "done"
+        ? msg.total > 0
+          ? `Done ${msg.total}/${msg.total} - ${msg.label}`
+          : `Done - ${msg.label}`
+        : msg.total > 0
+          ? `${msg.done}/${msg.total} - ${msg.label}`
+          : msg.label;
+
+  // Forward upstream so the server can extend its timeout instead of firing
+  // on silence mid-build (the timeout-then-late-commit race behind the
+  // "blank page, then everything pops at once" report).
+  try {
+    send({
+      type: "progress",
+      transactionId: msg.transactionId,
+      done: msg.done,
+      total: msg.total,
+      label: msg.label,
+      phase: msg.phase,
+      at: Date.now(),
+    });
+  } catch {
+    /* best-effort: panel display matters more than the upstream copy */
+  }
+
+  if (terminal) {
+    progressHideTimer = window.setTimeout(() => {
+      progressEl.style.visibility = "hidden";
+      progressLabelEl.style.visibility = "hidden";
+    }, 4000);
+  }
 }
 
 /**
@@ -433,6 +491,7 @@ function route(msg: ServerMessage): void {
 
     case "request": {
       const requestId = msg.requestId;
+      const budget = timeoutFor(msg.tool);
       pending.set(requestId, {
         resolve: (data) => {
           send({ type: "result", requestId, ok: true, data });
@@ -446,9 +505,9 @@ function route(msg: ServerMessage): void {
             type: "result",
             requestId,
             ok: false,
-            error: `Plugin timed out after ${REQUEST_TIMEOUT_MS}ms executing ${msg.tool}.`,
+            error: `Plugin timed out after ${budget}ms executing ${msg.tool}.`,
           });
-        }, REQUEST_TIMEOUT_MS),
+        }, budget),
       });
 
       toMain({ kind: "request", requestId, tool: msg.tool, payload: msg.payload });

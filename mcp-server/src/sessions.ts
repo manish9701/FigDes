@@ -16,13 +16,33 @@ import type {
 } from "../../shared/protocol";
 
 const REQUEST_TIMEOUT_MS = 60_000;
+/** Long builds (fonts + hundreds of ops) legitimately take minutes. Timing out
+ * at 60s while the plugin is still applying is the "blank page, then
+ * everything pops at once" race: ChatGPT reports failure, the late commit
+ * lands anyway. */
+const LONG_BUILD_TIMEOUT_MS = 300_000;
 const STALE_AFTER_MS = 60_000;
+
+function timeoutForTool(tool: PluginToolName): number {
+  switch (tool) {
+    case "create_design":
+    case "modify_design":
+    case "update_component":
+    case "native_design":
+      return LONG_BUILD_TIMEOUT_MS;
+    case "render_node":
+      return 120_000;
+    default:
+      return REQUEST_TIMEOUT_MS;
+  }
+}
 
 interface Pending {
   resolve: (data: unknown) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
   tool: PluginToolName;
+  timeoutMs: number;
 }
 
 export class Session {
@@ -96,21 +116,48 @@ export class Session {
   }
 
   /** Dispatch a tool to the plugin and await its result. */
-  request(tool: PluginToolName, payload: unknown, timeoutMs = REQUEST_TIMEOUT_MS): Promise<unknown> {
+  request(tool: PluginToolName, payload: unknown, timeoutMs?: number): Promise<unknown> {
     if (!this.alive) {
       return Promise.reject(new Error(`Plugin session ${this.id} is not connected.`));
     }
 
+    const budget = timeoutMs ?? timeoutForTool(tool);
     const requestId = `r_${randomUUID()}`;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`The Figma plugin did not respond to ${tool} within ${timeoutMs}ms. Is the plugin still open?`));
-      }, timeoutMs);
+        reject(new Error(`The Figma plugin did not respond to ${tool} within ${budget}ms. Is the plugin still open?`));
+      }, budget);
 
-      this.pending.set(requestId, { resolve, reject, timer, tool });
+      this.pending.set(requestId, { resolve, reject, timer, tool, timeoutMs: budget });
       this.send({ type: "request", requestId, tool, payload });
     });
+  }
+
+  /**
+   * Upstream build heartbeat (see shared/protocol ProgressMessage).
+   *
+   * Every progress frame proves the plugin is still applying ops, so the
+   * request timer restarts instead of firing mid-build. Without this sliding
+   * window a 90s build always fails at 60s and commits late.
+   */
+  touchProgress(requestId: string | undefined, done: number, total: number, label: string): void {
+    this.lastSeen = Date.now();
+    if (!requestId) return;
+    const entry = this.pending.get(requestId);
+    if (!entry) return;
+    clearTimeout(entry.timer);
+    entry.timer = setTimeout(() => {
+      this.pending.delete(requestId);
+      entry.reject(new Error(`The Figma plugin did not respond to ${entry.tool} within ${entry.timeoutMs}ms. Is the plugin still open?`));
+    }, entry.timeoutMs);
+    // Refresh the liveness window without re-arming unref concerns; the timer
+    // above is the budget that matters.
+  }
+
+  /** Progress without a request id still proves liveness (chunked builds). */
+  touch(): void {
+    this.lastSeen = Date.now();
   }
 
   settleResult(msg: ResultMessage): void {

@@ -58,6 +58,26 @@ export class OperationError extends Error {
 const fontCache = new Map<string, FontName>();
 
 /**
+ * Cached font catalogue.
+ *
+ * `listAvailableFontsAsync` is the slowest call in a text-heavy build: the
+ * previous code called it once per text node (via resolveWeightStyle) plus
+ * once per fallback in loadFont. A 100-text screen therefore scanned the
+ * installed fonts 100+ times before drawing anything, which is a large part
+ * of why big builds felt stalled. Cache the list once per plugin session.
+ */
+let availableFontsCache: ReadonlyArray<Font> | null = null;
+async function availableFonts(): Promise<ReadonlyArray<Font>> {
+  if (availableFontsCache) return availableFontsCache;
+  try {
+    availableFontsCache = await figma.listAvailableFontsAsync();
+  } catch {
+    availableFontsCache = [];
+  }
+  return availableFontsCache;
+}
+
+/**
  * Text typography requires the font to be loaded before the property is set.
  * A missing family is reported, never silently substituted — otherwise the
  * model believes it applied a brand font when it did not.
@@ -70,7 +90,7 @@ async function loadFont(family: string, style: string): Promise<FontName> {
   try {
     await figma.loadFontAsync({ family, style });
   } catch {
-    const available = await figma.listAvailableFontsAsync();
+    const available = await availableFonts();
     const match =
       available.find((f) => f.fontName.family === family && f.fontName.style === style) ??
       available.find((f) => f.fontName.family === family) ??
@@ -102,12 +122,8 @@ async function resolveWeightStyle(family: string, weight: number, preferred: str
   const wanted = weightToStyleName(weight);
   const candidates = [...new Set([wanted, preferred, "Regular"])];
 
-  let available: ReadonlyArray<Font> = [];
-  try {
-    available = await figma.listAvailableFontsAsync();
-  } catch {
-    return candidates[0]!;
-  }
+  const available = await availableFonts();
+  if (available.length === 0) return candidates[0]!;
 
   const stylesForFamily = new Set(available.filter((f) => f.fontName.family === family).map((f) => f.fontName.style));
   if (stylesForFamily.size === 0) {
@@ -473,17 +489,22 @@ export async function runTransaction(input: {
       applied.push(`${op.type}${note ? ` ${note}` : ""}`);
       touchRefs(ctx, op);
 
-      // Report roughly every 10% (and always the last op) so a 500-op build
-      // narrates without flooding the iframe with 500 messages.
+      // Report roughly every 5% (and always the last op) so a 500-op build
+      // narrates without flooding the iframe with 500 messages. 10% steps
+      // left long builds silent for 30+ seconds, which reads as "stalled".
       const done = n + 1;
-      if (input.onProgress && (done === total || done % Math.max(1, Math.floor(total / 10)) === 0)) {
+      if (input.onProgress && (done === total || done % Math.max(1, Math.floor(total / 20)) === 0)) {
         input.onProgress(done, total, describe(op) || op.type);
       }
 
       // Yield so the canvas repaints and the panel stays alive. Without this
       // the whole transaction runs synchronously and the user sees nothing
-      // until the final commit.
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      // until the final commit — the "blank page, then everything pops at
+      // once" symptom. Yield every op for small builds; every 4th op for
+      // large ones (same repaint cadence, ~4x fewer task switches).
+      if (total <= 60 || n % 4 === 3 || done === total) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
     }
   } catch (err) {
     return failure(input.transactionId, err, true);
@@ -515,6 +536,12 @@ export async function runTransaction(input: {
     }
   }
 
+  // Reveal: select what was built and bring the viewport to it. Without this
+  // the canvas stays where the user left it — often an empty area — so a
+  // successful build reads as a "blank page" until they scroll and find it.
+  // Best-effort by design: a viewport failure must never fail the build.
+  await revealCreated(ctx);
+
   // The trace is evidence, not a log file: cap it so a 2000-op construction
   // does not flood the model with 2000 lines.
   const trace = applied.length > APPLIED_TRACE_CAP
@@ -529,6 +556,62 @@ export async function runTransaction(input: {
     modifiedNodes: [...ctx.modified],
     applied: trace,
   };
+}
+
+/**
+ * Brings the viewport to what a transaction just built.
+ *
+ * Selects up to 8 top-level created frames/components (plus any modified
+ * targets when nothing was created) and scrolls to them. Slides are skipped
+ * for selection — they live in the deck grid, not on a free canvas — but the
+ * first slide's page is still surfaced via selection when possible.
+ */
+async function revealCreated(ctx: Ctx): Promise<void> {
+  try {
+    const ids: string[] = [];
+    for (const entry of ctx.created) {
+      if (entry.type === "PAGE" || entry.type === "DOCUMENT") continue;
+      // Prefer containers: a root frame tells the user where the screen is,
+      // a loose text node does not.
+      if (entry.type === "FRAME" || entry.type === "COMPONENT" || entry.type === "INSTANCE" || entry.type === "GROUP" || entry.type === "SLIDE") {
+        ids.push(entry.figmaNodeId);
+        if (ids.length >= 8) break;
+      }
+    }
+    if (ids.length === 0) {
+      for (const id of ctx.modified) {
+        ids.push(id);
+        if (ids.length >= 8) break;
+      }
+    }
+    if (ids.length === 0) return;
+
+    const scenes: SceneNode[] = [];
+    for (const id of ids) {
+      try {
+        const node = await figma.getNodeByIdAsync(id);
+        if (!node || node.removed) continue;
+        if (node.type === "PAGE" || node.type === "DOCUMENT") continue;
+        scenes.push(node as SceneNode);
+      } catch {
+        /* gone: skip */
+      }
+    }
+    if (scenes.length === 0) return;
+
+    try {
+      figma.currentPage.selection = scenes.slice(0, 8);
+    } catch {
+      /* selection is a nicety, not a requirement */
+    }
+    try {
+      figma.viewport.scrollAndZoomIntoView(scenes.slice(0, 4));
+    } catch {
+      /* older API surface: selection alone still lands the user nearby */
+    }
+  } catch {
+    /* reveal must never fail a successful build */
+  }
 }
 
 function isCreateOp(op: Parsed): boolean {

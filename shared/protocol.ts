@@ -1032,8 +1032,29 @@ export type NotifyMessage =
   | { type: "notify"; kind: "activity"; text: string; at: number }
   | { type: "notify"; kind: "preview"; label: string; mimeType: string; data: string; at: number };
 
+/**
+ * Upstream build progress: plugin -> server.
+ *
+ * The main thread already posts per-chunk progress to the iframe panel, but
+ * the server never saw it — so a 2-minute build looked stalled from ChatGPT's
+ * side until the final result arrived (or the 60s timeout fired first and the
+ * late commit "randomly popped up" afterwards). Forwarding the same
+ * done/total/label/phase upstream lets the server extend its timeout and log
+ * the build instead of timing out on silence.
+ */
+export interface ProgressMessage {
+  type: "progress";
+  requestId?: string;
+  transactionId?: string;
+  done: number;
+  total: number;
+  label: string;
+  phase: "started" | "applying" | "done" | "failed";
+  at: number;
+}
+
 export type ServerMessage = WelcomeMessage | RequestMessage | DisconnectMessage | NotifyMessage;
-export type ClientMessage = RegisterMessage | StateMessage | ResultMessage;
+export type ClientMessage = RegisterMessage | StateMessage | ResultMessage | ProgressMessage;
 
 /* -------------------------------------------------------------------------- */
 /* Tool names — the single dispatch table                                      */

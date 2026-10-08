@@ -73,8 +73,26 @@ export interface TransportOptions {
   onNotify?: (msg: Extract<ServerMessage, { type: "notify" }>) => void;
 }
 
-export const DEFAULT_REQUEST_TIMEOUT_MS = 20000;
+export const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+/** Long builds (fonts + hundreds of ops) need minutes, not seconds. */
+export const LONG_BUILD_TIMEOUT_MS = 300000;
 export const DEFAULT_HEARTBEAT_MS = 5000;
+
+/** Per-tool budget: builds get 5 minutes so the server never times out first
+ * and commits late (the "blank, then everything pops at once" race). */
+export function timeoutForTool(tool: string): number {
+  switch (tool) {
+    case "create_design":
+    case "modify_design":
+    case "update_component":
+    case "native_design":
+      return LONG_BUILD_TIMEOUT_MS;
+    case "render_node":
+      return 120000;
+    default:
+      return DEFAULT_REQUEST_TIMEOUT_MS;
+  }
+}
 
 interface Pending {
   resolve: (data: unknown) => void;
@@ -214,6 +232,10 @@ export function createTransport(options: TransportOptions): Transport {
 
       case "request": {
         const requestId = msg.requestId;
+        // Per-tool budget: a global 20s/60s timeout fires mid-build while the
+        // main thread is still applying ops, producing a failure on ChatGPT's
+        // side followed by a late commit ("blank, then everything pops").
+        const budget = Math.max(requestTimeoutMs, timeoutForTool(msg.tool));
         pending.set(requestId, {
           resolve: (data) => {
             send({ type: "result", requestId, ok: true, data });
@@ -229,9 +251,9 @@ export function createTransport(options: TransportOptions): Transport {
               type: "result",
               requestId,
               ok: false,
-              error: `Plugin timed out after ${requestTimeoutMs}ms executing ${msg.tool}.`,
+              error: `Plugin timed out after ${budget}ms executing ${msg.tool}.`,
             });
-          }, requestTimeoutMs),
+          }, budget),
         });
 
         postToMain({ kind: "request", requestId, tool: msg.tool, payload: msg.payload } as unknown as UiToMain);
@@ -262,6 +284,20 @@ export function createTransport(options: TransportOptions): Transport {
     if (!msg) return;
     if (msg.kind === "response") {
       settle(msg.requestId, msg.ok, msg.data, msg.error);
+      return;
+    }
+    if (msg.kind === "progress") {
+      // Upstream build heartbeat: lets the server extend its timeout and log
+      // the build instead of failing on silence mid-transaction.
+      send({
+        type: "progress",
+        transactionId: msg.transactionId,
+        done: msg.done,
+        total: msg.total,
+        label: msg.label,
+        phase: msg.phase,
+        at: Date.now(),
+      });
       return;
     }
     // `ready` is the main thread announcing itself; nothing to translate, the

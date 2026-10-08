@@ -74,6 +74,17 @@ export function commitNativeTransaction(transactionId?: string): TransactionStat
   const id = current.transactionId;
   current.transactionId = null;
   current.mutations = 0;
+  // Same reveal contract as the semantic path: a successful native build must
+  // land the viewport on the selection (or leave it alone when there is
+  // nothing selected), so it never reads as a "blank page".
+  try {
+    const sel = figma.currentPage.selection;
+    if (Array.isArray(sel) && sel.length > 0) {
+      figma.viewport.scrollAndZoomIntoView(sel.slice(0, 4));
+    }
+  } catch {
+    /* reveal is best-effort */
+  }
   return { status: "transaction-committed", transactionId: id, state: current.state, mutations };
 }
 

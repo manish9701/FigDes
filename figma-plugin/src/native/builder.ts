@@ -119,9 +119,17 @@ function applySizing(node: AnyNode, axis: "horizontal" | "vertical", value: stri
 }
 
 function setAutoLayout(node: AnyNode, opts: StackOptions): void {
-  node.layoutMode = opts.direction ?? "VERTICAL";
-  node.primaryAxisSizingMode = "FIXED";
-  node.counterAxisSizingMode = "FIXED";
+  const direction = opts.direction ?? "VERTICAL";
+  node.layoutMode = direction;
+
+  // createAutoLayout starts in AUTO/HUG mode. Preserve that behavior when the
+  // caller has not fixed an axis; forcing FIXED on an empty stack collapses it
+  // to its initial 1x1 size and is a common source of "beautiful but empty" output.
+  const primaryFixed = direction === "HORIZONTAL" ? opts.width !== undefined : opts.height !== undefined;
+  const counterFixed = direction === "HORIZONTAL" ? opts.height !== undefined : opts.width !== undefined;
+  node.primaryAxisSizingMode = primaryFixed ? "FIXED" : "AUTO";
+  node.counterAxisSizingMode = counterFixed ? "FIXED" : "AUTO";
+
   if (opts.gap !== undefined) node.itemSpacing = opts.gap;
   if (opts.align !== undefined) node.primaryAxisAlignItems = opts.align;
   if (opts.crossAlign !== undefined) node.counterAxisAlignItems = opts.crossAlign;

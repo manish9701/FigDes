@@ -1,7 +1,7 @@
 /**
  * `figdes_use_figma` — controlled native execution (spec §4, §17, §18, §36, §37).
  *
- * The VM sandbox stays, but three things are now enforced that were not:
+ * Native execution is split into two layers: the MCP server owns routing, session\n * locking and transaction policy; the Figma plugin owns the actual Plugin API execution.\n * The script therefore runs against the real `figma` object in the document context.\n * The server still enforces the timeout, lock and transaction guarantees below:
  *
  * 1. A **hard wall-clock timeout that covers async work**. `vm`'s own timeout
  *    only stops synchronous execution, so a script that awaits RPCs could run
@@ -53,7 +53,7 @@ export const UseFigmaArgs = z
       .string()
       .max(MAX_SCRIPT_SIZE)
       .describe(
-        "Controlled JavaScript executed against the FigDes native Figma API. Only the exposed fig API, Math, JSON, Date and console are available. All fig.* calls are async and must be awaited. Prefer fig.batch([...]) with $refs over N sequential awaits: one round-trip instead of N. Keep construction scripts render-free and run render/visual review only at checkpoints.",
+        "JavaScript executed in the Figma plugin main thread with the real Figma Plugin API. The `figma` global is available, along with Math, JSON, Date and console. Use native Figma objects directly: createFrame/createAutoLayout/createComponent/createVector/createBooleanOperation, auto-layout properties, variables, styles, components and instances, node transforms, and viewport APIs. Prefer native layout relationships over hand-written coordinates. Keep construction scripts render-free; use render_design after checkpoints. For a full screen, build incrementally: composition first, then information, then refinement and states.",
       ),
     /**
      * Read-only inspection scripts skip the session lock and the native

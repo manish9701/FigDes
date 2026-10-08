@@ -445,6 +445,7 @@ export function compileIR(ir: DesignIR): CompileResult {
 
 /** True when a string is a colour the plugin can paint directly. */
 function isColorLiteral(value: string): boolean {
+  if (value.trim().toLowerCase() === "transparent") return true;
   try {
     parseColor(value);
     return true;
@@ -876,6 +877,7 @@ function emitText(
   titleScale = 1,
   look: StyleLook = DEFAULT_LOOK,
 ): void {
+  box = { ...box, x: box.x - region.x, y: box.y - region.y };
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
   // Display roles answer contrast intent: bold contrast lifts headlines, muted
   // contrast quiets them. Body text is never touched — emphasis that moves
@@ -1015,6 +1017,9 @@ function emitComponent(
   look: StyleLook = DEFAULT_LOOK,
 ): void {
   const p = spec.props;
+  // Layout boxes are absolute on the canvas; emitted child operations are
+  // relative to their Figma parent.
+  box = { ...box, x: box.x - region.x, y: box.y - region.y };
   /** Components are created inside their region unless they declare elsewhere. */
   const parentHint = region.id;
   /** Slide type scale, applied to every hardcoded size in this function. */
@@ -2018,8 +2023,135 @@ function emitComponent(
       break;
     }
 
+    case "topologyMap": {
+      // Topology is the product's primary spatial explanation, not a generic
+      // panel. Build real editable nodes and native vector relationships.
+      const surface = p.surface !== undefined ? str("surface", "transparent") : "#FBFAF6";
+      const pad = Math.round(grid * 3);
+      const w = Math.max(240, Math.round(box.w));
+      const h = Math.max(220, Math.round(box.h || grid * 30));
+      operations.push(op({
+        type: "createFrame",
+        id: spec.id,
+        parent: parentHint,
+        name: str("title", "Compute topology"),
+        x: box.x,
+        y: box.y,
+        width: w,
+        height: h,
+        fill: surface,
+        radius: 0,
+        clipsContent: false,
+      }));
+      if (str("title")) {
+        operations.push(op({
+          type: "createText",
+          parent: spec.id,
+          name: "Title",
+          x: 0,
+          y: 0,
+          content: str("title"),
+          fontSize: fs(11),
+          family: "JetBrains Mono",
+          weight: 600,
+          letterSpacing: 20,
+          fill: "#5A5C54",
+        }));
+      }
+
+      const rawNodes: unknown[] = Array.isArray(p.nodes) ? p.nodes as unknown[] : [];
+      const nodes = rawNodes
+        .filter((n): n is Record<string, unknown> => !!n && typeof n === "object")
+        .slice(0, 6)
+        .map((n, i) => ({
+          id: typeof n.id === "string" ? n.id : `node-${i + 1}`,
+          label: typeof n.label === "string" ? n.label : `Node ${i + 1}`,
+          detail: typeof n.detail === "string" ? n.detail : "",
+          role: typeof n.role === "string" ? n.role : i === 1 ? "runtime" : "device",
+        }));
+
+      const nodeCount = Math.max(1, nodes.length);
+      const usableW = Math.max(180, w - pad * 2);
+      const y = Math.max(90, Math.round(h * 0.52));
+      const nodeW = Math.min(250, Math.max(170, Math.floor(usableW / nodeCount - grid * 4)));
+      const nodeH = 104;
+      const gapX = nodeCount > 1 ? Math.max(28, Math.floor((usableW - nodeW * nodeCount) / (nodeCount - 1))) : 0;
+      const startX = Math.round((w - (nodeW * nodeCount + gapX * Math.max(0, nodeCount - 1))) / 2);
+      const centers = new Map<string, { x: number; y: number }>();
+
+      nodes.forEach((n, i) => {
+        const x = startX + i * (nodeW + gapX);
+        const cy = y + nodeH / 2;
+        centers.set(n.id, { x: x + nodeW / 2, y: cy });
+        const isRuntime = n.role === "runtime";
+        operations.push(op({
+          type: "createFrame",
+          id: n.id,
+          parent: spec.id,
+          name: n.label,
+          x,
+          y,
+          width: nodeW,
+          height: nodeH,
+          fill: isRuntime ? "#242521" : "#FFFFFF",
+          stroke: isRuntime ? "#242521" : "#D9D8D0",
+          strokeWeight: 1,
+          radius: 0,
+          layoutMode: "VERTICAL",
+          padding: grid * 2,
+          itemSpacing: grid,
+        }));
+        operations.push(op({
+          type: "createText",
+          parent: n.id,
+          name: "Label",
+          content: n.label,
+          fontSize: fs(isRuntime ? 20 : 18),
+          weight: 600,
+          fill: isRuntime ? "#FFFFFF" : "#242521",
+        }));
+        if (n.detail) {
+          operations.push(op({
+            type: "createText",
+            parent: n.id,
+            name: "Detail",
+            content: n.detail,
+            fontSize: fs(11),
+            family: "JetBrains Mono",
+            fill: isRuntime ? "#E7E7E1" : "#6F716A",
+          }));
+        }
+      });
+
+      const rawEdges: unknown[] = Array.isArray(p.edges) ? p.edges as unknown[] : [];
+      rawEdges.slice(0, 12).forEach((e, i) => {
+        if (!e || typeof e !== "object") return;
+        const edge = e as Record<string, unknown>;
+        const from = typeof edge.from === "string" ? edge.from : "";
+        const to = typeof edge.to === "string" ? edge.to : "";
+        const a = centers.get(from) ?? centers.get(nodes.find(n => n.label === from)?.id ?? "");
+        const b = centers.get(to) ?? centers.get(nodes.find(n => n.label === to)?.id ?? "");
+        if (!a || !b) return;
+        const left = Math.min(a.x, b.x);
+        const width = Math.max(1, Math.abs(b.x - a.x));
+        operations.push(op({
+          type: "createVector",
+          parent: spec.id,
+          name: `Topology link ${i + 1}`,
+          x: left,
+          y: a.y,
+          width,
+          height: 1,
+          path: "M 0 0 L " + width + " 0",
+          stroke: "#9B9D95",
+          strokeWeight: 1,
+          strokeCap: "ROUND",
+        }));
+      });
+      break;
+    }
+
     case "panel":
-    case "topologyMap":
     case "placementMap":
     default: {
       // Generic container. A topology map is emitted as a titled region so the
@@ -2313,6 +2445,7 @@ function weightToStyle(weight: number): string {
  */
 function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1): number {
   if (spec.kind !== "text") {
+    if (spec.kind === "component" && spec.type === "topologyMap") return Math.round(320 * typeScale);
     return spec.kind === "component" ? Math.round(90 * typeScale) : 32;
   }
 

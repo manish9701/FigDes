@@ -67,13 +67,13 @@ function paint(input: string | null | undefined): any[] {
   return c ? [{ type: "SOLID", color: c }] : [];
 }
 
-function setCommon(node: AnyNode, opts: BuilderOptions): AnyNode {
+function setCommon(node: AnyNode, opts: BuilderOptions, figmaApi?: AnyFigma): AnyNode {
   if (opts.name !== undefined) node.name = opts.name;
 
   // Top-level Figma nodes default to (0,0). Automatically place an unpositioned
   // root to the right of existing page content so a new screen never silently
   // lands underneath the previous screen. Explicit x/y always win.
-  if (!opts.parent && opts.x === undefined && opts.y === undefined) {
+  if (figmaApi && !opts.parent && opts.x === undefined && opts.y === undefined) {
     const page = figmaApi.currentPage;
     let maxX = 0;
     for (const child of page.children ?? []) {
@@ -158,7 +158,7 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
       : kind === "line" ? figmaApi.createLine()
       : kind === "vector" ? figmaApi.createVector()
       : (() => { throw new Error("Unknown FigDes primitive: " + kind); })();
-    return setCommon(node, opts);
+    return setCommon(node, opts, figmaApi);
   };
 
   const frame = (opts: StackOptions = {}): AnyNode => {
@@ -191,7 +191,7 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
     if (opts.autoResize !== undefined) node.textAutoResize = opts.autoResize;
     if (opts.width !== undefined) node.resize(opts.width, Math.max(1, node.height));
     node.characters = opts.text;
-    setCommon(node, { ...opts, width: undefined, height: undefined, parent: undefined });
+    setCommon(node, { ...opts, width: undefined, height: undefined, parent: undefined }, figmaApi);
     return node;
   };
 
@@ -227,7 +227,7 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
     if (!componentNode || componentNode.type !== "COMPONENT") {
       throw new Error("FigDes instance: " + componentId + " is not a local COMPONENT. Resolve the component first.");
     }
-    return setCommon(componentNode.createInstance(), opts);
+    return setCommon(componentNode.createInstance(), opts, figmaApi);
   };
 
   const connect = (

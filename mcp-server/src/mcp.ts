@@ -39,7 +39,7 @@ const INSTRUCTIONS = [
   "   ids instead of guesses. Never assume a node exists.",
   "4. Reuse what is already in the file — components, tokens, layout patterns — before creating new",
   "   structures. Preserve the existing design system unless asked to redesign.",
-  "5. Choose execution mode after Art Direction. Use Semantic Mode (design_runtime/create_design) for",
+  "5. Choose execution mode after Art Direction. Treat plan_screen.execution as the routing signal. If nativeRequired=true, use figdes_use_figma as the primary builder.",
   "   predictable repeated product UI. Use Native Mode (figdes_use_figma) for composition-led screens,",
   "   custom geometry, spatial/topology work, or brand-critical visual design. Use Hybrid Mode when",
   "   reusable semantic components belong inside a custom native composition. Native code must use the",

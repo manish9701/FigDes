@@ -462,6 +462,14 @@ export interface ScreenPlan {
     renderGate: boolean;
     reason: string;
   };
+  /** Native composition contract for the direct Figma Plugin API path. */
+  nativeComposition?: {
+    buildOrder: string[];
+    geometryPolicy: string;
+    visualPrimitives: string[];
+    relationshipPrimitives: string[];
+    structureRequirements: string[];
+  };
   /** Rule ids the plan is likely to trip, with what to do instead. */
   guardPreview: Array<{ rule: string; therefore: string }>;
   /** Composition alternatives worth putting to the user (§38). */

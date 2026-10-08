@@ -481,6 +481,10 @@ export async function runTransaction(input: {
   try {
     const ordered = [...pass1, ...pass2];
     const total = ordered.length;
+    // Pinned once: the first container scrolls the viewport to the build site
+    // while it is still empty, so the user watches regions fill in rather
+    // than staring at a blank area until the final reveal.
+    let pinned = false;
 
     for (let n = 0; n < ordered.length; n++) {
       const op = ordered[n]!;
@@ -488,6 +492,15 @@ export async function runTransaction(input: {
       const note = await apply(ctx, op, index);
       applied.push(`${op.type}${note ? ` ${note}` : ""}`);
       touchRefs(ctx, op);
+
+      if (!pinned && (op.type === "createFrame" || op.type === "createSlide" || op.type === "createComponent")) {
+        pinned = true;
+        // Viewport only, no selection change: a selection would fire
+        // selectionchange and trigger a full panel scan mid-build, while a
+        // bare scroll simply lands the user where the work is happening.
+        // Not awaited — the build must never wait on the viewport.
+        void pinViewport(ctx);
+      }
 
       // Report roughly every 5% (and always the last op) so a 500-op build
       // narrates without flooding the iframe with 500 messages. 10% steps
@@ -502,6 +515,8 @@ export async function runTransaction(input: {
       // until the final commit — the "blank page, then everything pops at
       // once" symptom. Yield every op for small builds; every 4th op for
       // large ones (same repaint cadence, ~4x fewer task switches).
+      // Completed nodes stay on the canvas as they land: nothing here removes
+      // or hides earlier work, so progress is cumulative, not flashing.
       if (total <= 60 || n % 4 === 3 || done === total) {
         await new Promise((resolve) => setTimeout(resolve, 0));
       }
@@ -556,6 +571,32 @@ export async function runTransaction(input: {
     modifiedNodes: [...ctx.modified],
     applied: trace,
   };
+}
+
+/**
+ * Early viewport pin: scrolls to the first container created, without touching
+ * the selection.
+ *
+ * Called once per transaction, right when structure first exists and details
+ * are still landing. The canvas therefore shows the frame appearing and
+ * filling in progressively; completed parts stay visible throughout because
+ * nothing in the loop removes or hides earlier work.
+ */
+async function pinViewport(ctx: Ctx): Promise<void> {
+  try {
+    const entry = ctx.created[ctx.created.length - 1];
+    if (!entry) return;
+    const node = await figma.getNodeByIdAsync(entry.figmaNodeId).catch(() => null);
+    if (!node || node.removed) return;
+    if (node.type === "PAGE" || node.type === "DOCUMENT") return;
+    try {
+      figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+    } catch {
+      /* older API surface: the final reveal still lands the user */
+    }
+  } catch {
+    /* pinning must never fail a build */
+  }
 }
 
 /**

@@ -21,6 +21,7 @@ import type { PlacedBox } from "../../../shared/ir";
 import type { Operation } from "../../../shared/protocol";
 import { parseColor } from "../../../shared/protocol";
 import { scoreDesign } from "./score";
+import { evaluateQualityGate, type QualityGateReport } from "./quality";
 
 export type AestheticVerdict = "PASS" | "WATCH" | "FAIL";
 
@@ -36,6 +37,7 @@ export interface CritiqueReport {
   dimensions: AestheticDimension[];
   /** Dimensions needing attention, worst first. */
   watchList: string[];
+  qualityGate: QualityGateReport;
 }
 
 interface Box {

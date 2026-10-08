@@ -663,6 +663,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     passes,
     artDirection,
     compositionCandidates,
+    visualDirections,
     execution,
     nativeComposition: execution.mode === "semantic" ? undefined : nativeCompositionProfile(decisionKind, composition, artDirection),
     guardPreview,
@@ -737,6 +738,7 @@ function directArt(
     slide: 70,
     stage: 85,
     column: 60,
+    custom: 45,
   };
 
   const kindBoost = (region: PlannedRegion): number => {
@@ -829,6 +831,7 @@ function directArt(
     avoid: compositionAvoid(kind),
     interactionStates,
     designRisks,
+    visualDirections: [],
   };
 }
 

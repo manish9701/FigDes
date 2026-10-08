@@ -337,7 +337,16 @@ function collectFrom(root: BaseNode, opts: ExtractOptions, ctx: CollectCtx, budg
     if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
       bump(ctx.components, node.name, node.type);
     } else if (node.type === "INSTANCE") {
-      bump(ctx.components, (node as InstanceNode).mainComponent?.name ?? node.name, "INSTANCE");
+      // Sync `.mainComponent` throws under documentAccess: dynamic-page, which
+      // fails the whole inspect_design_system call. The label is best-effort,
+      // so fall back to the instance name instead of going async here.
+      let label = node.name;
+      try {
+        label = (node as InstanceNode).mainComponent?.name ?? node.name;
+      } catch {
+        /* dynamic-page: keep the instance name */
+      }
+      bump(ctx.components, label, "INSTANCE");
     }
 
     if ("children" in node && node.children) {

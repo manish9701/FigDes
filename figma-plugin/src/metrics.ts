@@ -220,7 +220,13 @@ function measure(node: BaseNode, depth: number): NodeMetrics {
 
   /* component info */
   if (node.type === "INSTANCE") {
-    m.instanceOf = (node as InstanceNode).mainComponent?.name ?? null;
+    // Sync `.mainComponent` throws under documentAccess: dynamic-page.
+    // Guard it so one instance never fails the whole metrics/review call.
+    try {
+      m.instanceOf = (node as InstanceNode).mainComponent?.name ?? null;
+    } catch {
+      m.instanceOf = null;
+    }
   }
   if (node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
     m.componentKey = (node as ComponentNode).key ?? null;

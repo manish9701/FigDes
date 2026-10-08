@@ -7,9 +7,9 @@
   "editorType": ["figma", "slides"],
   "documentAccess": "dynamic-page",
   "networkAccess": {
-    "allowedDomains": ["https://figdes.onrender.com", "wss://figdes.onrender.com"],
+    "allowedDomains": ["https://figdes.onrender.com", "wss://figdes.onrender.com", "https://*.trycloudflare.com", "wss://*.trycloudflare.com", "https://*.ts.net", "wss://*.ts.net", "https://*.ngrok-free.dev", "wss://*.ngrok-free.dev", "https://*.ngrok.io", "wss://*.ngrok.io"],
     "devAllowedDomains": ["http://localhost:8787", "ws://localhost:8787"],
-    "reasoning": "The plugin iframe opens a WebSocket to the hosted Design Agent server at https://figdes.onrender.com (production) or http://localhost:8787 (local dev), to receive schema-validated design operations and return Figma document state."
+    "reasoning": "The plugin iframe opens a WebSocket to the hosted Design Agent server at https://figdes.onrender.com (production), a tunnel URL for local dev (trycloudflare / tailscale / ngrok), or http://localhost:8787 (local dev), to receive schema-validated design operations and return Figma document state."
   },
   "permissions": []
 }

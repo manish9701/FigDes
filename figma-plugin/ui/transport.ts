@@ -86,6 +86,7 @@ export function timeoutForTool(tool: string): number {
     case "modify_design":
     case "update_component":
     case "native_design":
+    case "execute_figma_script":
       return LONG_BUILD_TIMEOUT_MS;
     case "render_node":
       return 120000;

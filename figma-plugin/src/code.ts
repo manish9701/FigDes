@@ -23,6 +23,7 @@ import {
 } from "../../shared/protocol";
 import { undoLastOperation, runTransaction, type UndoResult } from "./operations";
 import { executeNativeCall } from "./native/index";
+import { executeFigmaScript } from "./native/script";
 import { countByType, DEFAULT_INSPECT, inspectNodes, inspectTopLevelFrames, listPages } from "./inspector";
 import { allPages } from "./cache";
 import { DEFAULT_EXTRACT, extractDesignSystem as extract } from "./design-system";
@@ -230,6 +231,9 @@ async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> 
 
     case "native_design":
       return executeNativeCall(payload);
+
+    case "execute_figma_script":
+      return executeFigmaScript(payload);
 
     case "undo_last_operation":
       return undoLastOperation();

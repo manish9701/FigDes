@@ -1141,6 +1141,7 @@ export const PLUGIN_TOOL_NAMES = [
   "create_design",
   "modify_design",
   "native_design",
+  "execute_figma_script",
   "undo_last_operation",
 ] as const;
 

@@ -120,9 +120,14 @@ export function critiqueVisual(input: {
       ? "WATCH"
       : "PASS";
 
+  const qualityGate = evaluateQualityGate({ verdict, dimensions }, {
+    compositionLed: ["topology", "spatial", "diagram", "instrument"].includes(input.composition),
+  });
+
   return {
     verdict,
     dimensions,
+    qualityGate,
     watchList: dimensions
       .filter((d) => d.verdict !== "PASS")
       .sort((a, b) => order[a.verdict] - order[b.verdict])

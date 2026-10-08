@@ -724,17 +724,51 @@ function directArt(
     return b ? Math.max(0, b.w) * Math.max(0, b.h) : 0;
   };
 
-  const heroes = regions.filter((r) => r.role === "hero" || r.role === "primary-visual");
-  const focalRegion = heroes.length > 0 ? heroes.sort((a, b) => area(b.id) - area(a.id))[0]! : [...regions].sort((a, b) => area(b.id) - area(a.id))[0];
+  const roleWeight: Record<PlannedRegion["role"], number> = {
+    "primary-visual": 100,
+    hero: 100,
+    content: 72,
+    secondary: 55,
+    inspector: 34,
+    "status-rail": 28,
+    header: 22,
+    navigation: 12,
+    footer: 10,
+    slide: 70,
+    stage: 85,
+    column: 60,
+  };
+
+  const kindBoost = (region: PlannedRegion): number => {
+    if (kind === "topology" && region.id === "map") return 35;
+    if (kind === "monitor" && region.id === "primary-visual") return 30;
+    if ((kind === "select" || kind === "compare") && (region.id === "content" || region.id === "table")) return 25;
+    if (kind === "inspect" && region.id === "subject") return 30;
+    if (kind === "configure" && region.id === "preview") return 25;
+    return 0;
+  };
+
+  const nonChrome = regions.filter((r) => !["navigation", "header", "footer", "status-rail"].includes(r.role));
+  const focalRegion = [...nonChrome].sort((a, b) => {
+    const aScore = roleWeight[a.role] + kindBoost(a) + Math.min(40, area(a.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    const bScore = roleWeight[b.role] + kindBoost(b) + Math.min(40, area(b.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    return bScore - aScore;
+  })[0];
 
   const focal = focalRegion
     ? {
         id: focalRegion.id,
-        why: heroes.length > 0 ? `'${focalRegion.id}' is the hero surface and the largest of its kind.` : `'${focalRegion.id}' is simply the largest surface; consider whether one region should be promoted to hero.`,
+        why: kindBoost(focalRegion) > 0
+          ? `'${focalRegion.id}' is the semantic focal for the ${kind} decision; geometry supports the role rather than defining it.`
+          : `'${focalRegion.id}' has the strongest visual role and enough area to carry the first read.`,
       }
     : null;
 
-  const ordered = [...regions].sort((a, b) => area(b.id) - area(a.id));
+  const ordered = [...regions].sort((a, b) => {
+    const aScore = roleWeight[a.role] + kindBoost(a) + Math.min(40, area(a.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    const bScore = roleWeight[b.role] + kindBoost(b) + Math.min(40, area(b.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    return bScore - aScore;
+  });
   const roleRank = (role: PlannedRegion["role"]): string => {
     if (role === "hero" || role === "primary-visual") return "primary surface";
     if (role === "content" || role === "secondary") return "supporting surface";

@@ -114,15 +114,104 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
       violations: result.violations,
       visionMerge: args.visionCriticObservations || null
     };
-  } else {
-    // If we only have a native nodeId, we rely heavily on the vision critic observations
-    // combined with the visual rules.
-    return {
-      status: "ok",
-      verdict: args.visionCriticObservations?.templateFeel?.includes("FAIL") ? "FAIL" : "WATCH",
-      visionMerge: args.visionCriticObservations || null,
-      message: "Merged vision critique with structural analysis."
+  } else if (args.nodeId) {
+    if (!registry) throw new Error("critique_visual(nodeId) needs a connected Figma plugin.");
+    const session = registry.resolve(args.sessionId);
+
+    const [raw, rendered] = await Promise.all([
+      session.request("collect_metrics", { target: args.nodeId, maxNodes: 3000, depth: 20 }),
+      session.request("render_node", { nodeId: args.nodeId, maxWidth: 1024, detail: "low" }, 120_000),
+    ]);
+
+    const report = raw as MetricsReport;
+    if (!report || !Array.isArray(report.nodes) || report.nodes.length === 0) {
+      throw new Error("critique_visual could not measure the live node. Inspect the node and retry.");
+    }
+
+    // Project live Figma measurements into the same deterministic aesthetic critic
+    // used for programs. This closes the old gap where native screens always got
+    // a generic WATCH regardless of their actual structure.
+    const nodes = report.nodes.filter((n) => n.visible && n.w > 0 && n.h > 0);
+    const root = nodes[0] ?? report.nodes[0]!;
+    const boxes = new Map(nodes.map((n) => [n.id, { id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }]));
+    const topLevel = nodes.filter((n) => n.parentId === root.parentId || n.depth === 1);
+    const focal = [...topLevel]
+      .filter((n) => n.type !== "TEXT")
+      .sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
+    const regions = topLevel.map((n) => ({
+      id: n.id,
+      role: n.id === focal?.id ? "primary-visual" : n.type === "TEXT" ? "secondary" : "content",
+    }));
+
+    const operations = nodes.map((n) => ({
+      type: n.type === "TEXT" ? "createText" : n.type === "VECTOR" ? "createVector" : "createFrame",
+      id: n.id,
+      parent: n.parentId ?? undefined,
+      width: n.w,
+      height: n.h,
+      fill: n.fill,
+      stroke: n.stroke?.hex,
+      strokeWeight: n.stroke?.weight,
+      cornerRadius: n.radius,
+      family: n.text?.family,
+      fontSize: n.text?.size ?? undefined,
+      content: n.text?.content ?? undefined,
+    })) as never;
+
+    const visual = critiqueVisual({
+      boxes,
+      operations,
+      regions,
+      composition: "native-live",
+      canvasW: root.w,
+      canvasH: root.h,
+      ...(focal ? { focal: focal.id } : {}),
+    });
+
+    const observation = args.visionCriticObservations;
+    const observationFail =
+      !!observation &&
+      Object.values(observation).some((value) => /fail|bad|weak|poor|generic|wrong|broken/i.test(value));
+    const qualityGate = {
+      ...visual.qualityGate,
+      status: observationFail ? "FAIL" : observation ? visual.qualityGate.status : "REVIEW",
+      renderRequired: !observation,
+      reason: observation
+        ? visual.qualityGate.reason
+        : "Native output has been structurally critiqued and rendered. Make the visual judgement from the screenshot, then re-run critique_visual with visionCriticObservations.",
     };
+
+    const content: Array<Record<string, unknown>> = [{
+      type: "text",
+      text: JSON.stringify({
+        status: "ok",
+        verdict: observationFail ? "FAIL" : visual.verdict,
+        qualityGate,
+        dimensions: visual.dimensions,
+        watchList: visual.watchList,
+        liveEvidence: {
+          nodes: report.nodeCount,
+          truncated: report.truncated,
+          components: report.nodes.filter((n) => n.type === "INSTANCE").length,
+          textLayers: report.nodes.filter((n) => n.type === "TEXT").length,
+          roundedSurfaces: report.nodes.filter((n) => (n.radius ?? 0) > 0).length,
+          filledSurfaces: report.nodes.filter((n) => Boolean(n.fill)).length,
+        },
+        visionMerge: observation || null,
+        nextStep: observation
+          ? "Apply only high-confidence structural fixes, then render again after a material visual change."
+          : "Judge the screenshot for focal clarity, hierarchy, rhythm, density, balance and template feel; provide concise observations and run critique_visual again.",
+      }, null, 2),
+    }];
+
+    const image = rendered as { data?: string; width?: number; height?: number };
+    if (image?.data) {
+      content.push({ type: "image", data: image.data, mimeType: "image/png" });
+    }
+
+    return { content };
+  } else {
+    throw new Error("critique_visual needs either program or nodeId.");
   }
 }
 

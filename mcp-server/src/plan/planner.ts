@@ -454,6 +454,8 @@ export interface ScreenPlan {
   artDirection: ArtDirection;
   /** Compositions worth comparing, recommended first (FigDes §6). */
   compositionCandidates: Array<{ composition: Composition; recommended: boolean; why: string }>;
+  /** Genuinely different visual directions. These are art-direction options, not three names for the same dashboard shell. */
+  visualDirections: Array<{ id: string; name: string; principle: string; geometry: string; surface: string; density: string; trade: string }>;
   /** Execution guidance derived from the composition, not tool convenience. */
   execution: {
     mode: "native" | "hybrid" | "semantic";
@@ -517,6 +519,8 @@ export interface ArtDirection {
   interactionStates: string[];
   /** What could still go wrong, cheapest to hear now. */
   designRisks: string[];
+  /** Three concrete visual directions to prevent the builder from collapsing into one template. */
+  visualDirections: Array<{ id: string; name: string; principle: string; geometry: string; surface: string; density: string; trade: string }>;
 }
 
 /**
@@ -590,6 +594,8 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   const passes = planPasses(intent, regions, composition);
 
   const artDirection = directArt(intent, decisionKind, boxes, regions, guardPreview, warnings);
+  const visualDirections = buildVisualDirections(decisionKind, composition, artDirection.focal?.id ?? null);
+  artDirection.visualDirections = visualDirections;
   const execution = executionProfile(decisionKind, composition);
 
   // The program carries visualIntent (focal + weights) that the runtime turns
@@ -657,6 +663,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     passes,
     artDirection,
     compositionCandidates,
+    visualDirections,
     execution,
     nativeComposition: execution.mode === "semantic" ? undefined : nativeCompositionProfile(decisionKind, composition, artDirection),
     guardPreview,
@@ -718,17 +725,52 @@ function directArt(
     return b ? Math.max(0, b.w) * Math.max(0, b.h) : 0;
   };
 
-  const heroes = regions.filter((r) => r.role === "hero" || r.role === "primary-visual");
-  const focalRegion = heroes.length > 0 ? heroes.sort((a, b) => area(b.id) - area(a.id))[0]! : [...regions].sort((a, b) => area(b.id) - area(a.id))[0];
+  const roleWeight: Record<PlannedRegion["role"], number> = {
+    "primary-visual": 100,
+    hero: 100,
+    content: 72,
+    secondary: 55,
+    inspector: 34,
+    "status-rail": 28,
+    header: 22,
+    navigation: 12,
+    footer: 10,
+    slide: 70,
+    stage: 85,
+    column: 60,
+    custom: 45,
+  };
+
+  const kindBoost = (region: PlannedRegion): number => {
+    if (kind === "topology" && region.id === "map") return 35;
+    if (kind === "monitor" && region.id === "primary-visual") return 30;
+    if ((kind === "select" || kind === "compare") && (region.id === "content" || region.id === "table")) return 25;
+    if (kind === "inspect" && region.id === "subject") return 30;
+    if (kind === "configure" && region.id === "preview") return 25;
+    return 0;
+  };
+
+  const nonChrome = regions.filter((r) => !["navigation", "header", "footer", "status-rail"].includes(r.role));
+  const focalRegion = [...nonChrome].sort((a, b) => {
+    const aScore = roleWeight[a.role] + kindBoost(a) + Math.min(40, area(a.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    const bScore = roleWeight[b.role] + kindBoost(b) + Math.min(40, area(b.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    return bScore - aScore;
+  })[0];
 
   const focal = focalRegion
     ? {
         id: focalRegion.id,
-        why: heroes.length > 0 ? `'${focalRegion.id}' is the hero surface and the largest of its kind.` : `'${focalRegion.id}' is simply the largest surface; consider whether one region should be promoted to hero.`,
+        why: kindBoost(focalRegion) > 0
+          ? `'${focalRegion.id}' is the semantic focal for the ${kind} decision; geometry supports the role rather than defining it.`
+          : `'${focalRegion.id}' has the strongest visual role and enough area to carry the first read.`,
       }
     : null;
 
-  const ordered = [...regions].sort((a, b) => area(b.id) - area(a.id));
+  const ordered = [...regions].sort((a, b) => {
+    const aScore = roleWeight[a.role] + kindBoost(a) + Math.min(40, area(a.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    const bScore = roleWeight[b.role] + kindBoost(b) + Math.min(40, area(b.id) / Math.max(1, intent.canvas?.width ?? 1440) / Math.max(1, intent.canvas?.height ?? 900) * 100);
+    return bScore - aScore;
+  });
   const roleRank = (role: PlannedRegion["role"]): string => {
     if (role === "hero" || role === "primary-visual") return "primary surface";
     if (role === "content" || role === "secondary") return "supporting surface";
@@ -789,10 +831,67 @@ function directArt(
     avoid: compositionAvoid(kind),
     interactionStates,
     designRisks,
+    visualDirections: [],
   };
 }
 
 
+function buildVisualDirections(
+  kind: DecisionKind,
+  composition: Composition,
+  focal: string | null,
+): Array<{ id: string; name: string; principle: string; geometry: string; surface: string; density: string; trade: string }> {
+  const focalLabel = focal ?? "the primary surface";
+  const base = {
+    spatial: {
+      id: "spatial-field", name: "Spatial field",
+      principle: "Let the primary object and its relationships carry the screen; chrome disappears into the edges.",
+      geometry: "One dominant field, deliberate asymmetry, native vectors/lines for relationships, large negative space.",
+      surface: "Mostly open canvas with one or two grounded surfaces; avoid enclosing every object.",
+      density: "Low-to-medium; density is concentrated around the focal object.",
+      trade: "Most distinctive and memorable, but requires stronger spatial placement and relationship design.",
+    },
+    editorial: {
+      id: "editorial-focus", name: "Editorial focus",
+      principle: "Use scale, typography and whitespace to make the decision obvious before the controls.",
+      geometry: "Oversized focal region with offset supporting context; no equal-width panel grid.",
+      surface: "Quiet canvas, restrained surfaces, typography doing more hierarchy work than borders.",
+      density: "Low; supporting information is compressed into a few intentional clusters.",
+      trade: "Calmest and most premium, but sacrifices raw information density.",
+    },
+    instrument: {
+      id: "technical-instrument", name: "Technical instrument",
+      principle: "Treat data as an instrument with traces, states and relationships rather than KPI cards.",
+      geometry: "Continuous primary surface, aligned readouts, rails and traces; use grids only where measurement benefits.",
+      surface: "Layered canvas/surface hierarchy with technical dividers and restrained state accents.",
+      density: "Medium-to-high, but structured into continuous fields instead of card stacks.",
+      trade: "Best for operators and developers; visually richer, but easier to over-densify.",
+    },
+  };
+  // Tailor the three directions to the decision instead of returning three generic templates.
+  if (kind === "topology") {
+    base.spatial.principle = "The network itself is the hero; use clusters, distance and edge paths to reveal weak links.";
+    base.editorial.principle = "A calm topology with one highlighted path or weak link, supported by a compact narrative rail.";
+    base.instrument.principle = "A live network instrument where health, latency and flow are encoded into nodes and edges.";
+  } else if (kind === "select" || kind === "compare") {
+    base.spatial.principle = "Place options in a meaningful field so relative fit is visible before opening detail.";
+    base.editorial.principle = "Make the recommended option visually dominant and let comparison evidence stay subordinate.";
+    base.instrument.principle = "Use aligned comparison traces/rows with one clear verdict column rather than option cards.";
+  } else if (kind === "configure") {
+    base.spatial.principle = "Keep the configured object visible as a real object; controls orbit it rather than replacing it.";
+    base.editorial.principle = "Make the consequence of the configuration the visual headline, with a quiet control column.";
+    base.instrument.principle = "Expose configuration as a technical control surface with live feedback and clear commit state.";
+  } else if (kind === "monitor") {
+    base.spatial.principle = "Use one continuous signal field with spatial annotations rather than a dashboard of readouts.";
+    base.editorial.principle = "Make the current state and one meaningful trend the story; compress secondary telemetry.";
+    base.instrument.principle = "Build a real instrument: traces, event stream, state markers and one intervention point.";
+  } else if (kind === "inspect") {
+    base.spatial.principle = "Give the subject a physical or system-like presence and let context orbit the object.";
+    base.editorial.principle = "Treat the subject as an editorial hero with a small amount of high-value evidence.";
+    base.instrument.principle = "Treat the subject as a live technical object with diagnostic layers and state evidence.";
+  }
+  return Object.values(base).map((d) => ({ ...d, principle: d.principle + " Focal: " + focalLabel + "." }));
+}
 function compositionPrinciples(kind: DecisionKind): string[] {
   const map: Record<DecisionKind, string[]> = {
     select: ["Make one option visually selected; use alignment for comparison, not containers.", "Keep the inspector subordinate to the option field."],

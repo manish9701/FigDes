@@ -24,12 +24,9 @@ import { randomUUID } from "node:crypto";
 import { type Session } from "../sessions";
 import { withSessionLock } from "./lock";
 
-const MAX_SCRIPT_SIZE = 120_000;
-const MAX_RPC_CALLS = 1_000;
-/** Hard wall-clock budget for the whole script, including awaited RPCs. */
-const DEFAULT_SCRIPT_TIMEOUT_MS = 30_000;
-/** Per-RPC cap; never longer than what remains of the script budget. */
-const RPC_TIMEOUT_MS = 20_000;
+const MAX_SCRIPT_SIZE = 160_000;
+/** Native builds can legitimately take minutes when fonts, components and many nodes are involved. */
+const DEFAULT_SCRIPT_TIMEOUT_MS = 300_000;
 
 /**
  * The script budget. Overridable so tests can prove the timeout path without
@@ -41,11 +38,6 @@ function scriptTimeoutMs(): number {
 }
 
 /** The RPC budget, also overridable for tests. */
-function maxRpcCalls(): number {
-  const raw = Number(process.env.DESIGN_AGENT_NATIVE_MAX_RPC);
-  return Number.isFinite(raw) && raw > 0 ? raw : MAX_RPC_CALLS;
-}
-
 export const UseFigmaArgs = z
   .object({
     sessionId: z.string().max(200).optional(),
@@ -53,7 +45,7 @@ export const UseFigmaArgs = z
       .string()
       .max(MAX_SCRIPT_SIZE)
       .describe(
-        "JavaScript executed in the Figma plugin main thread with the real Figma Plugin API. The `figma` global is available, along with Math, JSON, Date and console. Use native Figma objects directly: createFrame/createAutoLayout/createComponent/createVector/createBooleanOperation, auto-layout properties, variables, styles, components and instances, node transforms, and viewport APIs. Prefer native layout relationships over hand-written coordinates. Keep construction scripts render-free; use render_design after checkpoints. For a full screen, build incrementally: composition first, then information, then refinement and states.",
+        "JavaScript executed in the Figma plugin main thread. The real `figma` Plugin API is available, plus the high-level `figdes` native composition builder. Prefer `figdes.stack/frame/text/rect/ellipse/vector/connect/instance` for construction because it handles font loading, auto-layout ordering and native geometry; use raw `figma.*` when the builder is insufficient. Build composition first, then information, refinement and states. Always return created/mutated node IDs (prefer `{rootId, createdNodeIds, mutatedNodeIds}`). Avoid hand-written x/y for relationships that belong in auto-layout. Use renderAfter for composition-led screens.",
       ),
     /**
      * Read-only inspection scripts skip the session lock and the native
@@ -62,6 +54,11 @@ export const UseFigmaArgs = z
      * than landing it unprotected.
      */
     readonly: z.boolean().optional().describe("Inspection only: skip the lock and transaction so reads run concurrently. Mutations are refused."),
+    timeoutMs: z.number().int().min(5000).max(300000).optional().describe("Execution watchdog in milliseconds. Default 300000. The plugin waits for an in-flight script to settle before rollback, so timeout never causes a late mutation after rollback."),
+    renderAfter: z.enum(["none", "first-created", "explicit"]).optional().default("none").describe("Render one result after a successful mutating script. Use first-created when the script returns createdNodeIds/rootId; use explicit with renderNodeId."),
+    renderNodeId: z.string().max(200).optional().describe("Node id to render when renderAfter=explicit."),
+    renderMaxWidth: z.number().int().min(256).max(2048).optional().default(1024),
+    renderDetail: z.enum(["low", "high"]).optional().default("low"),
   })
   .strict();
 
@@ -128,31 +125,70 @@ function message(err: unknown): string {
 
 type FigmaScriptResult = Record<string, unknown>;
 
+function firstString(values: unknown[]): string | undefined {
+  return values.find((v): v is string => typeof v === "string" && v.length > 0);
+}
+
+function candidateRenderNode(result: FigmaScriptResult): string | undefined {
+  const root = result.result;
+  if (root && typeof root === "object") {
+    const r = root as Record<string, unknown>;
+    if (typeof r.rootId === "string") return r.rootId;
+    if (Array.isArray(r.createdNodeIds)) return firstString(r.createdNodeIds);
+    if (Array.isArray(r.affectedNodeIds)) return firstString(r.affectedNodeIds);
+  }
+  if (Array.isArray(result.createdNodeIds)) return firstString(result.createdNodeIds);
+  return undefined;
+}
+
 /** Execute model-authored JavaScript against the real Figma Plugin API in the plugin main thread. */
-async function runNativeScript(session: Session, script: string, opts: { readonly?: boolean } = {}): Promise<FigmaScriptResult> {
+async function runNativeScript(session: Session, script: string, opts: { readonly?: boolean; timeoutMs?: number } = {}): Promise<FigmaScriptResult> {
   const readonlyMode = opts.readonly === true;
-  const transactionId = `ntx_${randomUUID()}`;
+  const transactionId = "ntx_" + randomUUID();
   const startedAt = Date.now();
-  const budgetMs = scriptTimeoutMs();
+  const budgetMs = opts.timeoutMs ?? scriptTimeoutMs();
   try {
-    const result = await session.request("execute_figma_script", { script, transactionId, readonly: readonlyMode }, budgetMs);
+    const result = await session.request("execute_figma_script", { script, transactionId, readonly: readonlyMode, timeoutMs: budgetMs }, budgetMs + 5_000);
     if (result && typeof result === "object") return { ...(result as Record<string, unknown>), transactionId, durationMs: Date.now() - startedAt };
     return { status: "success", transactionId, result, durationMs: Date.now() - startedAt };
   } catch (err) {
-    return { status: "failed", transactionId, durationMs: Date.now() - startedAt, error: { code: "FIGMA_SCRIPT_ERROR", message: message(err), recovery: "Inspect the Figma error, fix the script, and retry. Do not repeat the unchanged script." } };
+    return { status: "failed", transactionId, durationMs: Date.now() - startedAt, error: { code: "FIGMA_SCRIPT_ERROR", message: message(err), recovery: "Inspect the error, fix the script, and retry. Do not repeat an unchanged script." } };
+  }
+}
+
+async function renderNativeResult(
+  session: Session,
+  result: FigmaScriptResult,
+  mode: "none" | "first-created" | "explicit",
+  explicitNodeId: string | undefined,
+  maxWidth: number,
+  detail: "low" | "high",
+): Promise<unknown> {
+  if (mode === "none") return result;
+  const nodeId = mode === "explicit" ? explicitNodeId : candidateRenderNode(result);
+  if (!nodeId) return { ...result, renderStatus: "not-rendered", renderError: "No render target returned. Return rootId or createdNodeIds, or pass renderNodeId." };
+  try {
+    const render = (await session.request("render_node", { nodeId, maxWidth, detail }, 120_000)) as { data?: string; width?: number; height?: number; estimatedTokens?: number };
+    if (!render?.data) return { ...result, renderStatus: "failed", renderError: "render_node returned no image data.", renderTarget: nodeId };
+    return {
+      content: [
+        { type: "text", text: JSON.stringify({ ...result, renderStatus: "ok", renderTarget: nodeId, imageSize: { width: render.width, height: render.height }, estimatedImageTokens: render.estimatedTokens }, null, 2) },
+        { type: "image", data: render.data, mimeType: "image/png" },
+      ],
+    };
+  } catch (err) {
+    return { ...result, renderStatus: "failed", renderError: message(err), renderTarget: nodeId };
   }
 }
 
 export async function figdesUseFigmaHandler(session: Session, args: unknown): Promise<unknown> {
   const parsed = UseFigmaArgs.parse(args ?? {});
-  if (parsed.readonly === true) {
-    // Inspection runs free: no lock, no transaction, nothing to roll back.
-    return runNativeScript(session, parsed.script, { readonly: true });
-  }
-  // Serialized per session: two mutating scripts must never interleave transactions.
-  return withSessionLock(session.id, () => runNativeScript(session, parsed.script));
+  const timeoutMs = parsed.timeoutMs ?? scriptTimeoutMs();
+  if (parsed.readonly === true) return runNativeScript(session, parsed.script, { readonly: true, timeoutMs });
+  const result = await withSessionLock(session.id, () => runNativeScript(session, parsed.script, { timeoutMs }));
+  if (result.status === "failed") return result;
+  return renderNativeResult(session, result, parsed.renderAfter ?? "none", parsed.renderNodeId, parsed.renderMaxWidth ?? 1024, parsed.renderDetail ?? "low");
 }
-
 /* -------------------------------------------------------------------------- */
 /* Visual inspection                                                           */
 /* -------------------------------------------------------------------------- */

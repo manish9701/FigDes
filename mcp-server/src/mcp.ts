@@ -70,7 +70,7 @@ const INSTRUCTIONS = [
   "    product truths (devices auto-discover, placement is automatic, chat is not primary, no generic",
   "    SaaS card walls) and returns PASS / WARNING / FAIL with measured evidence. Pass the program",
   "    to check before building, or inspect:true to check what is in the file. Fix every FAIL.",
-  "    Score with score_design too: a weak spot below 6 is a fix list. Refine with refine_screen,",
+  "    Then call critique_visual on the rendered/program result. Its qualityGate is authoritative for visual completion: FAIL means repair, REVIEW means do not call it done yet, and PASS is required for composition-led work.\n" +\n  "    Score with score_design too: a weak spot below 6 is a fix list. Refine with refine_screen,",
   "    which runs the review-fix loop to convergence - you judge the renders, it does the mechanics.",
   "",
   "Build in passes, and honour each pass's 'hold' list:",

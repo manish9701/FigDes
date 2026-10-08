@@ -1151,9 +1151,9 @@ inputSchema: CompileArgs,
 
   {
     name: "figdes_use_figma",
-    title: "Native Execution Tool",
+    title: "Native Composition Execution",
     description:
-      "Execute controlled JavaScript against the FigDes native design API. Supports node inspection and querying, native node creation/modification, typography, fills, strokes and effects, vectors and custom paths, auto-layout and constraints, components and instances, variants, variables and styles, cloning/grouping/reordering, geometry inspection, and transactional execution. Every call is validated against a strict action schema and runs inside one rollback-safe transaction with a hard time budget that covers async work; a per-session lock stops two native scripts from interleaving. All fig.* calls are asynchronous and must be awaited. Does not expose the raw global Figma API.",
+      "Execute JavaScript directly in the Figma Plugin API context. This is the primary builder for composition-led screens. The script receives the real figma API plus a high-level figdes builder (stack/frame/text/rect/ellipse/vector/connect/instance) that handles font loading, auto-layout ordering, sizing and native geometry. Prefer figdes for construction and raw figma for advanced API work. Return rootId/createdNodeIds/mutatedNodeIds. Optional renderAfter='first-created' or 'explicit' turns the same call into a build + visual evidence checkpoint. Native writes are transactional and serialized per session; timeout is an execution watchdog that waits for an in-flight script to settle before rollback, preventing late mutations.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
       const parsed = UseFigmaArgs.parse(args ?? {});

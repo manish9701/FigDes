@@ -9,6 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { contrastRatio, relativeLuminance, requiredRatio, parseHex } from "../mcp-server/dist-test/review/contrast.js";
 import { runRules, summarise, inferBase, validated } from "../mcp-server/dist-test/review/rules.js";
+import { evaluateQualityGate } from "../mcp-server/dist-test/review/quality.js";
 
 /* -------------------------------------------------------------------------- */
 /* Fixtures                                                                     */
@@ -581,4 +582,53 @@ test("button variants inside a component set are not screen buttons", () => {
     kids.push(node({ id: `3:${i}`, parentId: "0:9", type: "COMPONENT", name: `Button variant ${i}` }));
   }
   assert.equal(find(runRules(metrics([set, ...kids]), "review"), "button-overload").length, 0);
+});
+
+
+/* -------------------------------------------------------------------------- */
+/* Professional visual quality gate                                           */
+
+function critiqueFixture(over = {}) {
+  const dimensions = [
+    { dimension: "Focal clarity", verdict: "PASS", evidence: "one clear focal" },
+    { dimension: "Hierarchy", verdict: "PASS", evidence: "clear type hierarchy" },
+    { dimension: "Composition", verdict: "PASS", evidence: "resolved composition" },
+    { dimension: "Card-wall tendency", verdict: "PASS", evidence: "no card wall" },
+    { dimension: "Template feel", verdict: "PASS", evidence: "no template markers" },
+    ...over.dimensions ?? [],
+  ];
+  return { verdict: over.verdict ?? "PASS", dimensions };
+}
+
+test("quality gate requires a render for composition-led work", () => {
+  const gate = evaluateQualityGate(critiqueFixture(), { compositionLed: true, renderReviewed: false });
+  assert.equal(gate.status, "REVIEW");
+  assert.equal(gate.renderRequired, true);
+});
+
+test("quality gate blocks card-wall and template warnings on composition-led screens", () => {
+  const gate = evaluateQualityGate(critiqueFixture({ dimensions: [
+    { dimension: "Card-wall tendency", verdict: "WATCH", evidence: "4 bordered surfaces cover 55%", suggestion: "Convert the cluster into a visual field." },
+  ] }), { compositionLed: true, renderReviewed: true });
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.blockingIssues[0], /Card-wall tendency/);
+});
+
+test("quality gate allows a watch item on information-led work without pretending it passed", () => {
+  const gate = evaluateQualityGate(critiqueFixture({
+    verdict: "WATCH",
+    dimensions: [{ dimension: "Depth", verdict: "WATCH", evidence: "flat surface" }],
+  }), { compositionLed: false, renderReviewed: true });
+  assert.equal(gate.status, "REVIEW");
+  assert.equal(gate.renderRequired, false);
+  assert.equal(gate.repairPlan.length, 1);
+});
+
+test("quality gate fails any hard FAIL regardless of composition mode", () => {
+  const gate = evaluateQualityGate(critiqueFixture({
+    verdict: "FAIL",
+    dimensions: [{ dimension: "Composition", verdict: "FAIL", evidence: "no focal region" }],
+  }), { compositionLed: false, renderReviewed: true });
+  assert.equal(gate.status, "FAIL");
+  assert.match(gate.blockingIssues[0], /Composition/);
 });

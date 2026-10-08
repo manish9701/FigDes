@@ -822,6 +822,36 @@ function compositionAvoid(kind: DecisionKind): string[] {
   return map[kind];
 }
 
+function nativeCompositionProfile(kind: DecisionKind, composition: Composition, artDirection: ArtDirection): ScreenPlan["nativeComposition"] {
+  const spatial = composition === "topology" || composition === "spatial" || composition === "diagram";
+  const monitoring = kind === "topology" || kind === "monitor" || kind === "inspect";
+  if (spatial || monitoring) {
+    return {
+      buildOrder: ["canvas-and-focal", "primary-relationships", "supporting-context", "controls-and-states", "polish"],
+      geometryPolicy: "Prefer native Figma geometry. Use auto-layout for structural containers, absolute positioning only for deliberate spatial relationships, and vectors/connectors for relationships. Never turn the composition into equal-weight cards.",
+      visualPrimitives: ["frames", "auto-layout", "vectors", "lines", "ellipses", "text", "components", "instances"],
+      relationshipPrimitives: ["position", "connector paths", "strokes", "grouping", "selection state", "spatial proximity"],
+      structureRequirements: [
+        "Keep the focal region '" + (artDirection.focal?.id ?? "primary visual") + "' visually dominant.",
+        "Relationships must remain legible without reading every label.",
+        "Name every major node semantically; never leave default layer names.",
+        "Do not use repeated metric cards as the primary composition.",
+      ],
+    };
+  }
+  return {
+    buildOrder: ["composition", "semantic-content", "controls-and-states", "polish"],
+    geometryPolicy: "Use native auto-layout for structural hierarchy and native components for repeated UI. Avoid absolute coordinates except for deliberate visual relationships.",
+    visualPrimitives: ["frames", "auto-layout", "text", "components", "instances", "vectors"],
+    relationshipPrimitives: ["auto-layout", "spacing", "alignment", "grouping"],
+    structureRequirements: [
+      "Preserve the focal hierarchy led by '" + (artDirection.focal?.id ?? "primary content") + "'.",
+      "Use real components for repeated UI.",
+      "Avoid equal-weight card grids unless comparison is the actual decision.",
+    ],
+  };
+}
+
 function executionProfile(kind: DecisionKind, composition: Composition): ScreenPlan["execution"] {
   const nativeKinds = new Set<DecisionKind>(["topology", "monitor", "inspect"]);
   const hybridKinds = new Set<DecisionKind>(["compare", "select", "configure", "author"]);

@@ -658,6 +658,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     artDirection,
     compositionCandidates,
     execution,
+    nativeComposition: execution.mode === "semantic" ? undefined : nativeCompositionProfile(decisionKind, composition, artDirection),
     guardPreview,
     alternatives,
     warnings,

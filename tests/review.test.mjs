@@ -595,7 +595,7 @@ function critiqueFixture(over = {}) {
     { dimension: "Composition", verdict: "PASS", evidence: "resolved composition" },
     { dimension: "Card-wall tendency", verdict: "PASS", evidence: "no card wall" },
     { dimension: "Template feel", verdict: "PASS", evidence: "no template markers" },
-    ...over.dimensions ?? [],
+    ...(over.dimensions ?? []),
   ];
   return { verdict: over.verdict ?? "PASS", dimensions };
 }

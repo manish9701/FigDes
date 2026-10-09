@@ -128,7 +128,7 @@ Exit gate: slides are traceable to sources and approved designs; no unsupported 
 
 | ID | Screen | Primary question | Status | Figma frame/link | Next action | Approved? |
 |---|---|---|---|---|---|---|
-| S01 | Home / AI computer overview | Is my AI computer ready, and what can I do next? | NEXT | Add after review | Explore Compute Field, System Brief, Compute Instrument; inspect existing screen first | No |
+| S01 | Home / AI computer overview | Is my AI computer ready, and what can I do next? | 🟡 Concept v1 rendered | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 | Fix contrast/readability; review composition with user | No |
 | S02 | Compute / topology | What devices make up the system and how are they connected? | Pending | Existing work may be reusable | Validate topology data and accessible list alternative | No |
 | S03 | Models / discovery | What can I run on this system? | Pending | Existing work may be reusable | Validate catalog fields and fit semantics | No |
 | S04 | Model detail / fit | Can I run this model and what are the trade-offs? | Pending | Existing work may be reusable | Validate requirements and estimate provenance | No |
@@ -185,7 +185,7 @@ Add an entry after every review iteration.
 
 | Review ID | Date | Screen | Finding | Severity | Change made | Evidence after change | Outcome |
 |---|---|---|---|---|---|---|---|
-| REV-001 | — | S01 | Awaiting first rendered design | — | — | Add Figma render/link | Pending |
+| REV-001 | 2026-10-09 | S01 | First Compute Field concept rendered. Topology focal point and next action read clearly, but technical labels are too small/low contrast; device relationships need visual review. The node labels and metrics are illustrative sample content, not confirmed EXO telemetry. | Major + minor | Build v1 as editable native Figma frame; kept existing screens untouched. | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 ; FigDes review reported 25 findings: 6 high, 19 medium, 0 critical. High-confidence contrast issues include #8A8C84 on light surfaces (3.12–3.35:1). 12 tiny technical-text findings; some are 8–10px. | Iterate; not approved |
 
 Severity:
 - Critical: wrong behavior, misleading data, broken core task, unsafe exposure.
@@ -232,3 +232,37 @@ A change is not verified until the new render is inspected. Record rejected alte
 7. Continue updating the research register so the later slide deck is evidence-backed.
 
 **Single source of truth:** update this file whenever scope, decisions, research status, screen status, or review outcomes change. Detailed requirements live in EXO_Product_UX_Architecture_Design_Foundation.md; link to that document rather than duplicating long specifications.
+
+
+## 11. Current Figma baseline — 9 October 2026
+
+### Existing design-system audit
+On page “Chatgpt Designs”, the inspection covered 354 nodes and found:
+- 228 text nodes without attached text styles.
+- 349 hardcoded color usages and 0 paint styles/variables discovered by the audit.
+- 16 text styles exist (including EXO/Display, EXO/Title, EXO/Body, EXO/Eyebrow, EXO/Label, EXO/Value, EXO/Nav and EXO/NavActive).
+- Inter and JetBrains Mono are the two established font families.
+- Existing frames retained: 01 — Compute Fabric (158:877), 02 — Model Studio (158:985), 03 — Runtime & Diagnostics (158:1074), and older EXO Compute Fabric (142:811).
+
+Note: the attempt to seed a reusable variable collection failed before making changes; no variables were created by that transaction. Do not report token seeding as complete.
+
+### First Home concept
+Frame: 04A — Home / Compute Field (Concept), node 182:1911.  
+Link: https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911
+
+What it explores:
+- The connected compute system is the main visual.
+- One next action: find a model that fits.
+- Current workload has a clear empty state.
+- Illustrative topology and device specs are labelled sample/not live.
+- Existing frames were not overwritten.
+
+Review findings:
+- 25 total findings: 6 high-confidence, 19 medium-confidence, 0 critical.
+- High-confidence contrast issue: #8A8C84 technical labels on light backgrounds measured around 3.12–3.35:1, below the 4.5:1 AA target for normal text.
+- Technical labels between 8–10px need larger type or should be removed if they are merely decoration.
+- The status dot should be accompanied by clear state text (already present nearby; reviewer flags dot in isolation).
+- The “Action separator” finding appears to classify a divider as an interactive control; verify manually rather than blindly applying the suggested fix.
+- The concept is not approved and is not connected to live EXO data.
+
+Next: correct high-confidence contrast/readability issues, inspect topology line/node relationships at full scale, then ask the user to review composition and product content before polishing further.

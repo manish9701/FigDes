@@ -1450,6 +1450,18 @@ test("sectionHeader action right-aligns in the same band", () => {
   assert.ok(action.x > 400, "right-aligned, not stacked under the title");
 });
 
+test("sectionHeader action is parented to the region, never to the title text", () => {
+  // Live defect: the action was parented to the title TEXT node, which Figma
+  // rejects ("TEXT cannot be a parent") — failing the whole transaction while
+  // dry-runs stayed green. Only live Figma validates parents.
+  const result = buildSingle({ fn: "sectionHeader", args: { title: "Models", action: "View all" } });
+  const title = result.operations.find((o) => o.type === "createText" && o.name === "Models");
+  const action = result.operations.find((o) => o.type === "createText" && o.name === "Action");
+  assert.equal(title.parent, "main");
+  assert.equal(action.parent, "main");
+  assert.notEqual(action.parent, title.id);
+});
+
 /* -------------------------------------------------------------------------- */
 /* First-class topologyMap                                                     */
 /* -------------------------------------------------------------------------- */

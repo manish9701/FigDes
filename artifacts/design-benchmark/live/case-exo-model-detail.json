@@ -2,7 +2,7 @@
   "caseId": "exo-model-detail",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T06:56:11.233Z",
+  "startedAt": "2026-10-09T07:28:35.528Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -35,7 +35,8 @@
       "name": "FigDes Live — exo-model-detail",
       "width": 1440,
       "height": 900,
-      "grid": 8
+      "grid": 8,
+      "fill": "#FFFDF9"
     },
     "regions": [
       {
@@ -48,6 +49,15 @@
       }
     ],
     "content": [
+      {
+        "fn": "sectionHeader",
+        "id": "detail-headline",
+        "parent": "detail",
+        "args": {
+          "title": "Model detail [fixture]",
+          "action": "Compare"
+        }
+      },
       {
         "fn": "text",
         "id": "t",
@@ -89,295 +99,15 @@
     ]
   },
   "irRevision": "live-exo-model-detail-r1",
-  "operationManifest": [
-    {
-      "id": "root",
-      "name": "FigDes Live — exo-model-detail",
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "detail",
-      "parent": "root",
-      "name": "Detail",
-      "x": 0,
-      "y": 0,
-      "fill": [],
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "t",
-      "parent": "detail",
-      "name": "atlas-7b [fixture]",
-      "x": 0,
-      "y": 0,
-      "type": "createText",
-      "content": "atlas-7b [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 14,
-      "width": 1440
-    },
-    {
-      "id": "m1",
-      "parent": "detail",
-      "name": "Memory",
-      "x": 0,
-      "y": 32,
-      "fill": "#FFFFFF",
-      "cornerRadius": 8,
-      "type": "createFrame",
-      "width": 1440,
-      "height": 90,
-      "layoutMode": "VERTICAL",
-      "padding": 16,
-      "itemSpacing": 8,
-      "counterAxisAlignItems": "MIN"
-    },
-    {
-      "parent": "m1",
-      "name": "Label",
-      "fill": "#6F716A",
-      "type": "createText",
-      "content": "Memory",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 12
-    },
-    {
-      "parent": "m1",
-      "name": "Value",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "41 GB [fixture]",
-      "family": "JetBrains Mono",
-      "style": "Regular",
-      "fontSize": 28,
-      "weight": 600
-    },
-    {
-      "id": "m2",
-      "parent": "detail",
-      "name": "Throughput",
-      "x": 0,
-      "y": 130,
-      "fill": "#FFFFFF",
-      "cornerRadius": 8,
-      "type": "createFrame",
-      "width": 1440,
-      "height": 90,
-      "layoutMode": "VERTICAL",
-      "padding": 16,
-      "itemSpacing": 8,
-      "counterAxisAlignItems": "MIN"
-    },
-    {
-      "parent": "m2",
-      "name": "Label",
-      "fill": "#6F716A",
-      "type": "createText",
-      "content": "Throughput",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 12
-    },
-    {
-      "parent": "m2",
-      "name": "Value",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "88 tok/s [fixture]",
-      "family": "JetBrains Mono",
-      "style": "Regular",
-      "fontSize": 28,
-      "weight": 600
-    },
-    {
-      "id": "st",
-      "parent": "detail",
-      "name": "fits [fixture]",
-      "x": 0,
-      "y": 228,
-      "fill": "#2D7A4D1A",
-      "cornerRadius": 8,
-      "type": "createFrame",
-      "width": 103,
-      "height": 22,
-      "layoutMode": "HORIZONTAL",
-      "padding": {
-        "top": 2,
-        "right": 8,
-        "bottom": 2,
-        "left": 8
-      }
-    },
-    {
-      "parent": "st",
-      "name": "Label",
-      "fill": "#1E6B3A",
-      "type": "createText",
-      "content": "fits [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 11,
-      "weight": 500
-    }
-  ],
+  "operationManifest": [],
   "dryRun": {
-    "operationCount": 11,
+    "operationCount": 13,
     "violations": [],
     "warnings": [
       "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
     ]
   },
-  "nativeFrameId": "130:475",
-  "buildStatus": "completed",
-  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-model-detail-r1.png",
-  "renderMeta": {
-    "note": "Rendered \"FigDes Live — exo-model-detail\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 14.8 KB base64.\nBudget used: 4,080 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
-    "structuredContent": {
-      "content": [
-        {
-          "type": "image",
-          "data": "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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgInh/wP0TgjOcFs4bAAAAABJRU5ErkJggg==",
-          "mimeType": "image/png"
-        },
-        {
-          "type": "text",
-          "text": "Rendered \"FigDes Live — exo-model-detail\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 14.8 KB base64.\nBudget used: 4,080 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
-        }
-      ]
-    }
-  },
-  "renderIds": [
-    "r1"
-  ],
-  "structuralFindings": [
-    "minor/medium off-grid-geometry: \"Value\" is not aligned to the 8px grid",
-    "minor/medium off-grid-geometry: \"Throughput\" is not aligned to the 8px grid",
-    "minor/medium off-grid-geometry: \"Value\" is not aligned to the 8px grid",
-    "minor/medium off-grid-geometry: \"fits [fixture]\" is not aligned to the 8px grid",
-    "minor/medium off-grid-geometry: \"Label\" is not aligned to the 8px grid",
-    "minor/medium off-scale-spacing: \"fits [fixture]\" has padding that is off the 8px scale",
-    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Memory\"",
-    "minor/medium text-outside-autolayout: \"Value\" is absolutely positioned inside the auto-layout frame \"Memory\"",
-    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Throughput\"",
-    "minor/medium text-outside-autolayout: \"Value\" is absolutely positioned inside the auto-layout frame \"Throughput\"",
-    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"fits [fixture]\""
-  ],
-  "structuralSummary": {
-    "total": 11,
-    "high": 0,
-    "medium": 11,
-    "low": 0,
-    "critical": 0,
-    "byRule": {
-      "off-grid-geometry": 5,
-      "off-scale-spacing": 1,
-      "text-outside-autolayout": 5
-    }
-  },
-  "reviewedNodes": 11,
-  "programCritique": {
-    "verdict": "FAIL",
-    "qualityGate": "FAIL",
-    "blocking": [
-      "Composition: no focal region; 1 regions; composition: split-view; largest region isolated by 0%"
-    ]
-  },
-  "programScore": {
-    "status": "ok",
-    "source": "program",
-    "overall": 7.3,
-    "dimensions": [
-      {
-        "dimension": "Composition",
-        "score": 2,
-        "evidence": "no focal region; 1 regions; composition: split-view; largest region isolated by 0%",
-        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
-      },
-      {
-        "dimension": "Hierarchy",
-        "score": 8,
-        "evidence": "4 distinct size(s): 11, 12, 14, 28; headline at 28px; 2 technical value(s) in mono; contrast 4/5 passing AA",
-        "improve": "1 text layer(s) fail AA against their backgrounds."
-      },
-      {
-        "dimension": "Information density",
-        "score": 5,
-        "evidence": "a single region fills everything; 11 node(s) drawn",
-        "improve": "One undifferentiated surface. Chrome and content deserve separation."
-      },
-      {
-        "dimension": "Alignment",
-        "score": 10,
-        "evidence": "5/5 boxes share an edge or centre"
-      },
-      {
-        "dimension": "Visual consistency",
-        "score": 10,
-        "evidence": "5 colour(s); 2 familie(s)"
-      },
-      {
-        "dimension": "Accessibility",
-        "score": 8,
-        "evidence": "smallest text 11px; technical values monospaced"
-      },
-      {
-        "dimension": "Focus",
-        "score": 8,
-        "evidence": "clear leader 'detail' at 100%: detail 100%"
-      }
-    ],
-    "weakSpots": [
-      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
-      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
-    ],
-    "doneChecklist": {
-      "primary decision obvious": false,
-      "intentional hierarchy": true,
-      "no weak spots below 6": false,
-      "structural QA (review_design on the live file)": false,
-      "rendered and visually reviewed": false
-    },
-    "warnings": [
-      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
-    ],
-    "violations": []
-  },
-  "visualFindings": [
-    {
-      "area": "top",
-      "defect": "both metric cards now render inside frame (fix verified); full-width stacked cards, mono values legible",
-      "severity": "minor"
-    },
-    {
-      "area": "full",
-      "defect": "~75% void below content; no focal hierarchy in fixture scope",
-      "severity": "major"
-    }
-  ],
-  "visualScores": null,
-  "visualStatus": "VISION_REVIEWED_R2",
-  "repairs": [
-    {
-      "id": "repair-metric-parent-r1",
-      "findingIds": [
-        "metric-blank-r1"
-      ],
-      "outcome": "resolved",
-      "notes": [
-        "compiler parent fix 8a0e6fa; rebuilt + re-rendered; metric cards verified visible in r1 re-render"
-      ]
-    }
-  ],
-  "unresolved": [
-    "fixture scope: full art direction + repair loop still open"
-  ],
-  "runtimeMs": 158845,
-  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED",
-  "visualVerdict": "WATCH"
+  "status": "FAILED",
+  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":6,\"regions\":1,\"content\":5,\"operationCount\":13,\"layoutMs\":1,\"semanticUnits\":5},\"regions\":[{\"id\":\"detail\",\"role\":\"inspector\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"flow\"}],\"algorithms\":{\"detail\":\"flow\"},\"constrained\":0,\"reflowed\":0,\"inte",
+  "runtimeMs": 1551
 }

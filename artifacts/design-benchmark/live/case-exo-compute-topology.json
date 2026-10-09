@@ -2,7 +2,7 @@
   "caseId": "exo-compute-topology",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T06:35:18.013Z",
+  "startedAt": "2026-10-09T07:28:33.068Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -35,7 +35,8 @@
       "name": "FigDes Live — exo-compute-topology",
       "width": 1440,
       "height": 900,
-      "grid": 8
+      "grid": 8,
+      "fill": "#FFFDF9"
     },
     "regions": [
       {
@@ -61,6 +62,15 @@
       }
     ],
     "content": [
+      {
+        "fn": "sectionHeader",
+        "id": "map-headline",
+        "parent": "map",
+        "args": {
+          "title": "Compute topology [fixture]",
+          "action": "View all"
+        }
+      },
       {
         "fn": "deviceNode",
         "id": "hub",
@@ -119,338 +129,13 @@
     ]
   },
   "irRevision": "live-exo-compute-topology-r1",
-  "operationManifest": [
-    {
-      "id": "root",
-      "name": "FigDes Live — exo-compute-topology",
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "map",
-      "parent": "root",
-      "name": "Map",
-      "x": 0,
-      "y": 0,
-      "fill": [],
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "hub",
-      "parent": "map",
-      "name": "hub-01 [fixture]",
-      "x": 652,
-      "y": 394,
-      "fill": "#FFFFFF",
-      "type": "createFrame",
-      "width": 128,
-      "height": 80,
-      "layoutMode": "VERTICAL",
-      "padding": 8,
-      "itemSpacing": 4,
-      "stroke": "#E0E0E0",
-      "strokeWeight": 1
-    },
-    {
-      "parent": "hub",
-      "name": "Device",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "hub-01 [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 12,
-      "weight": 600
-    },
-    {
-      "parent": "hub",
-      "name": "Memory",
-      "fill": "#6F716A",
-      "type": "createText",
-      "content": "1.8 TB",
-      "family": "JetBrains Mono",
-      "style": "Regular",
-      "fontSize": 10
-    },
-    {
-      "id": "n1",
-      "parent": "map",
-      "name": "node-01 [fixture]",
-      "x": 648,
-      "y": 410,
-      "fill": "#FFFFFF",
-      "type": "createFrame",
-      "width": 128,
-      "height": 80,
-      "layoutMode": "VERTICAL",
-      "padding": 8,
-      "itemSpacing": 4,
-      "stroke": "#E0E0E0",
-      "strokeWeight": 1
-    },
-    {
-      "parent": "n1",
-      "name": "Device",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "node-01 [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 12,
-      "weight": 600
-    },
-    {
-      "parent": "n1",
-      "name": "Memory",
-      "fill": "#6F716A",
-      "type": "createText",
-      "content": "96 GB",
-      "family": "JetBrains Mono",
-      "style": "Regular",
-      "fontSize": 10
-    },
-    {
-      "id": "n2",
-      "parent": "map",
-      "name": "node-02 [fixture]",
-      "x": 656,
-      "y": 410,
-      "fill": "#FFFFFF",
-      "type": "createFrame",
-      "width": 128,
-      "height": 80,
-      "layoutMode": "VERTICAL",
-      "padding": 8,
-      "itemSpacing": 4,
-      "stroke": "#8A5200",
-      "strokeWeight": 1
-    },
-    {
-      "parent": "n2",
-      "name": "Device",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "node-02 [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 12,
-      "weight": 600
-    },
-    {
-      "id": "st",
-      "parent": "map",
-      "name": "1 needs attention [fixture]",
-      "x": 0,
-      "y": 0,
-      "fill": "#B26A001A",
-      "cornerRadius": 8,
-      "type": "createFrame",
-      "width": 183,
-      "height": 22,
-      "layoutMode": "HORIZONTAL",
-      "padding": {
-        "top": 2,
-        "right": 8,
-        "bottom": 2,
-        "left": 8
-      }
-    },
-    {
-      "parent": "st",
-      "name": "Label",
-      "fill": "#8A5200",
-      "type": "createText",
-      "content": "1 needs attention [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 11,
-      "weight": 500
-    },
-    {
-      "id": "c1",
-      "parent": "root",
-      "name": "orthogonal connector hub -> n1",
-      "x": 706,
-      "y": 410,
-      "fill": [],
-      "type": "createVector",
-      "width": 18.43,
-      "height": 64,
-      "path": "M 0 64 L 0 32 L 16 32 L 16 0 L 0 64 M 16 0 L 18.43 10.91 L 8.72 8.49 L 16 0 Z",
-      "stroke": "#8A8C84",
-      "strokeWeight": 1,
-      "fillArrows": true
-    },
-    {
-      "id": "c2",
-      "parent": "root",
-      "name": "orthogonal connector hub -> n2",
-      "x": 707.57,
-      "y": 410,
-      "fill": [],
-      "type": "createVector",
-      "width": 18.43,
-      "height": 64,
-      "path": "M 18.43 64 L 18.43 32 L 2.43 32 L 2.43 0 L 18.43 64 M 2.43 0 L 9.71 8.49 L 0 10.91 L 2.43 0 Z",
-      "stroke": "#8A8C84",
-      "strokeWeight": 1,
-      "fillArrows": true
-    },
-    {
-      "id": "c1-label",
-      "parent": "root",
-      "name": "Label 8us",
-      "x": 728,
-      "y": 428,
-      "fill": "#5A5C54",
-      "type": "createText",
-      "content": "8us",
-      "family": "JetBrains Mono",
-      "style": "Regular",
-      "fontSize": 11,
-      "weight": 600
-    }
-  ],
+  "operationManifest": [],
   "dryRun": {
-    "operationCount": 15,
+    "operationCount": 17,
     "violations": [],
     "warnings": []
   },
-  "nativeFrameId": "129:366",
-  "buildStatus": "completed",
-  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-compute-topology-r1.png",
-  "renderMeta": {
-    "note": "Rendered \"FigDes Live — exo-compute-topology\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 9.8 KB base64.\nBudget used: 1,020 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
-    "structuredContent": {
-      "content": [
-        {
-          "type": "image",
-          "data": "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rupHMN+9DwAAAADwfnHZZZf16yf9+nsfAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsK/9f4MmexoMvknmAAAAAElFTkSuQmCC",
-          "mimeType": "image/png"
-        },
-        {
-          "type": "text",
-          "text": "Rendered \"FigDes Live — exo-compute-topology\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 9.8 KB base64.\nBudget used: 1,020 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
-        }
-      ]
-    }
-  },
-  "renderIds": [
-    "r1"
-  ],
-  "structuralFindings": [
-    "minor/medium off-grid-geometry: \"hub-01 [fixture]\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Memory\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"node-01 [fixture]\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Memory\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"node-02 [fixture]\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"Label\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"orthogonal connector hub -> n1\" is not aligned to the 4px grid",
-    "minor/medium off-grid-geometry: \"orthogonal connector hub -> n2\" is not aligned to the 4px grid",
-    "minor/medium off-scale-spacing: \"1 needs attention [fixture]\" has padding that is off the 4px scale",
-    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"hub-01 [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Memory\" is absolutely positioned inside the auto-layout frame \"hub-01 [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"node-01 [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Memory\" is absolutely positioned inside the auto-layout frame \"node-01 [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"node-02 [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"1 needs attention [fixture]\"",
-    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum",
-    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum"
-  ],
-  "structuralSummary": {
-    "total": 20,
-    "high": 0,
-    "medium": 20,
-    "low": 0,
-    "critical": 0,
-    "byRule": {
-      "off-grid-geometry": 11,
-      "off-scale-spacing": 1,
-      "text-outside-autolayout": 6,
-      "tiny-technical-text": 2
-    }
-  },
-  "reviewedNodes": 15,
-  "programCritique": {
-    "verdict": "WATCH",
-    "qualityGate": "FAIL",
-    "blocking": [
-      "Hierarchy: 3 distinct size(s): 10, 11, 12; 3 technical value(s) in mono; contrast 5/6 passing AA"
-    ]
-  },
-  "programScore": {
-    "status": "ok",
-    "source": "program",
-    "overall": 6.5,
-    "dimensions": [
-      {
-        "dimension": "Composition",
-        "score": 7,
-        "evidence": "one focal region (map); 1 regions; composition: topology; largest region isolated by 0%",
-        "improve": "One region is a page, not a composition. Split intent from chrome. The largest region touches a canvas edge with no breathing room."
-      },
-      {
-        "dimension": "Hierarchy",
-        "score": 5,
-        "evidence": "3 distinct size(s): 10, 11, 12; 3 technical value(s) in mono; contrast 5/6 passing AA",
-        "improve": "The largest text is 12px: no headline, no entry point. 1 text layer(s) fail AA against their backgrounds."
-      },
-      {
-        "dimension": "Information density",
-        "score": 5,
-        "evidence": "a single region fills everything; 5px of stroke in play; 15 node(s) drawn",
-        "improve": "One undifferentiated surface. Chrome and content deserve separation."
-      },
-      {
-        "dimension": "Alignment",
-        "score": 6.8,
-        "evidence": "3/5 boxes share an edge or centre"
-      },
-      {
-        "dimension": "Visual consistency",
-        "score": 10,
-        "evidence": "8 colour(s); 2 familie(s); accents: #B26A001A, #8A5200"
-      },
-      {
-        "dimension": "Accessibility",
-        "score": 4,
-        "evidence": "smallest text 10px; 2 tiny layer(s); technical values monospaced",
-        "improve": "2 text layer(s) under 11px. Minimum readable technical text is 11px, body 12px and up."
-      },
-      {
-        "dimension": "Focus",
-        "score": 8,
-        "evidence": "clear leader 'map' at 100%: map 100%"
-      }
-    ],
-    "weakSpots": [
-      "Accessibility (4/10): 2 text layer(s) under 11px. Minimum readable technical text is 11px, body 12px and up.",
-      "Hierarchy (5/10): The largest text is 12px: no headline, no entry point. 1 text layer(s) fail AA against their backgrounds.",
-      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
-    ],
-    "doneChecklist": {
-      "primary decision obvious": true,
-      "intentional hierarchy": false,
-      "no weak spots below 6": false,
-      "structural QA (review_design on the live file)": false,
-      "rendered and visually reviewed": false
-    },
-    "warnings": [],
-    "violations": []
-  },
-  "visualFindings": [],
-  "visualScores": null,
-  "visualStatus": "PENDING_VISION_REVIEW",
-  "repairs": [],
-  "unresolved": [
-    "visual judgement pending (Phase B)"
-  ],
-  "runtimeMs": 11721,
-  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+  "status": "FAILED",
+  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":8,\"regions\":1,\"content\":7,\"operationCount\":17,\"layoutMs\":1,\"semanticUnits\":7},\"regions\":[{\"id\":\"map\",\"role\":\"hero\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"topology\"}],\"algorithms\":{\"map\":\"tree\"},\"constrained\":0,\"reflowed\":0,\"intentNotes",
+  "runtimeMs": 2458
 }

@@ -2,7 +2,7 @@
   "caseId": "exo-configuration",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T06:37:51.845Z",
+  "startedAt": "2026-10-09T07:28:38.482Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -34,7 +34,8 @@
       "name": "FigDes Live — exo-configuration",
       "width": 1440,
       "height": 900,
-      "grid": 8
+      "grid": 8,
+      "fill": "#FFFDF9"
     },
     "regions": [
       {
@@ -47,6 +48,15 @@
       }
     ],
     "content": [
+      {
+        "fn": "sectionHeader",
+        "id": "form-headline",
+        "parent": "form",
+        "args": {
+          "title": "Runtime policy [fixture]",
+          "action": "History"
+        }
+      },
       {
         "fn": "text",
         "id": "t",
@@ -75,214 +85,15 @@
     ]
   },
   "irRevision": "live-exo-configuration-r1",
-  "operationManifest": [
-    {
-      "id": "root",
-      "name": "FigDes Live — exo-configuration",
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "form",
-      "parent": "root",
-      "name": "Form",
-      "x": 0,
-      "y": 0,
-      "fill": [],
-      "type": "createFrame",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "t",
-      "parent": "form",
-      "name": "Runtime policy [fixture]",
-      "x": 0,
-      "y": 0,
-      "type": "createText",
-      "content": "Runtime policy [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 14,
-      "width": 1440
-    },
-    {
-      "id": "p",
-      "parent": "form",
-      "name": "Thresholds [fixture]",
-      "x": 0,
-      "y": 32,
-      "fill": "#FFFDF9",
-      "type": "createFrame",
-      "width": 1440,
-      "height": 90,
-      "layoutMode": "VERTICAL",
-      "padding": 16,
-      "itemSpacing": 8
-    },
-    {
-      "parent": "p",
-      "name": "Title",
-      "fill": "#242521",
-      "type": "createText",
-      "content": "Thresholds [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 14,
-      "weight": 600
-    },
-    {
-      "id": "ok",
-      "parent": "form",
-      "name": "Approve [fixture]",
-      "x": 0,
-      "y": 130,
-      "fill": "#242521",
-      "type": "createFrame",
-      "width": 156,
-      "height": 40,
-      "layoutMode": "HORIZONTAL",
-      "padding": {
-        "top": 8,
-        "right": 16,
-        "bottom": 8,
-        "left": 16
-      }
-    },
-    {
-      "parent": "ok",
-      "name": "Label",
-      "fill": "#FFFFFF",
-      "type": "createText",
-      "content": "Approve [fixture]",
-      "family": "Inter",
-      "style": "Regular",
-      "fontSize": 13,
-      "weight": 600
-    }
-  ],
+  "operationManifest": [],
   "dryRun": {
-    "operationCount": 7,
+    "operationCount": 9,
     "violations": [],
     "warnings": [
       "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
     ]
   },
-  "nativeFrameId": "129:405",
-  "buildStatus": "completed",
-  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-configuration-r1.png",
-  "renderMeta": {
-    "note": "Rendered \"FigDes Live — exo-configuration\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 8.1 KB base64.\nBudget used: 2,040 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
-    "structuredContent": {
-      "content": [
-        {
-          "type": "image",
-          "data": "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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACl/B/uYI4ivfsubAAAAABJRU5ErkJggg==",
-          "mimeType": "image/png"
-        },
-        {
-          "type": "text",
-          "text": "Rendered \"FigDes Live — exo-configuration\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 8.1 KB base64.\nBudget used: 2,040 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
-        }
-      ]
-    }
-  },
-  "renderIds": [
-    "r1"
-  ],
-  "structuralFindings": [
-    "minor/medium off-grid-geometry: \"Approve [fixture]\" is not aligned to the 8px grid",
-    "minor/medium text-outside-autolayout: \"Title\" is absolutely positioned inside the auto-layout frame \"Thresholds [fixture]\"",
-    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Approve [fixture]\""
-  ],
-  "structuralSummary": {
-    "total": 3,
-    "high": 0,
-    "medium": 3,
-    "low": 0,
-    "critical": 0,
-    "byRule": {
-      "off-grid-geometry": 1,
-      "text-outside-autolayout": 2
-    }
-  },
-  "reviewedNodes": 7,
-  "programCritique": {
-    "verdict": "FAIL",
-    "qualityGate": "FAIL",
-    "blocking": [
-      "Composition: no focal region; 1 regions; composition: editorial; largest region isolated by 0%"
-    ]
-  },
-  "programScore": {
-    "status": "ok",
-    "source": "program",
-    "overall": 6.9,
-    "dimensions": [
-      {
-        "dimension": "Composition",
-        "score": 2,
-        "evidence": "no focal region; 1 regions; composition: editorial; largest region isolated by 0%",
-        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
-      },
-      {
-        "dimension": "Hierarchy",
-        "score": 5,
-        "evidence": "2 distinct size(s): 13, 14; contrast 2/2 passing AA",
-        "improve": "Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content."
-      },
-      {
-        "dimension": "Information density",
-        "score": 5,
-        "evidence": "a single region fills everything; 7 node(s) drawn",
-        "improve": "One undifferentiated surface. Chrome and content deserve separation."
-      },
-      {
-        "dimension": "Alignment",
-        "score": 10,
-        "evidence": "4/4 boxes share an edge or centre"
-      },
-      {
-        "dimension": "Visual consistency",
-        "score": 10,
-        "evidence": "3 colour(s); 1 familie(s)"
-      },
-      {
-        "dimension": "Accessibility",
-        "score": 8,
-        "evidence": "smallest text 13px"
-      },
-      {
-        "dimension": "Focus",
-        "score": 8,
-        "evidence": "clear leader 'form' at 100%: form 100%"
-      }
-    ],
-    "weakSpots": [
-      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
-      "Hierarchy (5/10): Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content.",
-      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
-    ],
-    "doneChecklist": {
-      "primary decision obvious": false,
-      "intentional hierarchy": false,
-      "no weak spots below 6": false,
-      "structural QA (review_design on the live file)": false,
-      "rendered and visually reviewed": false
-    },
-    "warnings": [
-      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
-    ],
-    "violations": []
-  },
-  "visualFindings": [],
-  "visualScores": null,
-  "visualStatus": "PENDING_VISION_REVIEW",
-  "repairs": [],
-  "unresolved": [
-    "visual judgement pending (Phase B)"
-  ],
-  "runtimeMs": 3608,
-  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+  "status": "FAILED",
+  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":5,\"regions\":1,\"content\":4,\"operationCount\":9,\"layoutMs\":1,\"semanticUnits\":4},\"regions\":[{\"id\":\"form\",\"role\":\"custom\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"flow\"}],\"algorithms\":{\"form\":\"flow\"},\"constrained\":0,\"reflowed\":0,\"intentNotes\"",
+  "runtimeMs": 1361
 }

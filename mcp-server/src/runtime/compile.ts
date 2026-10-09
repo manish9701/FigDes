@@ -1308,8 +1308,12 @@ function emitComponent(
       if (str("action")) {
         const action = str("action");
         const w = hugWidth(action, { fontSize: Math.round(12 * typeScale), paddingX: 0 });
+        // Parented to the region, not to the title text: Figma rejects TEXT
+        // as a parent, and the coordinates are region-relative either way.
+        // (Live defect: every screen using sectionHeader+action failed commit
+        // while dry-runs stayed green, because only Figma validates parents.)
         operations.push(
-          op({ type: "createText", parent: spec.id, name: "Action", x: Math.round(box.x + box.w - w), y: box.y + 4, content: action, fontSize: fs(12), weight: 500, fill: "#0B6BCB" }),
+          op({ type: "createText", parent: parentHint, name: "Action", x: Math.round(box.x + box.w - w), y: box.y + 4, content: action, fontSize: fs(12), weight: 500, fill: "#0B6BCB" }),
         );
       }
       break;

@@ -39,9 +39,23 @@ const CASES = [
   { id: "editorial-product-page", decision: "Which model should run, weighing cost and quality?", info: ["model name", "run cost", "latency", "quality", "recommendation"] },
 ];
 
+const CASE_TITLES = {
+  "exo-compute-topology": ["Compute topology", "View all"],
+  "exo-model-detail": ["Model detail", "Compare"],
+  "exo-runtime-monitoring": ["Runtime", "Pause"],
+  "exo-configuration": ["Runtime policy", "History"],
+  "exo-enterprise-workspace": ["Assigned fleet", "Manage"],
+  "generic-saas-dashboard": ["Overview", "Settings"],
+  "data-heavy-workspace": ["Follow-ups", "Filter"],
+  "spatial-relationship": ["Dependency graph", "View all"],
+  "editorial-product-page": ["Run chooser", "Docs"],
+};
+
 /** Minimal fixture programs: exercise the loop mechanics, clearly marked. */
 function programFor(id) {
-  const canvas = { name: `FigDes Live — ${id}`, width: 1440, height: 900, grid: 8 };
+  // EXO light surface on every canvas (repair round 2): transparent canvases
+  // rendered as an unreadable black void and punished every focal reading.
+  const canvas = { name: `FigDes Live — ${id}`, width: 1440, height: 900, grid: 8, fill: "#FFFDF9" };
   const F = "[fixture]";
   switch (id) {
     case "exo-compute-topology":
@@ -164,7 +178,12 @@ async function tool(name, args) {
 }
 
 function pickRoot(buildData) {
-  const nodes = buildData?.transaction?.createdNodes ?? buildData?.createdNodes ?? [];
+  const txn = buildData?.transaction;
+  if (txn && txn.status === "failed") {
+    const e = txn.error ?? {};
+    throw new Error(`transaction failed at op #${e.operation} (${e.opType}): ${e.message} Hint: ${e.hint ?? ""}`);
+  }
+  const nodes = txn?.createdNodes ?? buildData?.createdNodes ?? [];
   const frame = nodes.find((n) => n.type === "FRAME") ?? nodes[0];
   if (!frame) throw new Error(`no created nodes: ${JSON.stringify(buildData).slice(0, 300)}`);
   return { id: frame.figmaNodeId ?? frame.id, name: frame.name, nodes };
@@ -222,6 +241,19 @@ for (const c of CASES) {
       rec.planDerivation = plan.derivation ?? null;
 
       const program = programFor(c.id);
+      // Round 3 repair: every screen gets a headline (Hierarchy entry point)
+      // and the workspace gets nav items (rail renders instead of vanishing).
+      const firstRegion = program.regions[0]?.id;
+      const [title, action] = CASE_TITLES[c.id] ?? [c.id, "View"];
+      if (firstRegion && !program.content.some((n) => n.fn === "sectionHeader")) {
+        program.content.unshift({ fn: "sectionHeader", id: `${firstRegion}-headline`, parent: firstRegion, args: { title: `${title} [fixture]`, action } });
+      }
+      if (c.id === "exo-enterprise-workspace" && !program.content.some((n) => n.fn === "navItem")) {
+        program.content.push(
+          { fn: "navItem", id: "nav-fleet", parent: "nav", args: { label: "Fleet", state: "active" } },
+          { fn: "navItem", id: "nav-models", parent: "nav", args: { label: "Models" } },
+        );
+      }
       rec.program = program;
       rec.irRevision = `live-${c.id}-r1`;
       rec.operationManifest = [];

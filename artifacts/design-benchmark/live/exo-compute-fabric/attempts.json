@@ -1,0 +1,22 @@
+{
+  "frame": "142:811",
+  "note": "Every mutating or capture attempt, including failures and flaps. No silent retries.",
+  "attempts": [
+    { "at": "r1-build", "op": "figdes_use_figma fabric-script-r1", "result": "MCP 60s timeout, late commit landed 56 nodes (frame 142:811)" },
+    { "at": "r1-render", "op": "render_design high/1440", "result": "ok, shot-r1.png (pill labels unreadable)" },
+    { "at": "r1-review", "op": "review_design", "result": "15 findings, 3 critical (contrast)" },
+    { "at": "repair-1", "op": "modify_design 11 ops (tints, radii)", "result": "success" },
+    { "at": "repair-2", "op": "modify_design 2 ops (bar radii) + native clip script", "result": "success" },
+    { "at": "r2-render", "op": "render_design high/1440", "result": "ok, shot-r2.png (labels readable)" },
+    { "at": "r2-review", "op": "review_design", "result": "10 findings, 0 critical" },
+    { "at": "r2-labels", "op": "modify_design 4x setTypography 11px", "result": "success" },
+    { "at": "r3-render-1", "op": "render_design high/1440", "result": "TIMEOUT 120s (plugin flapping)" },
+    { "at": "r3-render-2", "op": "render_design high/1440", "result": "NO PLUGIN (session empty)" },
+    { "at": "r3-render-3", "op": "render_design high/1440", "result": "ok after reconnect, shot-r3.png" },
+    { "at": "r3-review", "op": "review_design", "result": "6 findings, 4 high (overflow FPs), 0 critical" },
+    { "at": "r3-score", "op": "score_design nodeId", "result": "7.6" },
+    { "at": "r3-critique-1", "op": "critique_visual nodeId+observations", "result": "NO PLUGIN (flap)" },
+    { "at": "r3-critique-2", "op": "critique_visual nodeId+observations", "result": "FAIL (whitespace/density)" },
+    { "at": "r3-qa", "op": "final_qa nodeId", "result": "FAIL (overflow x4 + card-wall)" }
+  ]
+}

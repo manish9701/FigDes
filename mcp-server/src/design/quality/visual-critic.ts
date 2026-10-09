@@ -43,12 +43,15 @@ export function extendCritique(input: {
   links?: Array<{ from: string; to: string; label?: string }>;
   patternId?: string;
   productName?: string;
+  /** Actual fills extracted from the rendered/native operations, not inferred from names. */
+  fills?: string[];
 }): ExtendedCritique {
   const genericity = evaluateGenericity({
     boxes: input.boxes,
     operations: input.operations,
     regions: input.regions,
     ...(input.composition !== undefined ? { composition: input.composition } : {}),
+    ...(input.fills !== undefined ? { fills: input.fills } : {}),
   });
   const extra: ExtendedDimension[] = [
     relationshipClarity(input.links ?? []),

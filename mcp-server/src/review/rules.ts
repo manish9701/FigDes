@@ -206,7 +206,7 @@ function textContrast(n: NodeMetrics): Finding[] {
   ];
 }
 
-/** Child extends past its parent's box. Pure geometry, so high confidence. */
+/** Child extends past its parent's box. Pure geometry, so high confidence — unless the coordinates are unverified. */
 function overflow(n: NodeMetrics, c: Ctx): Finding[] {
   if (!n.parentId || n.type === "PAGE" || n.type === "DOCUMENT") return [];
   const parent = c.byId.get(n.parentId);
@@ -222,6 +222,29 @@ function overflow(n: NodeMetrics, c: Ctx): Finding[] {
   if (n.x < -0.5) spills.push("left");
   if (n.y < -0.5) spills.push("top");
   if (spills.length === 0) return [];
+
+  // Unverified coordinate space (no absolute box existed at collection time):
+  // report uncertainty at low confidence rather than a high-confidence hard
+  // failure. Genuine overflow on canonical parent-local coordinates still
+  // fails loud. Absent coordSpace is legacy payloads, kept as-is.
+  if (n.coordSpace === "local-unverified") {
+    return [
+      {
+        rule: "overflow",
+        confidence: "low",
+        severity: "minor",
+        title: `"${n.name}" may extend past the edge of "${parent.name}" (unverified coordinates)`,
+        evidence: {
+          parentSize: `${parent.w}x${parent.h}`,
+          childBox: `x=${round2(n.x)} y=${round2(n.y)} w=${n.w} h=${n.h}`,
+          spills: spills.join(", "),
+          coordinateSpace: "local-unverified",
+        },
+        nodeIds: [n.id],
+        guidance: `Re-measure with canonical parent-local bounds before treating this as a defect.`,
+      },
+    ];
+  }
 
   return [
     {

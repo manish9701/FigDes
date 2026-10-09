@@ -893,6 +893,14 @@ export interface NodeMetrics {
   y: number;
   w: number;
   h: number;
+  /**
+   * Coordinate space of x/y/w/h. "parent-local" is canonical: converted from
+   * absolute boxes so rotated nodes (whose raw x/y are absolute) compare
+   * correctly against parent dimensions. "local-unverified" means no absolute
+   * box existed and rules must downgrade confidence rather than hard-fail.
+   * Absent on older payloads, which rules treat as legacy local.
+   */
+  coordSpace?: "parent-local" | "local-unverified";
   visible: boolean;
   defaultNamed: boolean;
   zIndex: number;

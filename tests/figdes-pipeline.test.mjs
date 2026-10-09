@@ -141,6 +141,26 @@ test("static connector labels and plain text are not tap targets", () => {
   assert.deepEqual(rules.map((f) => f.nodeIds[0]).sort(), ["2:3"]);
 });
 
+test("canonical parent-local overflow still fails when real", () => {
+  const parent = metricNode({ id: "p", type: "FRAME", name: "Field", w: 824, h: 600, coordSpace: "parent-local" });
+  const inside = metricNode({ id: "c1", parentId: "p", type: "FRAME", name: "Card", x: 119, y: 300, w: 306, h: 10, coordSpace: "parent-local" });
+  assert.deepEqual(runRules(metrics([parent, inside]), "review").filter((f) => f.rule === "overflow"), []);
+  const outside = metricNode({ id: "c2", parentId: "p", type: "FRAME", name: "Wide", x: 700, y: 100, w: 200, h: 10, coordSpace: "parent-local" });
+  const found = runRules(metrics([parent, outside]), "review").filter((f) => f.rule === "overflow");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].confidence, "high");
+});
+
+test("unverified coordinates report uncertainty, not a hard failure", () => {
+  const parent = metricNode({ id: "p", type: "FRAME", name: "Field", w: 824, h: 600 });
+  const child = metricNode({ id: "c", parentId: "p", type: "LINE", name: "Line", x: 1935, y: 412, w: 306, h: 0, coordSpace: "local-unverified" });
+  const found = runRules(metrics([parent, child]), "review").filter((f) => f.rule === "overflow");
+  assert.equal(found.length, 1);
+  assert.equal(found[0].confidence, "low");
+  assert.equal(found[0].severity, "minor");
+  assert.match(found[0].title, /unverified/);
+});
+
 /* -------------------------------------------------------------------------- */
 /* Geometry: overlaps, relationships, reflow                                    */
 /* -------------------------------------------------------------------------- */

@@ -98,12 +98,21 @@ function mixin(node) {
   node.setPluginData = () => {};
   node.getPluginData = () => "";
 
-  // Real Figma exposes absoluteBoundingBox on every scene node. Non-enumerable
-  // so it never leaks into JSON snapshots or clone().
+  // Real Figma exposes absoluteBoundingBox on every scene node: page-space
+  // bounds with rotation baked in. Non-enumerable so it never leaks into JSON
+  // snapshots or clone(). Accumulated up the parent chain, like the real API.
   Object.defineProperty(node, "absoluteBoundingBox", {
     configurable: true,
     get() {
-      return { x: node.x ?? 0, y: node.y ?? 0, width: node.width ?? 0, height: node.height ?? 0 };
+      let x = node.x ?? 0;
+      let y = node.y ?? 0;
+      let p = node.parent;
+      while (p) {
+        x += p.x ?? 0;
+        y += p.y ?? 0;
+        p = p.parent;
+      }
+      return { x, y, width: node.width ?? 0, height: node.height ?? 0 };
     },
   });
 

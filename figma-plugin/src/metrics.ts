@@ -7,6 +7,7 @@
  */
 import { effectiveFill, flattenPaints, isDefaultName, primaryFill, primaryStroke, toHex } from "./resolve";
 import { allPages, beginScan, getNode, scanStats } from "./cache";
+import { toParentLocal, isFiniteBox } from "../../shared/geometry";
 import type { NodeMetrics, MetricsReport } from "../../shared/protocol";
 
 const MAX_NODES = 1500;
@@ -125,7 +126,7 @@ function measure(node: BaseNode, depth: number): NodeMetrics {
     opacity?: number;
   };
 
-  const box = boxOf(scene);
+  const box = canonicalBox(scene);
   const parent = "parent" in node ? node.parent : null;
 
   const m: NodeMetrics = {
@@ -134,10 +135,11 @@ function measure(node: BaseNode, depth: number): NodeMetrics {
     type: node.type,
     name: node.name,
     depth,
-    x: box.x,
-    y: box.y,
-    w: box.w,
-    h: box.h,
+    x: box.box.x,
+    y: box.box.y,
+    w: box.box.w,
+    h: box.box.h,
+    coordSpace: box.space,
     visible: "visible" in node ? node.visible !== false : true,
     defaultNamed: isDefaultName(node.name),
     zIndex: parent && "children" in parent ? parent.children.indexOf(node as never) : 0,
@@ -235,11 +237,41 @@ function measure(node: BaseNode, depth: number): NodeMetrics {
   return m;
 }
 
-function boxOf(node: SceneNode): { x: number; y: number; w: number; h: number } {
+function absOf(node: unknown): { x: number; y: number; w: number; h: number } | null {
   try {
-    return { x: round(node.x), y: round(node.y), w: round(node.width), h: round(node.height) };
+    const b = (node as { absoluteBoundingBox?: { x: number; y: number; width: number; height: number } | null }).absoluteBoundingBox;
+    if (!b) return null;
+    const box = { x: b.x, y: b.y, w: b.width, h: b.height };
+    return isFiniteBox(box) ? box : null;
   } catch {
-    return { x: 0, y: 0, w: 0, h: 0 };
+    return null;
+  }
+}
+
+/**
+ * Canonical parent-local bounds (quality-reliability P0).
+ *
+ * Raw x/y are parent-local for ordinary nodes but absolute for rotated ones
+ * (live defect: rotated LINEs reported page coordinates, and the overflow
+ * rule compared them to parent size — a guaranteed false positive). Converting
+ * through absolute boxes makes both cases parent-local; rotation stays baked
+ * into the axis-aligned box, which can only over-cover, never under-cover.
+ */
+function canonicalBox(node: SceneNode): { box: { x: number; y: number; w: number; h: number }; space: "parent-local" | "local-unverified" } {
+  const parent = "parent" in node ? (node.parent as SceneNode | null) : null;
+  const childAbs = absOf(node);
+  const parentAbs = parent ? absOf(parent) : null;
+  if (childAbs && parentAbs) {
+    const rel = toParentLocal(childAbs, parentAbs);
+    if (rel) return { box: rel, space: "parent-local" };
+  }
+  // Fallback: raw local values, flagged so rules downgrade confidence rather
+  // than hard-failing on unverified geometry.
+  try {
+    const scene = node as SceneNode & { x: number; y: number; width: number; height: number };
+    return { box: { x: round(scene.x), y: round(scene.y), w: round(scene.width), h: round(scene.height) }, space: "local-unverified" as const };
+  } catch {
+    return { box: { x: 0, y: 0, w: 0, h: 0 }, space: "local-unverified" as const };
   }
 }
 

@@ -17,7 +17,7 @@ import { solveConstraints, type PlacedBox } from "./constraints";
 import { routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
-import { inferComposition, packContent, planLayout, radial, forceDirected, defaultGutter } from "./layout";
+import { inferComposition, packContent, planLayout, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
 import { runAlgorithm } from "./algorithms";
 
 /* -------------------------------------------------------------------------- */
@@ -700,7 +700,7 @@ function emitContent(args: {
   /** Preset look: nav voice, value numerals, header scale, panel padding. */
   look: StyleLook;
 }): string | undefined {
-  const { ir, region, content, inner, gap, operations, composition, algorithms, boxes, typeScale, titleScale, look } = args;
+  const { ir, region, content, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look } = args;
   const grid = ir.canvas.grid;
 
   const textItems = content.filter((c) => c.kind === "text");
@@ -762,21 +762,64 @@ function emitContent(args: {
           }).points;
 
     const size = graphicSize(grid);
-    for (const spec of graphItems) {
+    // NaN guard: a misbehaving algorithm (unknown name falling through to a
+    // mismatched default) must degrade to a deterministic column, never emit
+    // non-finite coordinates into Figma operations.
+    let nanFallbacks = 0;
+    const finitePoints = new Map<string, { x: number; y: number }>();
+    graphItems.forEach((spec, i) => {
       const at = points.get(spec.id);
+      if (at && Number.isFinite(at.x) && Number.isFinite(at.y)) {
+        finitePoints.set(spec.id, at);
+      } else {
+        nanFallbacks++;
+        finitePoints.set(spec.id, {
+          x: inner.x + inner.w / 2,
+          y: inner.y + grid * 10 + i * (deviceSize.h + gap),
+        });
+      }
+    });
+    if (nanFallbacks > 0) {
+      violations.push({
+        rule: "layout",
+        message: `${nanFallbacks} node(s) got non-finite coordinates from '${algorithm}'; placed in a fallback column instead.`,
+      });
+    }
+    const sepBoxes: Array<{ id: string; x: number; y: number; w: number; h: number }> = [];
+    for (const spec of graphItems) {
+      const at = finitePoints.get(spec.id);
       if (!at) continue;
       // A device keeps its natural machine-tile size; abstract graphics share
       // one small square so dots and rings read as one system.
       const extent = spec.kind === "component" ? deviceSize : size;
-      const box: ResolvedBox = {
+      sepBoxes.push({
+        id: spec.id,
         x: Math.round(at.x - extent.w / 2),
         y: Math.round(at.y - extent.h / 2),
         w: extent.w,
         h: extent.h,
-      };
+      });
+    }
+    // Algorithms place centres without knowing tile sizes; separate real boxes
+    // so a tight tree cannot pile 128px tiles on 24px slots (live defect).
+    // Integer coordinates: fractional drift from halving shifts is invisible
+    // precision that only pollutes grid-alignment checks downstream.
+    for (const b of sepBoxes) { b.x = Math.round(b.x); b.y = Math.round(b.y); }
+    const sep = separateOverlaps(sepBoxes, { x: inner.x, y: inner.y, w: inner.w, h: inner.h }, gap);
+    if (sep.remaining > 0) {
+      violations.push({
+        rule: "layout",
+        message: `${sep.remaining} graph pair(s) still overlap after separation in '${region.id}'.`,
+      });
+    }
+    for (const spec of graphItems) {
+      const placed0 = sepBoxes.find((b) => b.id === spec.id);
+      if (!placed0) continue;
+      placed0.x = Math.round(placed0.x);
+      placed0.y = Math.round(placed0.y);
       // The recorded box and the drawn node share one optically-corrected box,
       // so connectors, relations and the returned geometry all agree.
-      const placed: ResolvedBox = devicePlacementBox(box, spec);
+      const placed: ResolvedBox = devicePlacementBox({ x: placed0.x, y: placed0.y, w: placed0.w, h: placed0.h }, spec);
       boxes.set(spec.id, { id: spec.id, ...placed });
       if (spec.kind === "component") emitComponent(spec, region, placed, operations, grid, typeScale, look);
       else if (spec.kind === "shape" || spec.kind === "vector") emitGraphic(spec, region, placed, operations);

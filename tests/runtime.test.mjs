@@ -11,7 +11,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { executeRuntime, PRIMITIVE_NAMES } from "../mcp-server/dist-test/runtime/interpreter.js";
 import { compileIR, toVectorPathData } from "../mcp-server/dist-test/runtime/compile.js";
-import { solveAxis, radial, forceDirected, layoutRegions, inferComposition, packContent } from "../mcp-server/dist-test/runtime/layout.js";
+import { solveAxis, radial, forceDirected, layoutRegions, inferComposition, packContent, separateOverlaps } from "../mcp-server/dist-test/runtime/layout.js";
 import { scoreDesign } from "../mcp-server/dist-test/review/score.js";
 import { tree, masonry, timeline, cluster, runAlgorithm } from "../mcp-server/dist-test/runtime/algorithms.js";
 import { solveConstraints } from "../mcp-server/dist-test/runtime/constraints.js";
@@ -549,6 +549,78 @@ test("tree is deterministic across runs", () => {
 
   for (const node of nodes) {
     assert.deepEqual(first.get(node.id), second.get(node.id), `${node.id} moved between identical runs`);
+  }
+});
+
+test("runAlgorithm serves radial and force with finite coordinates", () => {
+  // Live defect: unknown names fell through to masonry with the wrong item
+  // shape and produced NaN (serialized as null) — non-finite coordinates must
+  // never reach Figma operations.
+  const nodes = [{ id: "hub" }, { id: "a" }, { id: "b" }];
+  const links = [{ from: "hub", to: "a" }, { from: "hub", to: "b" }];
+  const opts = { bounds: { x: 0, y: 0, w: 1440, h: 900 }, gap: 24, levelGap: 48, columns: 1 };
+  for (const algo of ["radial", "force", "forceGraph", "tree", "cluster"]) {
+    const { points } = runAlgorithm(algo, nodes, links, opts);
+    assert.equal(points.size, 3, `${algo} placed every node`);
+    for (const [id, p] of points) {
+      assert.ok(Number.isFinite(p.x) && Number.isFinite(p.y), `${algo}/${id} is non-finite: ${p.x},${p.y}`);
+    }
+  }
+});
+
+test("separateOverlaps parts piled tiles and stays in bounds", () => {
+  const boxes = [
+    { id: "a", x: 652, y: 394, w: 128, h: 80 },
+    { id: "b", x: 648, y: 410, w: 128, h: 80 },
+    { id: "c", x: 656, y: 410, w: 128, h: 80 },
+  ];
+  const out = separateOverlaps(boxes, { x: 0, y: 0, w: 1440, h: 900 }, 8);
+  assert.equal(out.remaining, 0, "no true overlap remains");
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i], b = boxes[j];
+      const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      assert.ok(!(ox > 0 && oy > 0), `${a.id}/${b.id} still overlap`);
+    }
+    assert.ok(boxes[i].x >= 0 && boxes[i].y >= 0, `${boxes[i].id} escaped bounds`);
+  }
+  const mkPile = () => ([
+    { id: "a", x: 652, y: 394, w: 128, h: 80 },
+    { id: "b", x: 648, y: 410, w: 128, h: 80 },
+    { id: "c", x: 656, y: 410, w: 128, h: 80 },
+  ]);
+  const first = mkPile();
+  separateOverlaps(first, { x: 0, y: 0, w: 1440, h: 900 }, 8);
+  const second = mkPile();
+  separateOverlaps(second, { x: 0, y: 0, w: 1440, h: 900 }, 8);
+  assert.deepEqual(first, second, "separation is deterministic");
+});
+
+test("a topology program compiles with no overlapping device tiles", () => {
+  const result = executeRuntime({
+    canvas: { name: "Topo", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "hero", id: "map", args: { width: "fill", height: "fill", composition: "topology", layout: "topology" } }],
+    links: [{ from: "hub", to: "n1", label: "8us" }, { from: "hub", to: "n2" }],
+    content: [
+      { fn: "deviceNode", id: "hub", parent: "map", args: { label: "hub-01" } },
+      { fn: "deviceNode", id: "n1", parent: "map", args: { label: "node-01" } },
+      { fn: "deviceNode", id: "n2", parent: "map", args: { label: "node-02" } },
+      { fn: "connector", id: "c1", parent: "map", args: { from: "hub", to: "n1", label: "8us" } },
+      { fn: "connector", id: "c2", parent: "map", args: { from: "hub", to: "n2" } },
+    ],
+  });
+  const tiles = ["hub", "n1", "n2"].map((id) => ({ id, ...result.boxes.get(id) }));
+  for (const t of tiles) {
+    assert.ok(Number.isInteger(t.x) && Number.isInteger(t.y), `${t.id} has integer coordinates`);
+  }
+  for (let i = 0; i < tiles.length; i++) {
+    for (let j = i + 1; j < tiles.length; j++) {
+      const a = tiles[i], b = tiles[j];
+      const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+      const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+      assert.ok(!(ox > 0 && oy > 0), `${a.id}/${b.id} overlap`);
+    }
   }
 });
 

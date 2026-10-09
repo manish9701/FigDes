@@ -26,7 +26,7 @@
  * sizes each node, and centring is what lets a node of any size sit correctly in
  * a slot without the algorithm needing to know its size.
  */
-import { round } from "./layout";
+import { round, radial, forceDirected } from "./layout";
 
 export interface AlgorithmNode {
   id: string;
@@ -426,6 +426,28 @@ export function runAlgorithm(
     case "cluster": {
       const r = cluster(nodes as ClusterItem[], opts);
       return { points: r, detail: { groups: [...r.groups.keys()], columns: r.columns } };
+    }
+    case "radial": {
+      const b = opts.bounds;
+      const out: PointMap = radial(
+        nodes.map((n) => ({ id: n.id })),
+        { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+        Math.max(40, Math.min(b.w, b.h) / 2 - (opts.gap ?? 24) * 4),
+      );
+      return { points: out };
+    }
+    case "force":
+    case "forceGraph": {
+      const b = opts.bounds;
+      const out: PointMap = forceDirected(
+        nodes.map((n) => ({ id: n.id })),
+        links,
+        {
+          center: { x: b.x + b.w / 2, y: b.y + b.h / 2 },
+          radius: Math.max(40, Math.min(b.w, b.h) / 3),
+        },
+      );
+      return { points: out };
     }
     case "masonry":
     case "pack":

@@ -499,6 +499,82 @@ export const round = (n: number): number => Math.round(n * 100) / 100;
  */
 export const defaultGutter = (grid: number): number => grid * 4;
 
+/* -------------------------------------------------------------------------- */
+/* Overlap separation                                                        */
+/* -------------------------------------------------------------------------- */
+
+export interface SeparableBox {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Pushes overlapping boxes apart until none overlap (or passes run out).
+ *
+ * Layout algorithms return *centres* without knowing node sizes, so a correct
+ * tree can still pile 128px tiles on 24px slots — the exact collapse seen live
+ * when three device nodes landed within 8px of each other. This post-pass runs
+ * on sized boxes: pairwise repulsion along the smaller overlap axis, clamped to
+ * bounds, deterministic (input order, fixed pass count). Returns how many
+ * pairs still overlap, so the caller can warn instead of pretending.
+ */
+export function separateOverlaps(
+  boxes: SeparableBox[],
+  bounds: { x: number; y: number; w: number; h: number },
+  minGap = 8,
+  maxPasses = 24,
+): { moved: number; remaining: number } {
+  let moved = 0;
+  const EPS = 1e-6;
+  const overlap = (a: SeparableBox, b: SeparableBox, gap: number): { ox: number; oy: number } => {
+    const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x) + gap;
+    const oy = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) + gap;
+    return { ox, oy };
+  };
+  const clampBox = (b: SeparableBox): void => {
+    b.x = Math.min(Math.max(b.x, bounds.x), Math.max(bounds.x, bounds.x + bounds.w - b.w));
+    b.y = Math.min(Math.max(b.y, bounds.y), Math.max(bounds.y, bounds.y + bounds.h - b.h));
+  };
+  for (let pass = 0; pass < maxPasses; pass++) {
+    let any = false;
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!;
+        const b = boxes[j]!;
+        const { ox, oy } = overlap(a, b, minGap);
+        if (ox <= EPS || oy <= EPS) continue;
+        any = true;
+        if (ox < oy) {
+          const shift = ox / 2;
+          if (a.x <= b.x) { a.x -= shift; b.x += shift; } else { a.x += shift; b.x -= shift; }
+        } else {
+          const shift = oy / 2;
+          if (a.y <= b.y) { a.y -= shift; b.y += shift; } else { a.y += shift; b.y -= shift; }
+        }
+        clampBox(a);
+        clampBox(b);
+        moved++;
+      }
+    }
+    if (!any) break;
+  }
+  let remaining = 0;
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      // True overlap counts with no gap demand: the loop aims for minGap, but
+      // only actual intersection is a defect worth reporting.
+      const { ox, oy } = overlap(boxes[i]!, boxes[j]!, 0);
+      if (ox > EPS && oy > EPS) remaining++;
+    }
+  }
+  return { moved, remaining };
+}
+
+/* -------------------------------------------------------------------------- */
+
 /** Convenience used by the compiler. */
 export function planLayout(ir: DesignIR, gutter?: number): ResolvedRegion[] {
   const g = gutter ?? defaultGutter(ir.canvas.grid);

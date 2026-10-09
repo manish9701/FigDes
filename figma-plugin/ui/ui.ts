@@ -59,6 +59,8 @@ let reconnectTimer: number | undefined;
 let heartbeatTimer: number | undefined;
 let haltReconnect = false;
 let registered = false;
+/** Last known document status: heartbeat sends this without main-thread round trips. */
+let lastStatus: StatusPayload | null = null;
 
 const pending = new Map<string, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: number }>();
 
@@ -316,6 +318,24 @@ function connect(): void {
   }
   ws = socket;
 
+  // A socket stuck in CONNECTING (no open, error or close) would otherwise
+  // wedge connect() forever: every later call returns early on the stale
+  // CONNECTING check while nothing ever connects.
+  const connectingTimer = window.setTimeout(() => {
+    if (ws === socket && socket.readyState === WebSocket.CONNECTING) {
+      appendLog("warn", "Connection attempt stalled — retrying with a fresh socket.");
+      try {
+        socket.close(1000, "connect-timeout");
+      } catch {
+        /* close is best-effort; onclose reschedules */
+      }
+      if (ws === socket) {
+        ws = null;
+        scheduleReconnect();
+      }
+    }
+  }, 15000);
+
   // Every handler below is a no-op once this socket has been superseded. Without
   // this guard a stale socket's late onclose nulls out `ws`, which points at the
   // replacement socket — and every subsequent send() silently no-ops, so the
@@ -323,6 +343,7 @@ function connect(): void {
   const isCurrent = () => ws === socket;
 
   socket.onopen = () => {
+    window.clearTimeout(connectingTimer);
     if (!isCurrent()) {
       socket.close(1000, "superseded");
       return;
@@ -352,6 +373,7 @@ function connect(): void {
   };
 
   socket.onclose = (ev: CloseEvent) => {
+    window.clearTimeout(connectingTimer);
     if (!isCurrent()) return;
     ws = null;
     registered = false;
@@ -418,6 +440,7 @@ async function bootstrapAndRegister(): Promise<void> {
     pluginVersion: config?.pluginVersion ?? "0.0.0",
     secret: config?.secret || undefined,
   };
+  lastStatus = status;
 
   send(register);
 
@@ -438,11 +461,30 @@ function figma_baseline_name(): string {
 
 function startHeartbeat(): void {
   stopHeartbeat();
+  let ticks = 0;
   heartbeatTimer = window.setInterval(() => {
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    // Socket-level liveness must not depend on the main thread: during long
+    // builds the main thread is wedged and a round trip would stall, making a
+    // healthy connection look dead server-side. Send the cached status every
+    // tick; refresh the cache from the main thread every ~30s.
+    ticks += 1;
+    const cached = lastStatus;
+    if (cached && ticks % 6 !== 0) {
+      send({
+        type: "state",
+        pageId: cached.pageId ?? "",
+        pageName: cached.pageName ?? "",
+        selection: cached.selection ?? [],
+        editorType: "figma",
+        at: Date.now(),
+      });
+      return;
+    }
     void request("figma_status")
       .then((raw) => {
         const s = raw as StatusPayload;
+        lastStatus = s;
         const state: StateMessage = {
           type: "state",
           pageId: s.pageId ?? "",
@@ -636,3 +678,19 @@ el<HTMLButtonElement>("save").addEventListener("click", () => {
 // change.
 toMain({ kind: "ready" });
 refreshPanel();
+
+// A sleeping laptop, a backgrounded tab or a proxy that severs idle sockets
+// all look identical from here: the socket dies quietly. Reconnect the moment
+// the environment signals it can, instead of waiting out the backoff.
+window.addEventListener("online", () => {
+  if (!ws || ws.readyState === WebSocket.CLOSED) {
+    attempts = 0;
+    connect();
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && (!ws || ws.readyState === WebSocket.CLOSED)) {
+    attempts = 0;
+    connect();
+  }
+});

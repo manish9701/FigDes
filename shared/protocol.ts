@@ -1183,8 +1183,7 @@ export type PluginToolName = (typeof PLUGIN_TOOL_NAMES)[number];
 export interface StatusResult {
   connected: boolean;
   message?: string;
-  sessionId?: string;
-  /** Human name for the plugin session: "Exo Labs — Chatgpt Designs". */
+  sessionId?: string;  /** Human name for the plugin session: "Exo Labs — Chatgpt Designs". */
   sessionName?: string;
   fileName?: string;
   fileKey?: string | null;
@@ -1194,6 +1193,12 @@ export interface StatusResult {
   selectionCount?: number;
   pluginVersion?: string;
   lastSeen?: number;
+  /**
+   * True when the socket is open but no app message arrived recently (busy
+   * main thread or throttled panel). The session still receives tool calls;
+   * this flag tells the user why it looks quiet, instead of showing gone.
+   */
+  stale?: boolean;
   /**
    * Named MCP client connections (ChatGPT, Claude Code, …), most-recent
    * first, each with its in-flight tool calls. This is how you see who is

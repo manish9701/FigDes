@@ -483,7 +483,7 @@ function isContentResult(data: unknown): data is { content: Array<{ type: string
  */
 function announce(registry: SessionRegistry, client: string, tool: string, detail: string): void {
   const text = detail ? `${client} · ${tool} — ${detail}` : `${client} · ${tool}`;
-  for (const session of registry.alive()) {
+  for (const session of registry.connected()) {
     session.notify({ type: "notify", kind: "activity", text: text.slice(0, 140), at: Date.now() });
   }
 }

@@ -80,7 +80,7 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       JSON.stringify(
         {
           ok: true,
-          sessions: registry.alive().map((s) => s.status()),
+          sessions: registry.connected().map((s) => s.status()),
           mcpClients: connections.map((c) => ({
             display: c.display,
             calls: c.calls,
@@ -138,6 +138,12 @@ server.on("upgrade", (req, socket, head) => {
 wss.on("connection", (ws: WebSocket) => {
   const session = registry.add(ws);
   console.log(`[ws] plugin connected (${session.id}) — waiting for register frame`);
+
+  // Transport keepalive: ping proves the socket is alive even when the Figma
+  // main thread is wedged and heartbeat messages stall. Pongs refresh the
+  // session (markPong); a socket silent beyond grace is terminated so a
+  // half-open connection fails fast instead of looking connected forever.
+  ws.on("pong", () => session.markPong());
 
   // A plugin that opens a socket but never registers is a half-open session.
   const registrationGuard = setTimeout(() => {
@@ -198,6 +204,36 @@ wss.on("connection", (ws: WebSocket) => {
 
   ws.on("error", (err) => console.error(`[ws] ${session.id} error:`, err.message));
 });
+
+/* -------------------------------------------------------------------------- */
+/* Transport keepalive                                                          */
+/* -------------------------------------------------------------------------- */
+
+const PING_MS = 25_000;
+const SILENT_KILL_MS = 90_000;
+
+const keepalive = setInterval(() => {
+  for (const session of registry.all()) {
+    if (!session.reachable) continue;
+    const quietFor = Date.now() - Math.max(session.lastSeen, session.lastPongAt);
+    if (quietFor > SILENT_KILL_MS) {
+      console.warn(`[ws] ${session.id} silent for ${Math.round(quietFor / 1000)}s; terminating half-open socket.`);
+      try {
+        session.socket.terminate();
+      } catch {
+        /* already gone */
+      }
+      continue;
+    }
+    try {
+      session.socket.ping();
+    } catch {
+      /* send-side failure surfaces at request time */
+    }
+  }
+}, PING_MS);
+// Keep-alive must not hold the process open on its own.
+(keepalive as unknown as { unref?: () => void }).unref?.();
 
 /* -------------------------------------------------------------------------- */
 /* Diagnostics                                                                  */

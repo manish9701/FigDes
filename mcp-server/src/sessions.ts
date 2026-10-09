@@ -49,6 +49,8 @@ export class Session {
   readonly id = `session_${randomUUID()}`;
   readonly connectedAt = Date.now();
   lastSeen = Date.now();
+  /** Last WebSocket pong: proves the socket is alive even when the Figma main thread is wedged and heartbeats stall. */
+  lastPongAt = 0;
 
   fileKey: string | null = null;
   fileName = "Unknown file";
@@ -75,6 +77,31 @@ export class Session {
 
   get alive(): boolean {
     return !this.closed && this.socket.readyState === this.socket.OPEN && Date.now() - this.lastSeen < STALE_AFTER_MS;
+  }
+
+  /**
+   * Socket-level reachability, ignoring message freshness.
+   *
+   * A wedged Figma main thread (long builds) or a throttled background panel
+   * stops heartbeat *messages* while the socket stays open. Dispatching on
+   * `alive` alone turned those stretches into "no plugin connected" failures
+   * with the panel still showing Connected. Dispatch on reachability instead:
+   * the per-request timeout (60s–5min) is the real guard, and a dead socket
+   * fails fast at send/request time. Freshness stays visible in health.
+   */
+  get reachable(): boolean {
+    return !this.closed && this.socket.readyState === this.socket.OPEN;
+  }
+
+  /** True when the socket is open but no message arrived recently. */
+  get stale(): boolean {
+    return this.reachable && Date.now() - this.lastSeen >= STALE_AFTER_MS;
+  }
+
+  /** WebSocket pong arrived: the transport is alive regardless of app traffic. */
+  markPong(): void {
+    this.lastPongAt = Date.now();
+    this.lastSeen = Math.max(this.lastSeen, Date.now());
   }
 
   send(msg: ServerMessage): void {
@@ -117,7 +144,7 @@ export class Session {
 
   /** Dispatch a tool to the plugin and await its result. */
   request(tool: PluginToolName, payload: unknown, timeoutMs?: number): Promise<unknown> {
-    if (!this.alive) {
+    if (!this.reachable) {
       return Promise.reject(new Error(`Plugin session ${this.id} is not connected.`));
     }
 
@@ -184,7 +211,7 @@ export class Session {
 
   status(): StatusResult {
     return {
-      connected: this.alive,
+      connected: this.reachable,
       sessionId: this.id,
       fileName: this.fileName,
       fileKey: this.fileKey,
@@ -193,6 +220,7 @@ export class Session {
       selectionCount: this.selection.length,
       pluginVersion: this.pluginVersion,
       lastSeen: this.lastSeen,
+      ...(this.stale ? { stale: true as const } : {}),
     };
   }
 
@@ -236,16 +264,21 @@ export class SessionRegistry {
     return this.all().filter((s) => s.alive);
   }
 
+  /** Sessions with an open socket, whether or not recent app traffic arrived. */
+  connected(): Session[] {
+    return this.all().filter((s) => s.reachable);
+  }
+
   /** SPEC §33: never guess the target when multiple files are open. */
   resolve(sessionId?: string): Session {
     if (sessionId) {
       const found = this.sessions.get(sessionId);
       if (!found) throw new Error(`Unknown plugin session: ${sessionId}`);
-      if (!found.alive) throw new Error(`Plugin session ${sessionId} exists but is not connected.`);
+      if (!found.reachable) throw new Error(`Plugin session ${sessionId} exists but is not connected.`);
       return found;
     }
 
-    const live = this.alive();
+    const live = this.all().filter((s) => s.reachable);
     if (live.length === 0) {
       throw new Error(
         "No Figma Design Agent plugin is connected. Open the plugin in the target Figma file and keep it running.",

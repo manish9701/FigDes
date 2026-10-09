@@ -560,7 +560,7 @@ export const TOOLS: ToolDefinition[] = [
           activity: recent,
         };
       } catch (err) {
-        if (registry.alive().length === 0) return { ...DISCONNECTED, clients: connections, activity: recent };
+        if (registry.connected().length === 0) return { ...DISCONNECTED, clients: connections, activity: recent };
         throw err;
       }
     },

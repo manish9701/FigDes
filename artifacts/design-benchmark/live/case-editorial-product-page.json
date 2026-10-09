@@ -311,7 +311,14 @@
       "severity": "minor"
     }
   ],
-  "visualScores": null,
+  "visualScores": {
+    "compositionHierarchy": 7,
+    "visualIdentity": 6,
+    "typography": 7,
+    "geometry": 8,
+    "detailCraft": 6,
+    "briefFidelity": 7
+  },
   "visualStatus": "VISION_REVIEWED_R3",
   "repairs": [],
   "unresolved": [
@@ -319,5 +326,7 @@
   ],
   "runtimeMs": 4952,
   "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED",
-  "visualVerdict": "WATCH"
+  "visualVerdict": "WATCH",
+  "liveTotal": 68.5,
+  "liveScorer": "opencode-agent direct PNG inspection (r3)"
 }

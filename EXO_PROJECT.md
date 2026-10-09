@@ -128,7 +128,7 @@ Exit gate: slides are traceable to sources and approved designs; no unsupported 
 
 | ID | Screen | Primary question | Status | Figma frame/link | Next action | Approved? |
 |---|---|---|---|---|---|---|
-| S01 | Home / AI computer overview | Is my AI computer ready, and what can I do next? | 🟡 Concept v1 rendered | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 | Fix contrast/readability; review composition with user | No |
+| S01 | Home / AI computer overview | Is my AI computer ready, and what can I do next? | 🟡 Concept v1.1 rendered and QA-patched | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 | User review of composition and content; then refine remaining issues | No |
 | S02 | Compute / topology | What devices make up the system and how are they connected? | Pending | Existing work may be reusable | Validate topology data and accessible list alternative | No |
 | S03 | Models / discovery | What can I run on this system? | Pending | Existing work may be reusable | Validate catalog fields and fit semantics | No |
 | S04 | Model detail / fit | Can I run this model and what are the trade-offs? | Pending | Existing work may be reusable | Validate requirements and estimate provenance | No |
@@ -154,9 +154,9 @@ One row per meaningful claim. Link the exact page/document, not only a homepage.
 |---|---|---|---|---|---|---|---|---|
 | R-001 | EXO supports the described multi-device compute workflow | Product fact | https://github.com/exo-explore/exo | Verify current revision | 2026-10-09 | Pending verification | Product context | Needs source check |
 | R-002 | EXO documents APIs for relevant system/runtime actions | Product fact | https://github.com/exo-explore/exo/blob/main/docs/api.md | Verify current revision | 2026-10-09 | Pending verification | Architecture/integration | Needs source check |
-| R-003 | Jan provides model discovery and a local API server | Competitor fact | https://www.jan.ai/docs/desktop/quickstart and https://www.jan.ai/docs/desktop/api-server | Verify page dates | 2026-10-09 | Medium until rechecked | Competitive analysis | Needs source check |
-| R-004 | LM Studio has distinct model discovery/loading workflows | Competitor fact | https://lmstudio.ai/docs/app/basics | Verify page date | 2026-10-09 | Medium until rechecked | Competitive analysis | Needs source check |
-| R-005 | Ollama supports OpenAI-compatible API patterns | Competitor fact | https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx | Verify current revision | 2026-10-09 | Medium until rechecked | Integration opportunity | Needs source check |
+| R-003 | Jan Hub shows hardware-fit labels for models; Jan also documents an OpenAI-compatible local API server with host/auth settings | Competitor fact | https://www.jan.ai/docs/desktop/manage-models and https://www.jan.ai/docs/desktop/api-server | Page dates not confirmed | 2026-10-09 | High for these documented features | Competitive analysis | Verified against official docs; recheck before deck export |
+| R-004 | LM Studio documents model list, download, load/unload and API server controls in its current REST/API documentation | Competitor fact | https://lmstudio.ai/docs/developer/rest and https://lmstudio.ai/docs/developer/rest/load | Page dates not confirmed | 2026-10-09 | High for documented API features | Competitive analysis | Verified against official docs; not a complete UX comparison |
+| R-005 | Ollama documents support for a subset of the OpenAI API | Competitor fact | https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx | Current main branch; check again before deck | 2026-10-09 | High for the stated subset claim | Integration opportunity | Verified against official docs; avoid saying full compatibility |
 
 Research hygiene:
 - Access date is when we inspected a source; it is not its publication date.
@@ -185,7 +185,7 @@ Add an entry after every review iteration.
 
 | Review ID | Date | Screen | Finding | Severity | Change made | Evidence after change | Outcome |
 |---|---|---|---|---|---|---|---|
-| REV-001 | 2026-10-09 | S01 | First Compute Field concept rendered. Topology focal point and next action read clearly, but technical labels are too small/low contrast; device relationships need visual review. The node labels and metrics are illustrative sample content, not confirmed EXO telemetry. | Major + minor | Build v1 as editable native Figma frame; kept existing screens untouched. | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 ; FigDes review reported 25 findings: 6 high, 19 medium, 0 critical. High-confidence contrast issues include #8A8C84 on light surfaces (3.12–3.35:1). 12 tiny technical-text findings; some are 8–10px. | Iterate; not approved |
+| REV-001 | 2026-10-09 | S01 | First Compute Field concept rendered. Topology focal point and next action read clearly, but technical labels were too small/low contrast; device relationships need visual review. Sample device data is not confirmed EXO telemetry. | Major + minor | Build v1 as editable native Figma frame; existing screens untouched. | https://www.figma.com/design/dkVVX7tVzvsk8HBrUoGen8/Exo-Labs?node-id=182-1911 ; initial review: 25 findings (6 high, 19 medium, 0 critical). | Iterated |
 
 Severity:
 - Critical: wrong behavior, misleading data, broken core task, unsafe exposure.
@@ -266,3 +266,19 @@ Review findings:
 - The concept is not approved and is not connected to live EXO data.
 
 Next: correct high-confidence contrast/readability issues, inspect topology line/node relationships at full scale, then ask the user to review composition and product content before polishing further.
+
+
+### Review iteration 2 — 9 October 2026
+- Applied darker neutral text to previously flagged low-contrast labels.
+- Increased small technical text toward 11px where the current layout allows.
+- Increased the primary action target to 44px high and aligned its corner radius with the surrounding system.
+- Repositioned the last device detail label inside the topology field.
+- Fresh render confirms the label no longer visibly crosses the field edge. High-confidence review now reports 2 findings before the final targeted patch; one was the label overflow (fixed) and one was the button radius (fixed). Run one more review before marking QA clean.
+- Visual composition remains a concept, not approved. Device count/specs, green system status, and connections are illustrative; do not use as factual slide evidence.
+- Token seeding was attempted but the tool rejected its variable-collection operation and rolled back without creating variables. The existing page still needs a properly validated design-system setup.
+
+### Research verification notes — 9 October 2026
+- Jan's official model management documentation describes hardware-fit labels (“Fits”, “May be slow”, “Won't fit”); its local API docs describe an OpenAI-compatible server and network/authentication configuration: https://www.jan.ai/docs/desktop/manage-models and https://www.jan.ai/docs/desktop/api-server
+- LM Studio's official API docs describe model listing and lifecycle endpoints including download/load/unload: https://lmstudio.ai/docs/developer/rest and https://lmstudio.ai/docs/developer/rest/load
+- Ollama's official documentation describes support for a subset of the OpenAI API, not full equivalence: https://github.com/ollama/ollama/blob/main/docs/api/openai-compatibility.mdx
+- These are official feature-documentation checks, not a complete side-by-side usability study. Do not extrapolate them into unsupported market-share, user-satisfaction, or adoption claims.

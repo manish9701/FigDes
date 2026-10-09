@@ -366,13 +366,20 @@
     "warnings": [],
     "violations": []
   },
-  "visualFindings": [],
+  "visualFindings": [
+    {
+      "area": "full",
+      "defect": "negative control: visibly a 3-card wall; program gate FAILs it as designed",
+      "severity": "major"
+    }
+  ],
   "visualScores": null,
-  "visualStatus": "PENDING_VISION_REVIEW",
+  "visualStatus": "VISION_REVIEWED_R3",
   "repairs": [],
   "unresolved": [
-    "visual judgement pending (Phase B)"
+    "fixture scope: 10/10 needs real art direction, not placeholder polish"
   ],
   "runtimeMs": 9114,
-  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED",
+  "visualVerdict": "FAIL"
 }

@@ -2,7 +2,7 @@
   "caseId": "exo-enterprise-workspace",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T07:52:49.821Z",
+  "startedAt": "2026-10-09T08:01:30.704Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -61,20 +61,11 @@
     "content": [
       {
         "fn": "sectionHeader",
-        "id": "nav-headline",
-        "parent": "nav",
+        "id": "work-headline",
+        "parent": "work",
         "args": {
           "title": "Assigned fleet [fixture]",
           "action": "Manage"
-        }
-      },
-      {
-        "fn": "text",
-        "id": "t",
-        "parent": "work",
-        "args": {
-          "text": "Assigned fleet [fixture]",
-          "fontSize": 24
         }
       },
       {
@@ -114,15 +105,305 @@
     ]
   },
   "irRevision": "live-exo-enterprise-workspace-r1",
-  "operationManifest": [],
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — exo-enterprise-workspace",
+      "fill": "#FFFDF9",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "nav",
+      "parent": "root",
+      "name": "Nav",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 240,
+      "height": 900
+    },
+    {
+      "id": "work",
+      "parent": "root",
+      "name": "Work",
+      "x": 272,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1168,
+      "height": 900
+    },
+    {
+      "id": "nav-fleet",
+      "parent": "nav",
+      "name": "Fleet",
+      "x": 0,
+      "y": 0,
+      "fill": "#F2C94C",
+      "type": "createFrame",
+      "width": 64,
+      "height": 36,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 8,
+        "right": 12,
+        "bottom": 8,
+        "left": 12
+      }
+    },
+    {
+      "parent": "nav-fleet",
+      "name": "Label",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "Fleet",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "weight": 600
+    },
+    {
+      "id": "nav-models",
+      "parent": "nav",
+      "name": "Models",
+      "x": 0,
+      "y": 98,
+      "fill": [],
+      "type": "createFrame",
+      "width": 72,
+      "height": 36,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 8,
+        "right": 12,
+        "bottom": 8,
+        "left": 12
+      }
+    },
+    {
+      "parent": "nav-models",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Models",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14
+    },
+    {
+      "id": "work-headline",
+      "parent": "work",
+      "name": "Assigned fleet [fixture]",
+      "x": 0,
+      "y": 0,
+      "fill": "#242521",
+      "type": "createText",
+      "content": "Assigned fleet [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 18,
+      "weight": 600
+    },
+    {
+      "parent": "work",
+      "name": "Action",
+      "x": 1127,
+      "y": 4,
+      "fill": "#0B6BCB",
+      "type": "createText",
+      "content": "Manage",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 500
+    },
+    {
+      "id": "d1",
+      "parent": "work",
+      "name": "edge-04 [fixture]",
+      "x": 0,
+      "y": 98,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#8A5200",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "d1",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "edge-04 [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "d2",
+      "parent": "work",
+      "name": "edge-09 [fixture]",
+      "x": 0,
+      "y": 196,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "d2",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "edge-09 [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    }
+  ],
   "dryRun": {
-    "operationCount": 14,
+    "operationCount": 13,
     "violations": [],
-    "warnings": [
-      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    "warnings": []
+  },
+  "nativeFrameId": "136:798",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-enterprise-workspace-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — exo-enterprise-workspace\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 12.7 KB base64.\nBudget used: 11,560 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQgAAAAAAACQgAAAAAkIAAAAAAAAkIAAAAAJCAAAAAAAAJCAAAAACQwP8HoJSla6XazmwAAAAASUVORK5CYII=",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — exo-enterprise-workspace\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 12.7 KB base64.\nBudget used: 11,560 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "serious/high overflow: \"Action\" extends past the edge of \"Work\"",
+    "minor/medium off-grid-geometry: \"Models\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Action\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"edge-04 [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Fleet\"",
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Models\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"edge-04 [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"edge-09 [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 10,
+    "high": 1,
+    "medium": 9,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "overflow": 1,
+      "off-grid-geometry": 5,
+      "text-outside-autolayout": 4
+    }
+  },
+  "reviewedNodes": 13,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 2 regions; composition: split-view; largest region isolated by 0%"
     ]
   },
-  "status": "FAILED",
-  "error": "Error: transaction failed at op #-1 (plan): Unrecognized color: transparent. Use #RGB, #RRGGBB, #RRGGBBAA or rgb(r,g,b). Hint: Inspect the target nodes first, then retry with corrected arguments. Use dryRun=true to validate without changing the document.",
-  "runtimeMs": 2018
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.9,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 4,
+        "evidence": "no focal region; 2 regions; composition: split-view; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 7,
+        "evidence": "3 distinct size(s): 12, 14, 18; contrast 3/3 passing AA",
+        "improve": "The largest text is 18px: no headline, no entry point."
+      },
+      {
+        "dimension": "Information density",
+        "score": 8,
+        "evidence": "2 regions tile the canvas; 2px of stroke in play; 13 node(s) drawn"
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "7/7 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "8 colour(s); 1 familie(s); accents: #F2C94C, #0B6BCB"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 12px"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'work' at 92%: work 92%, nav 8%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (4/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [],
+    "violations": []
+  },
+  "visualFindings": [
+    {
+      "area": "full",
+      "defect": "rail+single headline+2 cards render; double-headline fixed r4",
+      "severity": "minor"
+    }
+  ],
+  "visualScores": null,
+  "visualStatus": "VISION_REVIEWED_R3",
+  "repairs": [],
+  "unresolved": [
+    "fixture scope: 10/10 needs real art direction, not placeholder polish"
+  ],
+  "runtimeMs": 89935,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED",
+  "visualVerdict": "WATCH"
 }

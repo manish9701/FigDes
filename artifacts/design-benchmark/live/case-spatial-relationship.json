@@ -424,13 +424,20 @@
     "warnings": [],
     "violations": []
   },
-  "visualFindings": [],
+  "visualFindings": [
+    {
+      "area": "full",
+      "defect": "ingest-store-relay chain reads with labels; minor label touches",
+      "severity": "minor"
+    }
+  ],
   "visualScores": null,
-  "visualStatus": "PENDING_VISION_REVIEW",
+  "visualStatus": "VISION_REVIEWED_R3",
   "repairs": [],
   "unresolved": [
-    "visual judgement pending (Phase B)"
+    "fixture scope: 10/10 needs real art direction, not placeholder polish"
   ],
   "runtimeMs": 11511,
-  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED",
+  "visualVerdict": "WATCH"
 }

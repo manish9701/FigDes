@@ -103,10 +103,9 @@ function programFor(id) {
           { fn: "frame", id: "work", args: { width: "fill", height: "fill" } },
         ],
         content: [
-          { fn: "text", id: "t", parent: "work", args: { text: `Assigned fleet ${F}`, fontSize: 24 } },
           { fn: "deviceNode", id: "d1", parent: "work", args: { label: `edge-04 ${F}`, health: "degraded" } },
           { fn: "deviceNode", id: "d2", parent: "work", args: { label: `edge-09 ${F}` } },
-        ] };
+        ] }; // headline injected by the driver (round 3 repair)
     case "generic-saas-dashboard":
       return { canvas,
         regions: [{ fn: "frame", id: "dash", args: { width: "fill", height: "fill" } }],
@@ -243,10 +242,15 @@ for (const c of CASES) {
       const program = programFor(c.id);
       // Round 3 repair: every screen gets a headline (Hierarchy entry point)
       // and the workspace gets nav items (rail renders instead of vanishing).
-      const firstRegion = program.regions[0]?.id;
+      // The headline goes to the first non-navigation region, and is skipped
+      // when the program already carries a title there (no doubled headlines).
+      const contentRegion = program.regions.find((r) => r.fn !== "navigation") ?? program.regions[0];
       const [title, action] = CASE_TITLES[c.id] ?? [c.id, "View"];
-      if (firstRegion && !program.content.some((n) => n.fn === "sectionHeader")) {
-        program.content.unshift({ fn: "sectionHeader", id: `${firstRegion}-headline`, parent: firstRegion, args: { title: `${title} [fixture]`, action } });
+      const hasTitle = program.content.some(
+        (n) => n.fn === "sectionHeader" || (n.fn === "text" && n.parent === contentRegion?.id),
+      );
+      if (contentRegion && !hasTitle) {
+        program.content.unshift({ fn: "sectionHeader", id: `${contentRegion.id}-headline`, parent: contentRegion.id, args: { title: `${title} [fixture]`, action } });
       }
       if (c.id === "exo-enterprise-workspace" && !program.content.some((n) => n.fn === "navItem")) {
         program.content.push(

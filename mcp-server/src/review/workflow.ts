@@ -22,6 +22,7 @@ import { scoreDesign } from "./score";
 import { critiqueVisual } from "./critique";
 import { evaluateQualityGate } from "./quality";
 import { evaluateGenericity } from "../design/quality/genericity";
+import { evaluateConsistency } from "../design/quality/consistency";
 import { extendCritique } from "../design/quality/visual-critic";
 import { planRepairs } from "../design/quality/repair-planner";
 import { evaluateFinalGate } from "../design/quality/final-gate";
@@ -679,6 +680,27 @@ interface ChecklistItem {
 }
 
 /**
+ * Derives consistency inputs from compiled operations by scanning their
+ * serialised form for fills, radii and font families. Shape-agnostic: it
+ * works regardless of which op produced the value, because it reads values
+ * rather than op types.
+ */
+function consistencyInputsFromProgram(operations: unknown[]): { fills: string[]; radii?: number[]; families?: string[] } {
+  const json = JSON.stringify(operations ?? []);
+  const fills = [...json.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0] ?? "").filter((s) => s.length > 0);
+  const radii = [...json.matchAll(/"(?:radius|cornerRadius)"\s*:\s*(\d+(?:\.\d+)?)/g)]
+    .map((m) => Number(m[1]))
+    .filter((n) => Number.isFinite(n));
+  const families = [...json.matchAll(/"family"\s*:\s*"([^"]{1,80})"/g)]
+    .map((m) => m[1] ?? "")
+    .filter((s) => s.length > 0);
+  const out: { fills: string[]; radii?: number[]; families?: string[] } = { fills };
+  if (radii.length > 0) out.radii = radii;
+  if (families.length > 0) out.families = families;
+  return out;
+}
+
+/**
  * The §33 quality gate: one checklist, five areas, one verdict.
  *
  * Each item is measured or explicitly marked unmeasurable — never guessed. A
@@ -729,6 +751,12 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       regions: runtime.ir.regions.map((r) => ({ id: r.id, role: r.role })),
       composition: resolvedComposition,
     });
+    // Consistency dimension (§7.5): measured from the compiled program's
+    // fills, radii and font families. Previously exported but never called by
+    // any tool; now a first-class checklist item and a gate blocker when a
+    // repair introduced unapproved fills.
+    const consistency = evaluateConsistency(consistencyInputsFromProgram(runtime.operations));
+    const consistencyBlocking = consistency.blocking ? [`Consistency: ${consistency.evidence.find((e) => e.startsWith("BLOCKING")) ?? "unapproved fills"}`] : [];
     const finalGate = evaluateFinalGate({
       scores: {
         hierarchy: dimension("Hierarchy") * 10,
@@ -740,9 +768,11 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
         productFit: dimension("Composition") * 10,
       },
       genericity,
-      blockingIssues: failed.map((f) => String(f.rule ?? "guard")),
+      blockingIssues: [...failed.map((f) => String(f.rule ?? "guard")), ...consistencyBlocking],
     });
-    items.push({
+    items.push(
+      { area: "SYSTEM", check: "design tokens consistent", pass: consistency.blocking ? false : consistency.score >= 70 ? true : null, detail: `consistency ${consistency.score}/100: ${consistency.evidence.slice(0, 2).join("; ")}` },
+      {
       area: "VISUAL",
       check: "final visual-quality gate",
       pass: finalGate.status === "FAIL" ? false : finalGate.status === "REVIEW" ? null : true,

@@ -1141,12 +1141,27 @@ function viableAlternatives(composition: Composition, kind: DecisionKind): Array
   if (kind === "monitor" || kind === "topology") {
     out.push({ composition: "instrument", trade: "denser, more numeric, reads as telemetry rather than as an object" });
     out.push({ composition: "editorial", trade: "more whitespace and fewer readouts, reads as a report rather than a monitor" });
+    out.push({ composition: "timeline", trade: "event timeline, better for reviewing how the state evolved" });
   } else if (kind === "select" || kind === "compare") {
     out.push({ composition: "table", trade: "rows read across for comparison, cheaper per option" });
     out.push({ composition: "spatial", trade: "options positioned by some measure, better when one option is clearly better" });
+    out.push({ composition: "split-view", trade: "options beside detail, more context per option" });
   } else if (kind === "explore" || kind === "inspect") {
     out.push({ composition: "split-view", trade: "list and detail side by side, more context per item" });
     out.push({ composition: "canvas", trade: "one thing at a time, less scanning" });
+    out.push({ composition: "table", trade: "rows for scanning many items, cheaper per row" });
+  } else if (kind === "configure") {
+    out.push({ composition: "split-view", trade: "form beside a live preview, so each setting shows its effect" });
+    out.push({ composition: "table", trade: "tabular review, better when many settings must be scanned together" });
+    out.push({ composition: "editorial", trade: "document-first setup narrative, better for complex multi-part configuration" });
+  } else if (kind === "integration") {
+    out.push({ composition: "split-view", trade: "provider list beside endpoint detail, more context per provider" });
+    out.push({ composition: "instrument", trade: "status-first connection health, better for diagnosing failures" });
+    out.push({ composition: "table", trade: "tabular endpoint inventory, better for many providers at a glance" });
+  } else if (kind === "author") {
+    out.push({ composition: "split-view", trade: "canvas beside an inspector, so structure and properties stay visible" });
+    out.push({ composition: "editorial", trade: "document-first flow, better for long-form content" });
+    out.push({ composition: "sequence", trade: "step-by-step creation flow, better for guided multi-stage authoring" });
   }
 
   return out.filter((a) => a.composition !== composition).slice(0, 2);

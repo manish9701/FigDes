@@ -185,3 +185,99 @@ export function summarizeBenchmarkRun(results: BenchmarkResult[]): BenchmarkSuit
     readyForComparison: missingCases.length === 0,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Baseline-vs-candidate comparison + regression tracking (blueprint §11)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Challenge categories from the blueprint's §11 matrix that have no dedicated
+ * benchmark case yet. Kept as data — not appended to BENCHMARKS, whose length
+ * is pinned by test — so the gap is explicit and plannable rather than silent.
+ */
+export const UNCOVERED_CHALLENGE_CATEGORIES: readonly string[] = [
+  "workflow-or-agent-builder",
+  "empty-loading-error-states",
+  "multi-screen-product-coherence",
+  "existing-file-extension-with-component-reuse",
+  "unfamiliar-domain-generalization",
+  "spatial-canvas-challenge",
+  "responsive-adaptation",
+  "design-system-adherence-under-constraints",
+];
+
+/**
+ * A positive control: an authored screen that must score well. The suite has
+ * long had a negative control (generic-saas-dashboard, must NOT look like
+ * this); without a positive control there is no proof the scorer can
+ * recognise good work rather than merely punish bad work.
+ */
+export const POSITIVE_CONTROL_CASE: BenchmarkCase = {
+  id: "authored-spatial-positive-control",
+  brief: "Authored spatial screen (positive control: must score well)",
+  decisionKind: "topology",
+  patternId: "spatial-topology",
+};
+
+export interface BenchmarkComparison {
+  caseId: string;
+  baseline: number;
+  candidate: number;
+  delta: number;
+  improved: boolean;
+  regressed: boolean;
+  /** A drop of at least this much counts as a regression, not noise. */
+  regressionThreshold: number;
+}
+
+export interface BenchmarkComparisonReport {
+  comparisons: BenchmarkComparison[];
+  improvements: number;
+  regressions: string[];
+  regressionRate: number;
+  /** True only when several categories improved and nothing regressed. */
+  broadImprovement: boolean;
+  summary: string;
+}
+
+/**
+ * Compares two runs of the same cases. Dimensions are preserved per case by
+ * the caller; this reports wins and regressions without collapsing them into
+ * one number that could hide a failure.
+ */
+export function compareBenchmarkRuns(
+  baseline: BenchmarkResult[],
+  candidate: BenchmarkResult[],
+  regressionThreshold = 5,
+): BenchmarkComparisonReport {
+  const baseByCase = new Map(baseline.map((r) => [r.caseId, r]));
+  const comparisons: BenchmarkComparison[] = [];
+  for (const next of candidate) {
+    const prev = baseByCase.get(next.caseId);
+    if (!prev) continue;
+    const delta = Math.round((next.total - prev.total) * 10) / 10;
+    comparisons.push({
+      caseId: next.caseId,
+      baseline: prev.total,
+      candidate: next.total,
+      delta,
+      improved: delta > 0,
+      regressed: delta <= -regressionThreshold,
+      regressionThreshold,
+    });
+  }
+  const improvements = comparisons.filter((c) => c.improved).length;
+  const regressions = comparisons.filter((c) => c.regressed).map((c) => c.caseId);
+  const broadImprovement = comparisons.length > 0 && improvements >= 2 && regressions.length === 0;
+  return {
+    comparisons,
+    improvements,
+    regressions,
+    regressionRate: comparisons.length === 0 ? 0 : Math.round((regressions.length / comparisons.length) * 100) / 100,
+    broadImprovement,
+    summary:
+      comparisons.length === 0
+        ? "No shared cases between baseline and candidate runs."
+        : `${improvements}/${comparisons.length} improved, ${regressions.length} regressed${regressions.length > 0 ? ` (${regressions.join(", ")})` : ""}.`,
+  };
+}

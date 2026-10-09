@@ -54,6 +54,27 @@ export const MemoryNoteSchema = z
     tags: z.array(z.string().max(40)).max(8).default([]),
     /** ISO timestamp. */
     recordedAt: z.string().max(40).default(""),
+    /**
+     * Provenance (blueprint §12). Optional so every note recorded before this
+     * field existed keeps parsing: where the note came from, which revision it
+     * was judged against, and who stands behind it.
+     */
+    provenance: z
+      .object({
+        source: z.string().max(200).optional(),
+        sessionId: z.string().max(200).optional(),
+        frameId: z.string().max(200).optional(),
+        revisionId: z.string().max(200).optional(),
+        reviewer: z.string().max(200).optional(),
+      })
+      .strict()
+      .optional(),
+    /** 0–1: how much to trust this note. Absent means unrated, not certain. */
+    confidence: z.number().min(0).max(1).optional(),
+    /** ISO timestamp after which this note must be re-confirmed. */
+    validUntil: z.string().max(40).optional(),
+    /** Id of the note that replaces this one, when superseded. */
+    supersededBy: z.string().min(1).max(120).optional(),
   })
   .strict();
 

@@ -1053,6 +1053,7 @@ function emitComponent(
         op({
           type: "createFrame",
           id: spec.id,
+          parent: parentHint,
           name: str("label", "Metric"),
           x: box.x,
           y: box.y,

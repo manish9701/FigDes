@@ -1,50 +1,346 @@
 {
   "caseId": "exo-model-detail",
-  "brief": "Choose between models by fit: ranked comparison with evidence",
-  "nodeId": "112:1204",
-  "nodeName": "V5 · 03 Models · Library",
-  "before": {
-    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
-    "critiqueVerdict": "FAIL",
-    "qualityGate": "FAIL",
-    "blockingIssues": [
-      "Whitespace/Density: 17 regions; 64 operations"
-    ],
-    "passing": [
-      "Focal clarity PASS: intended focal holds 69%",
-      "Balance PASS 80/20",
-      "Card-wall: WATCH (7 bordered surfaces, capped 100%)",
-      "Template feel PASS"
-    ],
-    "reviewHigh": 0,
-    "reviewerVisual": "PASS: fit-ranked rows (Q4/6.2B/61 tok/s, ACTIVE/TIGHT/SHARDED pills), mono specs, quiet dividers; reads as an instrument table, not a card wall"
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:37:32.967Z",
+  "fixtures": [
+    {
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
+    }
+  ],
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 5 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
   },
-  "repairs": [],
-  "repairsNote": "No repair applied deliberately: 0 high findings, focal PASS, and the card-wall WATCH counts status pills (radius>=4) as bordered surfaces — reviewed against the image and dismissed with reason. Forcing a change on a verified-good screen would be worse than the loop reporting a clean pass.",
-  "after": null,
-  "resolution": {
-    "resolved": [],
-    "persisting": [],
-    "introduced": [],
-    "method": "single-pass verification (render + critique + review agree; nothing to fix)"
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "object-inspector",
+    "infoKinds": [
+      "option",
+      "attribute",
+      "signal"
+    ],
+    "appliedGuidance": [
+      "'nav' gap 24px from 'ObjectInspector' balanced density.",
+      "Relationship rule carried into build: Context rows reference the subject explicitly."
+    ],
+    "note": "Derived from 5 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
   },
-  "score": {
-    "total": 90,
-    "dimensions": {
-      "hierarchy": 14,
-      "composition": 13,
-      "productSpecificity": 14,
-      "typography": 9,
-      "spacingRhythm": 9,
-      "relationshipClarity": 8,
-      "density": 7,
-      "nativeQuality": 5,
-      "distinctiveness": 5,
-      "readability": 9
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — exo-model-detail",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "inspector",
+        "id": "detail",
+        "args": {
+          "width": "fill",
+          "height": "fill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "fn": "text",
+        "id": "t",
+        "parent": "detail",
+        "args": {
+          "text": "atlas-7b [fixture]",
+          "fontSize": 28
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m1",
+        "parent": "detail",
+        "args": {
+          "label": "Memory",
+          "value": "41 GB [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m2",
+        "parent": "detail",
+        "args": {
+          "label": "Throughput",
+          "value": "88 tok/s [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "statusPill",
+        "id": "st",
+        "parent": "detail",
+        "args": {
+          "label": "fits [fixture]",
+          "tone": "success"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-exo-model-detail-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — exo-model-detail",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "detail",
+      "parent": "root",
+      "name": "Detail",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "t",
+      "parent": "detail",
+      "name": "atlas-7b [fixture]",
+      "x": 0,
+      "y": 0,
+      "type": "createText",
+      "content": "atlas-7b [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "width": 1440
+    },
+    {
+      "id": "m1",
+      "name": "Memory",
+      "x": 0,
+      "y": 32,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m1",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Memory",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m1",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "41 GB [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "m2",
+      "name": "Throughput",
+      "x": 0,
+      "y": 130,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m2",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Throughput",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m2",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "88 tok/s [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "st",
+      "parent": "detail",
+      "name": "fits [fixture]",
+      "x": 0,
+      "y": 228,
+      "fill": "#2D7A4D1A",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 103,
+      "height": 22,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 2,
+        "right": 8,
+        "bottom": 2,
+        "left": 8
+      }
+    },
+    {
+      "parent": "st",
+      "name": "Label",
+      "fill": "#1E6B3A",
+      "type": "createText",
+      "content": "fits [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 500
+    }
+  ],
+  "dryRun": {
+    "operationCount": 11,
+    "violations": [],
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ]
+  },
+  "nativeFrameId": "129:381",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-model-detail-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — exo-model-detail\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 6.1 KB base64.\nBudget used: 1,360 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPDV8D/dPZ+7g9JdJQAAAABJRU5ErkJggg==",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — exo-model-detail\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 6.1 KB base64.\nBudget used: 1,360 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
     }
   },
-  "measurementNotes": [
-    "Density FAIL on 17 regions for a 5-row table is proxy noise: rows legitimately need rank/title/spec/pill/action nodes. Recorded as heuristic-precision evidence, not a design defect.",
-    "Card-wall heuristic counts soft status pills as bordered surfaces: precision evidence for future pill-vs-card distinction."
-  ]
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"fits [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "text-outside-autolayout": 1
+    }
+  },
+  "reviewedNodes": 5,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 1 regions; composition: split-view; largest region isolated by 0%"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.3,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 2,
+        "evidence": "no focal region; 1 regions; composition: split-view; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 8,
+        "evidence": "4 distinct size(s): 11, 12, 14, 28; headline at 28px; 2 technical value(s) in mono; contrast 4/5 passing AA",
+        "improve": "1 text layer(s) fail AA against their backgrounds."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 11 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "5/5 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "5 colour(s); 2 familie(s)"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 11px; technical values monospaced"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'detail' at 100%: detail 100%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 8639,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
 }

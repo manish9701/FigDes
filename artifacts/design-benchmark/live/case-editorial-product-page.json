@@ -1,0 +1,274 @@
+{
+  "caseId": "editorial-product-page",
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:38:20.685Z",
+  "fixtures": [
+    {
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
+    }
+  ],
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 2 classified information item(s) for the 'select' decision; pattern 'ComparisonField' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
+  },
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "comparison-field",
+    "infoKinds": [
+      "option",
+      "relationship"
+    ],
+    "appliedGuidance": [
+      "'nav' gap 24px from 'ComparisonField' balanced density.",
+      "'header' gap 24px from 'ComparisonField' balanced density.",
+      "Relationship rule carried into build: Same schema both sides."
+    ],
+    "note": "Derived from 2 classified information item(s) for the 'select' decision; pattern 'ComparisonField' applied as guidance, not structure."
+  },
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — editorial-product-page",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "hero",
+        "id": "story",
+        "args": {
+          "width": "fill",
+          "height": "fill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "fn": "text",
+        "id": "t",
+        "parent": "story",
+        "args": {
+          "text": "Run the small model first [fixture]",
+          "fontSize": 32
+        }
+      },
+      {
+        "fn": "text",
+        "id": "b",
+        "parent": "story",
+        "args": {
+          "text": "Half the cost, nearly the quality [fixture]",
+          "fontSize": 16
+        }
+      },
+      {
+        "fn": "button",
+        "id": "go",
+        "parent": "story",
+        "args": {
+          "label": "Run atlas-7b [fixture]"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-editorial-product-page-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — editorial-product-page",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "story",
+      "parent": "root",
+      "name": "Story",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "t",
+      "parent": "story",
+      "name": "Run the small model first [fixture]",
+      "x": 0,
+      "y": 0,
+      "type": "createText",
+      "content": "Run the small model first [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "width": 1440
+    },
+    {
+      "id": "b",
+      "parent": "story",
+      "name": "Half the cost, nearly the quality [fixtu",
+      "x": 0,
+      "y": 32,
+      "type": "createText",
+      "content": "Half the cost, nearly the quality [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "width": 1440
+    },
+    {
+      "id": "go",
+      "parent": "story",
+      "name": "Run atlas-7b [fixture]",
+      "x": 0,
+      "y": 64,
+      "fill": "#242521",
+      "type": "createFrame",
+      "width": 193,
+      "height": 40,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 8,
+        "right": 16,
+        "bottom": 8,
+        "left": 16
+      }
+    },
+    {
+      "parent": "go",
+      "name": "Label",
+      "fill": "#FFFFFF",
+      "type": "createText",
+      "content": "Run atlas-7b [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 13,
+      "weight": 600
+    }
+  ],
+  "dryRun": {
+    "operationCount": 6,
+    "violations": [],
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings.",
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ]
+  },
+  "nativeFrameId": "129:451",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/editorial-product-page-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — editorial-product-page\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 9.0 KB base64.\nBudget used: 3,740 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgE+7/weAAhMwuIwe7QAAAABJRU5ErkJggg==",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — editorial-product-page\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 9.0 KB base64.\nBudget used: 3,740 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Run atlas-7b [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "text-outside-autolayout": 1
+    }
+  },
+  "reviewedNodes": 6,
+  "programCritique": {
+    "verdict": "WATCH",
+    "qualityGate": "REVIEW",
+    "blocking": []
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.6,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 7,
+        "evidence": "one focal region (story); 1 regions; composition: editorial; largest region isolated by 0%",
+        "improve": "One region is a page, not a composition. Split intent from chrome. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 5,
+        "evidence": "2 distinct size(s): 13, 14; contrast 1/1 passing AA",
+        "improve": "Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 6 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "4/4 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "2 colour(s); 1 familie(s)"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 13px"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'story' at 100%: story 100%"
+      }
+    ],
+    "weakSpots": [
+      "Hierarchy (5/10): Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": true,
+      "intentional hierarchy": false,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings.",
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 3154,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+}

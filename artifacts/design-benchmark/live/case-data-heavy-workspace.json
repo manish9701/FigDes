@@ -1,0 +1,300 @@
+{
+  "caseId": "data-heavy-workspace",
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:38:06.602Z",
+  "fixtures": [
+    {
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
+    }
+  ],
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 4 classified information item(s) for the 'select' decision; pattern 'ComparisonField' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
+  },
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "comparison-field",
+    "infoKinds": [
+      "event",
+      "signal"
+    ],
+    "appliedGuidance": [
+      "'nav' gap 24px from 'ComparisonField' balanced density.",
+      "'header' gap 24px from 'ComparisonField' balanced density.",
+      "Relationship rule carried into build: Same schema both sides."
+    ],
+    "note": "Derived from 4 classified information item(s) for the 'select' decision; pattern 'ComparisonField' applied as guidance, not structure."
+  },
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — data-heavy-workspace",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "frame",
+        "id": "ws",
+        "args": {
+          "width": "fill",
+          "height": "fill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "fn": "text",
+        "id": "t",
+        "parent": "ws",
+        "args": {
+          "text": "Follow-ups [fixture]",
+          "fontSize": 24
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m1",
+        "parent": "ws",
+        "args": {
+          "label": "Open incidents",
+          "value": "7 [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "statusPill",
+        "id": "st",
+        "parent": "ws",
+        "args": {
+          "label": "owner: rios [fixture]",
+          "tone": "info"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-data-heavy-workspace-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — data-heavy-workspace",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "ws",
+      "parent": "root",
+      "name": "Ws",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "t",
+      "parent": "ws",
+      "name": "Follow-ups [fixture]",
+      "x": 0,
+      "y": 0,
+      "type": "createText",
+      "content": "Follow-ups [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "width": 1440
+    },
+    {
+      "id": "m1",
+      "name": "Open incidents",
+      "x": 0,
+      "y": 32,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m1",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Open incidents",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m1",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "7 [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "st",
+      "parent": "ws",
+      "name": "owner: rios [fixture]",
+      "x": 0,
+      "y": 130,
+      "fill": "#0D99FF1A",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 146,
+      "height": 22,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 2,
+        "right": 8,
+        "bottom": 2,
+        "left": 8
+      }
+    },
+    {
+      "parent": "st",
+      "name": "Label",
+      "fill": "#0B6BCB",
+      "type": "createText",
+      "content": "owner: rios [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 500
+    }
+  ],
+  "dryRun": {
+    "operationCount": 8,
+    "violations": [],
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ]
+  },
+  "nativeFrameId": "129:431",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/data-heavy-workspace-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — data-heavy-workspace\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 6.6 KB base64.\nBudget used: 3,060 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAABAAAAAKACAYAAAACfQphAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAOdEVYdFNvZnR3YXJlAEZpZ21hnrGWYwAAE1hJREFUeAHt3U9sHUWaAPDqfo7tODixTSBiJg5erdDOJgiyc3MuZE+gvcAe8B4zq4XrMuGyx+DTnkLgstIoiQauzEokpwmnSS7kNjgIM5HQSM7YzAAhyYuTGP95r3uqnvt5jPEzEMLkgX6/qNP9uqu/qu7bV1VdDgEAAAAAAAAA+OGrpf+GhoYO9/f3j63b6ovRZjfEsgfjpU/iPpUbisf10KViG5+Lbfyfqp2XUtvj8f/G7VLcnque83ttf6zzF7Gel+KWxbouBwAAALgP8pTIZ1n263j81LptqNMNsezb1eGRqmw3ezJuU3E7m35Uz/lG3FLSv2urG+N7OZI6DMJ3dyZuF6q2AAAAwH3Rk/4ry3KmXq9PbryYRq/j7tG4XYrXz3QKEsulDoPUIZD2b8ayM2n0PR6fj8f16jjVMZU6HOLxWDw+36G+M9U9a+VSMp7aELdnqzhvdqp3k+bVq3gpdop5uIp1JV1Lsx+qMu22pU6NS7Gz4BfpvcRzqa6Z9W2O516Kx69X94bqnlSuvrE9Vd0z1XsEAACA+yLvdGFkZOS1sDpqfT4mw2k0/JedysbrvwurSXIq+3ZKzPM8T/c+W10/FncvVcXTfleHOEfWXRsL1QyDeP6XVawU/7l2W6p6p6rzJ8LWUrmUoLc6Jap4qa6pNDOgavOx6jnqKfmv7plZ35Z17Umequptxa5mGAxV7fn1PZpBAAAAAN9ZawZATFYPDg8Pp2S6PRvgP+P+qbj/l3QuJrJpxDxN/X9tY4A0uh/LTsWyZ6vfb8TdkaIo0rT31HFwIcVMdVR1HY6/J6vk+NkqTMrJX9+inUPtGQqpLVXi327LWNzO3rhx49+3uD9VMBWfMe0vbDifRujfTAl7bHO9fb0atZ+qZjOMdYobn+W19OzpeeJxSv7T/Vl6J9XzTQUAAAC4z1ozAFKyGhPof01bSv43FkpZcUyQxzrESEnvzLrfqbMgJexpFPxwWJ1yfybWcb7qLKhXI/Ct0fhquxC2UI3Gr7WlqjOdT0l/WsPg7ZGRka+bAbCV9HnDc9X+rsV2pHa111FI7bwQAAAAoAvkW1xrf4ffHuU/36FcGuE+HNoB8/xIdS4l6GdiUpym/KdE+Gz1KcAbreCr38dfqLZ2+Zm4+4cqzlrM1PnQ/t4+7avOhFaynWYGpI6LeO5wde5bS1P/0/2xnlc2xGgf19szGNprE2wSZmb1seqT1WyFC+HLHSMAAABw3/R0uhAT4qNpWvzw8HC9/Xuzcil5j6Pv52O599LPoijWPgcIq6vvH66m0ac4Y2HrUfHX02h+jDUT/vbNfqtjICbpT8XzqTNhLI38V1P3D6bF/eI9rc6GanbAt5Luj21ufRoQjyerdQDSs15IHRapQyAtOpj6BeLWXnNgJnz1PbQ+JUifUsS2pE6Leqd3BgAAAD9odzsC/w3i/u5u4sfix2LnxLG/92J869uZZgykvxqQ2hIAAADgPukJ99DdjMB/z/HPxtH99NcIvpeOiU42tHMsWA8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP37Zl36VZRb+L+wI/RvOs7U7YTn8d7YUAAAAoEutJfrDvyp3LfXE5J+7khWheWdX+DxMZM0AAAAAXabVASD5vzd0AgAAANCt8vCrcqDbkv/yL3N7w7eU/fGjA/nly+PpuHbj2s50nPZ3E+vr2pZibxa3zENt8IswFAAAAKDL5IMhDIQuUn48MxquXpsI39b8zRPF8tKBdFjMzPx/s2jsLf788TNZff7AZsWzS+9Nhrtx+/Zo8cXCi/mN+vhml5uN0NdaSwEAAAC6SE+zJ/RudiEl4rVr9f9Kx82Hdp+qxcS32YyJ889+djGb+v2J8uDPj4Y/fPh0meXzeWN5vMjz2Xx5+VCx5+Hj2SN755pXPjrQc+PWC0Vv77vZ/sd/k8qGZnM0azZGi93Dp7L5hf3hn/e/k+Knkfrmx3+eyIvm3uaDQ6dDT2221Yh4T7a0+Ew7RmtEf3b25XabUj1r7Y1dAOGJJ09l0+9PxAR8NGs0d2Xb+6bLRrGzjOeK/u3TvSMjs8Xs3Avltm3TsS0TsRMghAceeKtYWtrfbmO5Y+d0fuv6oSLLyxSjNrr3rS/V+Vh8/un3R8NWftt6pxYFBAAAoGvknS7UPrt+otnb/87Kjh2/yT69Olnmtfl88Yvn848uj4eieKa8fHk8W16aKLLafLbSOFTGZLkxOHgq++Sz11KiXrt+azJ/5NFj+crK4+H9Sy9kKysHwsrKoWL4oZPF4srOsix2tutq3Ly1K1tZnmgO7T4VVmKjllfGWzMBFhf/oxh5+HiKUX74wfMpeW+EbK65c+h0p5H9fPdPz8Vuipvl0IPnyuXl0VRvz09+eq526/bLxdzci0XsXKiN7LkYsjCf2pIVzZ2pvnRvq40Lt0dDozEeGs3RFKP40+xkeg+tOuN7CN/EbKgFAAAA6CIdOwCK+C+N9tf+8bHpvCxGy7gvi+JQHC0/UPRsO5kvL42XRbmr9k+PTafyWUyWU9msLPeWn189kIVitPjkSkyYy53tWrK+3t9m+/bOtcqlEff1svyDdG2tYfX58axWa53L+/veTUl6Y8fAO7WiGK/duH6iU7ubex6cb4VbF6s5/OB8loW52AHxdKp3szJf0dt3sXW9aBzKlxYm8pvXX27NMwAAAIAfoHyrS2mhuzQSX1Z5b1bL34mj/RPZE0++GpqNZ2JSPbvZndnuh6bLkM+WT/78aLF75NWyr296/fVWzK9ZnK/o7Z0NZbM11b5Inxb0brtYa6zsLfY8dKz5wMDxsLT4QviGWvUV5YFQq10sq4UC167ltfmyLPe1Pi8omo9/5d74HMXDDx/P9z16LPT1vxUAAADgB6hjB0A5PHI0+/SzE/nV+suNXTuPpnPFwPZzRa3nXKtAbdu5on+glRCXeTbdM7h9fjVi/m4acQ8D/SezqfdOZ1evvxL6HpgNtWyuyHtaI+7Z7YX9YcMiemVP/uH64/StfVmrTacYRZndTCP3Zd/Ah/mnVyfzO4sTzcHBV0LHp8rfXY3TczPVm9249XTo7z+Z79t3PF9cXF1gsLf3eIz9aprZkMX2N69cORE7Az5InzSErGe2tf/be5gsrsze3aKBAAAA0AWygdPlT8KPwdTvT+d5HK1/4uAr4fuUFjNcXHgx9A+cbC9iuNHCI+Fa+LfMIoAAAAB0jWzHyXJP+vv1gXtmYTB8Hiay5QAAAABdIr9ThMXAPZNvCw3JPwAAAN0mD8PhdkxZLW9/j9zuD7cCAAAAdJk8jlY3F4bDNZ0A393CYJiP7/OLAAAAAF0mWzt6q6yFO2FwRwj9ZbHVnwdko4WesBS2x5F/U/8BAADoUtmmZ1NnAN/M86EIWWb2BAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPzZ/BTeBYEOHaQMEAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — data-heavy-workspace\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 6.6 KB base64.\nBudget used: 3,060 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"owner: rios [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "text-outside-autolayout": 1
+    }
+  },
+  "reviewedNodes": 5,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 1 regions; composition: editorial; largest region isolated by 0%"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.3,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 2,
+        "evidence": "no focal region; 1 regions; composition: editorial; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 8,
+        "evidence": "4 distinct size(s): 11, 12, 14, 28; headline at 28px; 1 technical value(s) in mono; contrast 2/3 passing AA",
+        "improve": "1 text layer(s) fail AA against their backgrounds."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 8 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "4/4 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "5 colour(s); 2 familie(s); accents: #0D99FF1A, #0B6BCB"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 11px; technical values monospaced"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'ws' at 100%: ws 100%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 5080,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+}

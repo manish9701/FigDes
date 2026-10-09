@@ -1,61 +1,365 @@
 {
   "caseId": "exo-runtime-monitoring",
-  "brief": "Watch inference live: intervene or let run",
-  "nodeId": "117:287",
-  "nodeName": "EXO Runtime Monitor",
-  "page": "Chatgpt Designs (not loaded this session)",
-  "before": {
-    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
-    "defects": [
-      "black canvas (regions emitted with no fill)",
-      "section headers ordered below their values by the grid algorithm",
-      "hero content huddled in the left third; right two-thirds empty"
-    ],
-    "reviewHigh": 1,
-    "reviewRules": ["overflow: memory track overhang"]
-  },
-  "repairs": [
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:37:41.607Z",
+  "fixtures": [
     {
-      "pass": 1,
-      "ops": "setFill canvas #F7F5EF + 6 setPosition (header/value/event order)",
-      "approvals": "none required (non-destructive)"
-    },
-    {
-      "pass": 2,
-      "ops": "createVector throughput trace (860x120, health green) + mono caption",
-      "note": "trace data illustrative, consistent with the file's demo-data convention"
-    },
-    {
-      "pass": 3,
-      "ops": "setSize memory track 432 (inside frame padding)",
-      "result": "review 1 high -> 0"
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
     }
   ],
-  "after": {
-    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
-    "reviewHigh": 0,
-    "reviewerVisual": "calm instrument: rail state, 64px hero number, mono sub-line, trace field, memory bar, quiet event rows; no card wall"
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 5 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
   },
-  "resolution": {
-    "resolved": ["black canvas", "header order", "empty right field", "memory overflow"],
-    "persisting": [],
-    "introduced": [],
-    "method": "re-render judged per pass + review_design re-runs (1 high -> 0)"
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "monitoring-instrument",
+    "infoKinds": [
+      "signal",
+      "relationship"
+    ],
+    "appliedGuidance": [
+      "'rail' gap 24px from 'MonitoringInstrument' balanced density.",
+      "Relationship rule carried into build: Signal-to-source traceable."
+    ],
+    "note": "Derived from 5 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure."
   },
-  "score": {
-    "total": 86,
-    "dimensions": {
-      "hierarchy": 13,
-      "composition": 12,
-      "productSpecificity": 12,
-      "typography": 9,
-      "spacingRhythm": 8,
-      "relationshipClarity": 7,
-      "density": 8,
-      "nativeQuality": 5,
-      "distinctiveness": 4,
-      "readability": 8
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — exo-runtime-monitoring",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "frame",
+        "id": "board",
+        "args": {
+          "width": "fill",
+          "height": "fill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "fn": "metric",
+        "id": "m1",
+        "parent": "board",
+        "args": {
+          "label": "GPU",
+          "value": "92% [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m2",
+        "parent": "board",
+        "args": {
+          "label": "Memory pressure",
+          "value": "71% [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m3",
+        "parent": "board",
+        "args": {
+          "label": "Error rate",
+          "value": "0.4% [fixture]",
+          "valueStyle": "technical"
+        }
+      },
+      {
+        "fn": "statusPill",
+        "id": "st",
+        "parent": "board",
+        "args": {
+          "label": "watching [fixture]",
+          "tone": "warning"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-exo-runtime-monitoring-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — exo-runtime-monitoring",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "board",
+      "parent": "root",
+      "name": "Board",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "m1",
+      "name": "GPU",
+      "x": 0,
+      "y": 0,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m1",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "GPU",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m1",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "92% [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "m2",
+      "name": "Memory pressure",
+      "x": 0,
+      "y": 98,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m2",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Memory pressure",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m2",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "71% [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "m3",
+      "name": "Error rate",
+      "x": 0,
+      "y": 196,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m3",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Error rate",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m3",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "0.4% [fixture]",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "st",
+      "parent": "board",
+      "name": "watching [fixture]",
+      "x": 0,
+      "y": 294,
+      "fill": "#B26A001A",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 127,
+      "height": 22,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 2,
+        "right": 8,
+        "bottom": 2,
+        "left": 8
+      }
+    },
+    {
+      "parent": "st",
+      "name": "Label",
+      "fill": "#8A5200",
+      "type": "createText",
+      "content": "watching [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 500
+    }
+  ],
+  "dryRun": {
+    "operationCount": 13,
+    "violations": [],
+    "warnings": []
+  },
+  "nativeFrameId": "129:392",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-runtime-monitoring-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — exo-runtime-monitoring\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 5.3 KB base64.\nBudget used: 1,700 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAABAAAAAKACAYAAAACfQphAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAOdEVYdFNvZnR3YXJlAEZpZ21hnrGWYwAAD0FJREFUeAHt3T1sndUZB/D/vbbvjR1/JCFpAk36QdspTB0qglSpXZqoSzuAqTpWZCpDoUO3BrqXDIzQ7jgdSiciVSJLcaVKZcEsJSBqiwBOAF9/XNv3q+d1SBQgRk5bpN7091vu6/Oe95xzvT3Pc95zEwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD4P1C7cTEYpPbirzK53c6+Zj31cNNWP/2x1XQ661mdvZBeAAAAYMjsJADm5jLS/EsOD3oZCbsaK4mA9WZWZs+nHQAAABgidcH/3nXqqTc6OfjyuYwGAAAAhsjIT7+cmfTSzBfkykc52e1ma7yRrRttb72f2QyyeGvbXrxxJec/WM9DhyZz6a13c/bD9Xy71c6Rtc3sm57Icv5L3l7O6autPN4fZGGimdan77c3MvrC3+wCAAAAYHjUB5tp5D/05rt5cvH9nLrdvfZmTq9t5OStbaO1rByc/GxgvQfHDzTy3MZ2pnuD/GB6LC/ta+T1fWNZuV3nf7yTP+TfMD2e+VqyUtZ+4nb367U0qzMTAgAAAENitD56++3sJXj+67fuy4NV1b1ez8Kxg5l751p+NzWRJ1vrO20rg2RpajzPd/t5tFTLz3y4lodLhf5sv3c9GTDezLnqc6uXs2WcJ8vl0jfvzRPtTn5Tri9WAXqtlsXy7EPNsfz6q0dutg2qAHuknlfuP5Znbl3X4UNZuvxuni73H1jr5Ey/JANGyhitjRKs19Iqc86vt/NYaZsv3U9evpKnGo1c7HRyqhqr+j7NkcyVNc0OaqmN1fJa+Wz1ejlTxpxujOW5ah3lu3xuguLS93demegGAAAAhsCup/2XIHz+aivHS1B8ogTHp66t5FQJ+i82RrIyOZFzJWB/pt/PmaMzWRyt54USVJ9rNpJBPw+WxMHD0/vzxMjHpwqMjeaFEvg/Ui4/sROgJBBOVAmBqWZ+1u3m9OJyTlcJgarv2Ehe2m1tkyXpUPq99rWjef5G27FDJRFRgvq1jTx9YH9++/VjmSvNC9+4N0/tNs54CfarMTrdPFbW/lwV/G93cjZ7sHzELyUAAAAwPHYNYqsK+kfr+WW9BNol2K5tdfNoYzTzrXZOrW7kfKmonyz3PrH1frWdmZIw2KmcV4mBew9kYWeSj9tu3PvMIkavt5cAfqaMufh5fXcz0UirPFvNt3J4Okt7eebmqwMlydHt5ES/zF8lAQIAAAB3mV0TAEcP5aX+ILOl4n+xVPhfKdfHj9+ThVLhP1GvZ74+kpXStlPRL4F3q9pSX+0OKH/OvL2cR6pt+m+/t1P137Nqzl4/D1VnCnT7mb2TZ3cOFixG6ll48708Vl0PkunFazk1mrTKuLMf9zn56Wer7zOoZbokOqbLvA8EAAAA7jIjP/lOpm53Y2wkWxvtzJ/4UuYbjbwx6GV+aiLLBybz9/V2mrVSoR8fy/M32zaTUj1fGh3NpVJJr97LX/jK0Vzc7mVpvHn9xP/t7SxU/cu4CzP7s3Tjs16lIWp59eD+LJf+C2O1XC7JhepU/+mDkzvv8u+4upqzg0FenhxPq8zxajVWNf5Es1T++9mansiL9x3Kpc2tbFX3SjB/qdMtiYvDmS9zz5eMwFap+v9pYjxvlCkvHz2Yy9W4h6by4lo7R/r91Mp8c5vbaba38r2STLhcre92/5/eejYuvJ5eAAAAYAjU/vh47sv/iOp0/ysf5HwJxCszJRj/xa3b+audAdVBf/ff8u7/F6HaNVAdGlgSCnO7vU6w/V6uzl7IdgAAAGAI1P7889yzVksz3JEfPZsr1a8VBAAAAIZAfa2tin2nBmvZEPwDAAAwTOo//n1Wt2vphD3pd9PtrGc1AAAAMESu/wrAd/PBdjub4XNVwX/3Wq7NXnD4HwAAAMOldusfrz2Sxj+PZV+jn7Fw0+p6es2ptH/4bLYCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcHf6F06f/HyyaDFjAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — exo-runtime-monitoring\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 5.3 KB base64.\nBudget used: 1,700 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
     }
   },
-  "visualReverification": "PENDING: built and verified in a prior session on the Chatgpt Designs page, which is not loaded in this session (plugin is on V5). Evidence above is carried forward, not re-captured. Re-render on page return to close."
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"watching [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 1,
+    "high": 0,
+    "medium": 1,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "text-outside-autolayout": 1
+    }
+  },
+  "reviewedNodes": 4,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 1 regions; composition: editorial; largest region isolated by 0%"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.3,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 2,
+        "evidence": "no focal region; 1 regions; composition: editorial; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 8,
+        "evidence": "3 distinct size(s): 11, 12, 28; headline at 28px; 3 technical value(s) in mono; contrast 6/7 passing AA",
+        "improve": "1 text layer(s) fail AA against their backgrounds."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 13 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "5/5 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "5 colour(s); 2 familie(s); accents: #B26A001A, #8A5200"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 11px; technical values monospaced"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'board' at 100%: board 100%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 10237,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
 }

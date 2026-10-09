@@ -1,0 +1,319 @@
+{
+  "caseId": "generic-saas-dashboard",
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:37:59.294Z",
+  "fixtures": [
+    {
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
+    }
+  ],
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
+  },
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "object-inspector",
+    "infoKinds": [
+      "attribute",
+      "event"
+    ],
+    "appliedGuidance": [
+      "'nav' gap 24px from 'ObjectInspector' balanced density.",
+      "Relationship rule carried into build: Context rows reference the subject explicitly."
+    ],
+    "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+  },
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — generic-saas-dashboard",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "frame",
+        "id": "dash",
+        "args": {
+          "width": "fill",
+          "height": "fill"
+        }
+      }
+    ],
+    "content": [
+      {
+        "fn": "metric",
+        "id": "m1",
+        "parent": "dash",
+        "args": {
+          "label": "Users",
+          "value": "12,400 [fixture]"
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m2",
+        "parent": "dash",
+        "args": {
+          "label": "Revenue",
+          "value": "$88k [fixture]"
+        }
+      },
+      {
+        "fn": "metric",
+        "id": "m3",
+        "parent": "dash",
+        "args": {
+          "label": "Growth",
+          "value": "+4% [fixture]"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-generic-saas-dashboard-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — generic-saas-dashboard",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "dash",
+      "parent": "root",
+      "name": "Dash",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "m1",
+      "name": "Users",
+      "x": 0,
+      "y": 0,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m1",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Users",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m1",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "12,400 [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "m2",
+      "name": "Revenue",
+      "x": 0,
+      "y": 98,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m2",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Revenue",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m2",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "$88k [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    },
+    {
+      "id": "m3",
+      "name": "Growth",
+      "x": 0,
+      "y": 196,
+      "fill": "#FFFFFF",
+      "cornerRadius": 8,
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8,
+      "counterAxisAlignItems": "MIN"
+    },
+    {
+      "parent": "m3",
+      "name": "Label",
+      "fill": "#6F716A",
+      "type": "createText",
+      "content": "Growth",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12
+    },
+    {
+      "parent": "m3",
+      "name": "Value",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "+4% [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 28,
+      "weight": 600
+    }
+  ],
+  "dryRun": {
+    "operationCount": 11,
+    "violations": [],
+    "warnings": []
+  },
+  "nativeFrameId": "129:420",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/generic-saas-dashboard-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — generic-saas-dashboard\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 3.5 KB base64.\nBudget used: 2,720 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "iVBORw0KGgoAAAANSUhEUgAABAAAAAKACAYAAAACfQphAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAOdEVYdFNvZnR3YXJlAEZpZ21hnrGWYwAACgNJREFUeAHtwIEAAAAAwrD7U0eQwVYAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAzBNgAAQ4aJ70AAAAASUVORK5CYII=",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — generic-saas-dashboard\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 3.5 KB base64.\nBudget used: 2,720 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [],
+  "structuralSummary": {
+    "total": 0,
+    "high": 0,
+    "medium": 0,
+    "low": 0,
+    "critical": 0,
+    "byRule": {}
+  },
+  "reviewedNodes": 2,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 1 regions; composition: editorial; largest region isolated by 0%"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.3,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 2,
+        "evidence": "no focal region; 1 regions; composition: editorial; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 8,
+        "evidence": "2 distinct size(s): 12, 28; headline at 28px; contrast 6/6 passing AA",
+        "improve": "Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 11 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "4/4 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "3 colour(s); 1 familie(s)"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 12px"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'dash' at 100%: dash 100%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 7306,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+}

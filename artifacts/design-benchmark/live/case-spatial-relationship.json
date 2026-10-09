@@ -1,0 +1,399 @@
+{
+  "caseId": "spatial-relationship",
+  "commit": "1b15f1f",
+  "server": "https://figdes.onrender.com/mcp",
+  "startedAt": "2026-10-09T06:38:11.685Z",
+  "fixtures": [
+    {
+      "key": "all-text",
+      "value": "[fixture]",
+      "fixture": true
+    }
+  ],
+  "candidateDirection": {
+    "selectedFamily": "task-derived",
+    "rationale": "Derived from 5 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure.",
+    "rejectedAlternatives": [],
+    "candidates": []
+  },
+  "planDerivation": {
+    "strategy": "task-derived",
+    "pattern": "spatial-topology",
+    "infoKinds": [
+      "relationship"
+    ],
+    "appliedGuidance": [
+      "'rail' gap 24px from 'SpatialTopology' balanced density.",
+      "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+    ],
+    "note": "Derived from 5 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
+  },
+  "program": {
+    "canvas": {
+      "name": "FigDes Live — spatial-relationship",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "hero",
+        "id": "graph",
+        "args": {
+          "width": "fill",
+          "height": "fill",
+          "composition": "topology",
+          "layout": "topology"
+        }
+      }
+    ],
+    "links": [
+      {
+        "from": "a",
+        "to": "b",
+        "label": "feeds"
+      },
+      {
+        "from": "b",
+        "to": "c",
+        "label": "drains"
+      }
+    ],
+    "content": [
+      {
+        "fn": "deviceNode",
+        "id": "a",
+        "parent": "graph",
+        "args": {
+          "label": "ingest [fixture]"
+        }
+      },
+      {
+        "fn": "deviceNode",
+        "id": "b",
+        "parent": "graph",
+        "args": {
+          "label": "relay [fixture]",
+          "health": "pressured"
+        }
+      },
+      {
+        "fn": "deviceNode",
+        "id": "c",
+        "parent": "graph",
+        "args": {
+          "label": "store [fixture]"
+        }
+      },
+      {
+        "fn": "connector",
+        "id": "c1",
+        "parent": "graph",
+        "args": {
+          "from": "a",
+          "to": "b",
+          "label": "feeds"
+        }
+      },
+      {
+        "fn": "connector",
+        "id": "c2",
+        "parent": "graph",
+        "args": {
+          "from": "b",
+          "to": "c",
+          "label": "drains"
+        }
+      }
+    ]
+  },
+  "irRevision": "live-spatial-relationship-r1",
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — spatial-relationship",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "graph",
+      "parent": "root",
+      "name": "Graph",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "a",
+      "parent": "graph",
+      "name": "ingest [fixture]",
+      "x": 652,
+      "y": 386,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "a",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "ingest [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "b",
+      "parent": "graph",
+      "name": "relay [fixture]",
+      "x": 652,
+      "y": 402,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "b",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "relay [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "c",
+      "parent": "graph",
+      "name": "store [fixture]",
+      "x": 652,
+      "y": 418,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "c",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "store [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "c1",
+      "parent": "root",
+      "name": "orthogonal connector a -> b",
+      "x": 711,
+      "y": 402,
+      "fill": [],
+      "type": "createVector",
+      "width": 10,
+      "height": 64,
+      "path": "M 5 64 L 5 32 L 5 32 L 5 0 L 5 64 M 5 0 L 10 10 L 0 10 L 5 0 Z",
+      "stroke": "#8A8C84",
+      "strokeWeight": 1,
+      "fillArrows": true
+    },
+    {
+      "id": "c2",
+      "parent": "root",
+      "name": "orthogonal connector b -> c",
+      "x": 711,
+      "y": 418,
+      "fill": [],
+      "type": "createVector",
+      "width": 10,
+      "height": 64,
+      "path": "M 5 64 L 5 32 L 5 32 L 5 0 L 5 64 M 5 0 L 10 10 L 0 10 L 5 0 Z",
+      "stroke": "#8A8C84",
+      "strokeWeight": 1,
+      "fillArrows": true
+    },
+    {
+      "id": "c1-label",
+      "parent": "root",
+      "name": "Label feeds",
+      "x": 722,
+      "y": 420,
+      "fill": "#5A5C54",
+      "type": "createText",
+      "content": "feeds",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 600
+    },
+    {
+      "id": "c2-label",
+      "parent": "root",
+      "name": "Label drains",
+      "x": 722,
+      "y": 436,
+      "fill": "#5A5C54",
+      "type": "createText",
+      "content": "drains",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 600
+    }
+  ],
+  "dryRun": {
+    "operationCount": 12,
+    "violations": [],
+    "warnings": []
+  },
+  "nativeFrameId": "129:439",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/spatial-relationship-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — spatial-relationship\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 7.3 KB base64.\nBudget used: 3,400 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGC2/AIxp91zDkXaGAAAAAElFTkSuQmCC",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — spatial-relationship\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 7.3 KB base64.\nBudget used: 3,400 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium duplicate-siblings: 3 identical children in \"Graph\"",
+    "minor/medium off-grid-geometry: \"ingest [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"relay [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"store [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"orthogonal connector a -> b\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"orthogonal connector b -> c\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Label feeds\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Label drains\" is not aligned to the 4px grid",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"ingest [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"relay [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"store [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 14,
+    "high": 0,
+    "medium": 14,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "duplicate-siblings": 1,
+      "off-grid-geometry": 10,
+      "text-outside-autolayout": 3
+    }
+  },
+  "reviewedNodes": 12,
+  "programCritique": {
+    "verdict": "WATCH",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Hierarchy: 2 distinct size(s): 11, 12; 2 technical value(s) in mono; contrast 3/3 passing AA"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.4,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 7,
+        "evidence": "one focal region (graph); 1 regions; composition: topology; largest region isolated by 0%",
+        "improve": "One region is a page, not a composition. Split intent from chrome. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 6,
+        "evidence": "2 distinct size(s): 11, 12; 2 technical value(s) in mono; contrast 3/3 passing AA",
+        "improve": "Two sizes is a whisper of hierarchy. A third step (eyebrow or caption) would separate metadata from content."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 5px of stroke in play; 12 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 8,
+        "evidence": "3/4 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "5 colour(s); 2 familie(s)"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 11px; technical values monospaced"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'graph' at 100%: graph 100%"
+      }
+    ],
+    "weakSpots": [
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": true,
+      "intentional hierarchy": false,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 8997,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
+}

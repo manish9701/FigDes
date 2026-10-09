@@ -1337,6 +1337,19 @@ test("metric valueStyle:technical sets the value in mono", () => {
   assert.equal(value.family, "JetBrains Mono");
 });
 
+test("metric container is parented to its region, not the page", () => {
+  // Live defect: the metric frame omitted `parent`, so it landed on the page
+  // while its texts nested inside it — review scoped to the built frame saw
+  // nothing and the screenshot rendered blank.
+  const result = buildSingle({ fn: "metric", args: { label: "Latency", value: "8 us" } });
+  const frame = result.operations.find((o) => o.id === "x");
+  assert.equal(frame.type, "createFrame");
+  assert.equal(frame.parent, "main");
+  for (const text of result.operations.filter((o) => o.type === "createText")) {
+    assert.equal(text.parent, "x");
+  }
+});
+
 test("deviceNode health:degraded strokes amber and offline fades", () => {
   const degraded = buildSingle({ fn: "deviceNode", args: { label: "n1", health: "degraded" } });
   assert.equal(degraded.operations.find((o) => o.id === "x").stroke, "#8A5200");

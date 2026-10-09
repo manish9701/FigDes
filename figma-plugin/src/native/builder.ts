@@ -252,9 +252,14 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
     const y2 = b.y + b.height / 2;
     const parent = opts.parent ?? figmaApi.currentPage;
     const lineNode = figmaApi.createLine();
+    // Append FIRST, then position in parent-local coordinates. Setting x/y
+    // before append leaves absolute values reinterpreted as parent-local,
+    // which parks every connector far outside its field (live defect: four
+    // invisible edges + false overflow findings on a correct-looking screen).
     parent.appendChild(lineNode);
-    lineNode.x = x1;
-    lineNode.y = y1;
+    const origin = parent.absoluteBoundingBox ?? { x: 0, y: 0 };
+    lineNode.x = x1 - (origin.x ?? 0);
+    lineNode.y = y1 - (origin.y ?? 0);
     lineNode.resize(Math.max(1, Math.hypot(x2 - x1, y2 - y1)), 0);
     lineNode.rotation = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
     lineNode.strokes = paint(opts.stroke ?? "#9B9B95");

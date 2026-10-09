@@ -41,6 +41,31 @@ export const BENCHMARK_WEIGHTS: Record<string, number> = {
   readability: 5,
 };
 
+/**
+ * What each number means (quality-reliability P1 — scales documented once).
+ *
+ * - Offline structural (`scoreBenchmark`, BENCHMARK_WEIGHTS): 0–100 from
+ *   planner evidence only. No screenshots involved; never visual proof.
+ * - Live visual (`scoreLiveBenchmark`, LIVE_SCORECARD_WEIGHTS): 0–100 from a
+ *   human/vision-judged render. Critical failure overrides to 0.
+ * - Program score (`score_design`): 0–10 per dimension with measured evidence.
+ * - Critique/QA gate (PASS/WATCH/FAIL/REVIEW): threshold verdicts, never
+ *   averages. Structural, heuristic, human-visual and gate outputs stay
+ *   separate — a good average never clears a blocking finding.
+ * - Consistency (`evaluateConsistency`): 0–100 token/type/radius discipline.
+ *
+ * Weights are pinned by test and change only after multiple screens are
+ * independently human-rated. Tuning them to make any single run pass is
+ * forbidden.
+ */
+export const SCORECARD_DOCS = {
+  offline: "BENCHMARK_WEIGHTS: planner evidence, 0-100, no screenshots",
+  live: "LIVE_SCORECARD_WEIGHTS: judged render, 0-100, critical overrides to 0",
+  program: "score_design: 0-10 per dimension with evidence",
+  gate: "PASS/WATCH/FAIL/REVIEW thresholds, never averages",
+  consistency: "evaluateConsistency: 0-100 token/type/radius discipline",
+} as const;
+
 export interface BenchmarkResult {
   caseId: string;
   total: number;

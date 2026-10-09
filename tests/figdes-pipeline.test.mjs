@@ -20,7 +20,9 @@ import {
   scoreBenchmark,
   LIVE_SCORECARD_WEIGHTS,
   scoreLiveBenchmark,
+  SCORECARD_DOCS,
 } from "../mcp-server/dist-test/design/benchmark/suite.js";
+import { evaluateConsistency } from "../mcp-server/dist-test/design/quality/consistency.js";
 import {
   DesignBriefSchema,
   VisualDirectionSchema,
@@ -255,6 +257,7 @@ test("benchmark weights sum to 100 and critical failures override", () => {
   assert.equal(offlineSum, 100);
   const liveSum = Object.values(LIVE_SCORECARD_WEIGHTS).reduce((a, b) => a + b, 0);
   assert.equal(liveSum, 100);
+  assert.deepEqual(Object.keys(SCORECARD_DOCS).sort(), ["consistency", "gate", "live", "offline", "program"]);
   const perfect = scoreBenchmark({
     caseId: "exo-compute-topology",
     dimensions: { hierarchy: 10, composition: 10, productSpecificity: 10, typography: 10, spacingRhythm: 10, relationshipClarity: 10, density: 10, nativeQuality: 10, distinctiveness: 10, readability: 10 },
@@ -266,4 +269,24 @@ test("benchmark weights sum to 100 and critical failures override", () => {
     criticalFailure: true,
   });
   assert.equal(liveFail.total, 0);
+});
+
+test("consistency scores token discipline and blocks repair-introduced drift", () => {
+  const clean = evaluateConsistency({
+    fills: ["#FFFDF9", "#242521", "#FFFFFF"],
+    approvedTokens: ["#FFFDF9", "#242521", "#FFFFFF"],
+    radii: [8, 12],
+    families: ["Inter"],
+  });
+  assert.ok(clean.score >= 90, `clean system scores high: ${clean.score}`);
+  assert.equal(clean.blocking, false);
+  const rainbow = evaluateConsistency({ fills: Array.from({ length: 15 }, (_, i) => `#${i.toString(16).padStart(6, "0")}`) });
+  assert.ok(rainbow.score < clean.score, "15 fills score below a 3-fill system");
+  const drift = evaluateConsistency({
+    fills: ["#FFFDF9", "#AB12CD"],
+    approvedTokens: ["#FFFDF9"],
+    repairIntroducedUnknown: true,
+  });
+  assert.equal(drift.blocking, true, "repair-introduced unknown fills block");
+  assert.ok(drift.evidence.some((e) => /BLOCKING/.test(e)));
 });

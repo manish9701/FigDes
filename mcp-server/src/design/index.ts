@@ -12,6 +12,7 @@ export * as relationships from "./composition/relationships";
 export * as compiler from "./compiler/native-plan";
 export * as genericity from "./quality/genericity";
 export * as findings from "./quality/visual-findings";
+export * as consistency from "./quality/consistency";
 export * as repairs from "./quality/repair-planner";
 export * as critic from "./quality/visual-critic";
 export * as gate from "./quality/final-gate";

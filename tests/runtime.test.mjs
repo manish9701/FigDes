@@ -2060,6 +2060,52 @@ test("two cards do not trip the rule", () => {
   assert.equal(findings.some((f) => f.rule === "card-wall"), false);
 });
 
+test("topology devices and inspector sections are structure, not a card wall", () => {
+  const frame = (id, parentId, name, x, y, w, h, depth) => ({
+    id, parentId, type: "FRAME", name, depth, x, y, w, h,
+    visible: true, defaultNamed: false, zIndex: 0,
+    fill: "#FFFFFF", stroke: { hex: "#E0E0E0", weight: 1 }, radius: 8,
+  });
+  const nodes = [
+    frame("1:0", null, "Fabric", 0, 0, 1440, 900, 0),
+    frame("1:1", "1:0", "TopologyField", 256, 112, 824, 600, 1),
+    frame("1:2", "1:1", "hub-01", 300, 366, 150, 92, 2),
+    frame("1:3", "1:1", "node-01", 560, 212, 160, 92, 2),
+    frame("1:4", "1:1", "node-02", 560, 520, 170, 92, 2),
+    frame("1:5", "1:0", "BottleneckInspector", 1104, 112, 312, 600, 1),
+    frame("1:6", "1:5", "Verdict", 1124, 578, 272, 66, 2),
+    frame("1:7", "1:5", "StatusRow", 1124, 300, 272, 66, 2),
+  ];
+  const findings = runRules(
+    { target: null, scope: "test", nodes, nodeCount: nodes.length, truncated: false, scanBudget: 100, scan: { pageLoads: 0, pagesCached: true } },
+    "review",
+  );
+  assert.equal(findings.some((f) => f.rule === "card-wall"), false, "field + inspector members must not read as peers");
+});
+
+test("dashboard KPI peers in one content frame still trip the rule", () => {
+  const frame = (id, parentId, name, x, y, w, h, depth) => ({
+    id, parentId, type: "FRAME", name, depth, x, y, w, h,
+    visible: true, defaultNamed: false, zIndex: 0,
+    fill: "#FFFFFF", stroke: { hex: "#E0E0E0", weight: 1 }, radius: 8,
+  });
+  const nodes = [
+    frame("1:0", null, "Dashboard", 0, 0, 1440, 900, 0),
+    frame("1:1", "1:0", "Sidebar", 0, 0, 232, 900, 1),
+    frame("1:2", "1:0", "Content", 232, 0, 1208, 900, 1),
+    frame("1:3", "1:2", "Users", 256, 100, 360, 480, 2),
+    frame("1:4", "1:2", "Revenue", 640, 100, 360, 480, 2),
+    frame("1:5", "1:2", "Growth", 1024, 100, 360, 480, 2),
+  ];
+  const findings = runRules(
+    { target: null, scope: "test", nodes, nodeCount: nodes.length, truncated: false, scanBudget: 100, scan: { pageLoads: 0, pagesCached: true } },
+    "review",
+  );
+  const wall = findings.find((f) => f.rule === "card-wall");
+  assert.ok(wall, "three same-size KPI peers must trip the rule");
+  assert.match(String(wall.evidence.peerParent), /Content/);
+});
+
 /* -------------------------------------------------------------------------- */
 /* Interaction states (FigDes section 28)                                       */
 /* -------------------------------------------------------------------------- */

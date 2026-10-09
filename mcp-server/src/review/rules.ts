@@ -481,13 +481,20 @@ function tinyTechnicalText(n: NodeMetrics): Finding[] {
  *
  * Counts bordered rectangles (frames/rectangles/components with both a fill and
  * a stroke or a radius that reads as a card) and measures their share of the
- * canvas. Three or more equal-weight cards, or cards covering most of the
- * screen, trigger the warning the spec asks for: convert a cluster into a
- * visual field, chart, topology or open composition.
+ * canvas. Peer cards — same parent, similar size, in a plain container — trigger
+ * the warning the spec asks for: convert a cluster into a visual field, chart,
+ * topology or open composition.
+ *
+ * Semantic exclusions (quality-reliability P0): members of topology fields,
+ * inspectors, rails, panels, bands and graphs are structure, not peer cards —
+ * a topology with five device tiles is not a KPI wall. Dashboard shells
+ * (navigation/header/content) stay fully scrutinized: no whitelist there.
  *
  * A warning, never a failure: sometimes the screen genuinely is a card grid,
  * and a critic that fails those is a critic that gets ignored.
  */
+const EXEMPT_CARD_CONTAINERS = /topolog|map|field|graph|inspector|rail|panel|band|decision/i;
+
 function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
   // One screen, one verdict: only the top-level frame is judged, so a file
   // with five screens produces five findings, not five hundred.
@@ -509,7 +516,13 @@ function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
       ((current.stroke !== undefined && current.stroke !== null) || (typeof current.radius === "number" && current.radius >= 4)) &&
       current.w > 40 &&
       current.h > 24;
-    if (isCard) cards.push(current);
+    if (isCard) {
+      const parent = current.parentId ? c.byId.get(current.parentId) : undefined;
+      const containerName = parent ? parent.name : "";
+      // Structure members are not peer cards. The parent name carries the
+      // role the metrics do not model; dashboards never match this pattern.
+      if (!EXEMPT_CARD_CONTAINERS.test(containerName)) cards.push(current);
+    }
 
     const kids = c.childrenOf.get(current.id);
     if (kids) stack.push(...kids);
@@ -517,18 +530,37 @@ function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
 
   if (cards.length < 3) return [];
 
-  const cardArea = cards.reduce((a, card) => a + card.w * card.h, 0);
+  // Peers share a parent AND a size: three lookalikes in one container is a
+  // wall; three lookalikes scattered across regions — or three differently
+  // sized layout regions — is a system.
+  const byParentSize = new Map<string, NodeMetrics[]>();
+  for (const card of cards) {
+    const key = `${card.parentId ?? ""}|${Math.round(card.w / 8)}x${Math.round(card.h / 8)}`;
+    byParentSize.set(key, [...(byParentSize.get(key) ?? []), card]);
+  }
+  let peers: NodeMetrics[] = [];
+  let peerParent = "";
+  for (const group of byParentSize.values()) {
+    if (group.length >= 3 && group.length > peers.length) {
+      peers = group;
+      peerParent = group[0]?.parentId ?? "";
+    }
+  }
+  if (peers.length < 3) return [];
+
+  const cardArea = peers.reduce((a, card) => a + card.w * card.h, 0);
   const share = cardArea / canvasArea;
   if (share < 0.4) return [];
 
+  const parentName = peerParent ? (c.byId.get(peerParent)?.name ?? peerParent) : "screen";
   return [
     {
       rule: "card-wall",
       confidence: "medium",
       severity: "minor",
-      title: `${cards.length} bordered cards cover ${Math.round(share * 100)}% of the screen`,
-      evidence: { cards: cards.length, areaShare: Math.round(share * 100) },
-      nodeIds: cards.slice(0, 12).map((card) => card.id),
+      title: `${peers.length} bordered cards cover ${Math.round(share * 100)}% of the screen`,
+      evidence: { cards: peers.length, areaShare: Math.round(share * 100), peerParent: parentName, peerIds: peers.slice(0, 6).map((card) => card.id).join(",") },
+      nodeIds: peers.slice(0, 12).map((card) => card.id),
       guidance:
         "Consider converting one card cluster into a visual field, chart, topology, or open composition. Cards are containers, not content.",
     },

@@ -346,10 +346,16 @@ function unnamedFrameChildren(n: NodeMetrics, c: Ctx): Finding[] {
 /* Medium-confidence rules                                                      */
 /* -------------------------------------------------------------------------- */
 
-/** Under 44x44. "Looks interactive" is inferred from the name, hence medium. */
+/**
+ * Under 44x44. "Looks interactive" is inferred from the name, hence medium.
+ *
+ * Static text is never a tap target by itself (handoff §6): a connector label
+ * named "link …" or ordinary text is not a control. Semantic role/state
+ * decides — a bare TEXT node has neither, so it is skipped like GROUP.
+ */
 function tinyTapTarget(n: NodeMetrics): Finding[] {
   if (!INTERACTIVE.test(n.name)) return [];
-  if (DECORATIVE.test(n.type) || n.type === "GROUP") return [];
+  if (DECORATIVE.test(n.type) || n.type === "GROUP" || n.type === "TEXT") return [];
   if (n.w >= 44 && n.h >= 44) return [];
 
   return [

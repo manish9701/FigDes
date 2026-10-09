@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { TOOL_NAMES } from "../../shared/protocol";
 import { SessionRegistry } from "./sessions";
 import { TOOLS } from "./tools";
-import { clients } from "./clients/registry";
+import { clients, inferClientFromUserAgent } from "./clients/registry";
 import { randomUUID } from "node:crypto";
 
 export interface McpHandle {
@@ -179,25 +179,197 @@ function preview(args: unknown): string {
   return bits.length ? ` ${bits.join(" ")}` : "";
 }
 
-function buildServer(registry: SessionRegistry): McpServer {
+/** Identity derived from the HTTP request itself (headers / body / fingerprint). */
+export interface RequestClient {
+  name?: string;
+  version?: string;
+  /** Which signal produced the identity — for debug logging. */
+  source: "initialize-body" | "header" | "user-agent" | "origin" | "fingerprint" | "none";
+}
+
+/**
+ * Last initialize clientInfo seen per request fingerprint (IP + User-Agent).
+ *
+ * Stateless Streamable HTTP mints a fresh server per request, so the
+ * initialize handshake (the only place clientInfo officially appears) is
+ * gone by the time the next tools/call arrives. Remembering it per
+ * fingerprint lets a tool call reuse the identity its own initialize
+ * reported minutes earlier — same process, same IP, same UA.
+ */
+const recentInitByFingerprint = new Map<string, { name: string; version?: string; at: number }>();
+const FINGERPRINT_TTL_MS = 10 * 60 * 1000;
+const loggedUnknownFingerprints = new Set<string>();
+
+function headerOf(req: IncomingMessage, name: string): string | undefined {
+  const v = req.headers[name.toLowerCase()];
+  if (Array.isArray(v)) return v[0];
+  return typeof v === "string" ? v : undefined;
+}
+
+function fingerprintFor(req: IncomingMessage): string {
+  const forwarded = headerOf(req, "x-forwarded-for")?.split(",")[0]?.trim();
+  const ip =
+    forwarded || (req.socket as { remoteAddress?: string } | undefined)?.remoteAddress || "local";
+  const ua = (headerOf(req, "user-agent") ?? "").slice(0, 120).toLowerCase();
+  return `${ip}::${ua}`;
+}
+
+/** tools/call and friends carry no clientInfo — only initialize does. */
+function extractInitializeClientInfo(parsed: unknown): { name?: string; version?: string } {
+  const messages = Array.isArray(parsed) ? parsed : [parsed];
+  for (const m of messages) {
+    if (!m || typeof m !== "object") continue;
+    const msg = m as { method?: unknown; params?: unknown };
+    if (msg.method !== "initialize" || !msg.params || typeof msg.params !== "object") continue;
+    const info = (msg.params as { clientInfo?: unknown }).clientInfo;
+    if (!info || typeof info !== "object") continue;
+    const rec = info as { name?: unknown; version?: unknown };
+    return {
+      ...(typeof rec.name === "string" && rec.name.trim() ? { name: rec.name.trim() } : {}),
+      ...(typeof rec.version === "string" && rec.version.trim() ? { version: rec.version.trim() } : {}),
+    };
+  }
+  return {};
+}
+
+/**
+ * Best-effort identity for ONE HTTP request, strongest signal first:
+ * initialize body → explicit header → User-Agent → Origin → recent
+ * initialize from the same fingerprint. Never throws; empty means unknown.
+ */
+function identifyRequestClient(req: IncomingMessage, parsedBody: unknown): RequestClient {
+  const fingerprint = fingerprintFor(req);
+
+  const init = extractInitializeClientInfo(parsedBody);
+  if (init.name) {
+    recentInitByFingerprint.set(
+      fingerprint,
+      { name: init.name, ...(init.version ? { version: init.version } : {}) , at: Date.now() },
+    );
+    return { ...init, source: "initialize-body" };
+  }
+
+  const explicit =
+    headerOf(req, "x-mcp-client-name") ??
+    headerOf(req, "x-client-name") ??
+    headerOf(req, "x-agent-name") ??
+    headerOf(req, "x-mcp-client");
+  if (explicit?.trim()) {
+    const version =
+      headerOf(req, "x-mcp-client-version") ?? headerOf(req, "x-client-version") ?? undefined;
+    return {
+      name: explicit.trim(),
+      ...(version?.trim() ? { version: version.trim() } : {}),
+      source: "header",
+    };
+  }
+
+  const ua = headerOf(req, "user-agent");
+  const inferred = inferClientFromUserAgent(ua);
+  if (inferred) {
+    // "opencode/1.2.3", "claude-code 1.0", "Cursor/0.42 (darwin)" → "1.2.3".
+    const version = ua?.match(/\/v?(\d+(?:\.\d+){0,3})/)?.[1] ?? ua?.match(/\sv(\d+(?:\.\d+){0,3})/i)?.[1];
+    return { name: inferred, ...(version ? { version } : {}), source: "user-agent" };
+  }
+
+  const origin = (headerOf(req, "origin") ?? headerOf(req, "referer") ?? "").toLowerCase();
+  if (origin.includes("chatgpt.com") || origin.includes("chat.openai.com") || origin.includes("openai.com")) {
+    return { name: "chatgpt", source: "origin" };
+  }
+
+  const remembered = recentInitByFingerprint.get(fingerprint);
+  if (remembered && Date.now() - remembered.at < FINGERPRINT_TTL_MS) {
+    return { name: remembered.name, ...(remembered.version ? { version: remembered.version } : {}), source: "fingerprint" };
+  }
+
+  if (!(parsedBody === undefined || parsedBody === null)) {
+    // Opportunistic pruning only — no timers in a request path.
+    const now = Date.now();
+    for (const [k, v] of recentInitByFingerprint) {
+      if (now - v.at > FINGERPRINT_TTL_MS) recentInitByFingerprint.delete(k);
+    }
+  }
+  return { source: "none" };
+}
+
+/** Pre-read a POST JSON body so we can peek at initialize's clientInfo. */
+function readJsonBody(req: IncomingMessage): Promise<{ parsed: unknown; hasBody: boolean }> {
+  return new Promise((resolve) => {
+    if (req.method !== "POST") {
+      resolve({ parsed: undefined, hasBody: false });
+      return;
+    }
+    const chunks: Buffer[] = [];
+    let bytes = 0;
+    const LIMIT = 5 * 1024 * 1024;
+    let settled = false;
+    const done = (parsed: unknown, hasBody: boolean): void => {
+      if (settled) return;
+      settled = true;
+      resolve({ parsed, hasBody });
+    };
+    req.on("data", (c: Buffer) => {
+      bytes += c.length;
+      if (bytes > LIMIT) {
+        req.pause();
+        done(undefined, true);
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (settled) return;
+      if (chunks.length === 0) {
+        done(undefined, false);
+        return;
+      }
+      try {
+        done(JSON.parse(Buffer.concat(chunks).toString("utf8")), true);
+      } catch {
+        done(undefined, true);
+      }
+    });
+    req.on("error", () => done(undefined, false));
+  });
+}
+
+function buildServer(registry: SessionRegistry, requestClient?: RequestClient): McpServer {
   const server = new McpServer(
     { name: "figma-design-agent", version: "0.1.0" },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 
-  /** Who is calling: the MCP initialize handshake's clientInfo, if reported. */
+  /**
+   * Who is calling.
+   *
+   * `server.getClientVersion()` only knows the answer on the initialize
+   * request itself — in stateless mode every tools/call arrives on a fresh
+   * server that never saw initialize, so it is ALWAYS empty for real work
+   * (the "Unknown client" bug). The HTTP-request identity is the fallback
+   * that actually fires.
+   */
   function caller(): { name?: string; version?: string } {
     try {
       const get = (server as unknown as { getClientVersion?: () => { name?: string; version?: string } | undefined }).getClientVersion;
-      if (typeof get !== "function") return {};
-      const info = get.call(server);
-      return {
-        ...(typeof info?.name === "string" ? { name: info.name } : {}),
-        ...(typeof info?.version === "string" ? { version: info.version } : {}),
-      };
+      if (typeof get === "function") {
+        const info = get.call(server);
+        if (typeof info?.name === "string" && info.name.trim()) {
+          return {
+            name: info.name,
+            ...(typeof info?.version === "string" ? { version: info.version } : {}),
+          };
+        }
+      }
     } catch {
-      return {};
+      /* fall through to the request identity */
     }
+    if (requestClient?.name) {
+      return {
+        name: requestClient.name,
+        ...(requestClient.version ? { version: requestClient.version } : {}),
+      };
+    }
+    return {};
   }
 
   /** Where the call is aimed: the addressed Figma file, best-effort. */
@@ -357,11 +529,29 @@ export function createMcpHandler(registry: SessionRegistry): McpHandle {
 
       transport.onclose = () => open.delete(transport);
 
-      const server = buildServer(registry);
+      // Peek at the body BEFORE the SDK consumes the stream: initialize is
+      // the only request that carries clientInfo, and in stateless mode the
+      // tools/call that follows arrives on a different server that never saw
+      // it. The parsed body is passed through so the SDK never re-reads.
+      const { parsed } = await readJsonBody(req);
+      const requestClient = identifyRequestClient(req, parsed);
+      if (!requestClient.name) {
+        const fp = fingerprintFor(req);
+        if (!loggedUnknownFingerprints.has(fp)) {
+          loggedUnknownFingerprints.add(fp);
+          const ua = headerOf(req, "user-agent") ?? "(no user-agent)";
+          console.log(
+            `${stamp()} UNKNOWN-CLIENT ua=${ua.slice(0, 160)} origin=${headerOf(req, "origin") ?? headerOf(req, "referer") ?? "(none)"} — ` +
+              `send x-mcp-client-name or set a recognisable User-Agent to label this client.`,
+          );
+        }
+      }
+
+      const server = buildServer(registry, requestClient);
       await server.connect(transport);
 
       try {
-        await transport.handleRequest(req, res);
+        await transport.handleRequest(req, res, parsed);
       } catch (err) {
         console.error("[mcp] request failed:", err);
         if (!res.headersSent) {

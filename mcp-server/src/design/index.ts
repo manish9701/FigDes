@@ -1,4 +1,5 @@
 /** Design-intelligence barrel: the full §6 target architecture in one import. */
+export * as contracts from "./contracts";
 export * as discovery from "./discovery/index";
 export * as designContext from "./context/design-context";
 export * as tokens from "./system/token-intelligence";

@@ -91,6 +91,54 @@ export interface BenchmarkSuiteReport {
 }
 
 /**
+ * Handoff §9 live scorecard (starting weights, calibrate against human
+ * ratings): composition/hierarchy 25, visual identity 20, typography 20,
+ * geometry 15, detail/craft 10, brief fidelity 10. Kept separate from the
+ * offline BENCHMARK_WEIGHTS so the structural runner and its tests are
+ * untouched; the live runner uses this.
+ */
+export const LIVE_SCORECARD_WEIGHTS: Record<string, number> = {
+  compositionHierarchy: 25,
+  visualIdentity: 20,
+  typography: 20,
+  geometry: 15,
+  detailCraft: 10,
+  briefFidelity: 10,
+};
+
+export interface LiveBenchmarkResult {
+  caseId: string;
+  total: number;
+  dimensions: Record<string, number>;
+  criticalFailure: boolean;
+}
+
+/**
+ * Scores one live case from 0–10 dimension inputs. A critical failure
+ * overrides the total to 0 — a broken screen never averages its way to done.
+ */
+export function scoreLiveBenchmark(input: {
+  caseId: string;
+  dimensions: Record<string, number>;
+  criticalFailure?: boolean;
+}): LiveBenchmarkResult {
+  const dimensions: Record<string, number> = {};
+  let total = 0;
+  for (const [dim, weight] of Object.entries(LIVE_SCORECARD_WEIGHTS)) {
+    const raw = Math.max(0, Math.min(10, input.dimensions[dim] ?? 0));
+    dimensions[dim] = raw;
+    total += (raw / 10) * weight;
+  }
+  const criticalFailure = input.criticalFailure === true;
+  return {
+    caseId: input.caseId,
+    total: criticalFailure ? 0 : Math.round(total * 10) / 10,
+    dimensions,
+    criticalFailure,
+  };
+}
+
+/**
  * Summarizes a recorded benchmark run. This intentionally does not claim to
  * render Figma screens: the caller must first generate screens and record
  * evidence-backed scores for each case.

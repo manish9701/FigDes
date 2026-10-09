@@ -288,18 +288,33 @@ test("final gate requires complete scores and fresh visual evidence before PASS"
   const incomplete = evaluateFinalGate({ scores: { hierarchy: 90, readability: 90, productFit: 90 }, visualEvidenceVerified: true });
   assert.equal(incomplete.status, "FAIL");
   assert.match(incomplete.blockingIssues.join(" "), /Missing evidence-backed scores/);
-  const unverified = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, productFit: 90 } });
+  const unverified = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 } });
   assert.equal(unverified.status, "REVIEW");
   assert.match(unverified.reason, /fresh rendered screenshot/);
+  const missingGenericity = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, productFit: 90 }, visualEvidenceVerified: true });
+  assert.equal(missingGenericity.status, "FAIL");
+  assert.match(missingGenericity.blockingIssues.join(" "), /genericity/);
+});
+
+test("final gate fails a stale screenshot revision, never PASS", () => {
+  const good = { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 };
+  const stale = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, expectedRevision: "ir-rev-2", evidenceRevision: "ir-rev-1" });
+  assert.equal(stale.status, "FAIL");
+  assert.match(stale.blockingIssues.join(" "), /Stale screenshot/);
+  const missing = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, expectedRevision: "ir-rev-2", evidenceRevision: null });
+  assert.equal(missing.status, "FAIL");
+  assert.match(missing.blockingIssues.join(" "), /Stale screenshot/);
+  const fresh = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, expectedRevision: "ir-rev-2", evidenceRevision: "ir-rev-2" });
+  assert.equal(fresh.status, "PASS");
 });
 
 test("final gate fails genericity above 70 and budgets renders at 4", () => {
   const fail = evaluateFinalGate({
-    scores: { hierarchy: 80, composition: 80, typography: 80, readability: 80, density: 80, distinctiveness: 80, productFit: 80 },
+    scores: { hierarchy: 80, composition: 80, typography: 80, readability: 80, density: 80, distinctiveness: 80, genericity: 20, productFit: 80 },
     genericity: { score: 80, blocking: true, findings: [], repairs: [] },
   });
   assert.equal(fail.status, "FAIL");
-  const over = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, productFit: 90 }, renders: 5 });
+  const over = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 }, renders: 5 });
   assert.equal(over.status, "FAIL");
   assert.match(over.blockingIssues.join(" "), /Render budget/);
   assert.equal(ITERATION_BUDGET.maxRenders, 4);

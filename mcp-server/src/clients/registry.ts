@@ -50,7 +50,10 @@ const MAX_ACTIVITY = 50;
 const KNOWN: Record<string, string> = {
   chatgpt: "ChatGPT",
   "chatgpt-connector": "ChatGPT",
+  "chatgpt-connector-platform": "ChatGPT",
+  "openai": "ChatGPT",
   "claude-code": "Claude Code",
+  "claude_code": "Claude Code",
   anthropic: "Claude",
   cursor: "Cursor",
   antigravity: "Antigravity",
@@ -60,23 +63,92 @@ const KNOWN: Record<string, string> = {
   "mcp-inspector": "MCP Inspector",
   opencode: "OpenCode",
   "claude": "Claude",
+  codex: "Codex",
+  gemini: "Gemini",
+  copilot: "Copilot",
+  aider: "Aider",
+  continue: "Continue",
+  zed: "Zed",
+  neovim: "Neovim",
+  vscode: "VS Code",
 };
+
+/**
+ * Normalised client identity: "opencode/1.2.3" → "opencode",
+ * "claude-code@1.0 (darwin)" → "claude-code", "Claude Code" → "claude-code",
+ * "ChatGPT-Connector v1" → "chatgpt-connector". Version suffixes are stripped;
+ * word separators (space/underscore) collapse to dashes so grouping is stable.
+ */
+function baseClientToken(raw: string): string {
+  const trimmed = (raw ?? "").trim();
+  if (!trimmed) return "";
+  // Cut at hard separators first: the name is never after /, @, (, ; or comma.
+  const head = (trimmed.split(/[\/@\(;,]+/)[0] ?? "").trim();
+  if (!head) return "";
+  // Strip a trailing version token (" v1", " 1.2.3") — but keep real names.
+  const noVersion = head.replace(/\s+v?\d+(\.\d+)*\s*$/i, "").trim();
+  const src = noVersion || head;
+  return src.toLowerCase().replace(/[_]+/g, "-").replace(/\s+/g, "-").replace(/\.+$/, "").replace(/-+/g, "-");
+}
 
 /** "claude-code" → "Claude Code"; "" → "Unknown client". */
 export function friendlyClientName(raw: string | undefined | null): string {
-  const clean = (raw ?? "").trim().toLowerCase().replace(/[_]+/g, "-");
+  const clean = baseClientToken(raw ?? "");
   if (!clean) return "Unknown client";
   if (KNOWN[clean]) return KNOWN[clean]!;
   return clean
-    .split(/[\s-]+/)
+    .split(/[-]+/)
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
 }
 
+/**
+ * Best-effort client identity from an HTTP User-Agent header.
+ *
+ * In stateless Streamable HTTP mode every tools/call arrives on a fresh
+ * server that never saw the initialize handshake, so
+ * `server.getClientVersion()` is always empty for real tool calls. The
+ * User-Agent is the only identity present on *every* request, which makes
+ * this the fallback that actually fires. Returns undefined when nothing
+ * recognisable is present so the caller can try the next signal.
+ */
+export function inferClientFromUserAgent(ua: string | undefined | null): string | undefined {
+  if (!ua) return undefined;
+  const low = ua.toLowerCase();
+  // Order matters: check distinctive multi-word tokens before substrings
+  // ("claude-code" before "claude", "chatgpt-connector" before "chatgpt").
+  const patterns: Array<[string, string]> = [
+    ["chatgpt-connector", "chatgpt-connector"],
+    ["chatgpt", "chatgpt"],
+    ["openai", "chatgpt"],
+    ["claude-code", "claude-code"],
+    ["claude_code", "claude-code"],
+    ["claude", "claude"],
+    ["anthropic", "anthropic"],
+    ["opencode", "opencode"],
+    ["cursor", "cursor"],
+    ["windsurf", "windsurf"],
+    ["antigravity", "antigravity"],
+    ["cline", "cline"],
+    ["goose", "goose"],
+    ["codex", "codex"],
+    ["mcp-inspector", "mcp-inspector"],
+    ["gemini", "gemini"],
+    ["copilot", "copilot"],
+    ["continue", "continue"],
+    ["aider", "aider"],
+    ["zed", "zed"],
+  ];
+  for (const [needle, name] of patterns) {
+    if (low.includes(needle)) return name;
+  }
+  return undefined;
+}
+
 /** Registry key: grouped by reported name, so tabs share one entry honestly. */
 export function clientKey(raw: string | undefined | null): string {
-  const clean = (raw ?? "").trim().toLowerCase();
+  const clean = baseClientToken(raw ?? "");
   return clean || "unknown";
 }
 

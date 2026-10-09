@@ -34,7 +34,8 @@ function corsHeaders(origin: string | undefined): Record<string, string> {
   return {
     "access-control-allow-origin": allow ? origin ?? "*" : "null",
     "access-control-allow-methods": "GET,POST,DELETE,OPTIONS",
-    "access-control-allow-headers": "content-type,authorization,x-api-key,mcp-session-id,mcp-protocol-version,last-event-id",
+    "access-control-allow-headers":
+      "content-type,authorization,x-api-key,mcp-session-id,mcp-protocol-version,last-event-id,x-mcp-client-name,x-mcp-client-version,x-client-name,x-client-version,x-agent-name",
     "access-control-expose-headers": "mcp-session-id",
     "access-control-max-age": "86400",
     vary: "Origin",

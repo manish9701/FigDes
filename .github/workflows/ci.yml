@@ -1,6 +1,6 @@
 # Design generation is treated as code output that can be tested (report §17):
-# every push builds the plugin and server, typechecks, and runs the mock-harness
-# suites that stand in for headless Figma. Live-file smoke tests stay manual.
+# every push builds the plugin and server, typechecks, runs the mock-harness suites,
+# and executes the offline planning benchmark. Live Figma rendering remains manual.
 name: ci
 
 on:
@@ -20,3 +20,11 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      - name: Run design-planning benchmark
+        run: npm run benchmark:design
+      - name: Upload benchmark report
+        uses: actions/upload-artifact@v4
+        with:
+          name: figdes-design-benchmark
+          path: artifacts/design-benchmark/latest.json
+          if-no-files-found: error

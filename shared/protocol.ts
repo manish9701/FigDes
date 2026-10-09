@@ -1168,6 +1168,8 @@ export interface StatusResult {
   connected: boolean;
   message?: string;
   sessionId?: string;
+  /** Human name for the plugin session: "Exo Labs — Chatgpt Designs". */
+  sessionName?: string;
   fileName?: string;
   fileKey?: string | null;
   pageId?: string;
@@ -1176,6 +1178,48 @@ export interface StatusResult {
   selectionCount?: number;
   pluginVersion?: string;
   lastSeen?: number;
+  /**
+   * Named MCP client connections (ChatGPT, Claude Code, …), most-recent
+   * first, each with its in-flight tool calls. This is how you see who is
+   * working on what when several agents share one server.
+   */
+  clients?: ClientConnection[];
+  /** Latest tool activity across all clients, newest first (bounded). */
+  activity?: ClientActivity[];
+}
+
+/**
+ * One named MCP client connection, as reported by its own handshake.
+ *
+ * `display` is the prettified name ("ChatGPT"); `reported` is the raw
+ * clientInfo string. Grouped by reported name: two tabs of one client are
+ * one entry with a call count, because stateless HTTP gives us nothing to
+ * tell them apart — and pretending otherwise would be a lie.
+ */
+export interface ClientConnection {
+  key: string;
+  display: string;
+  reported: string;
+  version: string;
+  firstSeen: number;
+  lastSeen: number;
+  lastSeenAgoMs: number;
+  calls: number;
+  errors: number;
+  lastTool: string;
+  lastTarget: string;
+  lastStatus: string;
+  active: Array<{ tool: string; target: string; forMs: number }>;
+}
+
+/** One finished tool call, newest activity first. Bounded to the latest 50. */
+export interface ClientActivity {
+  at: number;
+  client: string;
+  tool: string;
+  target: string;
+  status: "ok" | "error";
+  detail?: string;
 }
 
 /* -------------------------------------------------------------------------- */

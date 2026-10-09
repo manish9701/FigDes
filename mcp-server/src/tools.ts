@@ -31,6 +31,7 @@ import { saveSnapshot, listSnapshots, getSnapshot } from "./snapshots/store";
 import { guardMutation, resolveExistingResources } from "./plan/gate";
 import { exoSeedOperations, exoSeedCounts } from "./tokens/exo";
 import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, critiqueVisualTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
+import { clients } from "./clients/registry";
 import { exportCode } from "./code/export";
 import { UseFigmaArgs, InspectVisualArgs, ReadContextArgs, figdesUseFigmaHandler, figdesInspectVisualHandler, figdesReadContextHandler } from "./native/use-figma";
 
@@ -542,15 +543,24 @@ export const TOOLS: ToolDefinition[] = [
     name: "figma_status",
     title: "Figma connection status",
     description:
-      "Check whether a Figma Design Agent plugin is connected, and which file/page/selection it is attached to. Call this first — if connected is false, nothing else will work.",
+      "Check whether a Figma Design Agent plugin is connected, and which file/page/selection it is attached to. Call this first — if connected is false, nothing else will work. Also lists every named MCP client connection (ChatGPT, Claude Code, …) with its in-flight tool calls, plus recent cross-client activity — this is how you see who is working on what when several agents share one server.",
     inputSchema: StatusArgs,
     handler: async (args, registry) => {
       const { sessionId } = StatusArgs.parse(args ?? {});
+      const { connections, activity } = clients.snapshot();
+      const recent = activity.slice(0, 10);
       try {
         const session = registry.resolve(sessionId);
-        return { ...session.status(), connected: true };
+        const status = session.status();
+        return {
+          ...status,
+          connected: true,
+          sessionName: `${status.fileName} — ${status.pageName || "?"}`,
+          clients: connections,
+          activity: recent,
+        };
       } catch (err) {
-        if (registry.alive().length === 0) return DISCONNECTED;
+        if (registry.alive().length === 0) return { ...DISCONNECTED, clients: connections, activity: recent };
         throw err;
       }
     },

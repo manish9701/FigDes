@@ -14,6 +14,7 @@ import { URL } from "node:url";
 import type { ClientMessage } from "../../shared/protocol";
 import { createMcpHandler } from "./mcp";
 import { SessionRegistry } from "./sessions";
+import { clients } from "./clients/registry";
 import { checkHttpAuth, checkWsAuth, confirmRegisteredSecret, loadAuthConfig, type AuthConfig } from "./security";
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -73,11 +74,20 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
 
   if (url.pathname === "/health") {
     res.writeHead(200, { "content-type": "application/json" });
+    const { connections, totalCalls } = clients.snapshot();
     res.end(
       JSON.stringify(
         {
           ok: true,
           sessions: registry.alive().map((s) => s.status()),
+          mcpClients: connections.map((c) => ({
+            display: c.display,
+            calls: c.calls,
+            active: c.active,
+            lastTool: c.lastTool,
+            lastTarget: c.lastTarget,
+          })),
+          totalToolCalls: totalCalls,
         },
         null,
         2,

@@ -12,6 +12,8 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { TOOL_NAMES } from "../../shared/protocol";
 import { SessionRegistry } from "./sessions";
 import { TOOLS } from "./tools";
+import { clients } from "./clients/registry";
+import { randomUUID } from "node:crypto";
 
 export interface McpHandle {
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
@@ -183,6 +185,34 @@ function buildServer(registry: SessionRegistry): McpServer {
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 
+  /** Who is calling: the MCP initialize handshake's clientInfo, if reported. */
+  function caller(): { name?: string; version?: string } {
+    try {
+      const get = (server as unknown as { getClientVersion?: () => { name?: string; version?: string } | undefined }).getClientVersion;
+      if (typeof get !== "function") return {};
+      const info = get.call(server);
+      return {
+        ...(typeof info?.name === "string" ? { name: info.name } : {}),
+        ...(typeof info?.version === "string" ? { version: info.version } : {}),
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /** Where the call is aimed: the addressed Figma file, best-effort. */
+  function targetOf(args: unknown): string {
+    try {
+      const sessionId = (args as { sessionId?: unknown } | null)?.sessionId;
+      if (typeof sessionId !== "string" || !sessionId) return "—";
+      const session = registry.get(sessionId);
+      if (!session) return `${sessionId.slice(0, 13)}… (unknown session)`;
+      return session.fileName && session.fileName !== "Unknown file" ? session.fileName : session.id;
+    } catch {
+      return "—";
+    }
+  }
+
   for (const tool of TOOLS) {
     if (!ALLOWED.has(tool.name)) continue;
 
@@ -194,18 +224,25 @@ function buildServer(registry: SessionRegistry): McpServer {
         inputSchema: tool.inputSchema,
       },
       async (args: unknown) => {
-        console.log(`${stamp()} CALL ${tool.name}${preview(args)}`);
+        const callId = `c_${randomUUID()}`;
+        const { name: clientName, version: clientVersion } = caller();
+        const target = targetOf(args);
+        const entry = clients.seen(clientName, clientVersion);
+        clients.start(clientName, callId, tool.name, target, clientVersion);
+        console.log(`${stamp()} CALL ${tool.name} [${entry.display}]${preview(args)}`);
         try {
           const data = await tool.handler(args, registry);
           const status =
             data && typeof data === "object" && "status" in data && "transactionId" in data
               ? ` -> ${String((data as { status: unknown }).status)}`
               : "";
-          console.log(`${stamp()} OK   ${tool.name}${status}`);
+          console.log(`${stamp()} OK   ${tool.name} [${entry.display}]${status}`);
+          clients.finish(callId, "ok", summarize(data));
           // The panel is a status light: every completed tool call narrates
           // itself there in one line, so the user watches the work stream by
-          // instead of wondering whether anything is happening.
-          announce(registry, tool.name, summarize(data));
+          // instead of wondering whether anything is happening. Prefixed with
+          // who ran it, so concurrent agents are tellable apart on the glass.
+          announce(registry, entry.display, tool.name, summarize(data));
           // A handler that already built an MCP content array (render_design,
           // figdes_inspect_visual, compare_visuals) returns image blocks. Those
           // must pass through untouched: JSON-encoding them would replace the
@@ -225,8 +262,9 @@ function buildServer(registry: SessionRegistry): McpServer {
           };
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
-          console.log(`${stamp()} ERR  ${tool.name}: ${message}`);
-          announce(registry, tool.name, `failed: ${message.slice(0, 120)}`);
+          console.log(`${stamp()} ERR  ${tool.name} [${entry.display}]: ${message}`);
+          clients.finish(callId, "error", message.slice(0, 120));
+          announce(registry, entry.display, tool.name, `failed: ${message.slice(0, 120)}`);
           return {
             isError: true,
             content: [{ type: "text" as const, text: message }],
@@ -271,8 +309,8 @@ function isContentResult(data: unknown): data is { content: Array<{ type: string
  * must stand alone in under a breath. Anything over ~140 characters is detail
  * that belongs in the tool result, not on the glass.
  */
-function announce(registry: SessionRegistry, tool: string, detail: string): void {
-  const text = detail ? `${tool} — ${detail}` : tool;
+function announce(registry: SessionRegistry, client: string, tool: string, detail: string): void {
+  const text = detail ? `${client} · ${tool} — ${detail}` : `${client} · ${tool}`;
   for (const session of registry.alive()) {
     session.notify({ type: "notify", kind: "activity", text: text.slice(0, 140), at: Date.now() });
   }

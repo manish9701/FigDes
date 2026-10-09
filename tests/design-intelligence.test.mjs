@@ -24,7 +24,7 @@ import { planRepairs } from "../mcp-server/dist-test/design/quality/repair-plann
 import { extendCritique } from "../mcp-server/dist-test/design/quality/visual-critic.js";
 import { evaluateFinalGate, ITERATION_BUDGET, FINAL_THRESHOLDS } from "../mcp-server/dist-test/design/quality/final-gate.js";
 import { compareQuality } from "../mcp-server/dist-test/design/quality/comparison.js";
-import { BENCHMARKS, BENCHMARK_WEIGHTS, scoreBenchmark } from "../mcp-server/dist-test/design/benchmark/suite.js";
+import { BENCHMARKS, BENCHMARK_WEIGHTS, scoreBenchmark, summarizeBenchmarkRun } from "../mcp-server/dist-test/design/benchmark/suite.js";
 import { classifyInfoItem, classifyInformation, deriveRegions, applyPatternGuidance } from "../mcp-server/dist-test/design/composition/derive.js";
 import { analyzeRelationships, describeSemantics } from "../mcp-server/dist-test/design/composition/relationships.js";
 import { localizeFinding, makeFindings, trackFindings } from "../mcp-server/dist-test/design/quality/visual-findings.js";
@@ -284,6 +284,15 @@ test("extended critic adds authorship dimensions without softening a FAIL", () =
   assert.ok(out.dimensions.some((d) => d.dimension === "Genericity"));
 });
 
+test("final gate requires complete scores and fresh visual evidence before PASS", () => {
+  const incomplete = evaluateFinalGate({ scores: { hierarchy: 90, readability: 90, productFit: 90 }, visualEvidenceVerified: true });
+  assert.equal(incomplete.status, "FAIL");
+  assert.match(incomplete.blockingIssues.join(" "), /Missing evidence-backed scores/);
+  const unverified = evaluateFinalGate({ scores: { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, productFit: 90 } });
+  assert.equal(unverified.status, "REVIEW");
+  assert.match(unverified.reason, /fresh rendered screenshot/);
+});
+
 test("final gate fails genericity above 70 and budgets renders at 4", () => {
   const fail = evaluateFinalGate({
     scores: { hierarchy: 80, composition: 80, typography: 80, readability: 80, density: 80, distinctiveness: 80, productFit: 80 },
@@ -295,6 +304,15 @@ test("final gate fails genericity above 70 and budgets renders at 4", () => {
   assert.match(over.blockingIssues.join(" "), /Render budget/);
   assert.equal(ITERATION_BUDGET.maxRenders, 4);
   assert.equal(FINAL_THRESHOLDS.genericityFailAbove, 70);
+});
+
+test("visual critic forwards actual fills to genericity detection", () => {
+  const out = extendCritique({
+    measured: { verdict: "PASS", dimensions: [] }, boxes: new Map(),
+    operations: [{ type: "createRectangle", width: 100, height: 100, fill: "#8B5CF6" }],
+    regions: [{ id: "runtime", role: "content" }], fills: ["#8B5CF6"],
+  });
+  assert.ok(out.genericity.findings.some((f) => f.id === "ai-aesthetic"));
 });
 
 test("comparison reports evidence, never a fabricated verdict", () => {
@@ -318,6 +336,14 @@ test("benchmark suite covers the required screens and scores to 100", () => {
   assert.equal(perfect.total, 100);
   const weak = scoreBenchmark({ caseId: "exo-compute-topology", dimensions: { hierarchy: 4, composition: 4 } });
   assert.ok(weak.total < 50);
+  const partial = summarizeBenchmarkRun([perfect]);
+  assert.equal(partial.completedCases, 1);
+  assert.equal(partial.readyForComparison, false);
+  assert.equal(partial.missingCases.length, 8);
+  const complete = summarizeBenchmarkRun(BENCHMARKS.map((b) => scoreBenchmark({ caseId: b.id, dimensions: Object.fromEntries(Object.keys(BENCHMARK_WEIGHTS).map((k) => [k, 8])) })));
+  assert.equal(complete.readyForComparison, true);
+  assert.equal(complete.completedCases, 9);
+  assert.equal(complete.averageScore, 80);
 });
 
 /* -------------------------------------------------------------------------- */

@@ -65,6 +65,8 @@ export function evaluateFinalGate(input: {
   repairHistory?: string[];
   renders?: number;
   renderNotes?: string[];
+  /** True only when a fresh rendered screenshot was inspected after the final repair. */
+  visualEvidenceVerified?: boolean;
 }): FinalQualityReport {
   const scores: FinalScores = {
     hierarchy: clamp(input.scores.hierarchy ?? 50),
@@ -77,6 +79,9 @@ export function evaluateFinalGate(input: {
     productFit: clamp(input.scores.productFit ?? 50),
   };
   const blocking = [...(input.blockingIssues ?? [])];
+  const requiredScoreKeys: Array<keyof FinalScores> = ["hierarchy", "composition", "typography", "readability", "density", "distinctiveness", "productFit"];
+  const missingScores = requiredScoreKeys.filter((key) => typeof input.scores[key] !== "number");
+  if (missingScores.length > 0) blocking.push(`Missing evidence-backed scores: ${missingScores.join(", ")}.`);
   if (input.genericity && input.genericity.score > FINAL_THRESHOLDS.genericityFailAbove) {
     blocking.push(`Genericity ${input.genericity.score}/100 exceeds ${FINAL_THRESHOLDS.genericityFailAbove}: ${input.genericity.findings.map((f) => f.id).join(", ")}`);
   }
@@ -98,6 +103,7 @@ export function evaluateFinalGate(input: {
     };
   }
   const needsReview =
+    input.visualEvidenceVerified !== true ||
     scores.hierarchy < FINAL_THRESHOLDS.hierarchyReviewBelow || scores.productFit < FINAL_THRESHOLDS.productFitReviewBelow;
   if (needsReview) {
     return {
@@ -106,7 +112,9 @@ export function evaluateFinalGate(input: {
       blockingIssues: [],
       repairHistory: input.repairHistory ?? [],
       renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
-      reason: "No blocking issues, but hierarchy or product fit needs a human look before done.",
+      reason: input.visualEvidenceVerified !== true
+        ? "Structural checks are incomplete as final evidence: inspect a fresh rendered screenshot before marking PASS."
+        : "No blocking issues, but hierarchy or product fit needs a human look before done.",
     };
   }
   return {

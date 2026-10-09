@@ -79,3 +79,36 @@ export function scoreBenchmark(input: {
     notes: [],
   };
 }
+
+
+export interface BenchmarkSuiteReport {
+  expectedCases: number;
+  completedCases: number;
+  missingCases: string[];
+  averageScore: number | null;
+  lowestScore: number | null;
+  readyForComparison: boolean;
+}
+
+/**
+ * Summarizes a recorded benchmark run. This intentionally does not claim to
+ * render Figma screens: the caller must first generate screens and record
+ * evidence-backed scores for each case.
+ */
+export function summarizeBenchmarkRun(results: BenchmarkResult[]): BenchmarkSuiteReport {
+  const byCase = new Map<string, BenchmarkResult>();
+  for (const result of results) {
+    if (BENCHMARKS.some((benchmark) => benchmark.id === result.caseId)) byCase.set(result.caseId, result);
+  }
+  const completed = BENCHMARKS.filter((benchmark) => byCase.has(benchmark.id)).map((benchmark) => byCase.get(benchmark.id)!);
+  const scores = completed.map((result) => result.total);
+  const missingCases = BENCHMARKS.filter((benchmark) => !byCase.has(benchmark.id)).map((benchmark) => benchmark.id);
+  return {
+    expectedCases: BENCHMARKS.length,
+    completedCases: completed.length,
+    missingCases,
+    averageScore: scores.length ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10 : null,
+    lowestScore: scores.length ? Math.min(...scores) : null,
+    readyForComparison: missingCases.length === 0,
+  };
+}

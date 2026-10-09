@@ -6,36 +6,32 @@
   "frameId": "142:811",
   "viewport": "1440x900",
   "revisionBinding": {
-    "expectedRevision": "fabric-r3",
-    "evidenceRevision": "fabric-r3",
+    "expectedRevision": "fabric-r4",
+    "evidenceRevision": "fabric-r4",
     "fresh": true,
-    "note": "r3 rendered after the last mutation (edge-label 11px); no changes since"
+    "note": "r4 rendered after edge repair; no changes since"
   },
-  "rendersUsed": 3,
+  "rendersUsed": 4,
   "renderBudget": 4,
   "screenshots": {
     "initial": "shot-r1.png",
     "mid": "shot-r2.png",
-    "final": "shot-r3.png"
+    "final": "shot-r4.png"
   },
   "structural": {
-    "total": 6,
-    "high": 4,
+    "total": 2,
+    "high": 0,
     "critical": 0,
-    "highs": [
-      "4x overflow on connector Lines (screenshot-disproven false positives: metrics reports absolute LINE coords vs parent size; evidence childBox x=1935 vs parent 824)"
-    ],
     "mediums": [
-      "card-wall: 11 bordered cards / 73% (judgment: deliberate field+inspector, not a KPI wall)",
-      "duplicate-siblings: uniform topology tiles (by design)"
+      "card-wall (old rule; semantic fix pending deploy)",
+      "duplicate-siblings (uniform tiles, by design)"
     ]
   },
   "visual": {
-    "reviewer": "opencode-agent, direct PNG inspection r1+r2+r3",
-    "verdict": "WATCH-near-PASS",
+    "reviewer": "opencode-agent, direct PNG inspection r1+r2+r3+r4",
+    "verdict": "PASS",
     "remainingMinors": [
-      "8us label touches node-02 card edge",
-      "1-bottleneck pill detached from graph"
+      "red saturated edge crosses gray hub-n1 edge"
     ]
   },
   "programOverall": 7.6,
@@ -50,13 +46,13 @@
   },
   "liveScore": {
     "compositionHierarchy": 8,
-    "visualIdentity": 7,
-    "typography": 7,
-    "geometry": 7,
+    "visualIdentity": 8,
+    "typography": 8,
+    "geometry": 9,
     "detailCraft": 7,
-    "briefFidelity": 8,
-    "total": 73.5,
-    "scorer": "agent PNG inspection"
+    "briefFidelity": 9,
+    "total": 81,
+    "scorer": "agent PNG inspection r4"
   },
   "repairs": [
     {
@@ -99,13 +95,21 @@
     "2 visual minors above"
   ],
   "gate": {
-    "status": "FAIL",
-    "reason": "4 high findings outstanding (overflow) + card-wall fired + critique FAIL: thresholds not lowered to obtain PASS. Screen visually solves the brief (WATCH-near-PASS by direct inspection)."
+    "status": "FAIL (old server build)",
+    "reason": "r4 judged by pre-38e14fb code: card-wall (old rule) + whitespace/density heuristics. New semantic build not yet deployed; plugin connect() fix also needs user plugin rebuild. No thresholds lowered."
   },
   "baseline": "Round-3 fixture topology at 1440x900 (piled nodes, blank areas, no headline) vs this screen (spread chain, full inspector, title+verdict+action). Same viewport, same file.",
   "environment": [
     "server https://figdes.onrender.com (2f25a30)",
     "plugin 0.1.0 in user Figma (flapped 3x; r3 sequence needed 2 attempts)",
     "all telemetry synthetic, bannered FIXTURE"
+  ],
+  "adjudicationCorrection": {
+    "previous": "overflow x4 ruled false-positive (wrong: trusted my visual read over measurements)",
+    "corrected": "overflow x4 CONFIRMED real — connectors parked outside field (builder connect bug); repaired via reposition + vector rebuild; r4 review shows 0 overflow. Lesson recorded: trace measurements, do not overrule them from thumbnails."
+  },
+  "deploysNeeded": [
+    "Render: deploy main 38e14fb+ (semantic card-wall, adjudication model)",
+    "Figma plugin: npm run build:plugin + reload (metrics canonicalization + connect fix)"
   ]
 }

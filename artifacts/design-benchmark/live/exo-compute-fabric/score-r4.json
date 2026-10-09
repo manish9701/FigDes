@@ -1,0 +1,78 @@
+{
+  "status": "ok",
+  "source": "live",
+  "overall": 7.6,
+  "dimensions": [
+    {
+      "dimension": "Composition",
+      "score": 9,
+      "evidence": "one focal region (142:826); 5 regions; composition: spatial; largest region isolated by 0%",
+      "improve": "The largest region touches a canvas edge with no breathing room."
+    },
+    {
+      "dimension": "Hierarchy",
+      "score": 8,
+      "evidence": "9 distinct size(s): 10, 11, 12, 13, 14, 15, 16, 18, 20; 14 technical value(s) in mono; contrast 42/42 passing AA",
+      "improve": "The largest text is 20px: no headline, no entry point."
+    },
+    {
+      "dimension": "Information density",
+      "score": 8,
+      "evidence": "5 regions tile the canvas; 10px of stroke in play; 60 node(s) drawn"
+    },
+    {
+      "dimension": "Alignment",
+      "score": 9.1,
+      "evidence": "55/62 boxes share an edge or centre"
+    },
+    {
+      "dimension": "Visual consistency",
+      "score": 4,
+      "evidence": "15 colour(s); 2 familie(s)",
+      "improve": "15 distinct colours is a rainbow, not a palette. Bind repeated values to variables. 4 high-salience colours (#F2C94C, #8F1D12, #C43D2B, #0B6BCB). Keep one action colour and one health colour; mute the rest."
+    },
+    {
+      "dimension": "Accessibility",
+      "score": 6,
+      "evidence": "smallest text 10px; 1 tiny layer(s); technical values monospaced",
+      "improve": "1 text layer(s) under 11px. Minimum readable technical text is 11px, body 12px and up."
+    },
+    {
+      "dimension": "Focus",
+      "score": 9,
+      "evidence": "intended focal '142:826' holds 61% of attention: 142:826 61%, 142:850 16%, 142:870 15%, 142:812 7%, 142:824 1%"
+    }
+  ],
+  "weakSpots": [
+    "Visual consistency (4/10): 15 distinct colours is a rainbow, not a palette. Bind repeated values to variables. 4 high-salience colours (#F2C94C, #8F1D12, #C43D2B, #0B6BCB). Keep one action colour and one health colour; mute the rest."
+  ],
+  "regions": [
+    {
+      "id": "142:826",
+      "role": "primary-visual"
+    },
+    {
+      "id": "142:812",
+      "role": "status-rail"
+    },
+    {
+      "id": "142:850",
+      "role": "inspector"
+    },
+    {
+      "id": "142:870",
+      "role": "content"
+    },
+    {
+      "id": "142:824",
+      "role": "content"
+    }
+  ],
+  "composition": "spatial",
+  "canvas": {
+    "width": 1440,
+    "height": 900
+  },
+  "measuredNodes": 64,
+  "note": "Roles inferred from layer names; composition inferred from region names. Disagree with an inference? Rename the layer and re-run."
+}

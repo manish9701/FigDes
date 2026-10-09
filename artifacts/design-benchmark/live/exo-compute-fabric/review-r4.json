@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "total": 2,
+    "high": 0,
+    "medium": 2,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "card-wall": 1,
+      "duplicate-siblings": 1
+    }
+  },
+  "findings": [
+    "minor/medium card-wall: 11 bordered cards cover 73% of the screen",
+    "minor/medium duplicate-siblings: 3 identical children in \"TopologyField\""
+  ]
+}

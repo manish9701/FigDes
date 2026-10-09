@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-09T05:48:12Z",
+  "runner": "FigDes live benchmark (agent-driven, connected Figma plugin)",
+  "mode": "live-plugin",
+  "serverCommit": "b9d0958+ (measurement fixes verified live: balance 68/32, card-wall cap 100%)",
+  "file": "Exo Labs",
+  "page": "V5",
+  "method": "For each case: render (low) -> judge image -> critique_visual + review_design -> targeted repair -> re-render -> verify (review 0 high + visual judgement). Scores are reviewer-assessed on the 100-point rubric (hierarchy 15, composition 15, product 15, typography 10, spacing 10, relationship clarity 10, density 10, native 5, distinctiveness 5, readability 5); never computed silently.",
+  "screenshotStorage": "PNG bytes are not embedded: image transport cannot round-trip base64 back to disk in this session. Each case records render nodeId, size and verdicts so any screenshot is reproducible with render_design(nodeId, detail low). Server-side render artifact saving is tracked follow-up work, not silently claimed.",
+  "cases": ["exo-compute-topology", "exo-model-detail", "exo-runtime-monitoring"],
+  "plannedOnly": ["exo-configuration", "exo-enterprise-workspace", "generic-saas-dashboard", "data-heavy-workspace", "spatial-relationship", "editorial-product-page"],
+  "plannedOnlyNote": "Covered by the offline structural runner (artifacts/design-benchmark/latest.json, 9/9 PASS). Full visual loops pending render budget."
+}

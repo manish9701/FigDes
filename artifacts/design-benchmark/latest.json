@@ -1,0 +1,707 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-10-09T05:45:12.749Z",
+  "runner": "FigDes executable planning benchmark",
+  "mode": "offline-planner-structural",
+  "expectedCases": 9,
+  "completedCases": 9,
+  "passedCases": 9,
+  "reviewCases": [],
+  "visualBenchmarkComplete": false,
+  "visualBenchmarkReason": "Live Figma screenshots are not captured by the offline planner runner; do not interpret structural checks as visual approval.",
+  "results": [
+    {
+      "caseId": "exo-compute-topology",
+      "brief": "EXO compute topology: where needs attention",
+      "requestedPattern": "spatial-topology",
+      "decisionKind": "topology",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "spatial-topology",
+        "infoKinds": [
+          "option",
+          "relationship",
+          "signal"
+        ],
+        "appliedGuidance": [
+          "'rail' gap 24px from 'SpatialTopology' balanced density.",
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+        ],
+        "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Find the weakest link in the EXO compute topology and identify which device needs attention",
+        "decisionKind": "topology",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "rail",
+          "role": "status-rail",
+          "composition": "instrument",
+          "width": "fill",
+          "height": 56,
+          "grow": 0,
+          "gap": 24,
+          "padding": 16,
+          "because": "fleet summary for the relationship field (devices, GPU health, memory pressure), read without focusing"
+        },
+        {
+          "id": "map",
+          "role": "primary-visual",
+          "composition": "topology",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 32,
+          "padding": 24,
+          "because": "the relationships themselves (devices, nodes, links (+1 more)): nodes, links, latency, which are the content"
+        }
+      ],
+      "warnings": [
+        "primaryDecision is unusually long. State it as a short noun phrase ('select a model'), not a sentence describing a screen.",
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "exo-model-detail",
+      "brief": "EXO model detail: understand this model",
+      "requestedPattern": "object-inspector",
+      "decisionKind": "inspect",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "option",
+          "attribute",
+          "signal"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 5 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Inspect this AI model and decide whether it fits the available local hardware",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (model name, memory, supported devices (+1 more)), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (memory, throughput, fit state)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "exo-runtime-monitoring",
+      "brief": "EXO runtime monitoring: intervene or let run",
+      "requestedPattern": "monitoring-instrument",
+      "decisionKind": "monitor",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "monitoring-instrument",
+        "infoKinds": [
+          "signal",
+          "relationship"
+        ],
+        "appliedGuidance": [
+          "'rail' gap 24px from 'MonitoringInstrument' balanced density.",
+          "Relationship rule carried into build: Signal-to-source traceable."
+        ],
+        "note": "Derived from 6 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Monitor live inference and decide whether to intervene or let it continue",
+        "decisionKind": "monitor",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "rail",
+          "role": "status-rail",
+          "composition": "instrument",
+          "width": "fill",
+          "height": 64,
+          "grow": 0,
+          "gap": 24,
+          "padding": 16,
+          "because": "state at a glance (GPU utilization, memory pressure, throughput (+2 more)), read without focusing"
+        },
+        {
+          "id": "primary-visual",
+          "role": "primary-visual",
+          "composition": "instrument",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 24,
+          "because": "one continuous signal surface for GPU utilization, memory pressure, throughput (+2 more) — grouped into a single instrument, never 6 cards"
+        },
+        {
+          "id": "detail",
+          "role": "secondary",
+          "composition": "split-view",
+          "width": "fill",
+          "height": 240,
+          "grow": 0,
+          "gap": 16,
+          "padding": 24,
+          "because": "the underlying data behind the signal (the stated decision)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "exo-configuration",
+      "brief": "EXO configuration: approve this policy",
+      "requestedPattern": "configuration-workbench",
+      "decisionKind": "configure",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "configuration-workbench",
+        "infoKinds": [
+          "setting",
+          "option",
+          "signal"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ConfigurationWorkbench' balanced density.",
+          "Relationship rule carried into build: Every control maps to a visible preview change."
+        ],
+        "note": "Derived from 6 classified information item(s) for the 'configure' decision; pattern 'ConfigurationWorkbench' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Configure and approve the runtime policy and its thresholds",
+        "decisionKind": "configure",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 240,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "form",
+          "role": "content",
+          "composition": "editorial",
+          "width": 480,
+          "height": "fill",
+          "grow": 0,
+          "gap": 16,
+          "padding": 24,
+          "because": "the controls (current settings, policy, threshold (+1 more)), in one column so their order reads as a sequence"
+        },
+        {
+          "id": "preview",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 24,
+          "padding": 24,
+          "because": "the effect of the settings, so a change is never a leap of faith"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "exo-enterprise-workspace",
+      "brief": "EXO enterprise workspace: act on a subset",
+      "requestedPattern": "data-workspace",
+      "decisionKind": "explore",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "spatial-topology",
+        "infoKinds": [
+          "option",
+          "relationship",
+          "event",
+          "signal",
+          "setting"
+        ],
+        "appliedGuidance": [
+          "'rail' gap 24px from 'SpatialTopology' balanced density.",
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+        ],
+        "note": "Derived from 5 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Explore the enterprise device fleet and act on a subset of assigned devices",
+        "decisionKind": "topology",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "rail",
+          "role": "status-rail",
+          "composition": "instrument",
+          "width": "fill",
+          "height": 56,
+          "grow": 0,
+          "gap": 24,
+          "padding": 16,
+          "because": "fleet summary for the relationship field (devices, health), read without focusing"
+        },
+        {
+          "id": "map",
+          "role": "primary-visual",
+          "composition": "topology",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 32,
+          "padding": 24,
+          "because": "the relationships themselves (devices, team assignments): team assignments, which are the content"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "generic-saas-dashboard",
+      "brief": "Generic SaaS dashboard (negative control: must NOT look like this)",
+      "requestedPattern": "monitoring-instrument",
+      "decisionKind": "monitor",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "attribute",
+          "event",
+          "setting"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 3 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Review a generic SaaS dashboard as a negative control; avoid copying its dashboard composition",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (conversion), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (conversion, activity)"
+        }
+      ],
+      "warnings": [
+        "primaryDecision is unusually long. State it as a short noun phrase ('select a model'), not a sentence describing a screen.",
+        "'Review a generic SaaS dashboard as a negative control; avoid copying its dashboard composition' names a page type, not a decision. Page types are what produce generic layouts. Name what the user decides here instead.",
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "data-heavy-workspace",
+      "brief": "Data-heavy workspace: find what needs follow-up",
+      "requestedPattern": "exploration-surface",
+      "decisionKind": "explore",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "exploration-surface",
+        "infoKinds": [
+          "event",
+          "signal"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 12px from 'ExplorationSurface' dense density.",
+          "'filters' gap 12px from 'ExplorationSurface' dense density.",
+          "Relationship rule carried into build: Selection previews without navigation."
+        ],
+        "note": "Derived from 4 classified information item(s) for the 'explore' decision; pattern 'ExplorationSurface' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Find events and incidents that need follow-up and identify the owner",
+        "decisionKind": "explore",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 240,
+          "height": "fill",
+          "grow": 0,
+          "gap": 12,
+          "because": "orientation"
+        },
+        {
+          "id": "filters",
+          "role": "header",
+          "composition": "editorial",
+          "width": "fill",
+          "height": 64,
+          "grow": 0,
+          "gap": 12,
+          "padding": 16,
+          "because": "narrowing (the stated decision) before listing"
+        },
+        {
+          "id": "results",
+          "role": "content",
+          "composition": "table",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 12,
+          "padding": 24,
+          "because": "the results (events, incidents), dense enough to scan"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "spatial-relationship",
+      "brief": "Spatial relationship interface: find the weak link",
+      "requestedPattern": "relationship-graph",
+      "decisionKind": "topology",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "spatial-topology",
+        "infoKinds": [
+          "relationship"
+        ],
+        "appliedGuidance": [
+          "'rail' gap 24px from 'SpatialTopology' balanced density.",
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+        ],
+        "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Find the weak link in this dependency graph and understand the relationship flow",
+        "decisionKind": "topology",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "rail",
+          "role": "status-rail",
+          "composition": "instrument",
+          "width": "fill",
+          "height": 56,
+          "grow": 0,
+          "gap": 24,
+          "padding": 16,
+          "because": "fleet summary for the relationship field (the stated decision), read without focusing"
+        },
+        {
+          "id": "map",
+          "role": "primary-visual",
+          "composition": "topology",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 32,
+          "padding": 24,
+          "because": "the relationships themselves (nodes, edges, dependencies (+3 more)): nodes, edges, dependencies (+3 more), which are the content"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "editorial-product-page",
+      "brief": "Editorial product page: run vs change model",
+      "requestedPattern": "editorial-focus",
+      "decisionKind": "compare",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "comparison-field",
+        "infoKinds": [
+          "option",
+          "relationship",
+          "attribute"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ComparisonField' balanced density.",
+          "'header' gap 24px from 'ComparisonField' balanced density.",
+          "Relationship rule carried into build: Same schema both sides."
+        ],
+        "note": "Derived from 3 classified information item(s) for the 'compare' decision; pattern 'ComparisonField' applied as guidance, not structure."
+      },
+      "intent": {
+        "primaryDecision": "Compare model run cost, latency, quality, and fit before choosing what to run",
+        "decisionKind": "compare",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 240,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation: where am I in the product"
+        },
+        {
+          "id": "header",
+          "role": "header",
+          "composition": "editorial",
+          "width": "fill",
+          "height": 72,
+          "grow": 0,
+          "gap": 24,
+          "padding": 24,
+          "because": "the decision, stated: \"Compare model run cost, latency, quality, and fit before choosing what to run\""
+        },
+        {
+          "id": "content",
+          "role": "content",
+          "composition": "table",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 16,
+          "padding": 24,
+          "because": "the options (model name) compared across fit state — alignment does the comparing, not decoration"
+        },
+        {
+          "id": "inspector",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "detail for the currently focused option (fit state)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    }
+  ]
+}

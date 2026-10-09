@@ -1,0 +1,61 @@
+{
+  "caseId": "exo-runtime-monitoring",
+  "brief": "Watch inference live: intervene or let run",
+  "nodeId": "117:287",
+  "nodeName": "EXO Runtime Monitor",
+  "page": "Chatgpt Designs (not loaded this session)",
+  "before": {
+    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
+    "defects": [
+      "black canvas (regions emitted with no fill)",
+      "section headers ordered below their values by the grid algorithm",
+      "hero content huddled in the left third; right two-thirds empty"
+    ],
+    "reviewHigh": 1,
+    "reviewRules": ["overflow: memory track overhang"]
+  },
+  "repairs": [
+    {
+      "pass": 1,
+      "ops": "setFill canvas #F7F5EF + 6 setPosition (header/value/event order)",
+      "approvals": "none required (non-destructive)"
+    },
+    {
+      "pass": 2,
+      "ops": "createVector throughput trace (860x120, health green) + mono caption",
+      "note": "trace data illustrative, consistent with the file's demo-data convention"
+    },
+    {
+      "pass": 3,
+      "ops": "setSize memory track 432 (inside frame padding)",
+      "result": "review 1 high -> 0"
+    }
+  ],
+  "after": {
+    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
+    "reviewHigh": 0,
+    "reviewerVisual": "calm instrument: rail state, 64px hero number, mono sub-line, trace field, memory bar, quiet event rows; no card wall"
+  },
+  "resolution": {
+    "resolved": ["black canvas", "header order", "empty right field", "memory overflow"],
+    "persisting": [],
+    "introduced": [],
+    "method": "re-render judged per pass + review_design re-runs (1 high -> 0)"
+  },
+  "score": {
+    "total": 86,
+    "dimensions": {
+      "hierarchy": 13,
+      "composition": 12,
+      "productSpecificity": 12,
+      "typography": 9,
+      "spacingRhythm": 8,
+      "relationshipClarity": 7,
+      "density": 8,
+      "nativeQuality": 5,
+      "distinctiveness": 4,
+      "readability": 8
+    }
+  },
+  "visualReverification": "PENDING: built and verified in a prior session on the Chatgpt Designs page, which is not loaded in this session (plugin is on V5). Evidence above is carried forward, not re-captured. Re-render on page return to close."
+}

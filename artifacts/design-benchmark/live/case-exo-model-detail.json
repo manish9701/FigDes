@@ -1,0 +1,50 @@
+{
+  "caseId": "exo-model-detail",
+  "brief": "Choose between models by fit: ranked comparison with evidence",
+  "nodeId": "112:1204",
+  "nodeName": "V5 · 03 Models · Library",
+  "before": {
+    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
+    "critiqueVerdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blockingIssues": [
+      "Whitespace/Density: 17 regions; 64 operations"
+    ],
+    "passing": [
+      "Focal clarity PASS: intended focal holds 69%",
+      "Balance PASS 80/20",
+      "Card-wall: WATCH (7 bordered surfaces, capped 100%)",
+      "Template feel PASS"
+    ],
+    "reviewHigh": 0,
+    "reviewerVisual": "PASS: fit-ranked rows (Q4/6.2B/61 tok/s, ACTIVE/TIGHT/SHARDED pills), mono specs, quiet dividers; reads as an instrument table, not a card wall"
+  },
+  "repairs": [],
+  "repairsNote": "No repair applied deliberately: 0 high findings, focal PASS, and the card-wall WATCH counts status pills (radius>=4) as bordered surfaces — reviewed against the image and dismissed with reason. Forcing a change on a verified-good screen would be worse than the loop reporting a clean pass.",
+  "after": null,
+  "resolution": {
+    "resolved": [],
+    "persisting": [],
+    "introduced": [],
+    "method": "single-pass verification (render + critique + review agree; nothing to fix)"
+  },
+  "score": {
+    "total": 90,
+    "dimensions": {
+      "hierarchy": 14,
+      "composition": 13,
+      "productSpecificity": 14,
+      "typography": 9,
+      "spacingRhythm": 9,
+      "relationshipClarity": 8,
+      "density": 7,
+      "nativeQuality": 5,
+      "distinctiveness": 5,
+      "readability": 9
+    }
+  },
+  "measurementNotes": [
+    "Density FAIL on 17 regions for a 5-row table is proxy noise: rows legitimately need rank/title/spec/pill/action nodes. Recorded as heuristic-precision evidence, not a design defect.",
+    "Card-wall heuristic counts soft status pills as bordered surfaces: precision evidence for future pill-vs-card distinction."
+  ]
+}

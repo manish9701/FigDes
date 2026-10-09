@@ -1,0 +1,58 @@
+{
+  "caseId": "exo-compute-topology",
+  "brief": "Show relationships between devices, runtime and model; find what needs attention",
+  "nodeId": "112:1114",
+  "nodeName": "V5 · 02 Compute · Topology",
+  "before": {
+    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
+    "critiqueVerdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blockingIssues": [
+      "Focal clarity: intended '112:1162' holds 38% (four equal cards, no dominant object)",
+      "Whitespace/Density: 16 regions; 65 operations"
+    ],
+    "reviewHigh": 1,
+    "reviewRules": ["radius-inconsistency on 112:1126"],
+    "reviewerVisual": "PASS hierarchy/order; WATCH equal-weight card row; edges labeled (12/8/4 Gb/s) with legend; selected card amber-bordered but same size"
+  },
+  "repairs": [
+    {
+      "via": "refine_screen(nodeId, maxIterations 2)",
+      "applied": "8 radius-inconsistency findings, 11 fixes",
+      "approvals": "none required (non-destructive)",
+      "result": "converged, 0 remaining high"
+    }
+  ],
+  "after": {
+    "render": { "detail": "low", "maxWidth": 1024, "ok": true },
+    "reviewHigh": 0,
+    "reviewerVisual": "no visible change (radius-only, as expected); corners consistent"
+  },
+  "resolution": {
+    "resolved": ["radius-inconsistency (review 1 high -> 0)"],
+    "persisting": ["focal weakness: four equal cards (true positive; redesign, not a safe auto-fix)"],
+    "introduced": [],
+    "method": "review_design re-run + visual render judgement"
+  },
+  "score": {
+    "total": 86,
+    "dimensions": {
+      "hierarchy": 12,
+      "composition": 11,
+      "productSpecificity": 14,
+      "typography": 8,
+      "spacingRhythm": 8,
+      "relationshipClarity": 9,
+      "density": 7,
+      "nativeQuality": 5,
+      "distinctiveness": 4,
+      "readability": 8
+    },
+    "note": "Radius pass moves +1 only. Proposed next repair (pending user approval): promote the SELECTED card to hero size so focal dominance matches its semantic dominance."
+  },
+  "measurementNotes": [
+    "Balance read PASS 68/32 live: confirms the parent-relative coordinate fix (no more fake '100% one side').",
+    "Card-wall share capped at 100% live (was 146%): confirms the overlap cap.",
+    "Focal names real child 112:1162 (intended == leader): confirms root is no longer a focal candidate."
+  ]
+}

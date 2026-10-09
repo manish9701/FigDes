@@ -218,7 +218,10 @@ export async function findNode(raw: FindNodeOptions): Promise<FindNodeResult> {
     const name = node.name ?? "";
     const lower = name.toLowerCase();
     const type = node.type;
-    const kids: BaseNode[] = "children" in node && node.children ? [...(node.children as BaseNode[])] : [];
+    // Newest first within each parent: children append at the end, so
+    // oldest-first order truncates exactly the nodes the agent just built.
+    // Matches are score-sorted afterwards, so only truncation changes.
+    const kids: BaseNode[] = "children" in node && node.children ? [...(node.children as BaseNode[])].reverse() : [];
 
     const ownText = node.type === "TEXT" ? String((node as TextNode).characters ?? "") : "";
     const childTexts = kids.flatMap((child) => walk(child, [...path, name]));

@@ -1426,6 +1426,24 @@ test("a committed build reports nodes that are already gone", async () => {
   assert.ok((reply.data.unconfirmedIds ?? []).length >= 1, "removed node reported unconfirmed");
 });
 
+test("file listing shows newest frames first so fresh builds stay visible", async () => {
+  // The live defect: page listings walked oldest-first under a node budget,
+  // so fresh builds were truncated out and read as "my build vanished" when
+  // the frames were sitting right there on the canvas.
+  const { figma: f } = loadPlugin();
+  await ask(f, "create_design", {
+    operations: [{ type: "createFrame", id: "older", name: "Older Frame", width: 100, height: 100 }],
+  });
+  await ask(f, "create_design", {
+    operations: [{ type: "createFrame", id: "newer", name: "Newer Frame", width: 100, height: 100 }],
+  });
+  const listed = await ask(f, "inspect_file", { budget: 1 });
+  assert.equal(listed.data.truncated, true, "budget forces truncation");
+  const names = listed.data.topLevelFrames.map((n) => n.name);
+  assert.ok(names.includes("Newer Frame"), `newest frame listed first, got: ${names.join(", ")}`);
+  assert.ok(!names.includes("Older Frame"), "oldest frame is what truncation drops");
+});
+
 test("getProperties returns full node state, not only geometry", async () => {
   const { figma: f } = loadPlugin();
   const created = await ask(f, "native_design", {

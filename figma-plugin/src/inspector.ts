@@ -173,7 +173,13 @@ export function inspectTopLevelFrames(page: PageNode, opts: InspectOptions = DEF
   let truncated = false;
   let left = opts.budget;
 
-  for (const child of page.children) {
+  // Newest first: page.children appends at the end, so oldest-first order
+  // truncates exactly the frames the agent just built — which then read as
+  // "my build vanished" when they are sitting right there on the canvas.
+  // Truncation now drops the oldest frames instead; the truncated flag (always
+  // returned) says so honestly.
+  const ordered = [...page.children].reverse();
+  for (const child of ordered) {
     if (left <= 0) {
       truncated = true;
       break;

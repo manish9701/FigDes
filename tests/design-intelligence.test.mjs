@@ -313,6 +313,23 @@ test("repair planner prioritizes hierarchy over polish", () => {
   assert.ok(repairs.length <= 8);
 });
 
+test("token-aware repairs reuse approved tokens and flag unknown hues", () => {
+  const withTokens = planRepairs({
+    watchList: ["Contrast (WATCH): pill label fails AA"],
+    tokens: { approved: ["#6B3F00", "#F7E8D2"] },
+  });
+  const fix = withTokens.find((r) => r.priority === "P2");
+  assert.match(fix.detail, /#6b3f00/i, "contrast repair cites an approved token");
+  assert.match(fix.verification, /whole-frame consistency/, "contrast fix verifies the whole frame");
+  const unknown = planRepairs({
+    watchList: ["Contrast (WATCH): use #AB12CD for the label"],
+    tokens: { approved: ["#6B3F00"] },
+  });
+  assert.match(unknown[0].verification, /approved token/, "unlisted hue needs confirmation");
+  const legacy = planRepairs({ watchList: ["Contrast (WATCH): pill label fails AA"] });
+  assert.ok(!/approved token/i.test(legacy[0].detail), "no token context, no token demands");
+});
+
 test("extended critic adds authorship dimensions without softening a FAIL", () => {
   const out = extendCritique({
     measured: { verdict: "FAIL", dimensions: [{ dimension: "Composition", verdict: "FAIL", evidence: "no focal" }] },

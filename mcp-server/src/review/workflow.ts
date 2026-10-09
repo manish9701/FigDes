@@ -25,6 +25,7 @@ import { evaluateGenericity } from "../design/quality/genericity";
 import { extendCritique } from "../design/quality/visual-critic";
 import { planRepairs } from "../design/quality/repair-planner";
 import { evaluateFinalGate } from "../design/quality/final-gate";
+import { makeFindings, trackFindings } from "../design/quality/visual-findings";
 import { guardMutation } from "../plan/gate";
 import type { Session } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
@@ -203,6 +204,32 @@ export const CritiqueArgs = z
       balance: z.string(),
       templateFeel: z.string(),
     }).optional().describe("Provide your own visual observations based on the screenshot, to merge with structural critique."),
+    visualFindings: z
+      .array(
+        z
+          .object({
+            area: z.string().max(120).describe("Where in the image: a canvas zone (top-left, center, bottom-right…), a region id, or 'focal'."),
+            defect: z.string().min(3).max(500).describe("The specific defect you see, in your own words."),
+            severity: z.enum(["critical", "major", "minor"]).optional().describe("critical blocks done; major must fix this pass; minor is polish. Default major."),
+          })
+          .strict(),
+      )
+      .max(20)
+      .optional()
+      .describe("Defects you saw in the render. Each is localized to measured node ids and returned with a repair that cites it. Re-report after fixing to verify."),
+    priorFindings: z
+      .array(
+        z
+          .object({
+            id: z.string().max(64).describe("Finding id from a previous critique (vf-*)."),
+            defect: z.string().max(500).optional(),
+            area: z.string().max(120).optional(),
+          })
+          .strict(),
+      )
+      .max(30)
+      .optional()
+      .describe("Findings from the previous render. Returned as resolved / persisting / introduced — but only when visualFindings re-reports the current image too."),
     renderReviewed: z.boolean().optional().describe("Set true after you have rendered and visually judged the result. Composition-led work stays at REVIEW until this is set."),
   })
   .strict();
@@ -379,9 +406,50 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
     const observationFail =
       !!observation &&
       Object.values(observation).some((value) => /fail|bad|weak|poor|generic|wrong|broken/i.test(value));
+
+    // Genericity on live nodes: the same first-class gate as on programs, so a
+    // native card wall cannot pass by skipping the program path.
+    const liveGenericity = evaluateGenericity({
+      boxes,
+      operations,
+      regions,
+      composition: "native-live",
+    });
+
+    // Image-grounded findings: defects the reviewer saw, localized to measured
+    // node ids, each with a repair that cites it. Verification needs both
+    // sides: prior findings plus a fresh report of the current image.
+    const regionsForFindings = topLevel.map((n) => ({ id: n.id, nodeId: n.id }));
+    const findingInputs = args.visualFindings ?? [];
+    const findings = findingInputs.length > 0
+      ? makeFindings({
+          findings: findingInputs,
+          nodes: nodes.map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h, parentId: n.parentId })),
+          regions: regionsForFindings,
+          ...(focal ? { focalId: focal.id } : {}),
+          canvasW: root.w,
+          canvasH: root.h,
+        })
+      : [];
+    const resolution = args.priorFindings && args.priorFindings.length > 0 && findings.length > 0
+      ? trackFindings(args.priorFindings.map((p) => ({ id: p.id })), findings.map((f) => ({ id: f.id })))
+      : null;
+    const resolutionNote = args.priorFindings && args.priorFindings.length > 0 && findings.length === 0
+      ? "Prior findings were supplied but the current image was not re-reported: pass visualFindings from what you see now to verify resolution."
+      : null;
+
+    const structuralBlocking = [...visual.qualityGate.blockingIssues];
+    if (liveGenericity.blocking) {
+      structuralBlocking.push(`Genericity: ${liveGenericity.score}/100 exceeds 70 — ${liveGenericity.findings.map((f) => f.id).join(", ")}. ${liveGenericity.repairs[0] ?? ""}`);
+    }
+    for (const f of findings) {
+      if (f.severity === "critical") structuralBlocking.push(`[${f.id}] ${f.area}: ${f.defect}`);
+    }
+
     const qualityGate = {
       ...visual.qualityGate,
-      status: observationFail ? "FAIL" : observation ? visual.qualityGate.status : "REVIEW",
+      status: observationFail || structuralBlocking.length > visual.qualityGate.blockingIssues.length ? "FAIL" : observation ? visual.qualityGate.status : "REVIEW",
+      blockingIssues: structuralBlocking,
       renderRequired: !observation,
       reason: observation
         ? visual.qualityGate.reason
@@ -392,10 +460,14 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
       type: "text",
       text: JSON.stringify({
         status: "ok",
-        verdict: observationFail ? "FAIL" : visual.verdict,
+        verdict: qualityGate.status === "FAIL" ? "FAIL" : visual.verdict,
         qualityGate,
         dimensions: visual.dimensions,
         watchList: visual.watchList,
+        genericity: { score: liveGenericity.score, blocking: liveGenericity.blocking, findings: liveGenericity.findings },
+        findings,
+        resolution,
+        ...(resolutionNote ? { resolutionNote } : {}),
         liveEvidence: {
           nodes: report.nodeCount,
           truncated: report.truncated,
@@ -405,9 +477,9 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
           filledSurfaces: report.nodes.filter((n) => Boolean(n.fill)).length,
         },
         visionMerge: observation || null,
-        nextStep: observation
-          ? "Apply only high-confidence structural fixes, then render again after a material visual change."
-          : "Judge the screenshot for focal clarity, hierarchy, rhythm, density, balance and template feel; provide concise observations and run critique_visual again.",
+        nextStep: observation || findings.length > 0
+          ? "Fix each finding via its nodeIds with modify_design, re-render, then re-run critique_visual with priorFindings plus fresh visualFindings to verify resolution."
+          : "Judge the screenshot for focal clarity, hierarchy, rhythm, density, balance and template feel; report what you see as visualFindings (area + defect) and run critique_visual again.",
       }, null, 2),
     }];
 

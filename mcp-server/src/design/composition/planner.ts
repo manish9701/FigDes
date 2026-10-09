@@ -21,6 +21,8 @@ export interface Relationship {
   from: string;
   to: string;
   meaning: string;
+  /** Semantic weight from relationship analysis. Absent means unranked. */
+  importance?: "critical" | "major" | "minor";
 }
 
 export interface Region {
@@ -81,6 +83,12 @@ export function buildCompositionPlan(input: {
   hierarchy: string[];
   regions: Array<{ id: string; role: string; why?: string }>;
   visualDirection?: string;
+  /**
+   * Ranked relationship meanings from relationship analysis. When supplied,
+   * primary relationships carry their importance into the build instead of
+   * treating every edge as equal.
+   */
+  relationshipMeanings?: Array<{ from: string; to: string; meaning: string; importance?: "critical" | "major" | "minor" }>;
 }): CompositionPlan {
   const pattern = input.pattern;
   const focal: FocalRegion | null = input.focalId
@@ -96,11 +104,18 @@ export function buildCompositionPlan(input: {
     .map((r) => ({ id: r.id, role: r.role, intent: r.why ?? "orientation / command" }));
   const contentPeers = input.regions.filter((r) => r.id !== input.focalId && !isControl(r.role) && !isContext(r.role));
   const primaryRelationships: Relationship[] = focal
-    ? contentPeers.slice(0, 3).map((r) => ({
-        from: focal.id,
-        to: r.id,
-        meaning: pattern?.relationshipRules[0] ?? "supporting evidence for the focal decision",
-      }))
+    ? (input.relationshipMeanings && input.relationshipMeanings.length > 0
+      ? input.relationshipMeanings.slice(0, 5).map((m) => ({
+          from: m.from,
+          to: m.to,
+          meaning: m.meaning,
+          ...(m.importance !== undefined ? { importance: m.importance } : {}),
+        }))
+      : contentPeers.slice(0, 3).map((r) => ({
+          from: focal.id,
+          to: r.id,
+          meaning: pattern?.relationshipRules[0] ?? "supporting evidence for the focal decision",
+        })))
     : [];
   return {
     visualDirection: input.visualDirection ?? "technical-instrument",

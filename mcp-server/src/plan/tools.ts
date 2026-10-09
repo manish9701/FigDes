@@ -19,6 +19,7 @@ import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import { bestPattern } from "../design/grammar/matcher";
 import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
 import { buildDesignContext, contextBrief } from "../design/context/design-context";
+import { toKnowledge } from "../design/system/component-intelligence";
 import type { Composition } from "../runtime/layout";
 import type { Session } from "../sessions";
 
@@ -38,6 +39,29 @@ export const PlanScreenArgs = z
     audience: z.enum(["developer", "operator", "engineer", "leadership", "general"]).optional(),
     availableInformation: z.array(z.string().max(120)).max(30).optional().describe("Data you actually have. Named, not assumed."),
     existingPatterns: z.array(z.string().max(120)).max(20).optional().describe("Patterns the file already uses."),
+    /**
+     * Known components, from find_component.
+     *
+     * When supplied, regions resolve what they will instance instead of
+     * assuming a rebuild: the plan names the component id per region. Omit
+     * when nothing suitable was found; the plan still derives, but cannot
+     * name its reuse.
+     */
+    components: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(200),
+            name: z.string().min(1).max(200),
+            description: z.string().max(500).optional(),
+            width: z.number().positive().max(20000).optional(),
+            height: z.number().positive().max(20000).optional(),
+            instanceCount: z.number().int().min(0).optional(),
+          })
+          .strict(),
+      )
+      .max(40)
+      .optional(),
     desiredComposition: z.enum(["editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison"]).optional(),
     name: z.string().max(120).optional(),
     /**
@@ -123,6 +147,20 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(args.audience !== undefined ? { audience: args.audience } : {}),
     ...(args.availableInformation !== undefined ? { availableInformation: args.availableInformation } : {}),
     ...(args.existingPatterns !== undefined ? { existingPatterns: args.existingPatterns } : {}),
+    ...(args.components !== undefined
+      ? {
+          components: args.components.map((c) =>
+            toKnowledge({
+              id: c.id,
+              name: c.name,
+              ...(c.description !== undefined ? { description: c.description } : {}),
+              ...(c.width !== undefined ? { width: c.width } : {}),
+              ...(c.height !== undefined ? { height: c.height } : {}),
+              ...(c.instanceCount !== undefined ? { instanceCount: c.instanceCount } : {}),
+            }),
+          ),
+        }
+      : {}),
     ...(args.desiredComposition !== undefined ? { desiredComposition: args.desiredComposition } : {}),
     ...(args.name !== undefined ? { name: args.name } : {}),
     // Deck format overrides any canvas size: slides are fixed 1920x1080, and a
@@ -292,7 +330,20 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     },
 
     /** Ordered regions, each with its reason. */
-    regions: plan.regions.map((r) => ({ id: r.id, role: r.role, why: r.because, grow: r.grow })),
+    regions: plan.regions.map((r) => ({
+      id: r.id,
+      role: r.role,
+      why: r.because,
+      grow: r.grow,
+      ...(r.reuse !== undefined ? { reuse: r.reuse } : {}),
+    })),
+
+    /**
+     * How the regions were determined: task-derived from the actual
+     * information (each `why` cites what it serves), or an explicit
+     * shell-fallback when there was nothing classifiable to derive from.
+     */
+    derivation: plan.derivation,
 
     /** The art director's decisions: focal, hierarchy, strategies, states, risks. */
     artDirection: plan.artDirection,

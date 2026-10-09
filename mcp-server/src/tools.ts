@@ -525,6 +525,16 @@ export const CompareVisualsArgs = z.object({
   beforeNodeId: z.string().describe("The node ID of the previous state"),
   afterNodeId: z.string().describe("The node ID of the new state"),
   focalOnly: z.boolean().optional().describe("Only compare focal regions"),
+  priorFindings: z
+    .array(z.object({ id: z.string().max(64) }).strict())
+    .max(30)
+    .optional()
+    .describe("Finding ids (vf-*) reported on the before state. Returned as resolved / persisting against currentFindings."),
+  currentFindings: z
+    .array(z.object({ id: z.string().max(64) }).strict())
+    .max(30)
+    .optional()
+    .describe("Finding ids reported on the after state. Both sides are needed: without a fresh report, nothing can be verified as resolved."),
 });
 
 export const TOOLS: ToolDefinition[] = [
@@ -826,7 +836,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "critique_visual",
     title: "Judge whether a design is good, not just correct",
     description:
-      "The aesthetic critic: evaluate a program (or a live Figma node via nodeId plus visionCriticObservations from the render) on focal clarity, hierarchy, composition, whitespace, density, repetition, card-wall tendency, visual balance, data-visualization quality, surface hierarchy, depth, and template feel. Returns verdict PASS / WATCH / FAIL plus the authoritative qualityGate (PASS / REVIEW / FAIL with blockingIssues, repairPlan and renderRequired). FAIL means repair before done; REVIEW means render and judge before done. Structural issues (overflow, contrast, naming) belong to review_design and are NOT mixed in here. Deterministic and free: run it alongside score_design before presenting anything.",
+      "The aesthetic critic: evaluate a program (or a live Figma node via nodeId plus visionCriticObservations from the render) on focal clarity, hierarchy, composition, whitespace, density, repetition, card-wall tendency, visual balance, data-visualization quality, surface hierarchy, depth, and template feel. Returns verdict PASS / WATCH / FAIL plus the authoritative qualityGate (PASS / REVIEW / FAIL with blockingIssues, repairPlan and renderRequired). FAIL means repair before done; REVIEW means render and judge before done. Structural issues (overflow, contrast, naming) belong to review_design and are NOT mixed in here. Deterministic and free: run it alongside score_design before presenting anything. For the image-grounded loop: report what you see as visualFindings (area + defect + severity); each is localized to measured node ids with a repair that cites it. After fixing, re-run with priorFindings plus fresh visualFindings — the resolution (resolved / persisting / introduced) is the verification that the loop improved something.",
     inputSchema: CritiqueArgs,
     handler: async (args, registry) => critiqueVisualTool(args, registry),
   },
@@ -1271,6 +1281,17 @@ inputSchema: CompileArgs,
       }
       if (nextActions.length === 0) nextActions.push("Compare the two images: does the intended focal point read more clearly after than before?");
 
+      // Finding verification (point D): the repair loop must show its work.
+      // Both sides are required — a resolution claimed without a fresh
+      // after-report is a guess, not evidence.
+      const { trackFindings } = await import("./design/quality/visual-findings");
+      const resolution = parsed.priorFindings && parsed.currentFindings
+        ? trackFindings(parsed.priorFindings, parsed.currentFindings)
+        : null;
+      if (parsed.priorFindings && !parsed.currentFindings) {
+        nextActions.push("Prior findings were supplied without a fresh after-report: judge the AFTER image and pass currentFindings to verify resolution.");
+      }
+
       const content: any[] = [
         {
           type: "text",
@@ -1280,6 +1301,7 @@ inputSchema: CompileArgs,
               before,
               after,
               delta,
+              resolution,
               renderStatus: { before: beforeRender.ok ? "ok" : "failed", after: afterRender.ok ? "ok" : "failed" },
               failures,
               nextActions,

@@ -27,6 +27,9 @@
 import { defaultGutter, inferComposition, layoutRegions, type Composition } from "../runtime/layout";
 import type { Region } from "../../../shared/ir";
 import { defaultRules } from "../memory/rules-exo";
+import { bestPattern } from "../design/grammar/matcher";
+import { deriveRegions, type Derivation } from "../design/composition/derive";
+import type { ComponentKnowledge } from "../design/system/component-intelligence";
 
 /* -------------------------------------------------------------------------- */
 /* Intent                                                                      */
@@ -55,6 +58,12 @@ export interface ScreenIntent {
   availableInformation?: string[];
   /** Patterns the file already uses. Reused rather than reinvented. */
   existingPatterns?: string[];
+  /**
+   * Known components (from find_component), so regions resolve reuse instead
+   * of assuming a rebuild. Optional: without it the plan still derives, but
+   * cannot name what will be instanced.
+   */
+  components?: ComponentKnowledge[];
   /** The model's own preference, used only as a tiebreaker. */
   desiredComposition?: Composition;
   canvas?: { width?: number; height?: number; grid?: number };
@@ -140,6 +149,8 @@ interface PlannedRegion {
   padding?: number;
   /** Why this region exists. Shown to the user, and to the model. */
   because: string;
+  /** Existing component this region will instance, resolved at plan time. */
+  reuse?: { componentId: string; name: string };
 }
 
 /**
@@ -455,6 +466,12 @@ export interface ScreenPlan {
   composition: Composition;
   /** The named screen template this plan follows (spec §14). */
   template: ScreenTemplate;
+  /**
+   * How the regions were determined: task-derived from the actual information,
+   * or an explicit kind-shell fallback. A fallback is honest, not a failure —
+   * but it must never masquerade as derived.
+   */
+  derivation: Derivation;
   /** The §31 2D model: geometry only, no content. */
   boxes: CompositionBox[];
   regions: PlannedRegion[];
@@ -548,7 +565,44 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
 
   const decisionKind = classifyDecision(intent.primaryDecision);
 
-  let regions = SHELLS[decisionKind](intent);
+  // Task-driven derivation first: regions serve the actual information for the
+  // stated decision, with the pattern as guidance. Shells are the explicit
+  // fallback when there is nothing classifiable to derive from.
+  const patternForPlan = bestPattern(decisionKind, intent.goal ?? intent.primaryDecision);
+  const derived = deriveRegions({
+    decisionKind,
+    primaryDecision: intent.primaryDecision,
+    info: intent.availableInformation ?? [],
+    ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
+    ...(patternForPlan ? { pattern: patternForPlan } : {}),
+    ...(intent.components !== undefined ? { components: intent.components } : {}),
+  });
+  let regions: PlannedRegion[];
+  let derivation: Derivation;
+  if (derived) {
+    regions = derived.regions.map((r) => ({
+      id: r.id,
+      role: r.role,
+      composition: r.composition,
+      width: r.width,
+      height: r.height,
+      grow: r.grow,
+      ...(r.gap !== undefined ? { gap: r.gap } : {}),
+      ...(r.padding !== undefined ? { padding: r.padding } : {}),
+      because: r.because,
+      ...(r.reuse !== undefined ? { reuse: r.reuse } : {}),
+    }));
+    derivation = derived.derivation;
+  } else {
+    regions = SHELLS[decisionKind](intent);
+    derivation = {
+      strategy: "shell-fallback",
+      pattern: patternForPlan?.id ?? null,
+      infoKinds: [],
+      appliedGuidance: [],
+      note: "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
+    };
+  }
 
   // An explicit preference wins, but only among compositions that make sense for
   // the roles in play. Overriding to `canvas` for a topology screen would produce
@@ -667,6 +721,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     },
     composition,
     template: templateFor(decisionKind),
+    derivation,
     boxes: finalBoxes,
     regions,
     passes,

@@ -1379,6 +1379,47 @@ interface GraphExpansion {
 }
 
 /** Shared node/edge expansion for topologyMap and placementMap. */
+
+/**
+ * What a graph node *means* as deviceNode props.
+ *
+ * `selected` draws the action-blue ring; health tones draw the state stroke;
+ * `pressured` maps to the warning tone (amber needs-attention) because the
+ * device vocabulary has no pressured state of its own. Unknown statuses warn
+ * and are ignored rather than guessed at.
+ */
+function nodeStatusArgs(status: unknown, warnings: string[], nodeId: string): Record<string, unknown> {
+  if (status === undefined) return {};
+  if (typeof status !== "string" || status.length === 0) {
+    warnings.push(`Graph node '${nodeId}' has an unusable status and it was ignored.`);
+    return {};
+  }
+  const s = status.toLowerCase();
+  if (s === "selected") return { selected: true };
+  if (s === "healthy" || s === "degraded" || s === "offline" || s === "warning" || s === "success" || s === "error") {
+    return { health: s };
+  }
+  if (s === "pressured") return { health: "warning" };
+  warnings.push(`Graph node '${nodeId}' status '${status}' is not a device state and was ignored. Use selected, healthy, degraded, offline, pressured or warning.`);
+  return {};
+}
+
+/**
+ * What an edge's importance *looks like*.
+ *
+ * Critical edges draw strong (3px, always labelled by the caller); major
+ * edges draw medium (2px); minor edges recede (1px dashed). Unknown weights
+ * warn and fall back to the default rather than inventing emphasis.
+ */
+function edgeWeightArgs(weight: unknown, warnings: string[], index: number): Record<string, unknown> {
+  if (weight === undefined) return {};
+  if (weight === "critical") return { strokeWeight: 3 };
+  if (weight === "major") return { strokeWeight: 2 };
+  if (weight === "minor") return { strokeWeight: 1, dashPattern: [4, 4] };
+  warnings.push(`Graph edge #${index + 1} weight '${String(weight)}' is not critical, major or minor and was ignored.`);
+  return {};
+}
+
 function expandGraph(exp: GraphExpansion): RuntimeCall[] {
   const { instanceId, parent, title, nodes, edges, selectedId, nodeDefaults, links, warnings } = exp;
   const out: RuntimeCall[] = [];
@@ -1410,6 +1451,7 @@ function expandGraph(exp: GraphExpansion): RuntimeCall[] {
         ...(typeof node.health === "string" ? { health: node.health } : {}),
         ...(typeof node.compute === "string" ? { compute: node.compute } : {}),
         ...(typeof node.shard === "string" ? { shard: node.shard } : {}),
+        ...nodeStatusArgs(node.status, warnings, nodeId),
         ...(selectedId !== undefined && nodeId === selectedId ? { selected: true } : {}),
       },
       id: `${instanceId}-${nodeId}`,
@@ -1439,19 +1481,31 @@ function expandGraph(exp: GraphExpansion): RuntimeCall[] {
     }
 
     // Latency first, then bandwidth: the label answers "how slow" before "how wide".
+    // Meaning last: it answers why the edge exists (serves, replicates, …).
     const bits = [edge.latency, edge.bandwidth, edge.label].filter((b): b is string => typeof b === "string" && b.length > 0);
+    if (typeof edge.meaning === "string" && edge.meaning.length > 0 && !bits.includes(edge.meaning)) {
+      bits.push(edge.meaning);
+    }
+    const label = bits.length > 0 ? bits.join(" · ").slice(0, 120) : undefined;
 
     out.push({
       fn: "connector",
       args: {
         from: `${instanceId}-${from}`,
         to: `${instanceId}-${to}`,
-        ...(bits.length > 0 ? { label: bits.join(" · ").slice(0, 120) } : {}),
+        ...(label !== undefined ? { label } : {}),
+        ...edgeWeightArgs(edge.weight, warnings, i),
       },
       id: `${instanceId}-edge-${i + 1}`,
       ...(parent !== undefined ? { parent } : {}),
     });
-    links.push({ from: `${instanceId}-${from}`, to: `${instanceId}-${to}` });
+    // Links keep the label: layout, connectors and the relationship-clarity
+    // critic all read it, and dropping it here made every edge anonymous.
+    links.push({
+      from: `${instanceId}-${from}`,
+      to: `${instanceId}-${to}`,
+      ...(label !== undefined ? { label } : {}),
+    });
   });
 
   if (edges.length > 200) {

@@ -170,8 +170,10 @@ function pickRoot(buildData) {
   return { id: frame.figmaNodeId ?? frame.id, name: frame.name, nodes };
 }
 
-const only = process.argv[2]; // optional single case id, or --redo to rebuild finished cases
-const redo = process.argv.includes("--redo");
+const argv = process.argv.slice(2);
+const redo = argv.includes("--redo");
+const onlyIds = argv.filter((a) => a !== "--redo");
+const only = onlyIds.length > 0 ? onlyIds : null; // optional case id(s)
 const runStarted = Date.now();
 await mkdir(shotsDir, { recursive: true });
 
@@ -182,7 +184,7 @@ console.log("server:", init.serverInfo?.name, init.serverInfo?.version);
 
 const summary = [];
 for (const c of CASES) {
-  if (only && c.id !== only && only !== "--redo") continue;
+  if (only && !only.includes(c.id)) continue;
   const t0 = Date.now();
   const rec = { caseId: c.id, commit: COMMIT, server: MCP, startedAt: new Date().toISOString(), fixtures: [{ key: "all-text", value: "[fixture]", fixture: true }] };
   // Resume: a retry reuses the already-built frame instead of duplicating it.

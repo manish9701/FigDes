@@ -1,0 +1,153 @@
+{
+  "phase": "B-vision-review-r1",
+  "reviewer": "opencode-agent (direct PNG inspection)",
+  "method": "Each r1 PNG read pixel-for-pixel; findings below are what is actually visible. No scores invented — verdicts are PASS/WATCH/FAIL per screen.",
+  "observations": {
+    "exo-compute-topology": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "area": "center",
+          "defect": "hub-01, node-01 and node-02 overlap in one pile at canvas center (manifest x 648-656); graph relationships unreadable",
+          "severity": "critical"
+        },
+        {
+          "area": "full",
+          "defect": "content occupies ~10% of canvas; vast empty surround, no focal hierarchy at viewing size",
+          "severity": "major"
+        },
+        {
+          "area": "top-left",
+          "defect": "status pill pinned at x0 y0, detached from the graph it annotates",
+          "severity": "major"
+        },
+        {
+          "area": "center",
+          "defect": "connectors render as ~18px stubs that walk nowhere readable",
+          "severity": "minor"
+        }
+      ]
+    },
+    "exo-model-detail": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "area": "full",
+          "defect": "both metric cards missing from frame (metric-parent compiler bug); only title text and green pill visible top-left",
+          "severity": "critical"
+        },
+        {
+          "area": "full",
+          "defect": "~90% void; no focal point, inspector shows almost nothing",
+          "severity": "major"
+        }
+      ]
+    },
+    "exo-runtime-monitoring": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "area": "full",
+          "defect": "all three metric cards missing (metric-parent bug); only amber pill visible — no monitoring values readable",
+          "severity": "critical"
+        }
+      ]
+    },
+    "exo-configuration": {
+      "verdict": "WATCH",
+      "findings": [
+        {
+          "area": "top",
+          "defect": "panel renders as a full-width white strip; reads as header-only, 85% void below",
+          "severity": "major"
+        },
+        {
+          "area": "left",
+          "defect": "approve button small and dark, weak primary action",
+          "severity": "minor"
+        }
+      ]
+    },
+    "exo-enterprise-workspace": {
+      "verdict": "WATCH",
+      "findings": [
+        {
+          "area": "left",
+          "defect": "navigation region invisible (no items rendered); two device cards stacked top-left, rest void",
+          "severity": "major"
+        },
+        {
+          "area": "left",
+          "defect": "degraded card amber stroke reads well — one honest signal",
+          "severity": "minor"
+        }
+      ]
+    },
+    "generic-saas-dashboard": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "area": "full",
+          "defect": "render is blank: 0 of 3 metrics visible (metric-parent bug)",
+          "severity": "critical"
+        },
+        {
+          "area": "full",
+          "defect": "structural review reported 0 findings on a blank screen — review scope only sees landed nodes, never absence",
+          "severity": "major"
+        }
+      ]
+    },
+    "data-heavy-workspace": {
+      "verdict": "WATCH",
+      "findings": [
+        {
+          "area": "full",
+          "defect": "title and blue pill visible; metric missing (metric-parent bug); single reading line, rest void",
+          "severity": "major"
+        }
+      ]
+    },
+    "spatial-relationship": {
+      "verdict": "FAIL",
+      "findings": [
+        {
+          "area": "center",
+          "defect": "all three nodes overlapped in a center pile (topology-layout collapse, same as exo-compute-topology)",
+          "severity": "critical"
+        },
+        {
+          "area": "center",
+          "defect": "edge labels 'feeds'/'drains' collide with node text",
+          "severity": "major"
+        }
+      ]
+    },
+    "editorial-product-page": {
+      "verdict": "WATCH",
+      "findings": [
+        {
+          "area": "top-left",
+          "defect": "title, body and button stacked top-left with no hero treatment; ~90% void; no focal hierarchy despite 32px title",
+          "severity": "major"
+        }
+      ]
+    }
+  },
+  "systemic": [
+    "metric primitive omitted parent: metric frames landed page-level in 4 cases (model-detail, runtime-monitoring, saas-dashboard, data-heavy) — fixed in source, pending redeploy + rebuild",
+    "topology layout collapses 3-node graphs to near-identical coordinates (overlap) in both graph cases — open engine defect",
+    "fixture programs leave most of the 1440x900 canvas transparent (renders black); no surface treatment — fixture scope, not a product claim",
+    "review_design cannot see absence: blank saas screen scored 0 findings — structural proxies need a content-presence check"
+  ],
+  "phase-B2-r2": {
+    "reviewer": "opencode-agent (direct PNG inspection)",
+    "note": "post-fix re-renders of the 4 metric cases; metric cards verified visible in all 4",
+    "verdicts": {
+      "exo-model-detail": "WATCH",
+      "exo-runtime-monitoring": "WATCH",
+      "generic-saas-dashboard": "FAIL",
+      "data-heavy-workspace": "WATCH"
+    }
+  }
+}

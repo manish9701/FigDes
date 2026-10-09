@@ -1,33 +1,53 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-09T06:16:12.552Z",
+  "generatedAt": "2026-10-09T07:00:10.108Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 9,
-  "foundCases": 3,
+  "foundCases": 9,
   "completeCases": 0,
-  "missingCases": [
-    "exo-configuration",
-    "exo-enterprise-workspace",
-    "generic-saas-dashboard",
-    "data-heavy-workspace",
-    "spatial-relationship",
-    "editorial-product-page"
-  ],
+  "missingCases": [],
   "liveBenchmarkComplete": false,
   "liveBenchmarkReason": "Live Figma evidence is incomplete: run the 9 cases against a connected plugin (render → critique → repair → verify) and re-run this validator. Offline structural results must not be presented as visual approval.",
   "cases": [
+    {
+      "file": "case-data-heavy-workspace.json",
+      "caseId": "data-heavy-workspace",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ]
+    },
+    {
+      "file": "case-editorial-product-page.json",
+      "caseId": "editorial-product-page",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ]
+    },
     {
       "file": "case-exo-compute-topology.json",
       "caseId": "exo-compute-topology",
       "status": "INCOMPLETE",
       "missing": [
-        "screenshotReference",
-        "visualScores",
-        "nativeFrameId",
-        "operationManifest",
-        "structuralFindings",
-        "unresolved"
+        "visualScores"
+      ]
+    },
+    {
+      "file": "case-exo-configuration.json",
+      "caseId": "exo-configuration",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ]
+    },
+    {
+      "file": "case-exo-enterprise-workspace.json",
+      "caseId": "exo-enterprise-workspace",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
       ]
     },
     {
@@ -35,12 +55,7 @@
       "caseId": "exo-model-detail",
       "status": "INCOMPLETE",
       "missing": [
-        "screenshotReference",
-        "visualScores",
-        "nativeFrameId",
-        "operationManifest",
-        "structuralFindings",
-        "unresolved"
+        "visualScores"
       ]
     },
     {
@@ -48,12 +63,23 @@
       "caseId": "exo-runtime-monitoring",
       "status": "INCOMPLETE",
       "missing": [
-        "screenshotReference",
-        "visualScores",
-        "nativeFrameId",
-        "operationManifest",
-        "structuralFindings",
-        "unresolved"
+        "visualScores"
+      ]
+    },
+    {
+      "file": "case-generic-saas-dashboard.json",
+      "caseId": "generic-saas-dashboard",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ]
+    },
+    {
+      "file": "case-spatial-relationship.json",
+      "caseId": "spatial-relationship",
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
       ]
     }
   ]

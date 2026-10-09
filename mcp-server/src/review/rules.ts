@@ -574,7 +574,13 @@ function duplicateSiblings(n: NodeMetrics, c: Ctx): Finding[] {
 
   const groups = new Map<string, NodeMetrics[]>();
   for (const s of siblings) {
-    const key = `${s.type}|${round2(s.w)}x${round2(s.h)}|${s.fill ?? "-"}|${s.text?.content ?? "-"}`;
+    // Stroke and descendant text are part of identity: nodes that differ by
+    // health ring or by label are distinct objects, not copies. Without this,
+    // every topology map flagged its machines as duplicates.
+    const kids = c.childrenOf.get(s.id) ?? [];
+    const kidText = kids.map((k) => k.text?.content ?? "").filter((t) => t.length > 0).join("|").slice(0, 120);
+    const stroke = s.stroke?.hex !== undefined ? `${s.stroke.hex}/${s.stroke.weight ?? 0}` : "-";
+    const key = `${s.type}|${round2(s.w)}x${round2(s.h)}|${s.fill ?? "-"}|${stroke}|${s.text?.content || kidText || "-"}`;
     const g = groups.get(key);
     if (g) g.push(s);
     else groups.set(key, [s]);

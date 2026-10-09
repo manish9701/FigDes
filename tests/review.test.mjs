@@ -382,6 +382,25 @@ test("flags likely duplicate siblings at medium confidence", () => {
   assert.equal(d[0].nodeIds.length, 3);
 });
 
+test("siblings differing by stroke or label are distinct objects, not duplicates", () => {
+  // The live defect: every topology map flagged its machines as duplicates
+  // because the rule compared size and fill only, ignoring health rings.
+  const machine = (id, stroke, label) => [
+    node({ id, parentId: "1:1", depth: 1, name: label, x: 0, y: 0, w: 128, h: 80, fill: "#FFFFFF", stroke }),
+    node({ id: `${id}-label`, parentId: id, depth: 2, name: "Device", type: "TEXT", w: 60, h: 14, text: { content: label } }),
+  ];
+  const findings = runRules(
+    metrics([
+      node({ id: "1:1", name: "Map", w: 1440, h: 800 }),
+      ...machine("2:1", { hex: "#1E6B3A", weight: 1 }, "hub-01"),
+      ...machine("2:2", { hex: "#8A5200", weight: 1 }, "edge-01"),
+      ...machine("2:3", { hex: "#1E6B3A", weight: 1 }, "edge-02"),
+    ]),
+    "review",
+  );
+  assert.equal(find(findings, "duplicate-siblings").length, 0);
+});
+
 /* -------------------------------------------------------------------------- */
 /* Audit ruleset                                                                */
 /* -------------------------------------------------------------------------- */

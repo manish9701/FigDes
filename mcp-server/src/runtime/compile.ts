@@ -342,6 +342,12 @@ export function compileIR(ir: DesignIR): CompileResult {
     if (used) algorithms[region.id] = used;
   }
 
+  // Regions grow to fit their content; regions below shift down. Text nodes
+  // auto-resize in Figma but region frames do not, so without this a headline
+  // taller than its header spilled into the region below and read as clipped.
+  // Only growth, never shrinkage; side rails (starting above) never shift.
+  if (!deck) fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid });
+
   /* --------------------------------------------------------- relations --- */
 
   // Relations run after everything is placed, so an anchor may be a region or a
@@ -738,7 +744,13 @@ function emitContent(args: {
   // around it inferred as — without this, a rail on a spatial screen collapsed
   // to one column and its pills overflowed the rail.
   const regionComposition = (region as { composition?: string }).composition;
-  const columns = region.columns ?? (composition === "instrument" || composition === "table" || regionComposition === "instrument" || regionComposition === "table" ? 3 : 1);
+  const grantGrid = composition === "instrument" || composition === "table" || regionComposition === "instrument" || regionComposition === "table";
+  // Rows read across: a table of model rows laid in three columns is a card
+  // wall wearing a table's name. When every flowing component is row-like,
+  // stack full-width regardless of the grid grant.
+  const ROW_TYPES = new Set(["modelRow", "timelineEvent"]);
+  const allRows = components.length > 0 && [...textItems, ...components].every((c) => c.kind === "text" || (c.kind === "component" && ROW_TYPES.has(c.type)));
+  const columns = region.columns ?? (!grantGrid || allRows ? 1 : 3);
   const requested = region.layout;
 
   /* --- graphics routed through a §17 algorithm ---------------------------- */
@@ -769,6 +781,13 @@ function emitContent(args: {
     algorithms[region.id] = algorithm;
 
     const nodes = graphItems.map((c, i) => ({ id: c.id, order: i }));
+    // Graph nodes have real extent (128x80 devices), but algorithms return
+    // centres spaced by `gap` alone — a 32px pitch under 128px nodes overlaps
+    // by construction, and overlap separation then shoved the fan into a
+    // vertical chain with edges crossing through nodes. Pitch by node size.
+    const hasDevices = graphDevices.length > 0;
+    const nodeGap = hasDevices ? deviceSize.w + gap : gap;
+    const nodeLevelGap = hasDevices ? deviceSize.h + gap * 2 : gap * 2;
     // `forceGraph` is served by the existing simulator; the rest are in
     // algorithms.ts. Both return centres, which the caller turns into boxes.
     const points =
@@ -780,8 +799,8 @@ function emitContent(args: {
           )
         : runAlgorithm(algorithm, nodes, ir.links, {
             bounds: { x: inner.x, y: inner.y, w: inner.w, h: inner.h },
-            gap,
-            levelGap: gap * 2,
+            gap: nodeGap,
+            levelGap: nodeLevelGap,
             columns,
           }).points;
 
@@ -2402,6 +2421,60 @@ function patchEmit(operations: Operation[], id: string, patch: { x: number; y: n
     candidate.width = patch.width;
     candidate.height = patch.height;
     return;
+  }
+}
+
+/**
+ * Grows regions to fit their placed content and shifts regions below down.
+ *
+ * A region whose content bottom clears its frame extends downward by the
+ * difference (plus bottom padding); every region starting at or below the old
+ * bottom edge moves down by the same amount, carrying its content boxes. Only
+ * growth: nothing shrinks, side rails never shift, and deck slides (fixed
+ * 1920x1080) are excluded by the caller. Region frame ops are patched in
+ * place and the boxes map is updated, so connectors resolved afterwards anchor
+ * to the final geometry.
+ */
+function fitRegionsToContent(args: {
+  regions: ResolvedRegion[];
+  boxes: Map<string, PlacedBox>;
+  operations: Operation[];
+  grid: number;
+}): void {
+  const { regions, boxes, operations, grid } = args;
+  const ordered = [...regions].sort((a, b) => a.y - b.y || a.x - b.x);
+  const origBottom = new Map(ordered.map((r) => [r.id, r.y + r.h]));
+  const grown: Array<{ bottom: number; dy: number }> = [];
+
+  const shiftBox = (id: string, dy: number): void => {
+    const box = boxes.get(id);
+    if (box) boxes.set(id, { ...box, y: box.y + dy });
+  };
+
+  for (const region of ordered) {
+    const origY = region.y;
+    const dy = grown.filter((g) => g.bottom <= origY).reduce((sum, g) => sum + g.dy, 0);
+    if (dy !== 0) {
+      region.y = origY + dy;
+      shiftBox(region.id, dy);
+      for (const child of region.children) shiftBox(child, dy);
+      patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+    }
+    const pad = normalizePadding(region.padding, grid);
+    let contentBottom = Number.NEGATIVE_INFINITY;
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (box) contentBottom = Math.max(contentBottom, box.y + box.h);
+    }
+    if (contentBottom === Number.NEGATIVE_INFINITY) continue;
+    const required = contentBottom - region.y + pad.bottom;
+    if (required > region.h) {
+      region.h = Math.round(required);
+      const frame = boxes.get(region.id);
+      if (frame) boxes.set(region.id, { ...frame, y: region.y, h: region.h });
+      patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      grown.push({ bottom: origBottom.get(region.id) ?? origY + region.h, dy: region.h - (origBottom.get(region.id)! - origY) });
+    }
   }
 }
 

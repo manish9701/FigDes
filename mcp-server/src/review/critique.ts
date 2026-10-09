@@ -169,7 +169,9 @@ function cardWallTendency(ops: Array<Record<string, unknown>>, canvasW: number, 
       cardArea += w * h;
     }
   }
-  const share = cardArea / Math.max(1, canvasW * canvasH);
+  // Capped: nested bordered frames double-count the same pixels, and a share
+  // over 100% reads as a broken measurement rather than a strong signal.
+  const share = Math.min(1, cardArea / Math.max(1, canvasW * canvasH));
   if (cards >= 3 && share >= 0.4) {
     return {
       dimension: "Card-wall tendency",

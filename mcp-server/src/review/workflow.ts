@@ -367,9 +367,11 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
     // a generic WATCH regardless of their actual structure.
     const nodes = report.nodes.filter((n) => n.visible && n.w > 0 && n.h > 0);
     const root = nodes.find((n) => n.id === report.target) ?? nodes.find((n) => n.type === "FRAME") ?? nodes[0] ?? report.nodes[0]!;
-    // Boxes are measured relative to the target: page-absolute coordinates
-    // would judge balance and position against the wrong origin.
-    const boxes = new Map(nodes.map((n) => [n.id, { id: n.id, x: n.x - root.x, y: n.y - root.y, w: n.w, h: n.h }]));
+    // No coordinate shift: metrics x/y are already parent-relative (see
+    // metrics.ts boxOf — it reads node.x/node.y, which Figma reports against
+    // the parent). Subtracting the target offset again pushed every child
+    // into negative space and made balanced rows read as "100% one side".
+    const boxes = new Map(nodes.map((n) => [n.id, { id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }]));
     // Regions are the target's own children. Two inflations made every live
     // screen read as fragmented: page siblings (parentId === root.parentId)
     // counted as regions of this screen, and loose TEXT nodes counted as

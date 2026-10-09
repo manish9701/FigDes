@@ -771,7 +771,7 @@ test("final_qa scopes collect_metrics to the node, not the whole file", async ()
 /* -------------------------------------------------------------------------- */
 /* Live-critique measurement fixes: regions, focal, balance, surfaces          */
 
-function liveTree() {
+function liveTree(rootX = 0) {
   const n = (over = {}) => ({
     parentId: null,
     type: "FRAME",
@@ -803,7 +803,7 @@ function liveTree() {
     scanBudget: 2000,
     scan: { pageLoads: 0, pagesCached: true },
     nodes: [
-      n({ id: "9:9", name: "Screen", w: 1440, h: 900, parentId: "page1", fill: "#F7F5EF", background: "#F7F5EF" }),
+      n({ id: "9:9", name: "Screen", x: rootX, w: 1440, h: 900, parentId: "page1", fill: "#F7F5EF", background: "#F7F5EF" }),
       n({ id: "9:10", parentId: "9:9", name: "Focal Hero", depth: 1, y: 64, w: 1440, h: 500, fill: "#ECEBE4", background: "#F7F5EF" }),
       n({ id: "9:12", parentId: "9:9", name: "Detail", depth: 1, y: 600, w: 1440, h: 240, fill: "#ECEBE5", background: "#F7F5EF" }),
       t({ id: "9:11", parentId: "9:9", depth: 1, x: 24, y: 700, background: "#F7F5EF" }),
@@ -849,6 +849,16 @@ test("a centered full-width stack reads as balanced, not toppled", async () => {
   const payload = liveCritiquePayload(out);
   const balance = payload.dimensions.find((d) => d.dimension === "Visual balance");
   assert.equal(balance.verdict, "PASS", `straddling boxes split half/half: ${balance.evidence}`);
+});
+
+test("metrics coords are parent-relative: a page offset must not shift children", async () => {
+  // The plugin reports node.x/node.y against the parent (metrics.ts boxOf).
+  // Shifting children by the target offset again pushed a balanced row into
+  // negative space and faked a "100% on one side" imbalance.
+  const out = await workflow.critiqueVisualTool({ nodeId: "9:9" }, stubCritiqueRegistry(liveTree(1440)));
+  const payload = liveCritiquePayload(out);
+  const balance = payload.dimensions.find((d) => d.dimension === "Visual balance");
+  assert.equal(balance.verdict, "PASS", `page offset must not move relative children: ${balance.evidence}`);
 });
 
 test("near-identical tonal fills read as one surface", async () => {

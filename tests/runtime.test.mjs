@@ -2129,6 +2129,24 @@ test("three stamped bordered cards read as repetition and card-wall", () => {
   assert.ok(report.watchList.length > 0);
 });
 
+test("card-wall share caps at 100%: nested borders cannot cover more than the canvas", () => {
+  const card = (id, x) => ({ id, x, y: 0, w: 1000, h: 800 });
+  const boxes = new Map(
+    ["root", "a", "b", "c", "d"].map((id, i) => [id, id === "root" ? { id, x: 0, y: 0, w: 1440, h: 900 } : card(id, i * 100)]),
+  );
+  const report = critiqueVisual({
+    boxes,
+    operations: ["a", "b", "c", "d"].map((id) => ({ type: "createFrame", id, width: 1000, height: 800, stroke: "#E0E0E0", cornerRadius: 8, fill: "#FFFFFF" })),
+    regions: ["a", "b", "c", "d"].map((id) => ({ id, role: "content" })),
+    composition: "canvas",
+    canvasW: 1440,
+    canvasH: 900,
+  });
+  const wall = report.dimensions.find((d) => d.dimension === "Card-wall tendency");
+  assert.equal(wall.verdict, "WATCH");
+  assert.match(wall.evidence, /100% of the canvas/, `overlapping areas must cap, not report 247%: ${wall.evidence}`);
+});
+
 /* -------------------------------------------------------------------------- */
 /* Measured contrast in scoring (FigDes section 16.1)                           */
 /* -------------------------------------------------------------------------- */

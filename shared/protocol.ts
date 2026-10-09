@@ -973,6 +973,14 @@ export interface Finding {
   suggestedOperations?: Operation[];
   /** Present when no safe fix exists, so the model knows to hand-edit. */
   guidance?: string;
+  /**
+   * Provenance (quality-reliability P1). All optional so older payloads keep
+   * working: rule version that emitted this, what kind of evidence backs it,
+   * and the coordinate space geometry was measured in.
+   */
+  ruleVersion?: string;
+  evidenceType?: "geometry" | "screenshot" | "accessibility" | "design-system" | "heuristic";
+  coordinateSpace?: "parent-local" | "local-unverified" | "legacy";
 }
 
 export interface ReviewReport {

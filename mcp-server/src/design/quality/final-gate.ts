@@ -27,6 +27,22 @@ export interface FinalQualityReport {
   repairHistory: string[];
   renderEvidence: Array<{ render: number; note: string }>;
   reason: string;
+  /**
+   * Adjudicated issues (quality-reliability P1): moved out of blocking with
+   * rationale retained, never erased. Only false-positive/intentional rulings
+   * WITH a tested rule correction stop blocking; anything else stays.
+   */
+  adjudicated: string[];
+}
+
+export interface GateAdjudication {
+  /** Case-insensitive substring matched against blocking-issue text. */
+  key: string;
+  disposition: "false-positive" | "intentional" | "confirmed" | "unresolved";
+  rationale: string;
+  reviewer: string;
+  /** Tested rule correction for this class. Required to stop blocking. */
+  ruleCorrection?: string;
 }
 
 /** Phase 9 thresholds. Calibrate through benchmark tests, not vibes. */
@@ -81,6 +97,13 @@ export function evaluateFinalGate(input: {
    */
   expectedRevision?: string;
   evidenceRevision?: string | null;
+  /**
+   * Adjudicated issues stop blocking only as false-positive/intentional WITH
+   * a tested rule correction and retained rationale. Confirmed, unresolved,
+   * or correction-less rulings keep blocking. The moved issues land in
+   * `report.adjudicated`, never vanish.
+   */
+  adjudications?: GateAdjudication[];
 }): FinalQualityReport {
   const scores: FinalScores = {
     hierarchy: clamp(input.scores.hierarchy ?? 50),
@@ -117,14 +140,30 @@ export function evaluateFinalGate(input: {
   if (renders > ITERATION_BUDGET.maxRenders) {
     blocking.push(`Render budget exhausted (${renders}/${ITERATION_BUDGET.maxRenders}). Stop and report.`);
   }
-  if (blocking.length > 0) {
+  const adjudicated: string[] = [];
+  const remaining = blocking.filter((issue) => {
+    const ruling = (input.adjudications ?? []).find(
+      (a) =>
+        (a.disposition === "false-positive" || a.disposition === "intentional") &&
+        a.ruleCorrection !== undefined &&
+        a.ruleCorrection.length > 0 &&
+        issue.toLowerCase().includes(a.key.toLowerCase()),
+    );
+    if (ruling) {
+      adjudicated.push(`${issue} — adjudicated ${ruling.disposition} by ${ruling.reviewer}: ${ruling.rationale} [correction: ${ruling.ruleCorrection}]`);
+      return false;
+    }
+    return true;
+  });
+  if (remaining.length > 0) {
     return {
       status: "FAIL",
       scores,
-      blockingIssues: blocking,
+      blockingIssues: remaining,
       repairHistory: input.repairHistory ?? [],
       renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
       reason: "Blocking visual-quality issues remain. Repair and re-render within budget.",
+      adjudicated,
     };
   }
   const needsReview =
@@ -140,6 +179,7 @@ export function evaluateFinalGate(input: {
       reason: input.visualEvidenceVerified !== true
         ? "Structural checks are incomplete as final evidence: inspect a fresh rendered screenshot before marking PASS."
         : "No blocking issues, but hierarchy or product fit needs a human look before done.",
+      adjudicated,
     };
   }
   return {
@@ -149,5 +189,6 @@ export function evaluateFinalGate(input: {
     repairHistory: input.repairHistory ?? [],
     renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
     reason: "No blocking issues; hierarchy and product fit hold.",
+    adjudicated,
   };
 }

@@ -27,7 +27,7 @@ import { compareQuality } from "../mcp-server/dist-test/design/quality/compariso
 import { BENCHMARKS, BENCHMARK_WEIGHTS, scoreBenchmark, summarizeBenchmarkRun } from "../mcp-server/dist-test/design/benchmark/suite.js";
 import { classifyInfoItem, classifyInformation, deriveRegions, applyPatternGuidance } from "../mcp-server/dist-test/design/composition/derive.js";
 import { analyzeRelationships, describeSemantics } from "../mcp-server/dist-test/design/composition/relationships.js";
-import { localizeFinding, makeFindings, trackFindings } from "../mcp-server/dist-test/design/quality/visual-findings.js";
+import { localizeFinding, makeFindings, trackFindings, adjudicateFindings } from "../mcp-server/dist-test/design/quality/visual-findings.js";
 import { planScreen } from "../mcp-server/dist-test/plan/planner.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
@@ -368,6 +368,58 @@ test("final gate fails a stale screenshot revision, never PASS", () => {
   assert.match(missing.blockingIssues.join(" "), /Stale screenshot/);
   const fresh = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, expectedRevision: "ir-rev-2", evidenceRevision: "ir-rev-2" });
   assert.equal(fresh.status, "PASS");
+});
+
+test("adjudicated false positives stop blocking only with retained evidence and a tested correction", () => {
+  const good = { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 };
+  const base = { scores: good, visualEvidenceVerified: true };
+  const blocked = evaluateFinalGate({ ...base, blockingIssues: ["Line extends past the edge of TopologyField"] });
+  assert.equal(blocked.status, "FAIL");
+  // No correction: still blocks.
+  const nocorr = evaluateFinalGate({
+    ...base,
+    blockingIssues: ["Line extends past the edge of TopologyField"],
+    adjudications: [{ key: "extends past the edge", disposition: "false-positive", rationale: "looks fine", reviewer: "opencode" }],
+  });
+  assert.equal(nocorr.status, "FAIL");
+  assert.equal(nocorr.adjudicated.length, 0);
+  // Confirmed: still blocks.
+  const conf = evaluateFinalGate({
+    ...base,
+    blockingIssues: ["Line extends past the edge of TopologyField"],
+    adjudications: [{ key: "extends past", disposition: "confirmed", rationale: "real", reviewer: "opencode", ruleCorrection: "canonical-bounds" }],
+  });
+  assert.equal(conf.status, "FAIL");
+  // False-positive WITH tested correction: excluded, retained with evidence.
+  const adj = evaluateFinalGate({
+    ...base,
+    blockingIssues: ["Line extends past the edge of TopologyField"],
+    adjudications: [{
+      key: "extends past the edge",
+      disposition: "false-positive",
+      rationale: "metrics reported absolute LINE coords vs parent size; screenshot shows correct landing",
+      reviewer: "opencode",
+      ruleCorrection: "shared/geometry toParentLocal + coordSpace",
+    }],
+  });
+  assert.equal(adj.status, "PASS");
+  assert.equal(adj.blockingIssues.length, 0);
+  assert.equal(adj.adjudicated.length, 1);
+  assert.match(adj.adjudicated[0], /false-positive/);
+});
+
+test("adjudications preserve originals and flag orphaned ids", () => {
+  const res = adjudicateFindings(
+    [{ id: "vf-a" }, { id: "vf-b" }],
+    [
+      { findingId: "vf-a", disposition: "false-positive", rationale: "verified on render", reviewer: "opencode", at: 1, ruleCorrection: "canonical-bounds" },
+      { findingId: "vf-ghost", disposition: "confirmed", rationale: "typo", reviewer: "opencode", at: 2 },
+    ],
+  );
+  assert.deepEqual(res.findings, [{ id: "vf-a" }, { id: "vf-b" }]);
+  assert.equal(res.applied.length, 1);
+  assert.equal(res.orphaned.length, 1);
+  assert.equal(res.orphaned[0].findingId, "vf-ghost");
 });
 
 test("final gate fails genericity above 70 and budgets renders at 4", () => {

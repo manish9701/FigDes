@@ -169,6 +169,46 @@ export interface FindingResolution {
 }
 
 /**
+ * Adjudication (quality-reliability P1): a reviewer's verdict on a finding,
+ * recorded WITHOUT erasing the original. Disputing a finding moves it to an
+ * adjudicated list with rationale, reviewer and timestamp — the evidence is
+ * retained so a wrong adjudication is itself reviewable.
+ */
+export type FindingDisposition = "open" | "confirmed" | "false-positive" | "intentional" | "unresolved";
+
+export interface FindingAdjudication {
+  findingId: string;
+  disposition: Exclude<FindingDisposition, "open">;
+  rationale: string;
+  reviewer: string;
+  at: number;
+  /** Tested rule correction that makes this class stop firing (required for the gate to stop blocking on it). */
+  ruleCorrection?: string;
+}
+
+export interface AdjudicationResult {
+  /** Untouched originals, in input order. */
+  findings: Array<{ id: string }>;
+  /** Adjudications that matched a real finding id. */
+  applied: FindingAdjudication[];
+  /** Adjudications naming unknown ids — recorded, never silently dropped. */
+  orphaned: FindingAdjudication[];
+}
+
+export function adjudicateFindings(
+  findings: Array<{ id: string }>,
+  adjudications: FindingAdjudication[],
+): AdjudicationResult {
+  const known = new Set(findings.map((f) => f.id));
+  const applied: FindingAdjudication[] = [];
+  const orphaned: FindingAdjudication[] = [];
+  for (const a of adjudications) {
+    (known.has(a.findingId) ? applied : orphaned).push(a);
+  }
+  return { findings: [...findings], applied, orphaned };
+}
+
+/**
  * Verifies whether the repair loop improved anything (point D).
  *
  * Matches by stable id: a prior finding absent now is resolved; present in

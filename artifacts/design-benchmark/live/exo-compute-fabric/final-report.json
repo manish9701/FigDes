@@ -1,0 +1,111 @@
+{
+  "challenge": "FigDes End-to-End Design Quality Challenge — EXO Compute Fabric",
+  "commit": "2f25a30",
+  "implementationVersion": "figma-design-agent 0.1.0",
+  "pluginVersion": "0.1.0",
+  "frameId": "142:811",
+  "viewport": "1440x900",
+  "revisionBinding": {
+    "expectedRevision": "fabric-r3",
+    "evidenceRevision": "fabric-r3",
+    "fresh": true,
+    "note": "r3 rendered after the last mutation (edge-label 11px); no changes since"
+  },
+  "rendersUsed": 3,
+  "renderBudget": 4,
+  "screenshots": {
+    "initial": "shot-r1.png",
+    "mid": "shot-r2.png",
+    "final": "shot-r3.png"
+  },
+  "structural": {
+    "total": 6,
+    "high": 4,
+    "critical": 0,
+    "highs": [
+      "4x overflow on connector Lines (screenshot-disproven false positives: metrics reports absolute LINE coords vs parent size; evidence childBox x=1935 vs parent 824)"
+    ],
+    "mediums": [
+      "card-wall: 11 bordered cards / 73% (judgment: deliberate field+inspector, not a KPI wall)",
+      "duplicate-siblings: uniform topology tiles (by design)"
+    ]
+  },
+  "visual": {
+    "reviewer": "opencode-agent, direct PNG inspection r1+r2+r3",
+    "verdict": "WATCH-near-PASS",
+    "remainingMinors": [
+      "8us label touches node-02 card edge",
+      "1-bottleneck pill detached from graph"
+    ]
+  },
+  "programOverall": 7.6,
+  "programDimensions": {
+    "Composition": 9,
+    "Hierarchy": 8,
+    "Information density": 8,
+    "Alignment": 9.3,
+    "Visual consistency": 4,
+    "Accessibility": 6,
+    "Focus": 9
+  },
+  "liveScore": {
+    "compositionHierarchy": 8,
+    "visualIdentity": 7,
+    "typography": 7,
+    "geometry": 7,
+    "detailCraft": 7,
+    "briefFidelity": 8,
+    "total": 73.5,
+    "scorer": "agent PNG inspection"
+  },
+  "repairs": [
+    {
+      "findings": [
+        "3 critical text-contrast (pill labels unreadable)"
+      ],
+      "ops": [
+        "8x setFill solid tints + dark text",
+        "map/inspector/band radius 8",
+        "map clipsContent"
+      ],
+      "verified": "r2: labels readable, 0 critical",
+      "rounds": "r1->r2"
+    },
+    {
+      "findings": [
+        "4 medium tiny-technical-text (10px edge labels)"
+      ],
+      "ops": [
+        "4x setTypography 11px"
+      ],
+      "verified": "r3",
+      "rounds": "r2->r3"
+    },
+    {
+      "findings": [
+        "2 radius-inconsistency"
+      ],
+      "ops": [
+        "3x setCornerRadius 8 + 2x bar radii"
+      ],
+      "verified": "r3: gone",
+      "rounds": "r1->r2"
+    }
+  ],
+  "unresolved": [
+    "overflow x4 false positives (metrics LINE-coordinate bug, plugin-side backlog)",
+    "card-wall fired (deliberate composition; rule disagrees)",
+    "consistency 4/10 (tint proliferation from contrast repairs)",
+    "2 visual minors above"
+  ],
+  "gate": {
+    "status": "FAIL",
+    "reason": "4 high findings outstanding (overflow) + card-wall fired + critique FAIL: thresholds not lowered to obtain PASS. Screen visually solves the brief (WATCH-near-PASS by direct inspection)."
+  },
+  "baseline": "Round-3 fixture topology at 1440x900 (piled nodes, blank areas, no headline) vs this screen (spread chain, full inspector, title+verdict+action). Same viewport, same file.",
+  "environment": [
+    "server https://figdes.onrender.com (2f25a30)",
+    "plugin 0.1.0 in user Figma (flapped 3x; r3 sequence needed 2 attempts)",
+    "all telemetry synthetic, bannered FIXTURE"
+  ]
+}

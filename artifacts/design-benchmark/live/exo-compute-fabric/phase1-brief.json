@@ -1,0 +1,82 @@
+{
+  "status": "ok",
+  "screen": "Inference fabric investigation",
+  "user": "engineer",
+  "userGoal": "Understand a slow local AI inference workload across devices, locate the bottleneck, evaluate placement, decide whether to intervene.",
+  "decision": {
+    "primaryDecision": "Drain node-02 and rebalance, or let the workload ride?",
+    "kind": "inspect"
+  },
+  "primaryObject": {
+    "id": "subject",
+    "why": "primary surface: the thing being understood (devices, fit state), given the most room"
+  },
+  "secondaryInformation": [
+    {
+      "id": "context",
+      "why": "chrome: surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+    },
+    {
+      "id": "nav",
+      "why": "chrome: orientation"
+    }
+  ],
+  "visualDirection": null,
+  "visualDirectionNote": "No direction stated, and none invented — ask for one or plan_screen proceeds with the system default.",
+  "visualHierarchy": [
+    {
+      "rank": 1,
+      "id": "subject",
+      "why": "primary surface: the thing being understood (devices, fit state), given the most room"
+    },
+    {
+      "rank": 2,
+      "id": "context",
+      "why": "chrome: surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+    },
+    {
+      "rank": 3,
+      "id": "nav",
+      "why": "chrome: orientation"
+    }
+  ],
+  "focal": {
+    "id": "subject",
+    "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+  },
+  "template": {
+    "name": "model-analysis",
+    "why": "one subject given the most room, context beside it"
+  },
+  "compositionCandidates": [
+    {
+      "composition": "canvas",
+      "recommended": true,
+      "why": "Inferred from the inspect decision: built around 'subject'."
+    },
+    {
+      "composition": "split-view",
+      "recommended": false,
+      "why": "list and detail side by side, more context per item"
+    }
+  ],
+  "componentStrategy": "No existing patterns were named: build from semantic primitives, promote anything repeated with create_component, and never rebuild a card out of rectangles twice.",
+  "visualizationStrategy": "One subject given the most room, context beside it.",
+  "interactionStates": [
+    "default",
+    "hover",
+    "selected",
+    "disabled",
+    "loading",
+    "empty",
+    "error",
+    "success"
+  ],
+  "designRisks": [
+    "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+  ],
+  "warnings": [
+    "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+  ],
+  "howToProceed": "Hand the decision, template, available information and visualDirection to plan_screen for geometry and passes. The brief is the why; the plan is the where."
+}

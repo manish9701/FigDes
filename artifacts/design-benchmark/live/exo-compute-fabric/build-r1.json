@@ -1,0 +1,10 @@
+{
+  "status": "failed",
+  "transactionId": "ntx_7fa2d5c8-37be-49d5-a4a5-a4beb731f092",
+  "durationMs": 61090,
+  "error": {
+    "code": "FIGMA_SCRIPT_ERROR",
+    "message": "Plugin timed out after 60000ms executing execute_figma_script.",
+    "recovery": "Inspect the error, fix the script, and retry. Do not repeat an unchanged script."
+  }
+}

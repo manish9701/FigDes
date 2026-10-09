@@ -1,0 +1,545 @@
+{
+  "fileName": "Exo Labs",
+  "scope": "page",
+  "pagesScanned": [
+    "Chatgpt Designs"
+  ],
+  "nodesScanned": 130,
+  "truncated": false,
+  "colors": [
+    {
+      "hex": "#242521",
+      "count": 34,
+      "sampleNames": [
+        "Device",
+        "Compute topology [fixture]",
+        "Model detail [fixture]"
+      ]
+    },
+    {
+      "hex": "#FFFFFF",
+      "count": 22,
+      "sampleNames": [
+        "hub-01 [fixture]",
+        "node-01 [fixture]",
+        "node-02 [fixture]"
+      ]
+    },
+    {
+      "hex": "#6F716A",
+      "count": 14,
+      "sampleNames": [
+        "Memory",
+        "Label"
+      ]
+    },
+    {
+      "hex": "#0B6BCB",
+      "count": 11,
+      "sampleNames": [
+        "Action",
+        "Label"
+      ]
+    },
+    {
+      "hex": "#FFFDF9",
+      "count": 11,
+      "sampleNames": [
+        "FigDes Live — exo-compute-topology",
+        "FigDes Live — exo-model-detail",
+        "FigDes Live — exo-runtime-monitoring"
+      ]
+    },
+    {
+      "hex": "#8A8C84",
+      "count": 6,
+      "sampleNames": [
+        "orthogonal connector hub -> n1",
+        "orthogonal connector hub -> n2",
+        "orthogonal connector a -> b"
+      ]
+    },
+    {
+      "hex": "#111111",
+      "count": 5,
+      "sampleNames": [
+        "atlas-7b [fixture]",
+        "Runtime policy [fixture]",
+        "Follow-ups [fixture]"
+      ]
+    },
+    {
+      "hex": "#5A5C54",
+      "count": 4,
+      "sampleNames": [
+        "Label 8us",
+        "Label feeds",
+        "Label drains"
+      ]
+    },
+    {
+      "hex": "#8A5200",
+      "count": 3,
+      "sampleNames": [
+        "Label"
+      ]
+    },
+    {
+      "hex": "#B26A00",
+      "count": 3,
+      "sampleNames": [
+        "1 needs attention [fixture]",
+        "watching [fixture]"
+      ]
+    },
+    {
+      "hex": "#0D99FF",
+      "count": 1,
+      "sampleNames": [
+        "owner: rios [fixture]"
+      ]
+    },
+    {
+      "hex": "#1E6B3A",
+      "count": 1,
+      "sampleNames": [
+        "Label"
+      ]
+    },
+    {
+      "hex": "#2D7A4D",
+      "count": 1,
+      "sampleNames": [
+        "fits [fixture]"
+      ]
+    },
+    {
+      "hex": "#F2C94C",
+      "count": 1,
+      "sampleNames": [
+        "Fleet"
+      ]
+    }
+  ],
+  "colorsTotal": 14,
+  "strokes": [
+    {
+      "hex": "#E0E0E0 @1px",
+      "count": 8
+    },
+    {
+      "hex": "#8A8C84 @1px",
+      "count": 6
+    },
+    {
+      "hex": "#8A5200 @1px",
+      "count": 3
+    }
+  ],
+  "radii": [
+    {
+      "value": 8,
+      "count": 14
+    }
+  ],
+  "shadows": [],
+  "typography": [
+    {
+      "label": "Inter Regular @12",
+      "sampleNames": [
+        "Device",
+        "Label"
+      ],
+      "count": 20
+    },
+    {
+      "label": "Inter Medium @12",
+      "sampleNames": [
+        "Action"
+      ],
+      "count": 10
+    },
+    {
+      "label": "Inter Regular @18",
+      "sampleNames": [
+        "Compute topology [fixture]",
+        "Model detail [fixture]",
+        "Runtime [fixture]"
+      ],
+      "count": 10
+    },
+    {
+      "label": "Inter Regular @14",
+      "sampleNames": [
+        "atlas-7b [fixture]",
+        "Runtime policy [fixture]",
+        "Title"
+      ],
+      "count": 8
+    },
+    {
+      "label": "JetBrains Mono Regular @28",
+      "sampleNames": [
+        "Value"
+      ],
+      "count": 6
+    },
+    {
+      "label": "Inter Medium @11",
+      "sampleNames": [
+        "Label"
+      ],
+      "count": 5
+    },
+    {
+      "label": "JetBrains Mono Regular @10",
+      "sampleNames": [
+        "Memory"
+      ],
+      "count": 4
+    },
+    {
+      "label": "JetBrains Mono Regular @11",
+      "sampleNames": [
+        "Label 8us",
+        "Label feeds",
+        "Label drains"
+      ],
+      "count": 4
+    },
+    {
+      "label": "Inter Regular @28",
+      "sampleNames": [
+        "Value"
+      ],
+      "count": 3
+    },
+    {
+      "label": "Inter Regular @13",
+      "sampleNames": [
+        "Label"
+      ],
+      "count": 2
+    }
+  ],
+  "spacing": {
+    "inferredBase": 4,
+    "values": [
+      {
+        "value": 0,
+        "count": 72
+      },
+      {
+        "value": 8,
+        "count": 41
+      },
+      {
+        "value": 16,
+        "count": 22
+      },
+      {
+        "value": 4,
+        "count": 11
+      },
+      {
+        "value": 2,
+        "count": 5
+      },
+      {
+        "value": 12,
+        "count": 2
+      }
+    ]
+  },
+  "layoutPatterns": [
+    {
+      "signature": "VERTICAL gap=4 pad=8/8/8/8 sizing=AUTO/FIXED",
+      "count": 11
+    },
+    {
+      "signature": "VERTICAL gap=8 pad=16/16/16/16 sizing=AUTO/FIXED",
+      "count": 10
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=2/8/2/8 sizing=AUTO/FIXED",
+      "count": 5
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=8/12/8/12 sizing=AUTO/FIXED",
+      "count": 2
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=8/16/8/16 sizing=AUTO/FIXED",
+      "count": 2
+    }
+  ],
+  "components": [],
+  "variables": [],
+  "variableValues": {},
+  "styles": {
+    "paint": 0,
+    "text": 16,
+    "effect": 0
+  },
+  "styleNames": {
+    "paint": [],
+    "text": [
+      "EXO/Wordmark",
+      "EXO/Wordmark",
+      "EXO/Display",
+      "EXO/Title",
+      "EXO/Subtitle",
+      "EXO/Body",
+      "EXO/Small",
+      "EXO/Tiny",
+      "EXO/Action",
+      "EXO/Health",
+      "EXO/Eyebrow",
+      "EXO/Label",
+      "EXO/Value",
+      "EXO/Caption",
+      "EXO/Nav",
+      "EXO/NavActive"
+    ]
+  },
+  "styleDetails": {
+    "text": [
+      {
+        "name": "EXO/Wordmark",
+        "family": "Inter",
+        "size": 12,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Wordmark",
+        "family": "Inter",
+        "size": 15,
+        "weight": "Semi Bold"
+      },
+      {
+        "name": "EXO/Display",
+        "family": "Inter",
+        "size": 34,
+        "weight": "Semi Bold"
+      },
+      {
+        "name": "EXO/Title",
+        "family": "Inter",
+        "size": 24,
+        "weight": "Semi Bold"
+      },
+      {
+        "name": "EXO/Subtitle",
+        "family": "Inter",
+        "size": 18,
+        "weight": "Semi Bold"
+      },
+      {
+        "name": "EXO/Body",
+        "family": "Inter",
+        "size": 15,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Small",
+        "family": "Inter",
+        "size": 13,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Tiny",
+        "family": "Inter",
+        "size": 12,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Action",
+        "family": "Inter",
+        "size": 13,
+        "weight": "Semi Bold"
+      },
+      {
+        "name": "EXO/Health",
+        "family": "Inter",
+        "size": 11,
+        "weight": "Medium"
+      },
+      {
+        "name": "EXO/Eyebrow",
+        "family": "JetBrains Mono",
+        "size": 10,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Label",
+        "family": "JetBrains Mono",
+        "size": 10,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Value",
+        "family": "JetBrains Mono",
+        "size": 13,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Caption",
+        "family": "JetBrains Mono",
+        "size": 11,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/Nav",
+        "family": "Inter",
+        "size": 13,
+        "weight": "Regular"
+      },
+      {
+        "name": "EXO/NavActive",
+        "family": "Inter",
+        "size": 13,
+        "weight": "Semi Bold"
+      }
+    ]
+  },
+  "fonts": [
+    {
+      "family": "Inter",
+      "styles": [
+        "Regular",
+        "Medium"
+      ],
+      "textNodes": 58
+    },
+    {
+      "family": "JetBrains Mono",
+      "styles": [
+        "Regular"
+      ],
+      "textNodes": 14
+    }
+  ],
+  "screens": [
+    {
+      "id": "136:660",
+      "name": "FigDes Live — exo-compute-topology",
+      "width": 1440,
+      "height": 900,
+      "childCount": 4,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:672",
+      "name": "FigDes Live — exo-model-detail",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:690",
+      "name": "FigDes Live — exo-runtime-monitoring",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:705",
+      "name": "FigDes Live — exo-configuration",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:722",
+      "name": "FigDes Live — generic-saas-dashboard",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:735",
+      "name": "FigDes Live — data-heavy-workspace",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:745",
+      "name": "FigDes Live — spatial-relationship",
+      "width": 1440,
+      "height": 900,
+      "childCount": 5,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:759",
+      "name": "FigDes Live — editorial-product-page",
+      "width": 1440,
+      "height": 900,
+      "childCount": 1,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:767",
+      "name": "FigDes Live — exo-compute-topology",
+      "width": 1440,
+      "height": 900,
+      "childCount": 4,
+      "page": "Chatgpt Designs"
+    },
+    {
+      "id": "136:798",
+      "name": "FigDes Live — exo-enterprise-workspace",
+      "width": 1440,
+      "height": 900,
+      "childCount": 2,
+      "page": "Chatgpt Designs"
+    }
+  ],
+  "assets": {
+    "images": 0,
+    "vectors": 6,
+    "imageNames": []
+  },
+  "patterns": [
+    {
+      "signature": "VERTICAL gap=4 pad=8/8/8/8 sizing=AUTO/FIXED",
+      "count": 11
+    },
+    {
+      "signature": "VERTICAL gap=8 pad=16/16/16/16 sizing=AUTO/FIXED",
+      "count": 10
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=2/8/2/8 sizing=AUTO/FIXED",
+      "count": 5
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=8/12/8/12 sizing=AUTO/FIXED",
+      "count": 2
+    },
+    {
+      "signature": "HORIZONTAL gap=0 pad=8/16/8/16 sizing=AUTO/FIXED",
+      "count": 2
+    }
+  ],
+  "naming": {
+    "defaultNamed": 0,
+    "conventions": []
+  },
+  "health": {
+    "textNodes": 72,
+    "unstyledText": 72,
+    "hardcodedColors": 117,
+    "hardcodedWithExistingVariable": 0
+  },
+  "scan": {
+    "pageLoads": 0,
+    "pagesCached": true
+  }
+}

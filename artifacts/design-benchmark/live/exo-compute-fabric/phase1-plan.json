@@ -1,0 +1,441 @@
+{
+  "status": "planned",
+  "decision": {
+    "primaryDecision": "Drain node-02 and rebalance, or let the workload ride?",
+    "kind": "inspect",
+    "composition": "canvas",
+    "goal": "Locate the inference bottleneck across the device fabric and decide whether to intervene.",
+    "audience": "engineer"
+  },
+  "template": {
+    "name": "model-analysis",
+    "why": "one subject given the most room, context beside it"
+  },
+  "composition": {
+    "canvas": {
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "boxes": [
+      {
+        "name": "nav",
+        "x": 0,
+        "y": 0,
+        "w": 208,
+        "h": 900,
+        "why": "orientation"
+      },
+      {
+        "name": "subject",
+        "x": 240,
+        "y": 0,
+        "w": 1200,
+        "h": 521,
+        "why": "the thing being understood (devices, fit state), given the most room"
+      },
+      {
+        "name": "context",
+        "x": 240,
+        "y": 553,
+        "w": 1200,
+        "h": 347,
+        "why": "surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+      }
+    ],
+    "note": "Composition only: no content yet. Nothing here has been created in Figma."
+  },
+  "regions": [
+    {
+      "id": "nav",
+      "role": "navigation",
+      "why": "orientation",
+      "grow": 0
+    },
+    {
+      "id": "subject",
+      "role": "primary-visual",
+      "why": "the thing being understood (devices, fit state), given the most room",
+      "grow": 2
+    },
+    {
+      "id": "context",
+      "role": "inspector",
+      "why": "surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))",
+      "grow": 0
+    }
+  ],
+  "derivation": {
+    "strategy": "task-derived",
+    "pattern": "object-inspector",
+    "infoKinds": [
+      "option",
+      "relationship",
+      "signal",
+      "attribute"
+    ],
+    "appliedGuidance": [
+      "'nav' gap 24px from 'ObjectInspector' balanced density.",
+      "Relationship rule carried into build: Context rows reference the subject explicitly."
+    ],
+    "note": "Derived from 8 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+  },
+  "artDirection": {
+    "focal": {
+      "id": "subject",
+      "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "subject",
+        "why": "primary surface: the thing being understood (devices, fit state), given the most room"
+      },
+      {
+        "rank": 2,
+        "id": "context",
+        "why": "chrome: surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+      },
+      {
+        "rank": 3,
+        "id": "nav",
+        "why": "chrome: orientation"
+      }
+    ],
+    "componentStrategy": "No existing patterns were named: build from semantic primitives, promote anything repeated with create_component, and never rebuild a card out of rectangles twice.",
+    "visualizationStrategy": "One subject given the most room, context beside it.",
+    "compositionPrinciples": [
+      "The subject gets the largest uninterrupted surface.",
+      "Context frames the subject instead of competing with it."
+    ],
+    "avoid": [
+      "raw specification dump",
+      "equal-weight side panels"
+    ],
+    "interactionStates": [
+      "default",
+      "hover",
+      "selected",
+      "disabled",
+      "loading",
+      "empty",
+      "error",
+      "success"
+    ],
+    "designRisks": [],
+    "visualDirections": [
+      {
+        "id": "spatial-field",
+        "name": "Spatial field",
+        "principle": "Give the subject a physical or system-like presence and let context orbit the object. Focal: subject.",
+        "geometry": "One dominant field, deliberate asymmetry, native vectors/lines for relationships, large negative space.",
+        "surface": "Mostly open canvas with one or two grounded surfaces; avoid enclosing every object.",
+        "density": "Low-to-medium; density is concentrated around the focal object.",
+        "trade": "Most distinctive and memorable, but requires stronger spatial placement and relationship design."
+      },
+      {
+        "id": "editorial-focus",
+        "name": "Editorial focus",
+        "principle": "Treat the subject as an editorial hero with a small amount of high-value evidence. Focal: subject.",
+        "geometry": "Oversized focal region with offset supporting context; no equal-width panel grid.",
+        "surface": "Quiet canvas, restrained surfaces, typography doing more hierarchy work than borders.",
+        "density": "Low; supporting information is compressed into a few intentional clusters.",
+        "trade": "Calmest and most premium, but sacrifices raw information density."
+      },
+      {
+        "id": "technical-instrument",
+        "name": "Technical instrument",
+        "principle": "Treat the subject as a live technical object with diagnostic layers and state evidence. Focal: subject.",
+        "geometry": "Continuous primary surface, aligned readouts, rails and traces; use grids only where measurement benefits.",
+        "surface": "Layered canvas/surface hierarchy with technical dividers and restrained state accents.",
+        "density": "Medium-to-high, but structured into continuous fields instead of card stacks.",
+        "trade": "Best for operators and developers; visually richer, but easier to over-densify."
+      }
+    ]
+  },
+  "execution": {
+    "mode": "native",
+    "recommendedTool": "figdes_use_figma",
+    "nativeRequired": true,
+    "renderGate": true,
+    "reason": "This is a composition-led inspect screen: use native execution so spatial relationships survive implementation."
+  },
+  "compositionCandidates": [
+    {
+      "composition": "canvas",
+      "recommended": true,
+      "why": "Inferred from the inspect decision: built around 'subject'."
+    },
+    {
+      "composition": "split-view",
+      "recommended": false,
+      "why": "list and detail side by side, more context per item"
+    }
+  ],
+  "passes": [
+    {
+      "pass": 1,
+      "name": "composition",
+      "add": [
+        "Empty frames for: nav, subject, context",
+        "One headline naming the decision",
+        "The primary visual as a single placeholder"
+      ],
+      "hold": [
+        "No text content beyond the headline",
+        "No repeated components - not one card, pill or row",
+        "No metrics. Pass 1 is where three-card layouts appear, and they are impossible to remove once every region is full."
+      ],
+      "done": "You can name each region and say why it exists, and the composition is one you would defend.",
+      "checkpoint": true
+    },
+    {
+      "pass": 2,
+      "name": "information",
+      "add": [
+        "Labels and content inside: nav, subject, context",
+        "Real data from: devices, topology links, per-link latency, memory pressure, GPU utilization, throughput, model placement, shard assignment, fit state",
+        "Controls the decision needs, and nothing more",
+        "Component instances via find_component, not rebuilt from rectangles"
+      ],
+      "hold": [
+        "No visual polish. Spacing and type tuning is pass 3, and doing it now means doing it twice."
+      ],
+      "done": "A person who knows the domain can read every value and complete the decision.",
+      "checkpoint": false
+    },
+    {
+      "pass": 3,
+      "name": "visual refinement",
+      "add": [
+        "Spacing, scale, alignment, density",
+        "Typography hierarchy and a monospaced face for machine data",
+        "Whitespace as deliberate space, not leftover"
+      ],
+      "hold": [
+        "No new content or regions. This pass only tunes what exists; adding here hides a structural problem."
+      ],
+      "done": "review_design returns no high-confidence findings and nothing looks accidental.",
+      "checkpoint": false
+    },
+    {
+      "pass": 4,
+      "name": "interaction states",
+      "add": [
+        "hover, selected, disabled",
+        "loading, empty, error, success"
+      ],
+      "hold": [
+        "No layout changes. A state that does not fit reveals a pass 1 or 2 problem, not a state problem."
+      ],
+      "done": "Every state that can occur is drawn, especially empty and error.",
+      "checkpoint": false
+    },
+    {
+      "pass": 5,
+      "name": "QA",
+      "add": [
+        "review_design, render_design (detail low), design_guard"
+      ],
+      "hold": [
+        "No fixes invented from a render alone. Judge hierarchy and balance from the image; take structure from the tools."
+      ],
+      "done": "design_guard returns no FAIL, review_design has no high-confidence findings, and one render confirms the composition reads.",
+      "checkpoint": true
+    }
+  ],
+  "visualPattern": {
+    "id": "object-inspector",
+    "name": "ObjectInspector",
+    "purpose": "Understand one object deeply with surrounding state that gives it meaning.",
+    "focalStrategy": "The subject gets the largest uninterrupted surface."
+  },
+  "compositionPlan": {
+    "visualDirection": "technical-instrument",
+    "pattern": "object-inspector",
+    "focal": {
+      "id": "subject",
+      "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+    },
+    "primaryRelationships": [],
+    "supportingContext": [
+      {
+        "id": "context",
+        "role": "inspector",
+        "intent": "surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+      }
+    ],
+    "controls": [
+      {
+        "id": "nav",
+        "role": "navigation",
+        "intent": "orientation"
+      }
+    ],
+    "polish": [
+      "spacing rhythm pass",
+      "typography hierarchy pass",
+      "state-colour restraint check"
+    ],
+    "hierarchy": {
+      "order": [
+        "subject",
+        "context",
+        "nav"
+      ],
+      "rationale": "Hierarchy follows 'ObjectInspector': Subject first"
+    },
+    "density": {
+      "level": "balanced",
+      "rationale": "Pattern 'ObjectInspector' prescribes balanced density."
+    },
+    "geometry": {
+      "strategy": "Subject:primary surface 2x context",
+      "rules": [
+        "Subject:primary surface 2x context",
+        "context in one rail",
+        "no equal-weight side panels"
+      ]
+    },
+    "negativeSpace": {
+      "strategy": "Whitespace separates per 'ObjectInspector': 32px around subject; 24px gaps to context; dense inside inspector rows",
+      "focalBreathingRoom": 32
+    },
+    "buildOrder": [
+      "canvas-and-focal",
+      "primary-relationships",
+      "supporting-context",
+      "controls-and-states",
+      "typography",
+      "polish"
+    ]
+  },
+  "compositionHolds": {
+    "holds": true,
+    "reason": "Focal 'subject' carries the decision; supporting context can degrade without losing it."
+  },
+  "designContext": {
+    "product": "EXO",
+    "direction": "technical-instrument",
+    "brief": "Product: EXO — technical, calm, spatial, precise. Direction: technical-instrument. Audience: engineer. Avoid: generic SaaS dashboard / card wall; chat-first layout; unnecessary gradients / glow / visual noise."
+  },
+  "program": {
+    "canvas": {
+      "name": "EXO Compute Fabric",
+      "width": 1440,
+      "height": 900,
+      "grid": 8
+    },
+    "regions": [
+      {
+        "fn": "navigation",
+        "id": "nav",
+        "args": {
+          "width": 208,
+          "height": "fill",
+          "gap": 24,
+          "composition": "instrument"
+        }
+      },
+      {
+        "fn": "hero",
+        "id": "subject",
+        "args": {
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "composition": "canvas"
+        }
+      },
+      {
+        "fn": "inspector",
+        "id": "context",
+        "args": {
+          "width": 360,
+          "height": "fill",
+          "gap": 24,
+          "composition": "split-view"
+        }
+      }
+    ],
+    "visualIntent": {
+      "focal": "subject",
+      "visualWeight": {
+        "subject": 0.9,
+        "context": 0.6,
+        "nav": 0.15
+      }
+    }
+  },
+  "guardPreview": [],
+  "needsDecision": {
+    "question": "Composition 'canvas' was inferred. 'split-view' is a defensible alternative.",
+    "recommended": "canvas",
+    "alternatives": [
+      {
+        "composition": "split-view",
+        "trade": "list and detail side by side, more context per item"
+      }
+    ],
+    "how": "Confirm the recommended composition, or pass desiredComposition to design_runtime."
+  },
+  "variants": [
+    {
+      "composition": "split-view",
+      "template": "model-analysis",
+      "why": "list and detail side by side, more context per item",
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "why": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "why": "the thing being understood (devices, fit state), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "why": "surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+        }
+      ],
+      "boxes": [
+        {
+          "name": "nav",
+          "x": 0,
+          "y": 0,
+          "w": 208,
+          "h": 900,
+          "why": "orientation"
+        },
+        {
+          "name": "subject",
+          "x": 240,
+          "y": 0,
+          "w": 1200,
+          "h": 521,
+          "why": "the thing being understood (devices, fit state), given the most room"
+        },
+        {
+          "name": "context",
+          "x": 240,
+          "y": 553,
+          "w": 1200,
+          "h": 347,
+          "why": "surrounding state that gives the subject meaning (memory pressure, GPU utilization, throughput (+1 more))"
+        }
+      ],
+      "focal": {
+        "id": "subject",
+        "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+      }
+    }
+  ],
+  "variantsNote": "Build the strongest, compare renders, then commit. A single composition is never final without seeing its siblings.",
+  "warnings": [],
+  "projectMemory": "Project design memory (durable notes about how this project should look):\n- [project] Prefer topology as the hero visualization on system screens.\n- [project] Prefer open surfaces over bordered cards; avoid unnecessary card borders.\n- [project] Use accent colour sparingly: one action yellow, one health green, nothing neon.\n- [project] Metrics are quiet instrument readouts, never a KPI wall.\n- [project] Set identifiers, latencies and addresses in a monospaced face."
+}

@@ -1,0 +1,32 @@
+{
+  "status": "ok",
+  "verdict": "FAIL",
+  "checklist": [
+    {
+      "area": "TECHNICAL",
+      "check": "no overflow or broken structure",
+      "pass": false,
+      "detail": "4 high-confidence in EXO Compute Fabric: overflow, overflow, overflow, overflow"
+    },
+    {
+      "area": "COMPOSITION",
+      "check": "no accidental card wall",
+      "pass": false,
+      "detail": "card-wall rule fired"
+    },
+    {
+      "area": "TECHNICAL",
+      "check": "render succeeds",
+      "pass": null,
+      "detail": "render the selection at low detail to confirm"
+    }
+  ],
+  "failed": [
+    "TECHNICAL: no overflow or broken structure — 4 high-confidence in EXO Compute Fabric: overflow, overflow, overflow, overflow",
+    "COMPOSITION: no accidental card wall — card-wall rule fired"
+  ],
+  "pendingLiveChecks": [
+    "TECHNICAL: render succeeds — render the selection at low detail to confirm"
+  ],
+  "howToProceed": "Fix every failed item, then re-run. A screen that misses critical criteria is not finished."
+}

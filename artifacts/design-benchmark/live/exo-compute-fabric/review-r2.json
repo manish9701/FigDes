@@ -1,0 +1,27 @@
+{
+  "summary": {
+    "total": 10,
+    "high": 4,
+    "medium": 6,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "overflow": 4,
+      "card-wall": 1,
+      "duplicate-siblings": 1,
+      "tiny-technical-text": 4
+    }
+  },
+  "findings": [
+    "serious/high overflow: \"Line\" extends past the edge of \"TopologyField\"",
+    "serious/high overflow: \"Line\" extends past the edge of \"TopologyField\"",
+    "serious/high overflow: \"Line\" extends past the edge of \"TopologyField\"",
+    "serious/high overflow: \"Line\" extends past the edge of \"TopologyField\"",
+    "minor/medium card-wall: 11 bordered cards cover 73% of the screen",
+    "minor/medium duplicate-siblings: 3 identical children in \"TopologyField\"",
+    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum",
+    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum",
+    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum",
+    "minor/medium tiny-technical-text: Monospaced text at 10px is below the readable minimum"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "frame": "142:811",
+  "revision": "fabric-r3",
+  "viewport": "1440x900",
+  "method": "direct PNG inspection (shot-r3.png) + known region geometry; unused space measured, not felt",
+  "regions": {
+    "TopologyField": { "box": [256, 112, 824, 600], "contentBottom": "~630", "voidBottomPx": "~85", "assessment": "legitimate separation for 5 tiles + connectors + labels; topology needs breathing room" },
+    "BottleneckInspector": { "box": [1104, 112, 312, 600], "contentBottom": "~600", "voidBottomPx": "~110", "assessment": "real underfill; verdict could extend or rows re-space" },
+    "DecisionBand": { "box": [256, 736, 1160, 140], "assessment": "fills its band; fine" },
+    "Rail": { "box": [0, 0, 232, 900], "assessment": "fills its rail; fine" }
+  },
+  "rulings": [
+    {
+      "claim": "6 regions fragment the canvas",
+      "disposition": "disputed",
+      "rationale": "5 deliberate regions (rail, field, inspector, band + root) tile intentionally; count alone is not fragmentation. Kept visible, not blocking."
+    },
+    {
+      "claim": "inspector bottom void ~110px",
+      "disposition": "confirmed-minor-open",
+      "rationale": "Measurable unused space after the verdict box; low priority; no repair applied this round (budget held for blockers)."
+    },
+    {
+      "claim": "field bottom void ~85px",
+      "disposition": "intentional",
+      "rationale": "Separation margin for graph hierarchy; removing it would crowd connectors into cards."
+    }
+  ],
+  "reviewer": "opencode-agent",
+  "note": "Whitespace/density stays a WATCH signal; this adjudication splits the measurable void from the subjective claim."
+}

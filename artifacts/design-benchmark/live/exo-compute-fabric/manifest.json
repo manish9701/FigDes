@@ -1,0 +1,22 @@
+{
+  "packDir": "D:\\Desktop\\exo\\artifacts\\design-benchmark\\live\\exo-compute-fabric",
+  "generatedAt": "2026-10-09T09:49:19.421Z",
+  "shots": [
+    {
+      "file": "shot-r1.png",
+      "sha256": "5315f8f99efcdc0a37f44303c097cd728f8502230513a44aa3e8911dc9890eb9",
+      "bytes": 66794
+    },
+    {
+      "file": "shot-r2.png",
+      "sha256": "5f4ee9b61c4254babf176b9fdad4d6d4948350bcc10884a303038f46e346fabc",
+      "bytes": 68707
+    },
+    {
+      "file": "shot-r3.png",
+      "sha256": "2195ac2828d7de35ae99d64f46ead19f07e2b2fb5a13d84cd6fbb9367bd42370",
+      "bytes": 69085
+    }
+  ],
+  "missing": []
+}

@@ -337,3 +337,65 @@ test("seven regions fragmenting the canvas fail density loudly", async () => {
   assert.ok(dim.score < 6, "seven regions must read as fragmentation");
   assert.match(dim.improve ?? "", /Merge regions/);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Planner brief battery (quality-reliability P2)                               */
+/* -------------------------------------------------------------------------- */
+
+test("planner: exact EXO Compute Fabric task inspects a topology, not a dashboard", () => {
+  const plan = planScreen({
+    primaryDecision: "Drain node-02 and rebalance, or let the workload ride?",
+    goal: "Locate the inference bottleneck across the device fabric and decide whether to intervene.",
+    availableInformation: ["devices", "topology links", "per-link latency", "memory pressure", "throughput", "model placement", "fit state"],
+  });
+  const roles = (plan.regions ?? []).map((r) => r.role);
+  assert.equal(plan.derivation?.strategy, "task-derived");
+  assert.ok(roles.includes("primary-visual") && roles.includes("inspector"), `inspect shape, got ${roles}`);
+});
+
+test("planner: monitor cluster health is instrument/monitor, not topology-by-keyword", () => {
+  const plan = planScreen({
+    primaryDecision: "Intervene in the cluster or let it run?",
+    availableInformation: ["GPU utilization", "memory pressure", "throughput", "error rate"],
+  });
+  assert.equal(plan.derivation?.pattern, "monitoring-instrument");
+});
+
+test("planner: bottleneck in a connected workload is a topology with labeled edges", () => {
+  const plan = planScreen({
+    primaryDecision: "Where is the bottleneck in this connected workload?",
+    availableInformation: ["nodes", "edges", "dependencies", "latency"],
+  });
+  const blob = JSON.stringify(plan).toLowerCase();
+  assert.ok(/topolog|graph|relationship/.test(blob), "connected-workload bottleneck plans spatially");
+});
+
+test("planner: choose a model is selection/comparison, not inspection", () => {
+  const plan = planScreen({
+    primaryDecision: "Which model should run, weighing cost and quality?",
+    availableInformation: ["model name", "run cost", "latency", "quality", "recommendation"],
+  });
+  const blob = JSON.stringify(plan).toLowerCase();
+  assert.ok(/compar|select|decision/.test(blob), "model choice plans as comparison/selection");
+});
+
+test("planner: unrelated spatial work falls back explicitly, never silently", () => {
+  const plan = planScreen({
+    primaryDecision: "Arrange warehouse zones for shortest pick paths?",
+    availableInformation: ["zones", "aisles", "pick volume", "distances"],
+  });
+  assert.equal(plan.derivation?.strategy, "shell-fallback");
+  assert.ok((plan.derivation?.note ?? "").length > 20, "fallback names its reason instead of guessing a domain");
+  assert.ok(!/topology|device.*health|gpu/i.test(plan.derivation?.pattern ?? ""), "no EXO topology leakage");
+});
+
+test("planner: generic dashboard brief is the negative control downstream", () => {
+  // The planner alone does not reject dashboards (same inspect shape as the
+  // fabric task) — the negative control is enforced by genericity card-wall
+  // and design_guard, which is exactly why those exist as separate gates.
+  const plan = planScreen({
+    primaryDecision: "Review user and revenue numbers?",
+    availableInformation: ["users", "revenue", "growth", "conversion"],
+  });
+  assert.equal(plan.derivation?.strategy, "task-derived");
+});

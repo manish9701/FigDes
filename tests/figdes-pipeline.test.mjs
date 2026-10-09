@@ -36,6 +36,7 @@ import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 import { deriveRegions } from "../mcp-server/dist-test/design/composition/derive.js";
 import { analyzeRelationships } from "../mcp-server/dist-test/design/composition/relationships.js";
 import { planScreen } from "../mcp-server/dist-test/plan/planner.js";
+import { scoreDesignTool } from "../mcp-server/dist-test/review/workflow.js";
 
 const PERFECT = {
   hierarchy: 90, composition: 90, typography: 90, readability: 90,
@@ -289,4 +290,50 @@ test("consistency scores token discipline and blocks repair-introduced drift", (
   });
   assert.equal(drift.blocking, true, "repair-introduced unknown fills block");
   assert.ok(drift.evidence.some((e) => /BLOCKING/.test(e)));
+});
+
+/* -------------------------------------------------------------------------- */
+/* Density: sparse topology vs genuinely fragmented layouts                     */
+/* -------------------------------------------------------------------------- */
+
+function densityOf(program) {
+  return scoreDesignTool({ program }).then((scored) =>
+    scored.dimensions.find((d) => d.dimension === "Information density"),
+  );
+}
+
+test("sparse topology with breathing room is not a density failure", async () => {
+  const dim = await densityOf({
+    canvas: { name: "Sparse", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "frame", id: "rail", args: { width: 232 } },
+      { fn: "hero", id: "map", args: { width: "fill", height: "fill" } },
+      { fn: "inspector", id: "insp", args: { width: 360 } },
+    ],
+    content: [
+      { fn: "deviceNode", id: "a", parent: "map", args: { label: "a" } },
+      { fn: "deviceNode", id: "b", parent: "map", args: { label: "b" } },
+    ],
+  });
+  assert.ok(dim.score >= 6, `sparse but composed topology must not fail density: ${dim.score} (${dim.evidence})`);
+});
+
+test("a single undifferentiated region loses density points with a fix", async () => {
+  const dim = await densityOf({
+    canvas: { name: "Single", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "only", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "text", id: "t", parent: "only", args: { text: "hello" } }],
+  });
+  assert.ok(dim.score <= 6, "one region filling everything is under-composed");
+  assert.match(dim.improve ?? dim.evidence, /separation|undifferentiated/i);
+});
+
+test("seven regions fragmenting the canvas fail density loudly", async () => {
+  const dim = await densityOf({
+    canvas: { name: "Frag", width: 1440, height: 900, grid: 8 },
+    regions: Array.from({ length: 7 }, (_, i) => ({ fn: "frame", id: `r${i}`, args: { width: 200, height: 100 } })),
+    content: [],
+  });
+  assert.ok(dim.score < 6, "seven regions must read as fragmentation");
+  assert.match(dim.improve ?? "", /Merge regions/);
 });

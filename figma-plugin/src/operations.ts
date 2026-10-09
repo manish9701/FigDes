@@ -522,7 +522,15 @@ export async function runTransaction(input: {
       }
     }
   } catch (err) {
-    return failure(input.transactionId, err, true);
+    // Surgical rollback: only nodes this transaction created are removed, by
+    // id. A bare undo here would pop whatever Figma last recorded — after a
+    // timeout or interleaving work, that is somebody else's commit.
+    return failure(
+      input.transactionId,
+      err,
+      true,
+      ctx.created.map((c) => c.figmaNodeId),
+    );
   }
 
   try {
@@ -534,6 +542,9 @@ export async function runTransaction(input: {
   // Evidence: committed bounds for everything created, read after the dust
   // settles so auto-layout shifts are included. A node removed later in the
   // same transaction simply carries no bounds rather than failing the report.
+  // Anything unresolvable is reported, not hidden: a "success" whose nodes are
+  // already gone is how silent partial builds happen.
+  const unconfirmedIds: string[] = [];
   for (const entry of ctx.created) {
     try {
       const node = await figma.getNodeByIdAsync(entry.figmaNodeId);
@@ -545,9 +556,12 @@ export async function runTransaction(input: {
           width: Math.round(b.width),
           height: Math.round(b.height),
         };
+      } else {
+        unconfirmedIds.push(entry.figmaNodeId);
       }
     } catch {
       /* gone: no bounds, still reported as created */
+      unconfirmedIds.push(entry.figmaNodeId);
     }
   }
 
@@ -570,6 +584,9 @@ export async function runTransaction(input: {
     createdNodes: ctx.created,
     modifiedNodes: [...ctx.modified],
     applied: trace,
+    ...(unconfirmedIds.length > 0
+      ? { unconfirmedIds }
+      : {}),
   };
 }
 
@@ -1578,23 +1595,63 @@ function register(ctx: Ctx, tempId: string | undefined, node: SceneNode, index: 
   return `${node.id}${tempId ? ` (${tempId})` : ""}`;
 }
 
-function failure(transactionId: string, err: unknown, attempted: boolean): TransactionFailure {
+/**
+ * Roll back a failed transaction by removing exactly the nodes it created.
+ *
+ * A bare `triggerUndo()` undoes whatever Figma last recorded — which, after a
+ * timeout, a user hand-edit, or any interleaving work, is somebody else's
+ * commit, not ours. Failed builds deleting previously committed screens is
+ * how that reads, and it is why rollback here is surgical: every created id
+ * is resolved and removed individually, and anything unresolvable is reported
+ * as an orphan for explicit cleanup rather than guessed away with an undo.
+ */
+async function removeCreated(figmaNodeIds: string[]): Promise<{ removedIds: string[]; orphanIds: string[] }> {
+  const removedIds: string[] = [];
+  const orphanIds: string[] = [];
+  for (const id of figmaNodeIds) {
+    try {
+      const node = await figma.getNodeByIdAsync(id);
+      if (node && "remove" in node && typeof (node as { remove?: unknown }).remove === "function") {
+        (node as unknown as { remove: () => void }).remove();
+        removedIds.push(id);
+      } else {
+        orphanIds.push(id);
+      }
+    } catch {
+      orphanIds.push(id);
+    }
+  }
+  return { removedIds, orphanIds };
+}
+
+async function failure(
+  transactionId: string,
+  err: unknown,
+  attempted: boolean,
+  createdIds: string[] = [],
+): Promise<TransactionFailure> {
   let rolledBack = false;
+  let removedIds: string[] = [];
+  let orphanIds: string[] = [];
 
   if (attempted) {
-    // Revert the partial application using Figma's own undo stack, then re-seal
-    // so the rollback is not itself undoable garbage.
-    try {
-      figma.triggerUndo();
-      figma.commitUndo();
-      rolledBack = true;
-    } catch {
-      rolledBack = false;
-    }
+    // Surgical: only our own nodes go. Never a bare undo.
+    const result = await removeCreated(createdIds);
+    removedIds = result.removedIds;
+    orphanIds = result.orphanIds;
+    rolledBack = createdIds.length === 0 || (removedIds.length === createdIds.length && orphanIds.length === 0);
   }
 
   const isOpError = err instanceof OperationError;
   const raw = err instanceof Error ? err.message : String(err);
+
+  const note = !attempted
+    ? "Nothing was committed, so the document is unchanged."
+    : orphanIds.length > 0
+      ? `Removed ${removedIds.length} of ${createdIds.length} created node(s); ${orphanIds.length} could not be resolved (${orphanIds.join(", ")}). Inspect those ids before retrying — the document may hold partial work.`
+      : createdIds.length === 0
+        ? "Nothing was created before the failure, so the document is unchanged."
+        : "All nodes this transaction created were removed again; nothing else was touched.";
 
   return {
     transactionId,
@@ -1605,11 +1662,11 @@ function failure(transactionId: string, err: unknown, attempted: boolean): Trans
       message: raw,
       // Spec §36: what failed, what was rolled back, what to try next.
       hint: hintFor(raw, isOpError ? err.opType : "plan"),
-      rolledBackNote: rolledBack
-        ? "All earlier operations in this transaction were reverted; the document is unchanged."
-        : "Nothing was committed, so the document is unchanged.",
+      rolledBackNote: note,
     },
     rolledBack,
+    ...(removedIds.length > 0 ? { removedIds } : {}),
+    ...(orphanIds.length > 0 ? { orphanIds } : {}),
   };
 }
 

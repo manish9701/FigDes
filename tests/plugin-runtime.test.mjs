@@ -1381,6 +1381,51 @@ test("a rollback with no mutations does not trigger an undo", async () => {
   assert.equal(f.__undoLog.length, before);
 });
 
+test("a failed create_design removes only its own nodes, never touching others", async () => {
+  // The live defect: a failed build undid whatever Figma last recorded, so a
+  // timeout could delete previously committed screens. Rollback is surgical
+  // now: created ids are removed individually, and no undo is triggered.
+  const { figma: f } = loadPlugin();
+  const keeper = await ask(f, "create_design", {
+    operations: [{ type: "createFrame", id: "keeper", name: "Keeper", width: 100, height: 100 }],
+  });
+  assert.equal(keeper.data.status, "success");
+  const keeperId = keeper.data.createdNodes[0].figmaNodeId;
+
+  const before = f.__undoLog.length;
+  const failed = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "doomed", name: "Doomed", width: 50, height: 50 },
+      { type: "setFill", target: "no-such-node", fill: "#FF0000" },
+    ],
+  });
+  assert.equal(failed.data.status, "failed");
+  assert.equal(failed.data.rolledBack, true);
+  assert.ok((failed.data.removedIds ?? []).length >= 1, "own created node removed");
+  assert.equal((failed.data.orphanIds ?? []).length, 0, "nothing left behind");
+  const undos = f.__undoLog.slice(before).filter((e) => e === "undo");
+  assert.equal(undos.length, 0, "no bare undo was triggered");
+
+  // The earlier commit survives; the failed transaction's node does not.
+  assert.ok(await f.getNodeByIdAsync(keeperId), "unrelated committed work survives");
+  const doomedId = (failed.data.removedIds ?? [])[0];
+  if (doomedId) assert.equal(await f.getNodeByIdAsync(doomedId), null, "partial work removed");
+});
+
+test("a committed build reports nodes that are already gone", async () => {
+  // Create-then-remove in one transaction is legal, but the report must not
+  // claim nodes exist that do not: unconfirmedIds names them.
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "create_design", {
+    operations: [
+      { type: "createFrame", id: "temp", name: "Temp", width: 40, height: 40 },
+      { type: "removeNode", target: "temp" },
+    ],
+  });
+  assert.equal(reply.data.status, "success");
+  assert.ok((reply.data.unconfirmedIds ?? []).length >= 1, "removed node reported unconfirmed");
+});
+
 test("getProperties returns full node state, not only geometry", async () => {
   const { figma: f } = loadPlugin();
   const created = await ask(f, "native_design", {

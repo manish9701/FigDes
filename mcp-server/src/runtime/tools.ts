@@ -8,7 +8,8 @@
 import { z } from "zod";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
 import { compileIR } from "./compile";
-import { DesignIRSchema } from "../../../shared/ir";
+import { placeRootFrame } from "./placement";
+import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import type { Session } from "../sessions";
 
@@ -243,6 +244,51 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     );
   }
 
+  // Auto-placement: the compiler puts every root frame at the origin, so
+  // consecutive screens pile onto the same spot. Before committing, ask the
+  // file where free canvas is and shift the root there. Only the compiler's
+  // own root (id "root" at 0,0) moves — explicit coordinates stay explicit.
+  // A failed lookup never fails the build; it just builds at the origin.
+  let placement: { x: number; y: number; reason: string } | null = null;
+  const rootOp = result.operations.find(
+    (op) => typeof op === "object" && op !== null && (op as Record<string, unknown>).type === "createFrame" && (op as Record<string, unknown>).id === "root",
+  ) as Record<string, unknown> | undefined;
+  if (rootOp !== undefined && rootOp.x === 0 && rootOp.y === 0) {
+    try {
+      const file = (await session.request("inspect_file", {})) as {
+        topLevelFrames?: Array<{ x?: unknown; y?: unknown; width?: unknown; height?: unknown }>;
+      };
+      const existing = (file.topLevelFrames ?? [])
+        .filter(
+          (f): f is { x: number; y: number; width: number; height: number } =>
+            typeof f.x === "number" && typeof f.y === "number" && typeof f.width === "number" && typeof f.height === "number",
+        )
+        .map((f) => ({ x: f.x, y: f.y, w: f.width, h: f.height }));
+      const canvas = result.ir.canvas;
+      const placed = placeRootFrame(existing, canvasSize(canvas.width, 1440), canvasSize(canvas.height, 900));
+      // The compiler emits region frames, connectors and their labels in
+      // page-absolute coordinates parented to the root — correct only while
+      // the root sits at the origin. Moving the root without converting them
+      // would offset everything twice, so root-parented ops become
+      // root-relative here. Region-parented content already is.
+      const dx = placed.x;
+      const dy = placed.y;
+      for (const op of result.operations) {
+        if (typeof op !== "object" || op === null) continue;
+        const o = op as Record<string, unknown>;
+        if (o.parent !== "root" || typeof o.x !== "number" || typeof o.y !== "number") continue;
+        if (o.id === "root") continue;
+        o.x = (o.x as number) - dx;
+        o.y = (o.y as number) - dy;
+      }
+      rootOp.x = placed.x;
+      rootOp.y = placed.y;
+      placement = placed;
+    } catch {
+      placement = { x: 0, y: 0, reason: "File listing failed; building at the origin." };
+    }
+  }
+
   // The same checkpoint gate as the low-level mutating tools, applied to the
   // compiled operations rather than to whatever the caller wrote. Going through
   // the runtime must not be a way around it.
@@ -264,6 +310,7 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     const built = await runChunked(session, result.operations, description);
     return {
       ...payload,
+      ...(placement !== null ? { placement } : {}),
       chunked: true,
       autoChunked: chunked !== true,
       status: built.completed ? payload.status : "completed-with-failed-chunks",
@@ -278,7 +325,7 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     transactionId,
   });
 
-  return { ...payload, transaction };
+  return { ...payload, ...(placement !== null ? { placement } : {}), transaction };
 }
 
 /** Operations per chunk. Small enough to stay well under node caps, large enough to keep chunks few. */

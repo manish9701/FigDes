@@ -90,6 +90,80 @@ function clampTimeout(value: unknown): number {
   return Math.max(5_000, Math.min(MAX_EXECUTION_MS, Math.floor(value)));
 }
 
+/**
+ * Counts raw-API mutations heuristically.
+ *
+ * The `figdes` builder reports exact counts through noteMutation, but a raw
+ * `figma.*` script bypasses it — so a script creating 25 nodes reported
+ * mutations:0, which reads as "did nothing" next to a success status. This
+ * wraps the injected `figma` object and counts mutating method calls plus
+ * property writes. It is a heuristic, not an audit: exotic mutators may be
+ * missed (undercount, never overclaim), and the count is labelled as such.
+ * Reads (getNodeByIdAsync, currentPage access without writes, findAll…)
+ * never count.
+ */
+const MUTATING_METHODS = new Set([
+  "createFrame", "createRectangle", "createEllipse", "createPolygon", "createStar",
+  "createLine", "createText", "createVector", "createConnector", "createComponent",
+  "createComponentSet", "createInstance", "createPage", "createSlice",
+  "createBooleanOperation", "flatten", "subtract", "union", "intersect", "exclude",
+  "appendChild", "insertChild", "remove", "clone", "resize", "rescale",
+  "group", "ungroup", "detachInstance", "swapComponent", "swapStyle",
+  "setPluginData", "setSharedPluginData", "setRelaunchData",
+  "addOnDocumentChange", "notify",
+]);
+const READ_METHODS = new Set([
+  "getNodeByIdAsync", "getStyleByIdAsync", "loadFontAsync", "listAvailableFontsAsync",
+  "loadAllPagesAsync", "getLocalPaintStylesAsync", "getLocalTextStylesAsync",
+  "getLocalEffectStylesAsync", "getLocalGridStylesAsync",
+  "findAll", "findOne", "findAllWithCriteria", "findChildren",
+  "getImageByHashAsync", "createImageAsync",
+]);
+
+function countingFigma(raw: typeof figma): { api: typeof figma; mutations: () => number } {
+  let count = 0;
+  const wrap = (value: unknown, depth: number): unknown => {
+    if (depth > 4 || value === null || (typeof value !== "object" && typeof value !== "function")) return value;
+    if (typeof value === "function") {
+      // Detached by construction (a return value, not a method access): the
+      // original call would have no receiver either, so counting is all we do.
+      const fn = value as (...args: unknown[]) => unknown;
+      const name = fn.name ?? "";
+      return (...args: unknown[]): unknown => {
+        if (MUTATING_METHODS.has(name)) count += 1;
+        const out = fn(...args);
+        if (out !== null && (typeof out === "object" || typeof out === "function")) return wrap(out, depth + 1);
+        return out;
+      };
+    }
+    return new Proxy(value as object, {
+      get(target, prop, receiver) {
+        const got = Reflect.get(target, prop, receiver);
+        // Methods keep their receiver: Figma API calls may depend on `this`,
+        // and an unbound wrapper would break them while counting correctly.
+        if (typeof got === "function" && typeof prop === "string") {
+          const mutating = MUTATING_METHODS.has(prop) || (!READ_METHODS.has(prop) && /^[A-Z]/.test(prop));
+          return (...args: unknown[]): unknown => {
+            if (mutating) count += 1;
+            const out = Reflect.apply(got as (...a: unknown[]) => unknown, target, args);
+            if (out !== null && (typeof out === "object" || typeof out === "function")) return wrap(out, depth + 1);
+            return out;
+          };
+        }
+        if (got !== null && (typeof got === "object" || typeof got === "function")) return wrap(got, depth + 1);
+        return got;
+      },
+      set(target, prop, next, receiver) {
+        // Any property write on a node (x, fills, characters…) is a mutation.
+        // Reads of figma.currentPage etc. never reach here as sets.
+        if (typeof prop === "string" && !prop.startsWith("__")) count += 1;
+        return Reflect.set(target, prop, next, receiver);
+      },
+    });
+  };
+  return { api: wrap(raw, 0) as typeof figma, mutations: () => count };
+}
+
 export async function executeFigmaScript(payload: unknown): Promise<Record<string, unknown>> {
   const input = (payload ?? {}) as ScriptPayload;
   const script = input.script;
@@ -126,8 +200,15 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
   let timedOut = false;
 
   try {
+    // Raw `figma.*` calls bypass the builder's noteMutation tracking, so a
+    // script creating 25 nodes reported mutations:0 next to a success status.
+    // The counting wrapper observes mutating calls and property writes
+    // heuristically (documented in countingFigma); the builder keeps its
+    // exact count. The two paths are disjoint, so the total never double
+    // counts.
+    const counted = countingFigma(figma);
     const execution = Promise.resolve(execute(
-      figma,
+      counted.api,
       Math,
       JSON,
       Date,
@@ -154,11 +235,13 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
     }
 
     if (!readonlyMode) {
+      const committed = commitNativeTransaction(transactionId);
       return {
         status: "success",
         transactionId,
         result: serializable(result),
-        transaction: commitNativeTransaction(transactionId),
+        transaction: committed,
+        rawApiMutations: { count: counted.mutations(), heuristic: true },
       };
     }
 

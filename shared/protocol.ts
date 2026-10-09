@@ -727,6 +727,13 @@ export interface TransactionSuccess {
   modifiedNodes?: string[];
   /** Human-readable trace, one line per applied operation. */
   applied: string[];
+  /**
+   * Created ids that no longer resolve after commit. Never invents a failure:
+   * when empty or absent everything reported as created still exists. When
+   * present, the build landed partially and the caller must verify before
+   * reporting success — this is the honest answer to "did it actually land".
+   */
+  unconfirmedIds?: string[];
 }
 
 export interface TransactionFailure {
@@ -742,8 +749,21 @@ export interface TransactionFailure {
     /** What state the document is actually in. */
     rolledBackNote: string;
   };
-  /** True when the plugin already rolled the document back via native undo. */
+  /**
+   * True when every node this transaction created was removed again, so the
+   * document holds none of its partial work. Removal is by explicit node id —
+   * never a bare undo, which would pop whatever Figma last recorded regardless
+   * of which transaction put it there.
+   */
   rolledBack: boolean;
+  /** Created ids that were removed again during rollback. */
+  removedIds?: string[];
+  /**
+   * Created ids that could not be removed (already gone, or unresolvable).
+   * Non-empty means the document may hold partial work: inspect these ids
+   * before retrying rather than assuming a clean slate.
+   */
+  orphanIds?: string[];
 }
 
 export type TransactionResult = TransactionSuccess | TransactionFailure;

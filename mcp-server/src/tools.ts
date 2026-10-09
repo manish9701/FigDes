@@ -397,10 +397,19 @@ const MetricsArgs = z
   })
   .strict();
 
-const ReviewArgs = z
+export const ReviewArgs = z
   .object({
     sessionId: SessionArg,
     target: z.string().max(200).optional().describe("Figma node id to review. Omit to review the current selection."),
+    /**
+     * Alias for `target`.
+     *
+     * Models naturally pass `nodeId` (every other visual tool takes it). It was
+     * silently dropped by strict parsing, so the review measured the selection
+     * instead of the requested frame — wrong evidence behind a correct-looking
+     * report. Accepting the alias closes the trap; `target` still wins.
+     */
+    nodeId: z.string().max(200).optional().describe("Alias for target."),
     maxNodes: z.number().int().min(20).max(5000).optional().describe("Scan budget. Default 2000."),
     depth: z.number().int().min(1).max(20).optional().describe("Maximum depth to walk. Default 12."),
     includeHidden: z.boolean().optional(),
@@ -785,9 +794,9 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: ReviewArgs,
     handler: async (args, registry) => {
       const parsed = ReviewArgs.parse(args ?? {});
-      const { sessionId, ruleset, minConfidence, limit, ...rest } = parsed;
+      const { sessionId, ruleset, minConfidence, limit, nodeId, target, ...rest } = parsed;
       const session = registry.resolve(sessionId);
-      return reviewSession(session, rest, ruleset ?? "review", minConfidence ?? "low", limit ?? 60);
+      return reviewSession(session, { ...rest, ...(target !== undefined ? { target } : nodeId !== undefined ? { target: nodeId } : {}) }, ruleset ?? "review", minConfidence ?? "low", limit ?? 60);
     },
   },
 
@@ -799,9 +808,9 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: ReviewArgs,
     handler: async (args, registry) => {
       const parsed = ReviewArgs.parse(args ?? {});
-      const { sessionId, ruleset, minConfidence, limit, ...rest } = parsed;
+      const { sessionId, ruleset, minConfidence, limit, nodeId, target, ...rest } = parsed;
       const session = registry.resolve(sessionId);
-      return reviewSession(session, rest, ruleset ?? "audit", minConfidence ?? "low", limit ?? 60);
+      return reviewSession(session, { ...rest, ...(target !== undefined ? { target } : nodeId !== undefined ? { target: nodeId } : {}) }, ruleset ?? "audit", minConfidence ?? "low", limit ?? 60);
     },
   },
 

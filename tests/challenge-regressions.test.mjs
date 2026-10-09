@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
+import { ReviewArgs } from "../mcp-server/dist-test/tools/tools.js";
 
 /* -------------------------------------------------------------------------- */
 /* Phase 2 P0 regressions: found by rendering real Figma challenges (P1 set)   */
@@ -115,4 +116,15 @@ test("an unrecognised state stays neutral instead of inventing meaning", () => {
   const out = executeRuntime(program);
   const label = out.operations.find((o) => o.type === "createText" && o.content === "mystery");
   assert.equal(label.fill, "#5A5C54", "unknown tone falls back to neutral");
+});
+
+test("review_design accepts nodeId as a target alias instead of mistargeting", () => {
+  // The live defect: passing nodeId (every other visual tool's shape) was
+  // silently dropped, so the review measured the selection instead of the
+  // requested frame — wrong evidence behind a correct-looking report.
+  const byNodeId = ReviewArgs.safeParse({ nodeId: "171:1287" });
+  assert.equal(byNodeId.success, true, "nodeId must parse");
+  const byTarget = ReviewArgs.safeParse({ target: "171:1287", nodeId: "1:1" });
+  assert.equal(byTarget.success, true);
+  if (byTarget.success) assert.equal(byTarget.data.target, "171:1287", "target wins over the alias");
 });

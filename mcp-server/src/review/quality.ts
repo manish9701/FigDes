@@ -25,7 +25,7 @@ const COMPOSITION_CRITICAL = new Set([
 
 export function evaluateQualityGate(
   critique: Pick<CritiqueReport, "verdict" | "dimensions">,
-  options: { compositionLed?: boolean; renderReviewed?: boolean } = {},
+  options: { compositionLed?: boolean; renderReviewed?: boolean; genericityScore?: number } = {},
 ): QualityGateReport {
   const compositionLed = options.compositionLed ?? false;
   const renderReviewed = options.renderReviewed ?? false;
@@ -33,6 +33,12 @@ export function evaluateQualityGate(
   const blockingIssues = critique.dimensions
     .filter((d) => d.verdict === "FAIL")
     .map((d) => `${d.dimension}: ${d.suggestion ?? d.evidence}`);
+
+  // Phase 9 — Anti-Generic Gate: Genericity > 70 → FAIL. Calibrated through
+  // benchmark tests rather than treated as a permanent number.
+  if (options.genericityScore !== undefined && options.genericityScore > 70) {
+    blockingIssues.push(`Genericity: ${options.genericityScore}/100 exceeds 70 — the screen reads as template-generated.`);
+  }
 
   if (compositionLed) {
     for (const d of critique.dimensions) {

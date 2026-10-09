@@ -817,16 +817,16 @@ export const TOOLS: ToolDefinition[] = [
     name: "score_design",
     title: "Score a design before claiming it is done",
     description:
-      "Score a declarative program on composition, hierarchy, density, alignment, consistency and accessibility, 0-10 each with the measured evidence and what would move each number. Deterministic and free: the same program always scores the same. Use it after design_runtime and before presenting anything - a weak spot below 6 is a fix list, not a failure.",
+      "Score a declarative program (or a live Figma node via nodeId) on composition, hierarchy, density, alignment, consistency and accessibility, 0-10 each with the measured evidence and what would move each number. Deterministic and free: the same input always scores the same. Use it after design_runtime (program) or a native build (nodeId) and before presenting anything - a weak spot below 6 is a fix list, not a failure.",
     inputSchema: ScoreArgs,
-    handler: async (args) => scoreDesignTool(args),
+    handler: async (args, registry) => scoreDesignTool(args, registry),
   },
 
   {
     name: "critique_visual",
     title: "Judge whether a design is good, not just correct",
     description:
-      "The aesthetic critic: evaluate a program on focal clarity, hierarchy, composition, whitespace, density, repetition, card-wall tendency, visual balance, data-visualization quality, surface hierarchy, depth, and template feel. Verdicts are PASS / WATCH / FAIL with measured evidence - never arbitrary scores. Structural issues (overflow, contrast, naming) belong to review_design and are NOT mixed in here. Deterministic and free: run it alongside score_design before presenting anything.",
+      "The aesthetic critic: evaluate a program (or a live Figma node via nodeId plus visionCriticObservations from the render) on focal clarity, hierarchy, composition, whitespace, density, repetition, card-wall tendency, visual balance, data-visualization quality, surface hierarchy, depth, and template feel. Returns verdict PASS / WATCH / FAIL plus the authoritative qualityGate (PASS / REVIEW / FAIL with blockingIssues, repairPlan and renderRequired). FAIL means repair before done; REVIEW means render and judge before done. Structural issues (overflow, contrast, naming) belong to review_design and are NOT mixed in here. Deterministic and free: run it alongside score_design before presenting anything.",
     inputSchema: CritiqueArgs,
     handler: async (args, registry) => critiqueVisualTool(args, registry),
   },

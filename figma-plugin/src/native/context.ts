@@ -66,6 +66,7 @@ async function localCounts(page: PageNode): Promise<Record<string, number>> {
     groups: 0,
     texts: 0,
     vectors: 0,
+    images: 0,
   };
   for (const node of page.findAll(() => true)) {
     switch (node.type) {
@@ -92,6 +93,15 @@ async function localCounts(page: PageNode): Promise<Record<string, number>> {
         break;
       default:
         break;
+    }
+    // IMAGE fills are assets worth reusing: count them while walking anyway.
+    try {
+      const fills = (node as unknown as { fills?: unknown }).fills;
+      if (Array.isArray(fills) && fills.some((f) => (f as { type?: string }).type === "IMAGE")) {
+        counts.images! += 1;
+      }
+    } catch {
+      /* best-effort */
     }
   }
   const [variables, paintStyles, textStyles, effectStyles] = await Promise.all([
@@ -123,6 +133,19 @@ export async function handleContext(
         selectionCount: page.selection.length,
         selection: page.selection.map((n) => ({ id: n.id, type: n.type, name: n.name })),
         counts: await localCounts(page),
+        // Bounded screen list: the nearby context a new screen must be
+        // consistent with (§7 phase 1). Full census lives in design-system.
+        screens: page.children
+          .filter((c) => c.type === "FRAME" || c.type === "COMPONENT" || c.type === "COMPONENT_SET" || c.type === "INSTANCE")
+          .slice(0, 24)
+          .map((c) => ({
+            id: c.id,
+            name: c.name,
+            width: Math.round((c as SceneNode & { width: number }).width ?? 0),
+            height: Math.round((c as SceneNode & { width: number; height: number }).height ?? 0),
+            childCount: "children" in c ? (c.children as unknown[]).length : 0,
+            page: page.name,
+          })),
         libraryCollections: await libraryCollections(),
       };
     }
@@ -183,8 +206,14 @@ function summarizeDesignSystem(report: DesignSystemReport): Record<string, unkno
     spacing: report.spacing,
     styles: report.styles,
     styleNames: report.styleNames,
+    styleDetails: report.styleDetails ?? { text: [] },
     components: report.components.slice(0, 12),
     variables: report.variables.slice(0, 20),
+    variableValues: Object.fromEntries(Object.entries(report.variableValues ?? {}).slice(0, 40)),
+    fonts: report.fonts ?? [],
+    screens: report.screens ?? [],
+    assets: report.assets ?? { images: 0, vectors: 0, imageNames: [] },
+    patterns: report.patterns ?? [],
     naming: report.naming,
     health: report.health,
   };

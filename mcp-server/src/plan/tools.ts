@@ -16,6 +16,9 @@
 import { z } from "zod";
 import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
+import { bestPattern } from "../design/grammar/matcher";
+import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
+import { buildDesignContext, contextBrief } from "../design/context/design-context";
 import type { Composition } from "../runtime/layout";
 import type { Session } from "../sessions";
 
@@ -133,6 +136,38 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
 
   const plan = planScreen(intent);
 
+  // The art director's explicit rejection of generic dashboards is a build
+  // instruction, not decoration. The shell for `select` (nav + header +
+  // table-content + inspector) IS the dashboard shape when executed
+  // literally — so when rejection is requested, say so loudly and point at
+  // the spatial sibling instead of silently returning the template.
+  const rejectGeneric = args.artDirection?.rejectGenericDashboard === true;
+  if (rejectGeneric && isGenericDashboardShape(plan)) {
+    plan.warnings.push(
+      "rejectGenericDashboard is set, but this plan still has the generic dashboard shape (navigation + header + table-content + inspector). " +
+        "Do not execute it literally through design_runtime: build the native spatial shell instead (status strip + topology field + attention rail), " +
+        "or confirm the spatial variant below.",
+    );
+    plan.guardPreview.push({
+      rule: "exo.no-generic-saas",
+      therefore: "Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. Build the spatial/instrument shell natively; reserve design_runtime for reusable content inside it.",
+    });
+  }
+
+  // A requested spatial/topology composition with list-detail regions is a
+  // mismatch the builder must resolve, not inherit silently.
+  if (
+    args.desiredComposition !== undefined &&
+    ["spatial", "topology", "diagram"].includes(args.desiredComposition) &&
+    plan.regions.some((r) => r.role === "header" && r.id === "header") &&
+    plan.regions.some((r) => r.role === "navigation")
+  ) {
+    plan.warnings.push(
+      `desiredComposition '${args.desiredComposition}' was honoured as the composition label, but the regions are still the list-detail shell (nav + header + content + inspector). ` +
+        "Execute natively per execution.mode instead of forcing these regions through design_runtime.",
+    );
+  }
+
   // The direction travels with the plan: the program it returns carries the
   // style into design_runtime, which applies its preset mechanics.
   if (args.visualDirection !== undefined) {
@@ -191,6 +226,23 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     };
   });
 
+  // Design intelligence (§11–§13): the pattern the decision needs, the
+  // composition plan (focal → relationships → context → controls), and the
+  // product context the next screen inherits. Additive: existing fields stay.
+  const pattern = bestPattern(plan.intent.decisionKind, intent.goal ?? intent.primaryDecision);
+  const designContext = buildDesignContext({
+    ...(args.audience !== undefined ? { audience: [args.audience] } : {}),
+  });
+  const compositionPlan = buildCompositionPlan({
+    pattern,
+    focalId: plan.artDirection.focal?.id ?? null,
+    ...(plan.artDirection.focal !== null ? { focalWhy: plan.artDirection.focal.why } : {}),
+    hierarchy: plan.artDirection.hierarchy.map((h) => h.id),
+    regions: plan.regions.map((r) => ({ id: r.id, role: r.role, why: r.because })),
+    ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
+  });
+  const holds = compositionHolds(compositionPlan);
+
   return {
     status: plan.warnings.length > 0 || plan.guardPreview.length > 0 ? "planned-with-warnings" : "planned",
 
@@ -245,11 +297,20 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     /** The art director's decisions: focal, hierarchy, strategies, states, risks. */
     artDirection: plan.artDirection,
 
+    /** Execution guidance derived from the composition, not tool convenience. */
+    execution: plan.execution,
+
     /** Compositions worth comparing, recommended first. */
     compositionCandidates: plan.compositionCandidates,
 
     /** The five-pass build order. Start at pass 1 and do not skip ahead. */
     passes: plan.passes,
+
+    /** Design intelligence (§11–§13): pattern, composition plan, product context. */
+    visualPattern: pattern ? { id: pattern.id, name: pattern.name, purpose: pattern.purpose, focalStrategy: pattern.focalStrategy } : null,
+    compositionPlan,
+    compositionHolds: holds,
+    designContext: { product: designContext.productName, direction: designContext.visualDirection, brief: contextBrief(designContext) },
 
     /** What to hand to design_runtime for pass 1: frames and a headline only. */
     program: plan.program,
@@ -288,6 +349,15 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(opts.notes !== undefined && opts.notes.length > 0 ? { projectMemory: opts.notes } : {}),
     ...(opts.screen !== undefined ? { screen: opts.screen } : {}),
   };
+}
+
+/** The dashboard shape: chrome around a table, executed literally. */
+function isGenericDashboardShape(plan: { regions: Array<{ id: string; role: string; composition: string }> }): boolean {
+  const ids = new Set(plan.regions.map((r) => r.id));
+  const hasChrome = ids.has("nav") && (ids.has("header") || ids.has("filters"));
+  const hasTableContent = plan.regions.some((r) => (r.id === "content" || r.id === "results") && (r.composition === "table" || r.composition === "canvas"));
+  const hasInspector = ids.has("inspector");
+  return hasChrome && hasTableContent && hasInspector;
 }
 
 /** One sentence on what switching composition costs. */

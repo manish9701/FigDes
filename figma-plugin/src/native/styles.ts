@@ -78,10 +78,17 @@ export async function handleStyles(
       const key = String(params.styleId ?? params.style ?? "");
       const style = await findStyle(key, params.kind as "paint" | "text" | "effect" | undefined);
       if (!style) throw new Error(`Style ${key} not found.`);
-      if (style.type === "PAINT" && "fillStyleId" in node) node.fillStyleId = style.id;
-      else if (style.type === "TEXT" && "textStyleId" in node) node.textStyleId = style.id;
-      else if (style.type === "EFFECT" && "effectStyleId" in node) node.effectStyleId = style.id;
-      else throw new Error(`Style type ${style.type} is incompatible with this node.`);
+      // The *Async setters are mandatory under "documentAccess": "dynamic-page";
+      // the sync ones throw "Cannot call with documentAccess: dynamic-page" at
+      // runtime, so a plugin that binds styles synchronously works on one
+      // document and fails on the next (report §5).
+      if (style.type === "PAINT" && "setFillStyleIdAsync" in node) {
+        await (node as unknown as { setFillStyleIdAsync: (id: string) => Promise<void> }).setFillStyleIdAsync(style.id);
+      } else if (style.type === "TEXT" && "setTextStyleIdAsync" in node) {
+        await (node as unknown as { setTextStyleIdAsync: (id: string) => Promise<void> }).setTextStyleIdAsync(style.id);
+      } else if (style.type === "EFFECT" && "setEffectStyleIdAsync" in node) {
+        await (node as unknown as { setEffectStyleIdAsync: (id: string) => Promise<void> }).setEffectStyleIdAsync(style.id);
+      } else throw new Error(`Style type ${style.type} is incompatible with this node.`);
       return serialize((await resolve(target)) as never);
     }
   }

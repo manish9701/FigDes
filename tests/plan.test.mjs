@@ -567,8 +567,7 @@ test("planning without a decision or archetype refuses", () => {
   assert.throws(() => buildPlan({ availableInformation: ["a"] }), /primaryDecision/);
 });
 
-test("a visual direction travels with the plan into the build", () => {
-  const out = buildPlan({ primaryDecision: "monitor cluster health", visualDirection: "quiet-instrument" });
+test("a visual direction travels with the plan into the build", () => {  const out = buildPlan({ primaryDecision: "monitor cluster health", visualDirection: "quiet-instrument" });
   assert.equal(out.program.visualIntent.style, "quiet-instrument");
 
   // The style survives the handoff: the built program applies its mechanics
@@ -614,4 +613,63 @@ test("buildPlan deck mode carries deck:true and slide regions", () => {
   assert.ok(plan.deckOutline.length === 5);
   const fns = new Set(plan.program.regions.map((r) => r.fn));
   assert.ok(fns.has("slide"));
+});
+
+/* -------------------------------------------------------------------------- */
+/* Pipeline fixes: pressure routes to topology, execution is exposed,          */
+/* rejectGenericDashboard is honoured                                          */
+/* -------------------------------------------------------------------------- */
+
+test("a pressured-resource decision is a topology decision, not a selection", () => {
+  assert.equal(classifyDecision("decide which pressured resource needs action"), "topology");
+  assert.equal(classifyDecision("find the weak link in the fleet"), "topology");
+  // An explicit comparison still compares, even when pressure is mentioned.
+  assert.equal(classifyDecision("compare pressure readings across devices"), "compare");
+  // Ordinary selections are untouched.
+  assert.equal(classifyDecision("select a model"), "select");
+});
+
+test("a pressure plan is a diagram-led native plan, not list-detail", () => {
+  const plan = planScreen({
+    primaryDecision: "decide which pressured resource needs action",
+    availableInformation: ["devices", "VRAM", "running models", "pressure"],
+  });
+  assert.equal(plan.composition, "topology");
+  assert.ok(plan.regions.some((r) => r.id === "map"), "the relationships get the map region");
+  assert.equal(plan.regions.some((r) => r.id === "inspector"), false, "no inspector on a topology");
+  assert.equal(plan.execution.mode, "native");
+  assert.equal(plan.execution.nativeRequired, true);
+  assert.equal(plan.execution.recommendedTool, "figdes_use_figma");
+});
+
+test("buildPlan exposes the execution profile the builder must follow", () => {
+  const out = buildPlan({ primaryDecision: "show network topology", availableInformation: ["nodes"] });
+  assert.ok(out.execution, "execution must be present");
+  assert.equal(out.execution.mode, "native");
+  assert.equal(out.execution.renderGate, true);
+  const infoLed = buildPlan({ primaryDecision: "select a model", availableInformation: ["a"] });
+  assert.equal(infoLed.execution.mode, "hybrid");
+});
+
+test("rejectGenericDashboard refuses the dashboard shape instead of ignoring it", () => {
+  const out = buildPlan({
+    primaryDecision: "select a model",
+    availableInformation: ["a"],
+    artDirection: {
+      visualCharacter: "technical precise calm",
+      primaryFocalObject: "comparison field",
+      density: "medium",
+      gridStrategy: "12-col",
+      spatialRhythm: "open",
+      surfaceStrategy: "open surfaces",
+      typographyHierarchy: "Inter plus mono",
+      colorStrategy: "restrained",
+      depthStrategy: "flat",
+      interactionEmphasis: "single action",
+      compositionType: "field dominates",
+      rejectGenericDashboard: true,
+    },
+  });
+  assert.ok(out.warnings.some((w) => /rejectGenericDashboard/.test(w)), "must warn that the shell is generic");
+  assert.ok(out.guardPreview.some((g) => g.rule === "exo.no-generic-saas"));
 });

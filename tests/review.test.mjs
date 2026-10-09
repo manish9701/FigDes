@@ -632,3 +632,138 @@ test("quality gate fails any hard FAIL regardless of composition mode", () => {
   assert.equal(gate.status, "FAIL");
   assert.match(gate.blockingIssues[0], /Composition/);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Pipeline fixes: critique_visual returns its qualityGate, score_design       */
+/* scores live nodes, final_qa scopes to the node                              */
+
+const workflow = await import("../mcp-server/dist-test/review/workflow.js");
+
+function liveMetrics() {
+  const frame = (id, parentId, name, x, y, w, h, extra = {}) => ({
+    id, parentId, type: "FRAME", name, depth: parentId ? 1 : 0, x, y, w, h,
+    visible: true, defaultNamed: false, zIndex: 0, fill: "#0F1110", background: "#0F1110", ...extra,
+  });
+  return {
+    target: "1:1",
+    scope: "Test Screen",
+    nodeCount: 6,
+    truncated: false,
+    scanBudget: 2000,
+    scan: { pageLoads: 0, pagesCached: true },
+    nodes: [
+      frame("1:1", null, "Screen", 0, 0, 1440, 900),
+      frame("1:2", "1:1", "topology-field", 0, 56, 824, 844),
+      frame("1:3", "1:1", "attention-rail", 824, 56, 384, 844),
+      frame("1:4", "1:1", "rail", 0, 0, 232, 900),
+      { id: "1:5", parentId: "1:2", type: "TEXT", name: "Title", depth: 2, x: 24, y: 38, w: 300, h: 21, visible: true, defaultNamed: false, zIndex: 0, background: "#0F1110", text: { content: "Where compute lives", length: 19, truncated: false, size: 17, family: "Inter", style: "Regular", color: "#FFFDF9", styled: true } },
+      { id: "1:6", parentId: "1:3", type: "TEXT", name: "Action", depth: 2, x: 848, y: 100, w: 200, h: 15, visible: true, defaultNamed: false, zIndex: 0, background: "#151713", text: { content: "RTX 4090 under pressure", length: 22, truncated: false, size: 20, family: "Inter", style: "Regular", color: "#FFFDF9", styled: true } },
+    ],
+  };
+}
+
+function fakeRegistry(metrics) {
+  const seen = [];
+  return {
+    seen,
+    resolve() {
+      return {
+        request: async (tool, args) => {
+          seen.push({ tool, args });
+          assert.equal(tool, "collect_metrics");
+          return metrics;
+        },
+      };
+    },
+  };
+}
+
+test("critique_visual on a program returns its qualityGate, not just the verdict", async () => {
+  const out = await workflow.critiqueVisualTool({
+    program: {
+      canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [],
+    },
+  });
+  assert.equal(out.status, "ok");
+  assert.ok(out.qualityGate, "qualityGate must be present");
+  assert.ok(["PASS", "REVIEW", "FAIL"].includes(out.qualityGate.status));
+  assert.ok(Array.isArray(out.blockingIssues), "blockingIssues must be present");
+  assert.ok(Array.isArray(out.repairPlan), "repairPlan must be present");
+  assert.equal(typeof out.renderRequired, "boolean");
+});
+
+test("critique_visual on a live node gates on vision, with REVIEW until the render is judged", async () => {
+  const before = await workflow.critiqueVisualTool({
+    nodeId: "105:286",
+    visionCriticObservations: {
+      focalPoint: "PASS: RTX pressure node clearly focal in the topology field",
+      hierarchy: "PASS: headline then field then rail reads clearly",
+      balance: "center field slightly heavy on the right, needs a look",
+      templateFeel: "PASS: spatial instrument with open surfaces and restrained color",
+    },
+  });
+  assert.equal(before.status, "ok");
+  assert.equal(before.source, "live");
+  assert.ok(before.qualityGate, "native path must return a qualityGate");
+  assert.equal(before.qualityGate.status, "REVIEW");
+  assert.equal(before.renderRequired, true);
+
+  const after = await workflow.critiqueVisualTool({
+    nodeId: "105:286",
+    renderReviewed: true,
+    visionCriticObservations: {
+      focalPoint: "PASS: pressure node is clearly focal",
+      hierarchy: "PASS: strong restrained hierarchy",
+      balance: "PASS: calm spatial balance",
+      templateFeel: "PASS: open surfaces, no template markers",
+    },
+  });
+  assert.equal(after.qualityGate.status, "PASS");
+});
+
+test("critique_visual on a live node FAILs a generic dashboard sighting", async () => {
+  const out = await workflow.critiqueVisualTool({
+    nodeId: "105:286",
+    renderReviewed: true,
+    visionCriticObservations: {
+      focalPoint: "no focal point, everything equal",
+      hierarchy: "flat",
+      balance: "static symmetry",
+      templateFeel: "FAIL: generic sidebar header three-card dashboard with card wall",
+    },
+  });
+  assert.equal(out.verdict, "FAIL");
+  assert.equal(out.qualityGate.status, "FAIL");
+  assert.ok(out.blockingIssues.length > 0);
+  assert.ok(out.repairPlan.length > 0);
+});
+
+test("score_design scores a live node with the same dimensions as a program", async () => {
+  const registry = fakeRegistry(liveMetrics());
+  const out = await workflow.scoreDesignTool({ nodeId: "1:1" }, registry);
+  assert.equal(out.status, "ok");
+  assert.equal(out.source, "live");
+  assert.equal(typeof out.overall, "number");
+  assert.ok(out.overall >= 0 && out.overall <= 10);
+  assert.ok(out.dimensions.length >= 6, "same dimension family as program scoring");
+  assert.ok(out.dimensions.some((d) => d.dimension === "Composition"));
+  assert.ok(out.dimensions.every((d) => typeof d.evidence === "string" && d.evidence.length > 0));
+  assert.deepEqual(registry.seen[0].args, { target: "1:1" }, "must scope collection to the node");
+});
+
+test("final_qa scopes collect_metrics to the node, not the whole file", async () => {
+  const seen = [];
+  const session = {
+    request: async (tool, args) => {
+      seen.push({ tool, args });
+      return liveMetrics();
+    },
+  };
+  const out = await workflow.finalQaTool(session, { nodeId: "1:1" });
+  assert.equal(seen[0].tool, "collect_metrics");
+  assert.deepEqual(seen[0].args, { target: "1:1" });
+  const technical = out.checklist.find((i) => i.check === "no overflow or broken structure");
+  assert.match(technical.detail, /Test Screen/, "detail must name the scoped subtree");
+});

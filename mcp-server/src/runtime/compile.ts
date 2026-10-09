@@ -352,6 +352,14 @@ export function compileIR(ir: DesignIR): CompileResult {
   }
   if (ir.relations.length > 0 && !deck) {
     const before = snapshot(boxes);
+    // Region geometry as the shell layout left it, before the solver moves it.
+    // Flow laid text out against these boxes, so the delta is what text needs to
+    // travel with its region. Without it, text stays behind at the old origin.
+    const regionBefore = new Map(regions.map((r) => [r.id, { x: r.x, y: r.y, w: r.w, h: r.h }]));
+    // A node the model positioned itself is authoritative: the solver already
+    // gave it the position asked for, and re-applying a delta on top of that
+    // would double the move.
+    const explicitlyPlaced = new Set(ir.relations.map((r) => r.id));
     const solved = solveConstraints({
       boxes: [...boxes.values()],
       constraints: ir.relations.map((r) => ({ ...r })),
@@ -392,7 +400,7 @@ export function compileIR(ir: DesignIR): CompileResult {
     }
 
     // Regions may have been resized, so their own text has to follow.
-    const reflow = relayoutRegionText({ ir, regions, boxes, operations, violations });
+    const reflow = relayoutRegionText({ ir, regions, boxes, operations, violations, regionBefore, explicitlyPlaced });
 
     regions = regions.map((r) => {
       const box = boxes.get(r.id);
@@ -2302,16 +2310,20 @@ function patchEmit(operations: Operation[], id: string, patch: { x: number; y: n
 }
 
 /**
- * Re-emits a region's text after a relation resized it.
+ * Carries a region's text along when a relation moves or resizes that region.
  *
- * Text inside an auto-layout frame follows its container in Figma, but text
- * placed by absolute coordinates does not. This walks each region's text nodes
- * and nudges them by the region's delta so a `width: "fill"` hero does not leave
- * its headline stranded at the old x.
+ * Flow placed each text node against the region's pre-relation box, so the node
+ * is already correct *relative to its region* and only needs the region's own
+ * translation applied on top. Re-packing the text here would be both wrong and
+ * unnecessary: the server has no measured text metrics, so any re-pack would
+ * guess line counts and silently change wrapping.
  *
- * Only the delta is applied. Re-flowing would require the plugin's measured
- * text metrics, which the server does not have; shifting by the delta is exact
- * and does not need them.
+ * The earlier version of this function reset every text node in the region to
+ * `inner.y`, which stacked an entire region's copy on a single line whenever a
+ * program used any relation at all. That is the failure this now prevents.
+ *
+ * Nodes the model placed with their own relation are left alone: the solver
+ * already moved them to the position asked for.
  */
 function relayoutRegionText(args: {
   ir: DesignIR;
@@ -2319,33 +2331,33 @@ function relayoutRegionText(args: {
   boxes: Map<string, PlacedBox>;
   operations: Operation[];
   violations: CompileResult["violations"];
+  /** Region geometry before the solver ran. */
+  regionBefore: Map<string, { x: number; y: number; w: number; h: number }>;
+  /** Ids the model positioned with an explicit relation. */
+  explicitlyPlaced: Set<string>;
 }): number {
-  const { ir, regions, boxes, operations } = args;
+  const { ir, regions, boxes, operations, regionBefore, explicitlyPlaced } = args;
   let shifted = 0;
 
   for (const region of regions) {
+    const was = regionBefore.get(region.id);
+    if (!was) continue;
+    const dx = region.x - was.x;
+    const dy = region.y - was.y;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+
     const textNodes = ir.content.filter((c) => c.kind === "text" && region.children.includes(c.id));
     for (const node of textNodes) {
+      if (explicitlyPlaced.has(node.id)) continue;
       const box = boxes.get(node.id);
       if (!box) continue;
-
-      // Re-pack the region's text from scratch: cheap, and correct even when the
-      // resize changed how many lines a headline needs.
-      const pad = normalizePadding(region.padding, ir.canvas.grid);
-      const inner: ResolvedBox = {
-        x: region.x + pad.left,
-        y: region.y + pad.top,
-        w: Math.max(0, region.w - pad.left - pad.right),
-        h: Math.max(0, region.h - pad.top - pad.bottom),
-      };
-      const gap = region.gap ?? ir.canvas.grid;
-      const columnWidth = inner.w;
-      const target: ResolvedBox = { x: inner.x, y: inner.y, w: columnWidth, h: estimateHeight(node, columnWidth) };
-
-      if (Math.abs(target.y - box.y) > 0.5 || Math.abs(target.x - box.x) > 0.5) {
-        patchPosition(operations, node.id, target.x, target.y);
-        shifted += 1;
-      }
+      const x = box.x + dx;
+      const y = box.y + dy;
+      if (Math.abs(x - box.x) < 0.5 && Math.abs(y - box.y) < 0.5) continue;
+      box.x = x;
+      box.y = y;
+      patchPosition(operations, node.id, x, y);
+      shifted += 1;
     }
   }
 
@@ -2443,10 +2455,33 @@ function weightToStyle(weight: number): string {
  * only needs to be close enough for the layout to look right. Reported
  * characters-per-line assumes the region's width.
  */
+/**
+ * Heights for components whose emitted height is already known exactly.
+ *
+ * The generic component estimate is 90px, which is right for a card and badly
+ * wrong for a hairline: a `divider` emits a 1px rectangle, so reserving 90px of
+ * flow space per rule made every hairline-driven editorial layout drift further
+ * apart as the column filled up, and pushed the last rows off the canvas.
+ *
+ * Only components with a deterministic emitted height appear here. Anything that
+ * genuinely sizes to its content keeps the generic estimate, so this narrows the
+ * error rather than replacing the heuristic.
+ */
+const FIXED_COMPONENT_HEIGHT: Record<string, number> = {
+  divider: 1,
+  sectionDivider: 32,
+  statusPill: 22,
+  button: 40,
+};
+
 function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1): number {
   if (spec.kind !== "text") {
-    if (spec.kind === "component" && spec.type === "topologyMap") return Math.round(320 * typeScale);
-    return spec.kind === "component" ? Math.round(90 * typeScale) : 32;
+    if (spec.kind === "component") {
+      if (spec.type === "topologyMap") return Math.round(320 * typeScale);
+      const fixed = FIXED_COMPONENT_HEIGHT[spec.type];
+      return Math.round((fixed ?? 90) * typeScale);
+    }
+    return 32;
   }
 
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;

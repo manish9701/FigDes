@@ -838,6 +838,12 @@ export interface DesignSystemReport {
   components: Array<{ name: string; count: number }>;
 
 variables: Array<{ name: string; type: string; id: string; scopes: string[] }>;
+  /**
+   * Resolved default-mode values for colour/number variables, keyed by name.
+   * Lets token intelligence bind by name instead of hardcoding hex. Absent
+   * entries mean "name known, value not resolved", never "no value".
+   */
+  variableValues?: Record<string, string | number | boolean | null>;
 styles: { paint: number; text: number; effect: number };
   /**
    * Style names, not just counts.
@@ -850,6 +856,17 @@ styles: { paint: number; text: number; effect: number };
   styleNames: { paint: string[]; text: string[] };
 
   naming: { defaultNamed: number; conventions: string[] };
+
+  /**
+   * Discovery intelligence (§7): fonts, text-style details, screens, assets and
+   * visual patterns observed in the scanned scope. All optional and bounded, so
+   * older servers that ignore them keep working unchanged.
+   */
+  fonts?: Array<{ family: string; styles: string[]; textNodes: number }>;
+  styleDetails?: { text: Array<{ name: string; family: string; size: number; weight: string }> };
+  screens?: Array<{ id: string; name: string; width: number; height: number; childCount: number; page: string }>;
+  assets?: { images: number; vectors: number; imageNames: string[] };
+  patterns?: Array<{ signature: string; count: number }>;
 
   health: {
     textNodes: number;

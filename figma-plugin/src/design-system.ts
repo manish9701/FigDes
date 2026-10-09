@@ -117,6 +117,10 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
     names: new Map(),
     textNodes: 0,
     defaultNamed: 0,
+    fonts: new Map(),
+    images: 0,
+    imageNames: [],
+    vectors: 0,
   };
 
   let pages: readonly PageNode[] = [figma.currentPage];
@@ -131,6 +135,7 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
   for (const page of pages) collectFrom(page, opts, ctx, budget);
 
   let variables: DesignSystemReport["variables"] = [];
+  let variableValues: Record<string, string | number | boolean | null> = {};
   if (opts.includeVariables) {
     try {
       const vars = await localVariables();
@@ -140,6 +145,24 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
         id: v.id,
         scopes: v.scopes,
       }));
+
+      // Resolved default-mode values, so token intelligence can bind by name
+      // instead of hardcoding hex. Aliases resolve to null (a reference, not a value).
+      for (const v of vars.slice(0, 120)) {
+        if (v.resolvedType !== "COLOR" && v.resolvedType !== "FLOAT" && v.resolvedType !== "STRING" && v.resolvedType !== "BOOLEAN") continue;
+        const modes = Object.values(v.valuesByMode);
+        const raw = modes[0] as { type?: string; r?: number; g?: number; b?: number; a?: number } | string | number | boolean | undefined;
+        if (raw === undefined || raw === null) continue;
+        if (typeof raw === "string" || typeof raw === "number" || typeof raw === "boolean") {
+          variableValues[v.name] = raw;
+          continue;
+        }
+        if ((raw as { type?: string }).type === "VARIABLE_ALIAS") continue;
+        if (typeof (raw as { r?: unknown }).r === "number") {
+          const c = raw as { r: number; g: number; b: number; a?: number };
+          variableValues[v.name] = toHex({ r: c.r, g: c.g ?? 0, b: c.b ?? 0, a: 1 }).toUpperCase();
+        }
+      }
 
       // Map resolved colour values back to token names, so a hardcoded hex that
       // already has a token can be flagged precisely.
@@ -164,6 +187,7 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
 
   let styles: DesignSystemReport["styles"] = { paint: 0, text: 0, effect: 0 };
   let styleNames: DesignSystemReport["styleNames"] = { paint: [], text: [] };
+  let styleDetails: { text: Array<{ name: string; family: string; size: number; weight: string }> } = { text: [] };
   if (opts.includeStyles) {
     try {
       const [p, t, e] = await Promise.all([localPaintStyles(), localTextStyles(), localEffectStyles()]);
@@ -171,6 +195,16 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
       // Names as well as counts. The checkpoint gate needs to know whether a style
       // already exists in order to tell *creating* one from *redefining* one.
       styleNames = { paint: p.map((s) => s.name), text: t.map((s) => s.name) };
+      // Text-style details: the product's real type ramp (family/size/weight),
+      // so font intelligence validates against evidence instead of assuming Inter.
+      styleDetails = {
+        text: t.slice(0, 40).map((s) => ({
+          name: s.name,
+          family: typeof s.fontName === "object" ? s.fontName.family : "mixed",
+          size: typeof s.fontSize === "number" ? Math.round(s.fontSize * 10) / 10 : 0,
+          weight: typeof s.fontName === "object" ? s.fontName.style : "mixed",
+        })),
+      };
     } catch {
       /* leave zeros */
     }
@@ -181,6 +215,35 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
   const spacingRanks = rank(ctx.spacing, 16);
   const base = inferBase([...ctx.spacing.entries()].map(([k, v]) => ({ value: Number(k), count: v.count })));
   const colorRanks = rank(ctx.colors, 24);
+  const conventions = deriveConventions(ctx.names);
+
+  // Discovery intelligence (§7): screens, fonts, assets, patterns — bounded.
+  const screens: DesignSystemReport["screens"] = [];
+  for (const page of pages) {
+    for (const child of page.children) {
+      if (screens.length >= 24) break;
+      if (child.type !== "FRAME" && child.type !== "COMPONENT" && child.type !== "COMPONENT_SET" && child.type !== "INSTANCE") continue;
+      const sized = child as SceneNode & { width?: number; height?: number };
+      screens.push({
+        id: child.id,
+        name: child.name,
+        width: Math.round(typeof sized.width === "number" ? sized.width : 0),
+        height: Math.round(typeof sized.height === "number" ? sized.height : 0),
+        childCount: "children" in child ? (child.children as unknown[]).length : 0,
+        page: page.name,
+      });
+    }
+    if (screens.length >= 24) break;
+  }
+  const fonts: DesignSystemReport["fonts"] = [...ctx.fonts.entries()]
+    .map(([family, v]) => ({ family, styles: [...v.styles].slice(0, 12), textNodes: v.textNodes }))
+    .sort((a, b) => b.textNodes - a.textNodes)
+    .slice(0, 10);
+  const layoutRanks = rank(ctx.layouts, 12);
+  const patterns: DesignSystemReport["patterns"] = [
+    ...layoutRanks.items.map((l) => ({ signature: l.key, count: l.count })),
+    ...conventions.slice(0, 6).map((c) => ({ signature: `naming:${c}`, count: 3 })),
+  ].slice(0, 16);
 
   return {
     fileName: figma.root.name,
@@ -207,16 +270,22 @@ export async function extractDesignSystem(opts: ExtractOptions): Promise<DesignS
       values: spacingRanks.items.map((v) => ({ value: Number(v.key), count: v.count })),
     },
 
-    layoutPatterns: rank(ctx.layouts, 12).items.map((l) => ({ signature: l.key, count: l.count })),
+    layoutPatterns: layoutRanks.items.map((l) => ({ signature: l.key, count: l.count })),
     components: rank(ctx.components, 40).items.map((c) => ({ name: c.key, count: c.count })),
 
     variables,
+    variableValues,
 styles,
     styleNames,
+    styleDetails,
+    fonts,
+    screens,
+    assets: { images: ctx.images, vectors: ctx.vectors, imageNames: ctx.imageNames },
+    patterns,
 
     naming: {
       defaultNamed: ctx.defaultNamed,
-      conventions: deriveConventions(ctx.names),
+      conventions,
     },
 
     health: {
@@ -248,6 +317,11 @@ interface CollectCtx {
   names: Map<string, number>;
   textNodes: number;
   defaultNamed: number;
+  /** Discovery intelligence: font families with styles and usage counts. */
+  fonts: Map<string, { styles: Set<string>; textNodes: number }>;
+  images: number;
+  imageNames: string[];
+  vectors: number;
 }
 
 function collectFrom(root: BaseNode, opts: ExtractOptions, ctx: CollectCtx, budget: { count: number }): void {
@@ -268,6 +342,11 @@ function collectFrom(root: BaseNode, opts: ExtractOptions, ctx: CollectCtx, budg
 
     /* colours */
     for (const paint of flattenPaints(holder.fills)) {
+      if (paint.kind === "image") {
+        ctx.images += 1;
+        if (ctx.imageNames.length < 12) ctx.imageNames.push(node.name);
+        continue;
+      }
       if (paint.kind !== "solid") continue;
       bump(ctx.colors, paint.hex, node.name);
       if (!isBound(holder, "fills")) {
@@ -312,9 +391,18 @@ function collectFrom(root: BaseNode, opts: ExtractOptions, ctx: CollectCtx, budg
       const style = typeof t.fontName === "object" ? t.fontName.style : "mixed";
       const size = typeof t.fontSize === "number" ? Math.round(t.fontSize * 10) / 10 : null;
       bump(ctx.typography, `${family} ${style} @${size ?? "?"}`, node.name);
+      const font = ctx.fonts.get(family) ?? { styles: new Set<string>(), textNodes: 0 };
+      font.styles.add(style);
+      font.textNodes += 1;
+      ctx.fonts.set(family, font);
       if (!t.textStyleId) {
         ctx.unstyledText.push({ nodeId: node.id, name: node.name, size, family });
       }
+    }
+
+    /* vectors double as the asset census: artwork worth reusing, not rebuilding */
+    if (node.type === "VECTOR" || node.type === "BOOLEAN_OPERATION" || node.type === "STAR" || node.type === "POLYGON" || node.type === "LINE" || node.type === "ELLIPSE") {
+      ctx.vectors += 1;
     }
 
     /* auto layout + spacing */

@@ -1,0 +1,15 @@
+/** Design-intelligence barrel: the full §6 target architecture in one import. */
+export * as discovery from "./discovery/index";
+export * as designContext from "./context/design-context";
+export * as tokens from "./system/token-intelligence";
+export * as components from "./system/component-intelligence";
+export * as typography from "./system/typography";
+export * as grammar from "./grammar/registry";
+export * as composition from "./composition/planner";
+export * as compiler from "./compiler/native-plan";
+export * as genericity from "./quality/genericity";
+export * as repairs from "./quality/repair-planner";
+export * as critic from "./quality/visual-critic";
+export * as gate from "./quality/final-gate";
+export * as comparison from "./quality/comparison";
+export * as benchmark from "./benchmark/suite";

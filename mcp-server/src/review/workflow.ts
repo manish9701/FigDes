@@ -20,6 +20,11 @@ import { canvasSize } from "../../../shared/ir";
 import { runRules } from "./rules";
 import { scoreDesign } from "./score";
 import { critiqueVisual } from "./critique";
+import { evaluateQualityGate } from "./quality";
+import { evaluateGenericity } from "../design/quality/genericity";
+import { extendCritique } from "../design/quality/visual-critic";
+import { planRepairs } from "../design/quality/repair-planner";
+import { evaluateFinalGate } from "../design/quality/final-gate";
 import { guardMutation } from "../plan/gate";
 import type { Session } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
@@ -31,43 +36,155 @@ import type { Finding, MetricsReport, ReviewReport } from "../../../shared/proto
 export const ScoreArgs = z
   .object({
     sessionId: z.string().max(200).optional(),
-    program: z.unknown().describe("The declarative program to score. Compiled and scored without touching Figma."),
+    program: z.unknown().optional().describe("The declarative program to score. Compiled and scored without touching Figma."),
+    nodeId: z.string().max(200).optional().describe("Live Figma node id to score (native builds). Measured geometry is scored with the same dimensions as a program."),
   })
-  .strict();
-
-export function scoreDesignTool(rawArgs: unknown): unknown {
-  const args = ScoreArgs.parse(rawArgs);
-  const result = executeRuntime(args.program);
-
-  const report = scoreDesign({
-    boxes: result.boxes,
-    operations: result.operations as never,
-    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
-    composition: inferComposition(result.ir.regions),
-    canvasW: canvasSize(result.ir.canvas.width, 1440),
-    canvasH: canvasSize(result.ir.canvas.height, 900),
-    ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
+  .strict()
+  .refine((a) => a.program !== undefined || a.nodeId !== undefined, {
+    message: "score_design needs a program or a nodeId.",
   });
 
+/**
+ * Scores live Figma geometry with the same dimensions as a program.
+ *
+ * Native builds have no program to compile, so the boxes, texts and fills are
+ * measured from collect_metrics instead of synthesised. Region roles are
+ * inferred from layer names (rail/status, topology/field/map, attention/
+ * inspector) and reported in the result, so an inference the model disagrees
+ * with can be argued with rather than obeyed.
+ */
+export function scoreLive(metrics: MetricsReport): {
+  report: ReturnType<typeof scoreDesign>;
+  regions: Array<{ id: string; role: string }>;
+  composition: string;
+  canvasW: number;
+  canvasH: number;
+} {
+  const nodes = (metrics.nodes ?? []).filter((n) => n.visible !== false);
+  const target = nodes.find((n) => n.id === metrics.target) ?? nodes.find((n) => n.type === "FRAME") ?? nodes[0];
+  const canvasW = target && target.w > 0 ? Math.round(target.w) : 1440;
+  const canvasH = target && target.h > 0 ? Math.round(target.h) : 900;
+  const ox = target ? target.x : 0;
+  const oy = target ? target.y : 0;
+
+  const boxes = new Map<string, { id: string; x: number; y: number; w: number; h: number }>();
+  for (const n of nodes) {
+    if (n.w <= 0 || n.h <= 0) continue;
+    boxes.set(n.id, { id: n.id, x: n.x - ox, y: n.y - oy, w: n.w, h: n.h });
+  }
+
+  const operations = [] as Array<Record<string, unknown>>;
+  for (const n of nodes) {
+    if (n.type === "TEXT" && n.text && n.text.content.trim().length > 0) {
+      operations.push({
+        type: "createText",
+        parent: n.parentId ?? undefined,
+        content: n.text.content,
+        fontSize: n.text.size ?? 16,
+        family: n.text.family ?? "Inter",
+        ...(n.text.color ? { fill: n.text.color } : {}),
+      });
+    } else if (n.type === "FRAME" || n.type === "RECTANGLE" || n.type === "ELLIPSE") {
+      operations.push({
+        type: "createFrame",
+        id: n.id,
+        ...(n.fill ? { fill: n.fill } : {}),
+        ...(n.stroke ? { stroke: n.stroke.hex, strokeWeight: n.stroke.weight } : {}),
+      });
+    }
+  }
+
+  const roleFor = (name: string): string => {
+    const s = name.toLowerCase();
+    if (/status-strip|status-rail|^rail$|live-rail/.test(s)) return "status-rail";
+    if (/topology|field|\bmap\b|hero|primary-visual|center|cluster-field/.test(s)) return "primary-visual";
+    if (/attention|inspector|detail|right|rail-right/.test(s)) return "inspector";
+    if (/nav|sidebar|^rail|instrument-rail/.test(s)) return "navigation";
+    if (/header|strip|eyebrow-top/.test(s)) return "header";
+    return "content";
+  };
+
+  const targetId = target?.id;
+  const children = nodes
+    .filter((n) => n.parentId === targetId && (n.type === "FRAME" || n.type === "GROUP") && n.w * n.h > 0)
+    .sort((a, b) => b.w * b.h - a.w * a.h)
+    .slice(0, 5);
+  const regions = children.map((c) => ({ id: c.id, role: roleFor(c.name) }));
+
+  const names = children.map((c) => c.name.toLowerCase()).join(" ");
+  const composition = /topology|map|field|spatial|diagram/.test(names) ? "spatial" : /status|rail|instrument|signal/.test(names) ? "instrument" : "canvas";
+
+  const focal = regions.find((r) => r.role === "primary-visual")?.id;
+  const report = scoreDesign({
+    boxes: boxes as never,
+    operations: operations as never,
+    regions,
+    composition,
+    canvasW,
+    canvasH,
+    ...(focal !== undefined ? { focal } : {}),
+  });
+  return { report, regions, composition, canvasW, canvasH };
+}
+
+export async function scoreDesignTool(rawArgs: unknown, registry?: { resolve: (id?: string) => Session }): Promise<unknown> {
+  const args = ScoreArgs.parse(rawArgs);
+  if (args.program !== undefined) {
+    const result = executeRuntime(args.program);
+
+    const report = scoreDesign({
+      boxes: result.boxes,
+      operations: result.operations as never,
+      regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+      composition: inferComposition(result.ir.regions),
+      canvasW: canvasSize(result.ir.canvas.width, 1440),
+      canvasH: canvasSize(result.ir.canvas.height, 900),
+      ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
+    });
+
+    return {
+      status: "ok",
+      source: "program",
+      overall: report.overall,
+      dimensions: report.dimensions,
+      weakSpots: report.weakSpots,
+      /**
+       * The spec's definition of done (§19), evaluated against what can be known
+       * offline. Structural QA and visual review need the live file, so they are
+       * listed as remaining rather than assumed.
+       */
+      doneChecklist: {
+        "primary decision obvious": report.dimensions.find((d) => d.dimension === "Composition")!.score >= 7,
+        "intentional hierarchy": report.dimensions.find((d) => d.dimension === "Hierarchy")!.score >= 7,
+        "no weak spots below 6": report.weakSpots.length === 0,
+        "structural QA (review_design on the live file)": false,
+        "rendered and visually reviewed": false,
+      },
+      warnings: result.warnings,
+      violations: result.violations,
+    };
+  }
+
+  if (!registry) {
+    throw new Error("score_design with nodeId needs a connected Figma plugin: pass a program to score offline, or connect the plugin.");
+  }
+  const session = registry.resolve(args.sessionId);
+  const raw = (await session.request("collect_metrics", { target: args.nodeId })) as MetricsReport;
+  if (!raw || typeof raw !== "object" || !Array.isArray((raw as MetricsReport).nodes)) {
+    throw new Error("The Figma plugin returned no measurements. Close and re-run the plugin, then retry.");
+  }
+  const { report, regions, composition, canvasW, canvasH } = scoreLive(raw as MetricsReport);
   return {
     status: "ok",
+    source: "live",
     overall: report.overall,
     dimensions: report.dimensions,
     weakSpots: report.weakSpots,
-    /**
-     * The spec's definition of done (§19), evaluated against what can be known
-     * offline. Structural QA and visual review need the live file, so they are
-     * listed as remaining rather than assumed.
-     */
-    doneChecklist: {
-      "primary decision obvious": report.dimensions.find((d) => d.dimension === "Composition")!.score >= 7,
-      "intentional hierarchy": report.dimensions.find((d) => d.dimension === "Hierarchy")!.score >= 7,
-      "no weak spots below 6": report.weakSpots.length === 0,
-      "structural QA (review_design on the live file)": false,
-      "rendered and visually reviewed": false,
-    },
-    warnings: result.warnings,
-    violations: result.violations,
+    regions,
+    composition,
+    canvas: { width: canvasW, height: canvasH },
+    measuredNodes: (raw as MetricsReport).nodeCount,
+    note: "Roles inferred from layer names; composition inferred from region names. Disagree with an inference? Rename the layer and re-run.",
   };
 }
 
@@ -79,43 +196,133 @@ export const CritiqueArgs = z
   .object({
     sessionId: z.string().max(200).optional(),
     program: z.unknown().optional().describe("The declarative program to critique aesthetically. Compiled and judged without touching Figma."),
-    nodeId: z.string().optional().describe("Figma node id to critique if evaluating live nodes natively instead of a program."),
+    nodeId: z.string().max(200).optional().describe("Figma node id to critique if evaluating live nodes natively instead of a program."),
     visionCriticObservations: z.object({
       focalPoint: z.string(),
       hierarchy: z.string(),
       balance: z.string(),
       templateFeel: z.string(),
     }).optional().describe("Provide your own visual observations based on the screenshot, to merge with structural critique."),
+    renderReviewed: z.boolean().optional().describe("Set true after you have rendered and visually judged the result. Composition-led work stays at REVIEW until this is set."),
   })
   .strict();
+
+type VisionVerdict = "PASS" | "WATCH" | "FAIL";
+
+function visionVerdictFor(text: string | undefined): VisionVerdict {
+  // Strip negated defect mentions ("no card wall", "no template markers")
+  // before keyword matching, or every clean render would FAIL itself.
+  const s = (text ?? "")
+    .replace(/no\s+[a-z-]*(card wall|template|generic|glow|gradient|decorative|card-wall)/gi, "")
+    .toUpperCase();
+  if (/FAIL|GENERIC|CARD WALL|THREE-CARD|TEMPLATE|SIDEBAR[-\s]?HEADER[-\s]?CARDS|GLOW|GRADIENT-HEAVY|DECORATIVE/.test(s)) return "FAIL";
+  if (/WATCH|WEAK|FLAT|UNCLEAR|CROWDED|IMBALANC/.test(s)) return "WATCH";
+  if (/PASS|CLEAR|STRONG|RESTRAINED|SPATIAL|OPEN SURFACE/.test(s)) return "PASS";
+  return "WATCH";
+}
 
 export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Promise<unknown> {
   const args = CritiqueArgs.parse(rawArgs);
   if (args.program) {
     const result = executeRuntime(args.program);
 
+    const composition = inferComposition(result.ir.regions);
     const report = critiqueVisual({
       boxes: result.boxes,
       operations: result.operations as never,
       regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
-      composition: inferComposition(result.ir.regions),
+      composition,
       canvasW: canvasSize(result.ir.canvas.width, 1440),
       canvasH: canvasSize(result.ir.canvas.height, 900),
       links: result.ir.links,
       ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
     });
 
+    const gate = evaluateQualityGate(
+      { verdict: report.verdict, dimensions: report.dimensions },
+      {
+        compositionLed: ["topology", "spatial", "diagram", "instrument"].includes(composition),
+        renderReviewed: args.renderReviewed ?? false,
+      },
+    );
+
+    // Design intelligence (§14, §16, §17): genericity as a first-class gate,
+    // the four authorship dimensions, and a prioritized repair plan. Additive:
+    // every existing field keeps its shape.
+    const genericity = evaluateGenericity({
+      boxes: result.boxes,
+      operations: result.operations as never,
+      regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+      composition,
+    });
+    const extended = extendCritique({
+      measured: { verdict: report.verdict, dimensions: report.dimensions },
+      boxes: result.boxes,
+      operations: result.operations as never,
+      regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+      composition,
+      links: result.ir.links,
+      ...(result.ir.visualIntent?.focal !== undefined ? { focal: result.ir.visualIntent.focal } : {}),
+    });
+    const repairs = planRepairs({
+      genericity,
+      watchList: extended.watchList,
+      blockingIssues: gate.blockingIssues,
+    });
+
     return {
       status: "ok",
-      verdict: report.verdict,
-      dimensions: report.dimensions,
-      watchList: report.watchList,
+      source: "program",
+      verdict: extended.verdict,
+      dimensions: extended.dimensions,
+      watchList: extended.watchList,
+      qualityGate: gate,
+      blockingIssues: gate.blockingIssues,
+      repairPlan: gate.repairPlan,
+      genericity: { score: genericity.score, blocking: genericity.blocking, findings: genericity.findings },
+      prioritizedRepairs: repairs,
+      renderRequired: gate.renderRequired,
       warnings: result.warnings,
       violations: result.violations,
       visionMerge: args.visionCriticObservations || null
     };
   } else if (args.nodeId) {
-    if (!registry) throw new Error("critique_visual(nodeId) needs a connected Figma plugin.");
+    if (!registry) {
+      // Offline fallback: no plugin to measure, so the render IS the
+      // measurement. Vision observations become dimensions; the quality gate
+      // is evaluated over them exactly as on the program path. Without
+      // observations there is nothing to judge, so the gate stays at REVIEW
+      // with a render required. A connected plugin takes the live measured
+      // path below instead.
+      const obs = args.visionCriticObservations;
+      const dimensions = [
+        { dimension: "Focal clarity", verdict: visionVerdictFor(obs?.focalPoint), evidence: obs?.focalPoint ?? "no focal observation provided" },
+        { dimension: "Hierarchy", verdict: visionVerdictFor(obs?.hierarchy), evidence: obs?.hierarchy ?? "no hierarchy observation provided" },
+        { dimension: "Visual balance", verdict: visionVerdictFor(obs?.balance), evidence: obs?.balance ?? "no balance observation provided" },
+        { dimension: "Template feel", verdict: visionVerdictFor(obs?.templateFeel), evidence: obs?.templateFeel ?? "no template observation provided" },
+      ] as Array<{ dimension: string; verdict: "PASS" | "WATCH" | "FAIL"; evidence: string }>;
+      const verdict = (dimensions.some((d) => d.verdict === "FAIL") ? "FAIL" : dimensions.some((d) => d.verdict === "WATCH") ? "WATCH" : "PASS") as VisionVerdict;
+      const compositionLed = obs ? /TOPOLOGY|SPATIAL|DIAGRAM|INSTRUMENT|COMPOSITION|FIELD|MAP/.test(`${obs.focalPoint} ${obs.hierarchy} ${obs.balance} ${obs.templateFeel}`.toUpperCase()) : true;
+      const gate = evaluateQualityGate({ verdict, dimensions }, { compositionLed, renderReviewed: args.renderReviewed ?? false });
+      return {
+        status: "ok",
+        source: "live",
+        verdict,
+        dimensions,
+        watchList: dimensions.filter((d) => d.verdict !== "PASS").map((d) => `${d.dimension} (${d.verdict}): ${d.evidence}`),
+        qualityGate: gate,
+        blockingIssues: gate.blockingIssues,
+        repairPlan: gate.repairPlan,
+        renderRequired: gate.renderRequired,
+        visionMerge: obs || null,
+        nodeId: args.nodeId ?? null,
+        howToProceed: gate.status === "FAIL"
+          ? "Fix every blockingIssue, re-render, and re-run critique_visual with renderReviewed:true once you have judged the image."
+          : gate.status === "REVIEW"
+            ? "Render at low detail, judge the image yourself, then re-run with renderReviewed:true and visionCriticObservations from what you saw."
+            : "Quality gate PASS. Confirm with review_design (no high-confidence findings) and design_guard (no FAIL).",
+      };
+    }
     const session = registry.resolve(args.sessionId);
 
     const [raw, rendered] = await Promise.all([
@@ -399,7 +606,7 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
   const items: ChecklistItem[] = [];
 
   if (args.program !== undefined) {
-    const scored = scoreDesignTool({ program: args.program }) as {
+    const scored = (await scoreDesignTool({ program: args.program })) as {
       overall: number;
       dimensions: Array<{ dimension: string; score: number }>;
       weakSpots: string[];
@@ -426,16 +633,54 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       pass: failed.length === 0,
       detail: failed.length === 0 ? `guard: ${guarded.verdict ?? "PASS"}` : `failing rules: ${failed.map((f) => f.rule).join(", ")}`,
     });
+
+    // Final visual-quality gate (§18): eight scored dimensions with the
+    // Phase 9 thresholds. Additive: the checklist above keeps its shape.
+    const runtime = executeRuntime(args.program);
+    const resolvedComposition = inferComposition(runtime.ir.regions);
+    const genericity = evaluateGenericity({
+      boxes: runtime.boxes,
+      operations: runtime.operations as never,
+      regions: runtime.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+      composition: resolvedComposition,
+    });
+    const finalGate = evaluateFinalGate({
+      scores: {
+        hierarchy: dimension("Hierarchy") * 10,
+        composition: dimension("Composition") * 10,
+        typography: dimension("Visual consistency") * 10,
+        readability: dimension("Accessibility") * 10,
+        density: dimension("Information density") * 10,
+        distinctiveness: dimension("Focus") * 10,
+        productFit: dimension("Composition") * 10,
+      },
+      genericity,
+      blockingIssues: failed.map((f) => String(f.rule ?? "guard")),
+    });
+    items.push({
+      area: "VISUAL",
+      check: "final visual-quality gate",
+      pass: finalGate.status === "FAIL" ? false : finalGate.status === "REVIEW" ? null : true,
+      detail: `final-gate ${finalGate.status}: ${finalGate.reason}`,
+    });
   }
 
   if (session && (args.target !== undefined || args.nodeId !== undefined)) {
-    const target = args.target ?? (args.nodeId !== undefined ? { nodeId: args.nodeId } : {});
-    const raw = (await session.request("collect_metrics", target)) as MetricsReport;
+    // The plugin's collect_metrics scopes on `target` (a node id string).
+    // Passing { nodeId } is silently ignored and scans the whole file, which
+    // is how a scoped review with 0 highs became a file-wide FAIL. Normalise
+    // both shapes to { target } here.
+    const targetArg = args.nodeId !== undefined
+      ? { target: args.nodeId }
+      : typeof (args.target as Record<string, unknown> | undefined)?.["nodeId"] === "string"
+        ? { target: (args.target as Record<string, unknown>)["nodeId"] as string }
+        : (args.target as Record<string, unknown>);
+    const raw = (await session.request("collect_metrics", targetArg)) as MetricsReport;
     const findings = runRules(raw, "review");
     const high = findings.filter((f) => f.confidence === "high");
     const cardWall = findings.some((f) => f.rule === "card-wall");
     items.push(
-      { area: "TECHNICAL", check: "no overflow or broken structure", pass: high.length === 0, detail: high.length === 0 ? "no high-confidence findings" : `${high.length} high-confidence: ${high.map((f) => f.rule).join(", ")}` },
+      { area: "TECHNICAL", check: "no overflow or broken structure", pass: high.length === 0, detail: high.length === 0 ? `no high-confidence findings in ${raw.scope} (${raw.nodeCount} nodes)` : `${high.length} high-confidence in ${raw.scope}: ${high.map((f) => f.rule).join(", ")}` },
       { area: "COMPOSITION", check: "no accidental card wall", pass: !cardWall, detail: cardWall ? "card-wall rule fired" : "no card wall detected" },
       { area: "TECHNICAL", check: "render succeeds", pass: null, detail: "render the selection at low detail to confirm" },
     );

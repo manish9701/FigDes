@@ -85,8 +85,17 @@ type DecisionKind =
   | "author";       // creating something -> canvas + controls
 
 const DECISION_PATTERNS: Array<{ kind: DecisionKind; pattern: RegExp }> = [
-  { kind: "select", pattern: /\b(select|choose|pick|which|what model|run what|switch to)\b/i },
   { kind: "compare", pattern: /\b(compare|versus|vs\.?|difference|side by side)\b/i },
+  /**
+   * Pressure and attention decisions are about relationships and state, not
+   * choosing between options. "Which pressured resource needs action" contains
+   * "which", but answering it needs a topology/instrument that shows where the
+   * strain is — not a comparison table of options. Checked before `select` so
+   * the generic list-detail shell does not swallow it; checked after `compare`
+   * so an explicit comparison ("compare pressure readings") still compares.
+   */
+  { kind: "topology", pattern: /\bpressur\w*|under pressure|needs attention|weak link|bottleneck|hotspot|which .* needs action\b/i },
+  { kind: "select", pattern: /\b(select|choose|pick|which|what model|run what|switch to)\b/i },
   /**
    * Deliberately narrow.
    *

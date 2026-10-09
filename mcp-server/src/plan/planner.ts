@@ -28,7 +28,7 @@ import { defaultGutter, inferComposition, layoutRegions, type Composition } from
 import type { Region } from "../../../shared/ir";
 import { defaultRules } from "../memory/rules-exo";
 import { bestPattern } from "../design/grammar/matcher";
-import { deriveRegions, type Derivation } from "../design/composition/derive";
+import { deriveRegions, classifyInformation, type Derivation } from "../design/composition/derive";
 import type { ComponentKnowledge } from "../design/system/component-intelligence";
 
 /* -------------------------------------------------------------------------- */
@@ -115,7 +115,7 @@ const DECISION_PATTERNS: Array<{ kind: DecisionKind; pattern: RegExp }> = [
    * `monitor` is also checked first, because "monitor X" is unambiguous and should
    * not be re-interpreted by whatever X happens to be.
    */
-  { kind: "monitor", pattern: /\b(monitor|monitoring|watch|watching|track|status|health|utilisation|utilization|throughput|live|realtime|real-time)\b/i },
+  { kind: "monitor", pattern: /\b(monitor|monitoring|watch|watching|track|status|health|utilisation|utilization|throughput|live|realtime|real-time|intervene)\b/i },
   { kind: "topology", pattern: /\b(topolog\w*|network topology|node-link|fleet|architecture|connectivity|how .* connect\w*)\b/i },
   // Integrations speak provider/endpoint/profile, so they get their own shell:
   // a provider list beside an endpoint detail pane, never a generic form.
@@ -563,7 +563,24 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   const height = typeof intent.canvas?.height === "number" ? intent.canvas.height : 900;
   const grid = typeof intent.canvas?.grid === "number" && intent.canvas.grid > 0 ? intent.canvas.grid : 8;
 
-  const decisionKind = classifyDecision(intent.primaryDecision);
+  let decisionKind = classifyDecision(intent.primaryDecision);
+
+  // Signal-heavy fallback: an 'inspect' verdict with no subject to inspect but
+  // several live signals is a monitoring task wearing inspect's clothes (e.g.
+  // "intervene or let the run continue" + throughput/latency/errors). Nudged
+  // explicitly, with a warning, never silently.
+  const kindNudges: string[] = [];
+  if (decisionKind === "inspect") {
+    const infoKinds = classifyInformation(intent.availableInformation ?? []).map((i) => i.kind);
+    const signals = infoKinds.filter((k) => k === "signal").length;
+    const hasSubject = infoKinds.some((k) => k === "option" || k === "relationship" || k === "detail");
+    if (signals >= 2 && !hasSubject) {
+      decisionKind = "monitor";
+      kindNudges.push(
+        `Reads as monitoring (${signals} live signals, no subject to inspect): planned as an instrument, not an inspection. Say otherwise if wrong — the classifier only saw '${intent.primaryDecision}'.`,
+      );
+    }
+  }
 
   // Task-driven derivation first: regions serve the actual information for the
   // stated decision, with the pattern as guidance. Shells are the explicit
@@ -646,7 +663,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     };
   });
 
-  const warnings = intentWarnings(intent, regions);
+  const warnings = [...kindNudges, ...intentWarnings(intent, regions)];
 
   // Would this plan trip a product rule? Checked against the *plan*, before any
   // content exists, which is the only moment a structural change is still cheap.

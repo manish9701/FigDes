@@ -191,8 +191,15 @@ function visualBalance(regionBoxes: Box[], canvasW: number, canvasH: number): Ae
   for (const b of regionBoxes) {
     const area = Math.max(0, b.w) * Math.max(0, b.h);
     const cx = b.x + b.w / 2;
-    if (cx < canvasW / 2) left += area;
-    else right += area;
+    // A box straddling the centre counts half and half. Without this, a stack
+    // of full-width regions (rail/hero/detail) lands entirely on one side of
+    // a strict comparison and every stacked layout reads as toppled.
+    if (cx < canvasW / 2 - 1) left += area;
+    else if (cx > canvasW / 2 + 1) right += area;
+    else {
+      left += area / 2;
+      right += area / 2;
+    }
   }
   const total = left + right || 1;
   const imbalance = Math.abs(left - right) / total;
@@ -234,7 +241,7 @@ function dataVizQuality(links: Array<{ from: string; to: string; label?: string 
 function surfaceHierarchy(ops: Array<Record<string, unknown>>): AestheticDimension {
   const fills = new Set<string>();
   for (const o of ops) {
-    if (typeof o.fill === "string") fills.add(o.fill.toLowerCase());
+    if (typeof o.fill === "string") fills.add(surfaceBucket(o.fill));
   }
   if (fills.size <= 1 && ops.length > 5) {
     return {
@@ -294,6 +301,20 @@ function templateFeel(regions: Array<{ id: string; role: string }>, composition:
     evidence: smells.join("; "),
     suggestion: "Break one symmetry deliberately: promote a hero, vary a span, let whitespace do work.",
   };
+}
+
+/**
+ * Buckets near-identical fills so tonal palettes read as one surface.
+ *
+ * #ECEBE4 and #ECEBE5 are the same warm grey sampled twice, not two design
+ * decisions; counting them separately made every tonal file read as noisy.
+ * Non-hex fills (tokens, rgb()) pass through untouched — only literals whose
+ * first four hex digits agree are merged.
+ */
+function surfaceBucket(fill: string): string {
+  const s = fill.trim().toUpperCase();
+  const m = s.match(/^#([0-9A-F]{4})[0-9A-F]*$/);
+  return m ? `#${m[1]}` : s;
 }
 
 /** Parses a hex colour; null when it is not a literal. Exported for reuse. */

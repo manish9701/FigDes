@@ -409,6 +409,24 @@ test("planScreen derives from task and falls back explicitly", () => {
   assert.match(fallback.derivation.note, /Name the data/);
 });
 
+test("intervene phrasing classifies as monitoring, not inspection", () => {
+  const plan = planScreen({ primaryDecision: "intervene or let the current inference run continue", availableInformation: ["cpu", "memory"] });
+  assert.equal(plan.intent.decisionKind, "monitor");
+  assert.equal(plan.template.name, "telemetry");
+});
+
+test("signal-heavy tasks nudge from inspect to monitor explicitly", () => {
+  const plan = planScreen({ primaryDecision: "should this keep going", availableInformation: ["throughput tok/s", "error rate", "cpu load"] });
+  assert.equal(plan.intent.decisionKind, "monitor", "signals with no subject are monitoring");
+  assert.ok(plan.warnings.some((w) => /Reads as monitoring/.test(w)), "the nudge must say so, never silently");
+  assert.equal(plan.derivation.strategy, "task-derived");
+});
+
+test("a diagnosed device with a subject stays an inspection", () => {
+  const plan = planScreen({ primaryDecision: "diagnose this device", availableInformation: ["device", "health"] });
+  assert.equal(plan.intent.decisionKind, "inspect");
+});
+
 test("integration derivation keeps providers and endpoint, not a form", () => {
   const out = deriveRegions({ decisionKind: "integration", primaryDecision: "connect a telemetry provider", info: ["providers", "endpoints"] });
   assert.ok(out);

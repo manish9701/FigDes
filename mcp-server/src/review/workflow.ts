@@ -366,15 +366,26 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
     // used for programs. This closes the old gap where native screens always got
     // a generic WATCH regardless of their actual structure.
     const nodes = report.nodes.filter((n) => n.visible && n.w > 0 && n.h > 0);
-    const root = nodes[0] ?? report.nodes[0]!;
-    const boxes = new Map(nodes.map((n) => [n.id, { id: n.id, x: n.x, y: n.y, w: n.w, h: n.h }]));
-    const topLevel = nodes.filter((n) => n.parentId === root.parentId || n.depth === 1);
-    const focal = [...topLevel]
-      .filter((n) => n.type !== "TEXT")
+    const root = nodes.find((n) => n.id === report.target) ?? nodes.find((n) => n.type === "FRAME") ?? nodes[0] ?? report.nodes[0]!;
+    // Boxes are measured relative to the target: page-absolute coordinates
+    // would judge balance and position against the wrong origin.
+    const boxes = new Map(nodes.map((n) => [n.id, { id: n.id, x: n.x - root.x, y: n.y - root.y, w: n.w, h: n.h }]));
+    // Regions are the target's own children. Two inflations made every live
+    // screen read as fragmented: page siblings (parentId === root.parentId)
+    // counted as regions of this screen, and loose TEXT nodes counted as
+    // regions instead of content.
+    const children = nodes.filter((n) => n.parentId === root.id && n.id !== root.id);
+    const structural = (children.length > 0 ? children : nodes.filter((n) => n.depth === 1 && n.id !== root.id))
+      .filter((n) => n.type !== "TEXT");
+    // The screen frame is never its own focal point. Prefer a semantically
+    // named candidate, then fall back to area — the old largest-box rule
+    // picked the root and manufactured a focal FAIL against its own child.
+    const semantic = structural.find((n) => /focal|hero|primary-visual|primary|subject/i.test(n.name));
+    const focal = semantic ?? [...structural]
       .sort((a, b) => (b.w * b.h) - (a.w * a.h))[0];
-    const regions = topLevel.map((n) => ({
+    const regions = structural.map((n) => ({
       id: n.id,
-      role: n.id === focal?.id ? "primary-visual" : n.type === "TEXT" ? "secondary" : "content",
+      role: n.id === focal?.id ? "primary-visual" : "content",
     }));
 
     const operations = nodes.map((n) => ({
@@ -419,7 +430,7 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
     // Image-grounded findings: defects the reviewer saw, localized to measured
     // node ids, each with a repair that cites it. Verification needs both
     // sides: prior findings plus a fresh report of the current image.
-    const regionsForFindings = topLevel.map((n) => ({ id: n.id, nodeId: n.id }));
+    const regionsForFindings = structural.map((n) => ({ id: n.id, nodeId: n.id }));
     const findingInputs = args.visualFindings ?? [];
     const findings = findingInputs.length > 0
       ? makeFindings({

@@ -767,3 +767,127 @@ test("final_qa scopes collect_metrics to the node, not the whole file", async ()
   const technical = out.checklist.find((i) => i.check === "no overflow or broken structure");
   assert.match(technical.detail, /Test Screen/, "detail must name the scoped subtree");
 });
+
+/* -------------------------------------------------------------------------- */
+/* Live-critique measurement fixes: regions, focal, balance, surfaces          */
+
+function liveTree() {
+  const n = (over = {}) => ({
+    parentId: null,
+    type: "FRAME",
+    name: "Frame",
+    depth: 0,
+    x: 0,
+    y: 0,
+    w: 100,
+    h: 100,
+    visible: true,
+    defaultNamed: false,
+    zIndex: 0,
+    ...over,
+  });
+  const t = (over = {}) =>
+    n({
+      type: "TEXT",
+      name: "Label",
+      w: 200,
+      h: 20,
+      text: { content: "hi", length: 2, truncated: false, size: 14, family: "Inter", style: "Regular", color: "#111111", styled: true },
+      ...over,
+    });
+  return {
+    target: "9:9",
+    scope: "Screen",
+    nodeCount: 5,
+    truncated: false,
+    scanBudget: 2000,
+    scan: { pageLoads: 0, pagesCached: true },
+    nodes: [
+      n({ id: "9:9", name: "Screen", w: 1440, h: 900, parentId: "page1", fill: "#F7F5EF", background: "#F7F5EF" }),
+      n({ id: "9:10", parentId: "9:9", name: "Focal Hero", depth: 1, y: 64, w: 1440, h: 500, fill: "#ECEBE4", background: "#F7F5EF" }),
+      n({ id: "9:12", parentId: "9:9", name: "Detail", depth: 1, y: 600, w: 1440, h: 240, fill: "#ECEBE5", background: "#F7F5EF" }),
+      t({ id: "9:11", parentId: "9:9", depth: 1, x: 24, y: 700, background: "#F7F5EF" }),
+      n({ id: "8:8", parentId: "page1", name: "Other Screen", x: 1500, w: 1440, h: 900 }),
+    ],
+  };
+}
+
+function stubCritiqueRegistry(metrics) {
+  return {
+    resolve() {
+      return {
+        request: async (tool) => {
+          if (tool === "collect_metrics") return metrics;
+          return {}; // render_node with no image: an explicit failure state
+        },
+      };
+    },
+  };
+}
+
+function liveCritiquePayload(out) {
+  return JSON.parse(out.content[0].text);
+}
+
+test("live regions are the target's children, not siblings or loose text", async () => {
+  const out = await workflow.critiqueVisualTool({ nodeId: "9:9" }, stubCritiqueRegistry(liveTree()));
+  const payload = liveCritiquePayload(out);
+  const density = payload.dimensions.find((d) => d.dimension === "Density");
+  assert.match(density.evidence, /2 regions/, `sibling frame and text node must not count as regions: ${density.evidence}`);
+});
+
+test("the screen frame is never its own focal point", async () => {
+  const out = await workflow.critiqueVisualTool({ nodeId: "9:9" }, stubCritiqueRegistry(liveTree()));
+  const payload = liveCritiquePayload(out);
+  const focal = payload.dimensions.find((d) => d.dimension === "Focal clarity");
+  assert.match(focal.evidence, /9:10/, "the named hero must be the intended focal");
+  assert.doesNotMatch(focal.evidence, /intended '9:9'/, "the root frame must not be a focal candidate");
+});
+
+test("a centered full-width stack reads as balanced, not toppled", async () => {
+  const out = await workflow.critiqueVisualTool({ nodeId: "9:9" }, stubCritiqueRegistry(liveTree()));
+  const payload = liveCritiquePayload(out);
+  const balance = payload.dimensions.find((d) => d.dimension === "Visual balance");
+  assert.equal(balance.verdict, "PASS", `straddling boxes split half/half: ${balance.evidence}`);
+});
+
+test("near-identical tonal fills read as one surface", async () => {
+  const out = await workflow.critiqueVisualTool({ nodeId: "9:9" }, stubCritiqueRegistry(liveTree()));
+  const payload = liveCritiquePayload(out);
+  const surfaces = payload.dimensions.find((d) => d.dimension === "Surface hierarchy");
+  assert.equal(surfaces.verdict, "PASS");
+  assert.match(surfaces.evidence, /2 surface/, `#ECEBE4 and #ECEBE5 are one warm grey: ${surfaces.evidence}`);
+});
+
+test("visualFindings localize to measured nodes with repairs that cite them", async () => {
+  const out = await workflow.critiqueVisualTool(
+    { nodeId: "9:9", visualFindings: [{ area: "center", defect: "hero too quiet", severity: "minor" }] },
+    stubCritiqueRegistry(liveTree()),
+  );
+  const payload = liveCritiquePayload(out);
+  assert.equal(payload.findings.length, 1);
+  assert.match(payload.findings[0].id, /^vf-[0-9a-f]+$/);
+  assert.deepEqual(payload.findings[0].nodeIds, ["9:10"]);
+  assert.match(payload.findings[0].repair, new RegExp(`\\[${payload.findings[0].id}\\]`));
+});
+
+test("resolution needs a fresh report, and tracks persisting honestly", async () => {
+  const registry = stubCritiqueRegistry(liveTree());
+  const first = liveCritiquePayload(await workflow.critiqueVisualTool(
+    { nodeId: "9:9", visualFindings: [{ area: "center", defect: "hero too quiet", severity: "minor" }] },
+    registry,
+  ));
+  const id = first.findings[0].id;
+  const noFresh = liveCritiquePayload(await workflow.critiqueVisualTool(
+    { nodeId: "9:9", priorFindings: [{ id }] },
+    registry,
+  ));
+  assert.equal(noFresh.resolution, null, "no fresh report means nothing verifiable");
+  assert.match(noFresh.resolutionNote, /re-reported/);
+  const again = liveCritiquePayload(await workflow.critiqueVisualTool(
+    { nodeId: "9:9", priorFindings: [{ id }], visualFindings: [{ area: "center", defect: "hero too quiet", severity: "minor" }] },
+    registry,
+  ));
+  assert.deepEqual(again.resolution.persisting, [id]);
+  assert.deepEqual(again.resolution.resolved, []);
+});

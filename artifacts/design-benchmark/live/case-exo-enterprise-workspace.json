@@ -2,7 +2,7 @@
   "caseId": "exo-enterprise-workspace",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T07:28:39.844Z",
+  "startedAt": "2026-10-09T07:52:49.821Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -123,6 +123,6 @@
     ]
   },
   "status": "FAILED",
-  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":8,\"regions\":2,\"content\":6,\"operationCount\":14,\"layoutMs\":0,\"semanticUnits\":6},\"regions\":[{\"id\":\"nav\",\"role\":\"navigation\",\"width\":240,\"height\":\"hug\",\"grow\":0,\"layout\":\"flow\"},{\"id\":\"work\",\"role\":\"custom\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"la",
-  "runtimeMs": 1369
+  "error": "Error: transaction failed at op #-1 (plan): Unrecognized color: transparent. Use #RGB, #RRGGBB, #RRGGBBAA or rgb(r,g,b). Hint: Inspect the target nodes first, then retry with corrected arguments. Use dryRun=true to validate without changing the document.",
+  "runtimeMs": 2018
 }

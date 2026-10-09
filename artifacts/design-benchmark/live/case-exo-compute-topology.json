@@ -2,7 +2,7 @@
   "caseId": "exo-compute-topology",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T07:28:33.068Z",
+  "startedAt": "2026-10-09T07:45:38.489Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -136,6 +136,6 @@
     "warnings": []
   },
   "status": "FAILED",
-  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":8,\"regions\":1,\"content\":7,\"operationCount\":17,\"layoutMs\":1,\"semanticUnits\":7},\"regions\":[{\"id\":\"map\",\"role\":\"hero\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"topology\"}],\"algorithms\":{\"map\":\"tree\"},\"constrained\":0,\"reflowed\":0,\"intentNotes",
-  "runtimeMs": 2458
+  "error": "Error: tool design_runtime error: [{\"type\":\"text\",\"text\":\"The Figma plugin did not respond to create_design within 300000ms. Is the plugin still open?\"}]",
+  "runtimeMs": 300991
 }

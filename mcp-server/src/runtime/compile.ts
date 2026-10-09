@@ -463,6 +463,20 @@ function isColorLiteral(value: string): boolean {
 }
 
 /**
+ * Fill for a surface that may be "transparent".
+ *
+ * Figma has no transparent paint — it is the absence of fill. Emitting the
+ * string "transparent" compiles cleanly but fails the live commit
+ * ("Unrecognized color"), the same dry-green/commit-red class as the
+ * metric-parent and sectionHeader-action defects. Map it to [] here so no
+ * primitive can emit it again.
+ */
+function surfaceFill(value: unknown, fallback: string | never[]): string | never[] {
+  if (typeof value === "string" && value.trim().toLowerCase() === "transparent") return [];
+  return typeof value === "string" ? value : fallback;
+}
+
+/**
  * Rewrites variable references into bindings.
  *
  * Runs last so every node it targets already exists in the operation list:
@@ -1220,7 +1234,7 @@ function emitComponent(
           y: box.y,
           width: hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
           height: 36,
-          fill: active ? "#F2C94C" : str("surface", "transparent"),
+          fill: active ? "#F2C94C" : surfaceFill(p.surface, []),
           radius: grid / 2,
           padding: { top: grid, right: grid * 1.5, bottom: grid, left: grid * 1.5 },
           layoutMode: "HORIZONTAL",
@@ -2082,7 +2096,7 @@ function emitComponent(
     case "topologyMap": {
       // Topology is the product's primary spatial explanation, not a generic
       // panel. Build real editable nodes and native vector relationships.
-      const surface = p.surface !== undefined ? str("surface", "transparent") : "#FBFAF6";
+      const surface = p.surface !== undefined ? surfaceFill(p.surface, "#FBFAF6") : "#FBFAF6";
       const pad = Math.round(grid * 3);
       const w = Math.max(240, Math.round(box.w));
       const h = Math.max(220, Math.round(box.h || grid * 30));

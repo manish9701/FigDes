@@ -2,7 +2,7 @@
   "caseId": "exo-configuration",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T07:28:38.482Z",
+  "startedAt": "2026-10-09T07:52:43.560Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -85,7 +85,121 @@
     ]
   },
   "irRevision": "live-exo-configuration-r1",
-  "operationManifest": [],
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — exo-configuration",
+      "fill": "#FFFDF9",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "form",
+      "parent": "root",
+      "name": "Form",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "t",
+      "parent": "form",
+      "name": "Runtime policy [fixture]",
+      "x": 0,
+      "y": 0,
+      "type": "createText",
+      "content": "Runtime policy [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "width": 1440
+    },
+    {
+      "id": "form-headline",
+      "parent": "form",
+      "name": "Runtime policy [fixture]",
+      "x": 0,
+      "y": 32,
+      "fill": "#242521",
+      "type": "createText",
+      "content": "Runtime policy [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 18,
+      "weight": 600
+    },
+    {
+      "parent": "form",
+      "name": "Action",
+      "x": 1392,
+      "y": 36,
+      "fill": "#0B6BCB",
+      "type": "createText",
+      "content": "History",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 500
+    },
+    {
+      "id": "p",
+      "parent": "form",
+      "name": "Thresholds [fixture]",
+      "x": 0,
+      "y": 130,
+      "fill": "#FFFDF9",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 90,
+      "layoutMode": "VERTICAL",
+      "padding": 16,
+      "itemSpacing": 8
+    },
+    {
+      "parent": "p",
+      "name": "Title",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "Thresholds [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 14,
+      "weight": 600
+    },
+    {
+      "id": "ok",
+      "parent": "form",
+      "name": "Approve [fixture]",
+      "x": 0,
+      "y": 228,
+      "fill": "#242521",
+      "type": "createFrame",
+      "width": 156,
+      "height": 40,
+      "layoutMode": "HORIZONTAL",
+      "padding": {
+        "top": 8,
+        "right": 16,
+        "bottom": 8,
+        "left": 16
+      }
+    },
+    {
+      "parent": "ok",
+      "name": "Label",
+      "fill": "#FFFFFF",
+      "type": "createText",
+      "content": "Approve [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 13,
+      "weight": 600
+    }
+  ],
   "dryRun": {
     "operationCount": 9,
     "violations": [],
@@ -93,7 +207,121 @@
       "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
     ]
   },
-  "status": "FAILED",
-  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":5,\"regions\":1,\"content\":4,\"operationCount\":9,\"layoutMs\":1,\"semanticUnits\":4},\"regions\":[{\"id\":\"form\",\"role\":\"custom\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"flow\"}],\"algorithms\":{\"form\":\"flow\"},\"constrained\":0,\"reflowed\":0,\"intentNotes\"",
-  "runtimeMs": 1361
+  "nativeFrameId": "136:705",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/exo-configuration-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — exo-configuration\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 12.9 KB base64.\nBudget used: 9,180 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEhAAAAAAQAICAAAAAEhAAAAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAgAQEAAAAAJCAAAAAAAASEAAAAABAAgIAAAAASEAAAAAAAAkIAAAAACABAQAAAAAkIAAAAACABAQAAAAAkIAAAAAAABIQAAAAAEACAgAAAABIQAAAAAAACQgAAAAAIAEBAAAAACQgAAAAAIAEBAAAAACQgAAAAAAAEvhnPNMDC/DtjAkAAAAASUVORK5CYII=",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — exo-configuration\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 12.9 KB base64.\nBudget used: 9,180 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium off-grid-geometry: \"Action\" is not aligned to the 8px grid",
+    "minor/medium off-grid-geometry: \"Thresholds [fixture]\" is not aligned to the 8px grid",
+    "minor/medium off-grid-geometry: \"Approve [fixture]\" is not aligned to the 8px grid",
+    "minor/medium text-outside-autolayout: \"Title\" is absolutely positioned inside the auto-layout frame \"Thresholds [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Label\" is absolutely positioned inside the auto-layout frame \"Approve [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 5,
+    "high": 0,
+    "medium": 5,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "off-grid-geometry": 3,
+      "text-outside-autolayout": 2
+    }
+  },
+  "reviewedNodes": 9,
+  "programCritique": {
+    "verdict": "FAIL",
+    "qualityGate": "FAIL",
+    "blocking": [
+      "Composition: no focal region; 1 regions; composition: editorial; largest region isolated by 0%"
+    ]
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 7.1,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 2,
+        "evidence": "no focal region; 1 regions; composition: editorial; largest region isolated by 0%",
+        "improve": "Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 7,
+        "evidence": "4 distinct size(s): 12, 13, 14, 18; contrast 2/2 passing AA",
+        "improve": "The largest text is 18px: no headline, no entry point."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 9 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "5/5 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "4 colour(s); 1 familie(s); accents: #0B6BCB"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 12px"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'form' at 100%: form 100%"
+      }
+    ],
+    "weakSpots": [
+      "Composition (2/10): Give the screen one focal region: a hero or primary-visual the eye lands on first. The largest region touches a canvas edge with no breathing room.",
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": false,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [
+      "'text' does not accept 'fontSize'. This runtime takes declarative arguments only and never executes code strings."
+    ],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 6260,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
 }

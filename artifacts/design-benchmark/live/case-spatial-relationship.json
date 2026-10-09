@@ -2,7 +2,7 @@
   "caseId": "spatial-relationship",
   "commit": "1b15f1f",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-09T07:28:44.068Z",
+  "startedAt": "2026-10-09T07:53:11.696Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -118,13 +118,319 @@
     ]
   },
   "irRevision": "live-spatial-relationship-r1",
-  "operationManifest": [],
+  "operationManifest": [
+    {
+      "id": "root",
+      "name": "FigDes Live — spatial-relationship",
+      "fill": "#FFFDF9",
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "graph",
+      "parent": "root",
+      "name": "Graph",
+      "x": 0,
+      "y": 0,
+      "fill": [],
+      "type": "createFrame",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "id": "a",
+      "parent": "graph",
+      "name": "ingest [fixture]",
+      "x": 652,
+      "y": 314,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "a",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "ingest [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "b",
+      "parent": "graph",
+      "name": "relay [fixture]",
+      "x": 652,
+      "y": 490,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "b",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "relay [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "c",
+      "parent": "graph",
+      "name": "store [fixture]",
+      "x": 652,
+      "y": 402,
+      "fill": "#FFFFFF",
+      "type": "createFrame",
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL",
+      "padding": 8,
+      "itemSpacing": 4,
+      "stroke": "#E0E0E0",
+      "strokeWeight": 1
+    },
+    {
+      "parent": "c",
+      "name": "Device",
+      "fill": "#242521",
+      "type": "createText",
+      "content": "store [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 600
+    },
+    {
+      "id": "graph-headline",
+      "parent": "graph",
+      "name": "Dependency graph [fixture]",
+      "x": 0,
+      "y": 0,
+      "fill": "#242521",
+      "type": "createText",
+      "content": "Dependency graph [fixture]",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 18,
+      "weight": 600
+    },
+    {
+      "parent": "graph",
+      "name": "Action",
+      "x": 1386,
+      "y": 4,
+      "fill": "#0B6BCB",
+      "type": "createText",
+      "content": "View all",
+      "family": "Inter",
+      "style": "Regular",
+      "fontSize": 12,
+      "weight": 500
+    },
+    {
+      "id": "c1",
+      "parent": "root",
+      "name": "orthogonal connector a -> b",
+      "x": 711,
+      "y": 394,
+      "fill": [],
+      "type": "createVector",
+      "width": 10,
+      "height": 96,
+      "path": "M 5 0 L 5 48 L 5 48 L 5 96 L 5 0 M 5 96 L 0 86 L 10 86 L 5 96 Z",
+      "stroke": "#8A8C84",
+      "strokeWeight": 1,
+      "fillArrows": true
+    },
+    {
+      "id": "c2",
+      "parent": "root",
+      "name": "orthogonal connector b -> c",
+      "x": 711,
+      "y": 482,
+      "fill": [],
+      "type": "createVector",
+      "width": 10,
+      "height": 10,
+      "path": "M 5 8 L 5 4 L 5 4 L 5 0 L 5 8 M 5 0 L 10 10 L 0 10 L 5 0 Z",
+      "stroke": "#8A8C84",
+      "strokeWeight": 1,
+      "fillArrows": true
+    },
+    {
+      "id": "c1-label",
+      "parent": "root",
+      "name": "Label feeds",
+      "x": 722,
+      "y": 428,
+      "fill": "#5A5C54",
+      "type": "createText",
+      "content": "feeds",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 600
+    },
+    {
+      "id": "c2-label",
+      "parent": "root",
+      "name": "Label drains",
+      "x": 722,
+      "y": 472,
+      "fill": "#5A5C54",
+      "type": "createText",
+      "content": "drains",
+      "family": "JetBrains Mono",
+      "style": "Regular",
+      "fontSize": 11,
+      "weight": 600
+    }
+  ],
   "dryRun": {
     "operationCount": 14,
     "violations": [],
     "warnings": []
   },
-  "status": "FAILED",
-  "error": "Error: no created nodes: {\"status\":\"completed\",\"dryRun\":false,\"stats\":{\"calls\":7,\"regions\":1,\"content\":6,\"operationCount\":14,\"layoutMs\":1,\"semanticUnits\":6},\"regions\":[{\"id\":\"graph\",\"role\":\"hero\",\"width\":\"fill\",\"height\":\"fill\",\"grow\":0,\"layout\":\"topology\"}],\"algorithms\":{\"graph\":\"tree\"},\"constrained\":0,\"reflowed\":0,\"intentN",
-  "runtimeMs": 1781
+  "nativeFrameId": "136:745",
+  "buildStatus": "completed",
+  "screenshotReference": "artifacts/design-benchmark/live/shots/spatial-relationship-r1.png",
+  "renderMeta": {
+    "note": "Rendered \"FigDes Live — spatial-relationship\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 13.9 KB base64.\nBudget used: 10,200 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free.",
+    "structuredContent": {
+      "content": [
+        {
+          "type": "image",
+          "data": "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AAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAASEAAAAAAgAQEAAAAAEhAAAAAAIAEBAAAAABIQAAAAACABAQAAAAAS+P9gh/JslG+c2wAAAABJRU5ErkJggg==",
+          "mimeType": "image/png"
+        },
+        {
+          "type": "text",
+          "text": "Rendered \"FigDes Live — spatial-relationship\" (FRAME) at 1024x640.\nNative size: 1440x900. Scale factor: 0.711x.\nCost: ~340 tokens (low detail), 13.9 KB base64.\nBudget used: 10,200 of 200,000 tokens.\nNote: this was downscaled from 1440px, so fine text detail is lost. Re-render with a higher maxWidth only if you need to read small type — it will cost proportionally more.\nJudge hierarchy, balance, density, alignment and whether the main relationship reads clearly. Structural defects are better found with review_design, which is free."
+        }
+      ]
+    }
+  },
+  "renderIds": [
+    "r1"
+  ],
+  "structuralFindings": [
+    "minor/medium duplicate-siblings: 3 identical children in \"Graph\"",
+    "minor/medium off-grid-geometry: \"ingest [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"relay [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"store [fixture]\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Device\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Action\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"orthogonal connector a -> b\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"orthogonal connector b -> c\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Label feeds\" is not aligned to the 4px grid",
+    "minor/medium off-grid-geometry: \"Label drains\" is not aligned to the 4px grid",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"ingest [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"relay [fixture]\"",
+    "minor/medium text-outside-autolayout: \"Device\" is absolutely positioned inside the auto-layout frame \"store [fixture]\""
+  ],
+  "structuralSummary": {
+    "total": 15,
+    "high": 0,
+    "medium": 15,
+    "low": 0,
+    "critical": 0,
+    "byRule": {
+      "duplicate-siblings": 1,
+      "off-grid-geometry": 11,
+      "text-outside-autolayout": 3
+    }
+  },
+  "reviewedNodes": 14,
+  "programCritique": {
+    "verdict": "WATCH",
+    "qualityGate": "REVIEW",
+    "blocking": []
+  },
+  "programScore": {
+    "status": "ok",
+    "source": "program",
+    "overall": 8,
+    "dimensions": [
+      {
+        "dimension": "Composition",
+        "score": 7,
+        "evidence": "one focal region (graph); 1 regions; composition: topology; largest region isolated by 0%",
+        "improve": "One region is a page, not a composition. Split intent from chrome. The largest region touches a canvas edge with no breathing room."
+      },
+      {
+        "dimension": "Hierarchy",
+        "score": 8,
+        "evidence": "3 distinct size(s): 11, 12, 18; 2 technical value(s) in mono; contrast 5/5 passing AA",
+        "improve": "The largest text is 18px: no headline, no entry point."
+      },
+      {
+        "dimension": "Information density",
+        "score": 5,
+        "evidence": "a single region fills everything; 5px of stroke in play; 14 node(s) drawn",
+        "improve": "One undifferentiated surface. Chrome and content deserve separation."
+      },
+      {
+        "dimension": "Alignment",
+        "score": 10,
+        "evidence": "5/5 boxes share an edge or centre"
+      },
+      {
+        "dimension": "Visual consistency",
+        "score": 10,
+        "evidence": "7 colour(s); 2 familie(s); accents: #0B6BCB"
+      },
+      {
+        "dimension": "Accessibility",
+        "score": 8,
+        "evidence": "smallest text 11px; technical values monospaced"
+      },
+      {
+        "dimension": "Focus",
+        "score": 8,
+        "evidence": "clear leader 'graph' at 100%: graph 100%"
+      }
+    ],
+    "weakSpots": [
+      "Information density (5/10): One undifferentiated surface. Chrome and content deserve separation."
+    ],
+    "doneChecklist": {
+      "primary decision obvious": true,
+      "intentional hierarchy": true,
+      "no weak spots below 6": false,
+      "structural QA (review_design on the live file)": false,
+      "rendered and visually reviewed": false
+    },
+    "warnings": [],
+    "violations": []
+  },
+  "visualFindings": [],
+  "visualScores": null,
+  "visualStatus": "PENDING_VISION_REVIEW",
+  "repairs": [],
+  "unresolved": [
+    "visual judgement pending (Phase B)"
+  ],
+  "runtimeMs": 11511,
+  "status": "BUILT_RENDERED_STRUCTURALLY_REVIEWED"
 }

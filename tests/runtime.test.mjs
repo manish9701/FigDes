@@ -1462,6 +1462,26 @@ test("sectionHeader action is parented to the region, never to the title text", 
   assert.notEqual(action.parent, title.id);
 });
 
+test("no compiled fill is the string 'transparent'", () => {
+  // Live defect: navItem(off) and topologyMap(surface:transparent) emitted
+  // fill:"transparent", which passes the op schema but fails the live commit
+  // ("Unrecognized color") and rolls the transaction back. Transparent must
+  // compile to [] (no fill), never to a paint string Figma cannot parse.
+  const nav = buildSingle({ fn: "navItem", args: { label: "Fleet" } });
+  const topo = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "hero", id: "map", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "topologyMap", id: "t", parent: "map", args: { surface: "transparent" } }],
+  });
+  for (const op of [...nav.operations, ...topo.operations]) {
+    const fill = op.fill;
+    assert.ok(fill !== "transparent", `${op.type} ${op.id ?? op.name} emits fill:"transparent"`);
+    if (typeof fill === "string") assert.doesNotMatch(fill, /transparent/i);
+  }
+  const navFrame = nav.operations.find((o) => o.id === "x");
+  assert.deepEqual(navFrame.fill, []);
+});
+
 /* -------------------------------------------------------------------------- */
 /* First-class topologyMap                                                     */
 /* -------------------------------------------------------------------------- */

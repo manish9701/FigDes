@@ -1,0 +1,136 @@
+{
+  "status": "ok",
+  "verdict": "FAIL",
+  "qualityGate": {
+    "status": "FAIL",
+    "blockingIssues": [
+      "Whitespace: 6 regions fragment the canvas; 13.5px of stroke in play; 62 node(s) drawn",
+      "Density: 6 regions; 62 operations drawn"
+    ],
+    "repairPlan": [
+      "6 regions fragment the canvas; 13.5px of stroke in play; 62 node(s) drawn",
+      "6 regions; 62 operations drawn",
+      "Vary the rhythm: promote one to hero size, merge two, or convert the cluster to a visual field.",
+      "Convert one cluster into a visual field, chart, topology, or open composition.",
+      "Merge near-identical surfaces until the file has a background, a surface and accents."
+    ],
+    "renderRequired": false,
+    "reason": "The composition has a blocking visual-quality issue and must be repaired before it is considered done."
+  },
+  "dimensions": [
+    {
+      "dimension": "Focal clarity",
+      "verdict": "PASS",
+      "evidence": "intended focal '142:826' holds 66% of attention: 142:826 66%, 142:812 12%, 142:850 11%, 142:870 10%, 142:822 0%, 142:824 0%"
+    },
+    {
+      "dimension": "Hierarchy",
+      "verdict": "PASS",
+      "evidence": "9 distinct size(s): 10, 11, 12, 13, 14, 15, 16, 18, 20; 14 technical value(s) in mono; contrast 42/42 passing AA"
+    },
+    {
+      "dimension": "Composition",
+      "verdict": "PASS",
+      "evidence": "one focal region (142:826); 6 regions; composition: native-live; largest region isolated by 12%"
+    },
+    {
+      "dimension": "Whitespace",
+      "verdict": "FAIL",
+      "evidence": "6 regions fragment the canvas; 13.5px of stroke in play; 62 node(s) drawn"
+    },
+    {
+      "dimension": "Density",
+      "verdict": "FAIL",
+      "evidence": "6 regions; 62 operations drawn"
+    },
+    {
+      "dimension": "Repetition",
+      "verdict": "WATCH",
+      "evidence": "8 boxes share one size bucket",
+      "suggestion": "Vary the rhythm: promote one to hero size, merge two, or convert the cluster to a visual field."
+    },
+    {
+      "dimension": "Card-wall tendency",
+      "verdict": "WATCH",
+      "evidence": "12 bordered surfaces cover 76% of the canvas",
+      "suggestion": "Convert one cluster into a visual field, chart, topology, or open composition."
+    },
+    {
+      "dimension": "Visual balance",
+      "verdict": "PASS",
+      "evidence": "left/right split 67/33"
+    },
+    {
+      "dimension": "Data-visualization quality",
+      "verdict": "PASS",
+      "evidence": "0/0 edges labelled; technical values monospaced"
+    },
+    {
+      "dimension": "Surface hierarchy",
+      "verdict": "WATCH",
+      "evidence": "14 distinct surfaces",
+      "suggestion": "Merge near-identical surfaces until the file has a background, a surface and accents."
+    },
+    {
+      "dimension": "Depth",
+      "verdict": "PASS",
+      "evidence": "flat by construction; depth is opt-in, not required"
+    },
+    {
+      "dimension": "Template feel",
+      "verdict": "PASS",
+      "evidence": "no template markers detected"
+    }
+  ],
+  "watchList": [
+    "Whitespace (FAIL): 6 regions fragment the canvas; 13.5px of stroke in play; 62 node(s) drawn",
+    "Density (FAIL): 6 regions; 62 operations drawn",
+    "Repetition (WATCH): Vary the rhythm: promote one to hero size, merge two, or convert the cluster to a visual field.",
+    "Card-wall tendency (WATCH): Convert one cluster into a visual field, chart, topology, or open composition.",
+    "Surface hierarchy (WATCH): Merge near-identical surfaces until the file has a background, a surface and accents."
+  ],
+  "genericity": {
+    "score": 12,
+    "blocking": false,
+    "findings": [
+      {
+        "id": "card-wall",
+        "evidence": "10 peer-bordered surfaces, mixed sizes",
+        "repair": "Convert one cluster into a visual field, chart or topology."
+      }
+    ]
+  },
+  "findings": [
+    {
+      "id": "vf-c986c28c",
+      "area": "center",
+      "defect": "red saturated edge crosses the gray hub-n1 edge",
+      "severity": "minor",
+      "nodeIds": [
+        "142:826",
+        "142:833",
+        "142:839",
+        "142:849",
+        "142:848"
+      ],
+      "repair": "[vf-c986c28c] center: red saturated edge crosses the gray hub-n1 edge (5 node(s): 142:826, 142:833, 142:839, 142:849, …). Polish when hierarchy holds; never before.",
+      "status": "open"
+    }
+  ],
+  "resolution": null,
+  "liveEvidence": {
+    "nodes": 64,
+    "truncated": false,
+    "components": 0,
+    "textLayers": 42,
+    "roundedSurfaces": 15,
+    "filledSurfaces": 60
+  },
+  "visionMerge": {
+    "focalPoint": "node-02 red-ringed card with BOTTLENECK caption",
+    "hierarchy": "20px title, 18px values, mono telemetry ramp",
+    "balance": "Rail anchors; field center; inspector and band frame content",
+    "templateFeel": "Topology field plus inspector plus decision band; no KPI wall"
+  },
+  "nextStep": "Fix each finding via its nodeIds with modify_design, re-render, then re-run critique_visual with priorFindings plus fresh visualFindings to verify resolution."
+}

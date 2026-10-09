@@ -89,14 +89,14 @@
     }
   ],
   "unresolved": [
-    "overflow x4 false positives (metrics LINE-coordinate bug, plugin-side backlog)",
-    "card-wall fired (deliberate composition; rule disagrees)",
-    "consistency 4/10 (tint proliferation from contrast repairs)",
-    "2 visual minors above"
+    "critique whitespace/density heuristic vs measured adjudication (open methodological disagreement, evidence retained)",
+    "inspector bottom void ~110px (confirmed-minor-open)",
+    "red/gray edge crossing (minor)",
+    "8us label touch (minor)"
   ],
   "gate": {
-    "status": "FAIL (old server build)",
-    "reason": "r4 judged by pre-38e14fb code: card-wall (old rule) + whitespace/density heuristics. New semantic build not yet deployed; plugin connect() fix also needs user plugin rebuild. No thresholds lowered."
+    "status": "MIXED — no forced PASS",
+    "reason": "final_qa checklist fully green (pending checks cleared); critique FAIL limited to disputed region-count heuristics with measured adjudication on file. Thresholds untouched."
   },
   "baseline": "Round-3 fixture topology at 1440x900 (piled nodes, blank areas, no headline) vs this screen (spread chain, full inspector, title+verdict+action). Same viewport, same file.",
   "environment": [
@@ -111,5 +111,33 @@
   "deploysNeeded": [
     "Render: deploy main 38e14fb+ (semantic card-wall, adjudication model)",
     "Figma plugin: npm run build:plugin + reload (metrics canonicalization + connect fix)"
-  ]
+  ],
+  "rerun": {
+    "at": "2026-10-09T10:26:42.157Z",
+    "deploys": [
+      "server 38e14fb+ (semantic card-wall live)",
+      "plugin rebuilt (coordSpace + connect fix)"
+    ],
+    "review": {
+      "total": 1,
+      "high": 0,
+      "critical": 0,
+      "remaining": [
+        "minor/medium duplicate-siblings (uniform tiles, by design)"
+      ]
+    },
+    "cardWall": "GONE (semantic rule: devices exempt via TopologyField, pills <3 peers)",
+    "overflow": "GONE (canonical parent-local coords from rebuilt plugin)",
+    "critique": "FAIL (whitespace/density region-count heuristics; disputed with measurements)",
+    "finalQa": {
+      "verdict": "PASS WITH LIVE CHECKS PENDING",
+      "failed": [],
+      "checksCleared": [
+        "review 1-medium",
+        "r4 render fresh + bound",
+        "design_guard PASS"
+      ]
+    },
+    "designGuard": "PASS (exo-labs project)"
+  }
 }

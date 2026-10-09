@@ -1,0 +1,29 @@
+{
+  "status": "ok",
+  "verdict": "PASS WITH LIVE CHECKS PENDING",
+  "checklist": [
+    {
+      "area": "TECHNICAL",
+      "check": "no overflow or broken structure",
+      "pass": true,
+      "detail": "no high-confidence findings in EXO Compute Fabric (64 nodes)"
+    },
+    {
+      "area": "COMPOSITION",
+      "check": "no accidental card wall",
+      "pass": true,
+      "detail": "no card wall detected"
+    },
+    {
+      "area": "TECHNICAL",
+      "check": "render succeeds",
+      "pass": null,
+      "detail": "render the selection at low detail to confirm"
+    }
+  ],
+  "failed": [],
+  "pendingLiveChecks": [
+    "TECHNICAL: render succeeds — render the selection at low detail to confirm"
+  ],
+  "howToProceed": "Clear the pending live checks (review_design, one low-detail render, design_guard with inspect:true), then call it done."
+}

@@ -776,6 +776,30 @@ regions.push({
     calls.push(call);
   };
 
+  // A top-level link is a relationship the layout already uses for placement —
+  // but nothing drew it, so topology screens rendered nodes with no edges.
+  // Synthesize one connector call per link so the edge is visible. A
+  // hand-written connector for the same pair wins: explicit drawing always
+  // beats synthesis, and the synthesis never duplicates it.
+  {
+    const drawn = new Set<string>();
+    for (const call of parsedProgram.content) {
+      if (call.fn !== "connector") continue;
+      const a = call.args as Record<string, unknown>;
+      if (typeof a.from === "string" && typeof a.to === "string") drawn.add(`${a.from}→${a.to}`);
+    }
+    for (const link of links) {
+      const key = `${link.from}→${link.to}`;
+      if (drawn.has(key)) continue;
+      drawn.add(key);
+      pushCall({
+        fn: "connector",
+        id: `link-${link.from}-${link.to}`.slice(0, 64),
+        args: { from: link.from, to: link.to, ...(link.label !== undefined ? { label: link.label } : {}) },
+      });
+    }
+  }
+
   for (const call of parsedProgram.content) {
     if (call.fn === "template") {
       templateUses += 1;

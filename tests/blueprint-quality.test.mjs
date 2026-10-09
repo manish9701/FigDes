@@ -61,8 +61,12 @@ import {
   BENCHMARKS,
   scoreBenchmark,
   compareBenchmarkRuns,
+  summarizeBenchmarkRun,
   UNCOVERED_CHALLENGE_CATEGORIES,
   POSITIVE_CONTROL_CASE,
+  EXPANDED_BENCHMARKS,
+  EXPANDED_SUITE_VERSION,
+  scoreChallenge,
 } from "../mcp-server/dist-test/design/benchmark/suite.js";
 import { evaluateConsistency } from "../mcp-server/dist-test/design/quality/consistency.js";
 import { planScreen, classifyDecision } from "../mcp-server/dist-test/plan/planner.js";
@@ -492,6 +496,51 @@ test("benchmark comparison reports regressions instead of hiding them", () => {
   assert.equal(report.broadImprovement, false);
   assert.ok(UNCOVERED_CHALLENGE_CATEGORIES.length > 0);
   assert.ok(POSITIVE_CONTROL_CASE.id.length > 0);
+});
+
+test("expanded v2 suite covers the uncovered categories without touching v1", () => {
+  assert.equal(BENCHMARKS.length, 9, "v1 baseline is frozen");
+  assert.equal(EXPANDED_BENCHMARKS.length, UNCOVERED_CHALLENGE_CATEGORIES.length);
+  assert.ok(EXPANDED_SUITE_VERSION.length > 0);
+  // No id collisions across suites: results compare without ambiguity.
+  const v1 = new Set(BENCHMARKS.map((b) => b.id));
+  for (const b of EXPANDED_BENCHMARKS) assert.ok(!v1.has(b.id), `collision: ${b.id}`);
+  // The unfamiliar-domain case is genuinely unfamiliar: no EXO terms.
+  const strange = EXPANDED_BENCHMARKS.find((b) => b.id === "unfamiliar-domain");
+  assert.ok(strange && !/exo|device|model|inference/i.test(strange.brief));
+  // summarizeBenchmarkRun accepts a custom case list (defaults to v1).
+  const full = Object.fromEntries(["hierarchy", "composition", "productSpecificity", "typography", "spacingRhythm", "relationshipClarity", "density", "nativeQuality", "distinctiveness", "readability"].map((k) => [k, 8]));
+  const v2report = summarizeBenchmarkRun(
+    EXPANDED_BENCHMARKS.map((b) => scoreBenchmark({ caseId: b.id, dimensions: full })),
+    EXPANDED_BENCHMARKS,
+  );
+  assert.equal(v2report.expectedCases, EXPANDED_BENCHMARKS.length);
+  assert.equal(v2report.readyForComparison, true);
+});
+
+test("three-outcome challenge scoring never hides a failure", () => {
+  const ok = (status, reason = "measured") => ({ status, reasons: [reason] });
+  const pass = scoreChallenge({ caseId: "x", structural: ok("PASS"), visual: ok("PASS"), product: ok("PASS") });
+  assert.equal(pass.overall, "PASS");
+
+  const visualFail = scoreChallenge({ caseId: "x", structural: ok("PASS"), visual: ok("FAIL", "hierarchy 2/10"), product: ok("PASS") });
+  assert.equal(visualFail.overall, "FAIL");
+  assert.ok(visualFail.reason.includes("visual"));
+
+  const pending = scoreChallenge({ caseId: "x", structural: ok("PASS"), visual: ok("PENDING", "no render yet"), product: ok("PASS") });
+  assert.equal(pending.overall, "PENDING");
+
+  // A pending visual the caller declared optional does not block.
+  const optionalPending = scoreChallenge({
+    caseId: "x", structural: ok("PASS"), visual: ok("PENDING", "offline run"), product: ok("PASS"),
+    optionalOutcomes: ["visual"],
+  });
+  assert.equal(optionalPending.overall, "PASS");
+
+  // NOT_APPLICABLE on a required outcome cannot read as fine.
+  const na = scoreChallenge({ caseId: "x", structural: ok("PASS"), visual: ok("NOT_APPLICABLE", "n/a?"), product: ok("PASS") });
+  assert.notEqual(na.overall, "PASS");
+  assert.ok(na.notVerified.length > 0);
 });
 
 /* -------------------------------------------------------------------------- */

@@ -77,6 +77,9 @@ const DEFAULT_LOOK: StyleLook = {
   headerScale: 1,
   panelPaddingScale: 1,
   bodyWeight: 400,
+  // Light canvas unless a warmth preset says otherwise. Without this an
+  // unfilled root exports as transparency (black in PNGs).
+  rootFill: "#FFFFFF",
 };
 
 export function styleLook(raw: string | string[] | undefined): StyleLook {
@@ -99,9 +102,12 @@ export function styleLook(raw: string | string[] | undefined): StyleLook {
   if (mechanics.contrast === "bold") look.bodyWeight = 600;
 
   // Warmth tints the canvas when the program states no fill of its own. Named
-  // paper tones, documented here: warm paper, blue-grey paper, otherwise unset.
+  // paper tones, documented here: warm paper, blue-grey paper, otherwise white.
+  // A default is required, not optional: an unfilled root exports as
+  // transparency (black in PNGs), so "no fill stated" must never mean black.
   if (mechanics.warmth === "warm") look.rootFill = "#FAF6EF";
   else if (mechanics.warmth === "cool") look.rootFill = "#F0F3F5";
+  else look.rootFill = "#FFFFFF";
 
   return look;
 }
@@ -727,8 +733,12 @@ function emitContent(args: {
 
   // Metric cards are a grid; a topology map is a single centred graphic;
   // everything else is a vertical flow. Choosing per-composition is what stops
-  // every screen looking like the same card wall.
-  const columns = region.columns ?? (composition === "instrument" || composition === "table" ? 3 : 1);
+  // every screen looking like the same card wall. The region's own composition
+  // counts too: a status rail is an instrument strip no matter what the screen
+  // around it inferred as — without this, a rail on a spatial screen collapsed
+  // to one column and its pills overflowed the rail.
+  const regionComposition = (region as { composition?: string }).composition;
+  const columns = region.columns ?? (composition === "instrument" || composition === "table" || regionComposition === "instrument" || regionComposition === "table" ? 3 : 1);
   const requested = region.layout;
 
   /* --- graphics routed through a §17 algorithm ---------------------------- */
@@ -1147,7 +1157,7 @@ function emitComponent(
       // Measured, not symbolic: a hug frame still needs a concrete width.
       // `tone` selects the colour pair; the label always stays as text, because
       // state communicated by colour alone is invisible to some readers.
-      const tone = toneFor(p.tone ?? p.state ?? p.color);
+      const tone = stateTone(p.tone ?? p.state ?? p.color);
       const label = str("label", "Status");
       operations.push(
         op({
@@ -1172,9 +1182,11 @@ function emitComponent(
     case "deviceNode": {
       // Health is a stroke, selection is a heavier stroke in action blue.
       // Selection wins over health: the thing the user is looking at must be
-      // unambiguous even when it is also degraded.
+      // unambiguous even when it is also degraded. `status` is accepted as an
+      // alias for `health` — authors write the product word, not the schema word.
       const selected = p.selected === true;
-      const stroke = selected ? "#0D99FF" : (healthStroke(p.health) ?? "#E0E0E0");
+      const health = typeof p.health === "string" ? p.health : typeof p.status === "string" ? p.status : undefined;
+      const stroke = selected ? "#0D99FF" : health !== undefined ? stateTone(health).fg : "#E0E0E0";
       operations.push(
         op({
           type: "createFrame",
@@ -1192,7 +1204,7 @@ function emitComponent(
           layoutMode: "VERTICAL",
           padding: grid,
           itemSpacing: 4,
-          ...(p.health === "offline" ? { opacity: 0.7 } : {}),
+          ...(health !== undefined && /offline|unavailable/.test(health.toLowerCase()) ? { opacity: 0.7 } : {}),
         }),
       );
       operations.push(op({ type: "createText", parent: spec.id, name: "Device", content: str("label", "Device"), fontSize: fs(12), weight: 600, fill: "#242521" }));
@@ -1894,8 +1906,9 @@ function emitComponent(
 
     case "modelRow": {
       // A real row: title, status in its tone colour, memory in mono. Three
-      // facts, one line each, no nested frames to maintain.
-      const tone = toneFor(p.status);
+      // facts, one line each, no nested frames to maintain. Status reads
+      // product language ("fits", "insufficient memory"), not just tones.
+      const tone = stateTone(p.status);
       operations.push(
         op({
           type: "createFrame",
@@ -2322,6 +2335,27 @@ const TONES: Record<string, { fg: string; bg: string }> = {
 /** Resolves a tone name to its colours, defaulting to neutral rather than failing. */
 function toneFor(v: unknown): { fg: string; bg: string } {
   if (typeof v === "string" && TONES[v.toLowerCase()]) return TONES[v.toLowerCase()]!;
+  return TONES.neutral!;
+}
+
+/**
+ * Product-language states mapped onto tones.
+ *
+ * Authors write "fits", "insufficient memory", "stale" — the words the product
+ * uses — not the tone vocabulary. Exact tone names win; recognised product
+ * language maps onto the nearest tone; anything else stays neutral rather
+ * than guessing. Narrow on purpose: a mapping that fires on substrings of
+ * ordinary prose would invent meaning.
+ */
+function stateTone(v: unknown): { fg: string; bg: string } {
+  if (typeof v === "string") {
+    const s = v.toLowerCase();
+    if (TONES[s]) return TONES[s]!;
+    if (/\bfits?\b|\bready\b|\bok\b|success|healthy|connected|available/.test(s)) return TONES.success!;
+    if (/fail|error|insufficient|exceed|offline|denied|unavailable|rejected/.test(s)) return TONES.error!;
+    if (/warn|degraded|stale|partial|pending|loading|progress|attention|pressure/.test(s)) return TONES.warning!;
+    if (/info|running|live|sync|refresh/.test(s)) return TONES.info!;
+  }
   return TONES.neutral!;
 }
 

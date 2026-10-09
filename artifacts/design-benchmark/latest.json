@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-09T09:54:49.576Z",
+  "generatedAt": "2026-10-09T15:33:49.652Z",
   "runner": "FigDes executable planning benchmark",
   "mode": "offline-planner-structural",
   "expectedCases": 9,
@@ -23,6 +23,33 @@
           "relationship",
           "signal"
         ],
+        "information": [
+          {
+            "text": "devices",
+            "kind": "option"
+          },
+          {
+            "text": "nodes",
+            "kind": "relationship"
+          },
+          {
+            "text": "links",
+            "kind": "relationship"
+          },
+          {
+            "text": "latency",
+            "kind": "relationship"
+          },
+          {
+            "text": "GPU health",
+            "kind": "signal"
+          },
+          {
+            "text": "memory pressure",
+            "kind": "signal"
+          }
+        ],
+        "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
           "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
@@ -30,6 +57,14 @@
         "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "devices",
+          "nodes",
+          "links",
+          "latency",
+          "GPU health",
+          "memory pressure"
+        ],
         "primaryDecision": "Find the weakest link in the EXO compute topology and identify which device needs attention",
         "decisionKind": "topology",
         "canvas": {
@@ -93,6 +128,35 @@
           "attribute",
           "signal"
         ],
+        "information": [
+          {
+            "text": "model name",
+            "kind": "option"
+          },
+          {
+            "text": "context length",
+            "kind": "unknown"
+          },
+          {
+            "text": "memory",
+            "kind": "attribute"
+          },
+          {
+            "text": "throughput",
+            "kind": "signal"
+          },
+          {
+            "text": "supported devices",
+            "kind": "option"
+          },
+          {
+            "text": "fit state",
+            "kind": "attribute"
+          }
+        ],
+        "unclassified": [
+          "context length"
+        ],
         "appliedGuidance": [
           "'nav' gap 24px from 'ObjectInspector' balanced density.",
           "Relationship rule carried into build: Context rows reference the subject explicitly."
@@ -100,6 +164,14 @@
         "note": "Derived from 5 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "model name",
+          "context length",
+          "memory",
+          "throughput",
+          "supported devices",
+          "fit state"
+        ],
         "primaryDecision": "Inspect this AI model and decide whether it fits the available local hardware",
         "decisionKind": "inspect",
         "canvas": {
@@ -170,6 +242,33 @@
           "signal",
           "relationship"
         ],
+        "information": [
+          {
+            "text": "GPU utilization",
+            "kind": "signal"
+          },
+          {
+            "text": "memory pressure",
+            "kind": "signal"
+          },
+          {
+            "text": "throughput",
+            "kind": "signal"
+          },
+          {
+            "text": "error rate",
+            "kind": "signal"
+          },
+          {
+            "text": "latency",
+            "kind": "relationship"
+          },
+          {
+            "text": "temperature",
+            "kind": "signal"
+          }
+        ],
+        "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'MonitoringInstrument' balanced density.",
           "Relationship rule carried into build: Signal-to-source traceable."
@@ -177,6 +276,14 @@
         "note": "Derived from 6 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "GPU utilization",
+          "memory pressure",
+          "throughput",
+          "error rate",
+          "latency",
+          "temperature"
+        ],
         "primaryDecision": "Monitor live inference and decide whether to intervene or let it continue",
         "decisionKind": "monitor",
         "canvas": {
@@ -250,6 +357,33 @@
           "option",
           "signal"
         ],
+        "information": [
+          {
+            "text": "current settings",
+            "kind": "setting"
+          },
+          {
+            "text": "policy",
+            "kind": "setting"
+          },
+          {
+            "text": "threshold",
+            "kind": "setting"
+          },
+          {
+            "text": "schedule",
+            "kind": "setting"
+          },
+          {
+            "text": "provider",
+            "kind": "option"
+          },
+          {
+            "text": "approval status",
+            "kind": "signal"
+          }
+        ],
+        "unclassified": [],
         "appliedGuidance": [
           "'nav' gap 24px from 'ConfigurationWorkbench' balanced density.",
           "Relationship rule carried into build: Every control maps to a visible preview change."
@@ -257,6 +391,14 @@
         "note": "Derived from 6 classified information item(s) for the 'configure' decision; pattern 'ConfigurationWorkbench' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "current settings",
+          "policy",
+          "threshold",
+          "schedule",
+          "provider",
+          "approval status"
+        ],
         "primaryDecision": "Configure and approve the runtime policy and its thresholds",
         "decisionKind": "configure",
         "canvas": {
@@ -331,6 +473,35 @@
           "signal",
           "setting"
         ],
+        "information": [
+          {
+            "text": "devices",
+            "kind": "option"
+          },
+          {
+            "text": "models",
+            "kind": "unknown"
+          },
+          {
+            "text": "team assignments",
+            "kind": "relationship"
+          },
+          {
+            "text": "deployments",
+            "kind": "event"
+          },
+          {
+            "text": "health",
+            "kind": "signal"
+          },
+          {
+            "text": "access policy",
+            "kind": "setting"
+          }
+        ],
+        "unclassified": [
+          "models"
+        ],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
           "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
@@ -338,6 +509,14 @@
         "note": "Derived from 5 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "devices",
+          "models",
+          "team assignments",
+          "deployments",
+          "health",
+          "access policy"
+        ],
         "primaryDecision": "Explore the enterprise device fleet and act on a subset of assigned devices",
         "decisionKind": "topology",
         "canvas": {
@@ -400,6 +579,37 @@
           "event",
           "setting"
         ],
+        "information": [
+          {
+            "text": "users",
+            "kind": "unknown"
+          },
+          {
+            "text": "revenue",
+            "kind": "unknown"
+          },
+          {
+            "text": "growth",
+            "kind": "unknown"
+          },
+          {
+            "text": "conversion",
+            "kind": "attribute"
+          },
+          {
+            "text": "activity",
+            "kind": "event"
+          },
+          {
+            "text": "settings",
+            "kind": "setting"
+          }
+        ],
+        "unclassified": [
+          "users",
+          "revenue",
+          "growth"
+        ],
         "appliedGuidance": [
           "'nav' gap 24px from 'ObjectInspector' balanced density.",
           "Relationship rule carried into build: Context rows reference the subject explicitly."
@@ -407,6 +617,14 @@
         "note": "Derived from 3 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "users",
+          "revenue",
+          "growth",
+          "conversion",
+          "activity",
+          "settings"
+        ],
         "primaryDecision": "Review a generic SaaS dashboard as a negative control; avoid copying its dashboard composition",
         "decisionKind": "inspect",
         "canvas": {
@@ -479,6 +697,36 @@
           "event",
           "signal"
         ],
+        "information": [
+          {
+            "text": "events",
+            "kind": "event"
+          },
+          {
+            "text": "incidents",
+            "kind": "event"
+          },
+          {
+            "text": "errors",
+            "kind": "signal"
+          },
+          {
+            "text": "owner",
+            "kind": "unknown"
+          },
+          {
+            "text": "status",
+            "kind": "signal"
+          },
+          {
+            "text": "last updated",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "owner",
+          "last updated"
+        ],
         "appliedGuidance": [
           "'nav' gap 12px from 'ExplorationSurface' dense density.",
           "'filters' gap 12px from 'ExplorationSurface' dense density.",
@@ -487,6 +735,14 @@
         "note": "Derived from 4 classified information item(s) for the 'explore' decision; pattern 'ExplorationSurface' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "events",
+          "incidents",
+          "errors",
+          "owner",
+          "status",
+          "last updated"
+        ],
         "primaryDecision": "Find events and incidents that need follow-up and identify the owner",
         "decisionKind": "explore",
         "canvas": {
@@ -557,6 +813,33 @@
         "infoKinds": [
           "relationship"
         ],
+        "information": [
+          {
+            "text": "nodes",
+            "kind": "relationship"
+          },
+          {
+            "text": "edges",
+            "kind": "relationship"
+          },
+          {
+            "text": "dependencies",
+            "kind": "relationship"
+          },
+          {
+            "text": "latency",
+            "kind": "relationship"
+          },
+          {
+            "text": "bandwidth",
+            "kind": "relationship"
+          },
+          {
+            "text": "weak link",
+            "kind": "relationship"
+          }
+        ],
+        "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
           "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
@@ -564,6 +847,14 @@
         "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "nodes",
+          "edges",
+          "dependencies",
+          "latency",
+          "bandwidth",
+          "weak link"
+        ],
         "primaryDecision": "Find the weak link in this dependency graph and understand the relationship flow",
         "decisionKind": "topology",
         "canvas": {
@@ -626,6 +917,37 @@
           "relationship",
           "attribute"
         ],
+        "information": [
+          {
+            "text": "model name",
+            "kind": "option"
+          },
+          {
+            "text": "run cost",
+            "kind": "unknown"
+          },
+          {
+            "text": "latency",
+            "kind": "relationship"
+          },
+          {
+            "text": "quality",
+            "kind": "unknown"
+          },
+          {
+            "text": "fit state",
+            "kind": "attribute"
+          },
+          {
+            "text": "recommendation",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "run cost",
+          "quality",
+          "recommendation"
+        ],
         "appliedGuidance": [
           "'nav' gap 24px from 'ComparisonField' balanced density.",
           "'header' gap 24px from 'ComparisonField' balanced density.",
@@ -634,6 +956,14 @@
         "note": "Derived from 3 classified information item(s) for the 'compare' decision; pattern 'ComparisonField' applied as guidance, not structure."
       },
       "intent": {
+        "availableInformation": [
+          "model name",
+          "run cost",
+          "latency",
+          "quality",
+          "fit state",
+          "recommendation"
+        ],
         "primaryDecision": "Compare model run cost, latency, quality, and fit before choosing what to run",
         "decisionKind": "compare",
         "canvas": {

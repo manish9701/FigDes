@@ -1,0 +1,908 @@
+{
+  "schemaVersion": 1,
+  "suiteVersion": "benchmark-v2",
+  "generatedAt": "2026-10-09T15:33:49.668Z",
+  "runner": "FigDes executable planning benchmark (expanded)",
+  "mode": "offline-planner-structural",
+  "expectedCases": 8,
+  "completedCases": 8,
+  "passedCases": 8,
+  "reviewCases": [],
+  "visualBenchmarkComplete": false,
+  "visualBenchmarkReason": "Live Figma screenshots are not captured by the offline planner runner; do not interpret structural checks as visual approval.",
+  "results": [
+    {
+      "caseId": "agent-builder-workflow",
+      "brief": "Agent builder: compose a diagnose-then-act workflow",
+      "requestedPattern": "canvas-workspace",
+      "decisionKind": "author",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "event"
+        ],
+        "information": [
+          {
+            "text": "trigger event",
+            "kind": "event"
+          },
+          {
+            "text": "diagnosis steps",
+            "kind": "unknown"
+          },
+          {
+            "text": "actions",
+            "kind": "unknown"
+          },
+          {
+            "text": "approvals",
+            "kind": "unknown"
+          },
+          {
+            "text": "run history",
+            "kind": "event"
+          }
+        ],
+        "unclassified": [
+          "diagnosis steps",
+          "actions",
+          "approvals"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "trigger event",
+          "diagnosis steps",
+          "actions",
+          "approvals",
+          "run history"
+        ],
+        "primaryDecision": "Agent builder: compose a diagnose-then-act workflow",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (the stated decision), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (trigger event, run history)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "empty-loading-error-states",
+      "brief": "Empty, loading and error states for a telemetry screen",
+      "requestedPattern": "monitoring-instrument",
+      "decisionKind": "monitor",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "monitoring-instrument",
+        "infoKinds": [
+          "signal"
+        ],
+        "information": [
+          {
+            "text": "telemetry stream",
+            "kind": "unknown"
+          },
+          {
+            "text": "loading state",
+            "kind": "signal"
+          },
+          {
+            "text": "empty state",
+            "kind": "unknown"
+          },
+          {
+            "text": "error state",
+            "kind": "signal"
+          },
+          {
+            "text": "retry action",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "telemetry stream",
+          "empty state",
+          "retry action"
+        ],
+        "appliedGuidance": [
+          "'rail' gap 24px from 'MonitoringInstrument' balanced density.",
+          "Relationship rule carried into build: Signal-to-source traceable."
+        ],
+        "note": "Derived from 2 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "telemetry stream",
+          "loading state",
+          "empty state",
+          "error state",
+          "retry action"
+        ],
+        "primaryDecision": "Empty, loading and error states for a telemetry screen",
+        "decisionKind": "monitor",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "rail",
+          "role": "status-rail",
+          "composition": "instrument",
+          "width": "fill",
+          "height": 64,
+          "grow": 0,
+          "gap": 24,
+          "padding": 16,
+          "because": "state at a glance (loading state, error state), read without focusing"
+        },
+        {
+          "id": "primary-visual",
+          "role": "primary-visual",
+          "composition": "instrument",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 24,
+          "because": "the primary signal (loading state, error state), given the most space"
+        },
+        {
+          "id": "detail",
+          "role": "secondary",
+          "composition": "split-view",
+          "width": "fill",
+          "height": 240,
+          "grow": 0,
+          "gap": 16,
+          "padding": 24,
+          "because": "the underlying data behind the signal (the stated decision)"
+        }
+      ],
+      "warnings": [
+        "Reads as monitoring (2 live signals, no subject to inspect): planned as an instrument, not an inspection. Say otherwise if wrong — the classifier only saw 'Empty, loading and error states for a telemetry screen'.",
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "multi-screen-coherence",
+      "brief": "Two screens, one journey: choose a model then watch it run",
+      "requestedPattern": "editorial-focus",
+      "decisionKind": "compare",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "comparison-field",
+        "infoKinds": [
+          "option",
+          "attribute",
+          "signal"
+        ],
+        "information": [
+          {
+            "text": "model name",
+            "kind": "option"
+          },
+          {
+            "text": "fit state",
+            "kind": "attribute"
+          },
+          {
+            "text": "run status",
+            "kind": "signal"
+          },
+          {
+            "text": "throughput",
+            "kind": "signal"
+          },
+          {
+            "text": "shared selection",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "shared selection"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ComparisonField' balanced density.",
+          "'header' gap 24px from 'ComparisonField' balanced density.",
+          "Relationship rule carried into build: Same schema both sides."
+        ],
+        "note": "Derived from 4 classified information item(s) for the 'select' decision; pattern 'ComparisonField' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "model name",
+          "fit state",
+          "run status",
+          "throughput",
+          "shared selection"
+        ],
+        "primaryDecision": "Two screens, one journey: choose a model then watch it run",
+        "decisionKind": "select",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 240,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation: where am I in the product"
+        },
+        {
+          "id": "header",
+          "role": "header",
+          "composition": "editorial",
+          "width": "fill",
+          "height": 72,
+          "grow": 0,
+          "gap": 24,
+          "padding": 24,
+          "because": "the decision, stated: \"Two screens, one journey: choose a model then watch it run\""
+        },
+        {
+          "id": "content",
+          "role": "content",
+          "composition": "table",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 16,
+          "padding": 24,
+          "because": "the options (model name) compared across fit state — alignment does the comparing, not decoration"
+        },
+        {
+          "id": "inspector",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "detail for the currently focused option (fit state)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "existing-file-extension",
+      "brief": "Extend the file's own components instead of rebuilding",
+      "requestedPattern": "object-inspector",
+      "decisionKind": "inspect",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "signal",
+          "attribute"
+        ],
+        "information": [
+          {
+            "text": "existing status pill",
+            "kind": "signal"
+          },
+          {
+            "text": "existing inspector",
+            "kind": "attribute"
+          },
+          {
+            "text": "new telemetry",
+            "kind": "unknown"
+          },
+          {
+            "text": "component reuse",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "new telemetry",
+          "component reuse"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "existing status pill",
+          "existing inspector",
+          "new telemetry",
+          "component reuse"
+        ],
+        "primaryDecision": "Extend the file's own components instead of rebuilding",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (existing inspector), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (existing status pill, existing inspector)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "unfamiliar-domain",
+      "brief": "Harbour logistics: berth congestion at a container terminal",
+      "requestedPattern": "spatial-topology",
+      "decisionKind": "topology",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "relationship",
+          "signal"
+        ],
+        "information": [
+          {
+            "text": "berth names",
+            "kind": "unknown"
+          },
+          {
+            "text": "vessel queue",
+            "kind": "unknown"
+          },
+          {
+            "text": "crane assignments",
+            "kind": "relationship"
+          },
+          {
+            "text": "congestion signals",
+            "kind": "signal"
+          },
+          {
+            "text": "tide window",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "berth names",
+          "vessel queue",
+          "tide window"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "berth names",
+          "vessel queue",
+          "crane assignments",
+          "congestion signals",
+          "tide window"
+        ],
+        "primaryDecision": "Harbour logistics: berth congestion at a container terminal",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (the stated decision), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (congestion signals)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "spatial-canvas-challenge",
+      "brief": "Free-form canvas: arrange a cluster upgrade plan",
+      "requestedPattern": "relationship-graph",
+      "decisionKind": "topology",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "relationship"
+        ],
+        "information": [
+          {
+            "text": "cluster nodes",
+            "kind": "relationship"
+          },
+          {
+            "text": "upgrade order",
+            "kind": "unknown"
+          },
+          {
+            "text": "dependencies",
+            "kind": "relationship"
+          },
+          {
+            "text": "risk flags",
+            "kind": "unknown"
+          },
+          {
+            "text": "rollback plan",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "upgrade order",
+          "risk flags",
+          "rollback plan"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "cluster nodes",
+          "upgrade order",
+          "dependencies",
+          "risk flags",
+          "rollback plan"
+        ],
+        "primaryDecision": "Free-form canvas: arrange a cluster upgrade plan",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (the stated decision), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (the stated decision)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "responsive-adaptation",
+      "brief": "Find results on any viewport: the same explore screen at 1440 and 768 wide",
+      "requestedPattern": "exploration-surface",
+      "decisionKind": "explore",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "exploration-surface",
+        "infoKinds": [
+          "option"
+        ],
+        "information": [
+          {
+            "text": "search filters",
+            "kind": "option"
+          },
+          {
+            "text": "result rows",
+            "kind": "option"
+          },
+          {
+            "text": "facets",
+            "kind": "option"
+          },
+          {
+            "text": "density at 768 wide",
+            "kind": "unknown"
+          },
+          {
+            "text": "density at 1440 wide",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "density at 768 wide",
+          "density at 1440 wide"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 12px from 'ExplorationSurface' dense density.",
+          "'filters' gap 12px from 'ExplorationSurface' dense density.",
+          "Relationship rule carried into build: Selection previews without navigation."
+        ],
+        "note": "Derived from 3 classified information item(s) for the 'explore' decision; pattern 'ExplorationSurface' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "search filters",
+          "result rows",
+          "facets",
+          "density at 768 wide",
+          "density at 1440 wide"
+        ],
+        "primaryDecision": "Find results on any viewport: the same explore screen at 1440 and 768 wide",
+        "decisionKind": "explore",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 240,
+          "height": "fill",
+          "grow": 0,
+          "gap": 12,
+          "because": "orientation"
+        },
+        {
+          "id": "filters",
+          "role": "header",
+          "composition": "editorial",
+          "width": "fill",
+          "height": 64,
+          "grow": 0,
+          "gap": 12,
+          "padding": 16,
+          "because": "narrowing (search filters, result rows, facets) before listing"
+        },
+        {
+          "id": "results",
+          "role": "content",
+          "composition": "table",
+          "width": "fill",
+          "height": "fill",
+          "grow": 1,
+          "gap": 12,
+          "padding": 24,
+          "because": "the results (search filters, result rows, facets), dense enough to scan"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    },
+    {
+      "caseId": "constrained-design-system",
+      "brief": "Build with only three tokens and one typeface",
+      "requestedPattern": "configuration-workbench",
+      "decisionKind": "configure",
+      "derivation": {
+        "strategy": "task-derived",
+        "pattern": "object-inspector",
+        "infoKinds": [
+          "setting"
+        ],
+        "information": [
+          {
+            "text": "three tokens",
+            "kind": "unknown"
+          },
+          {
+            "text": "one typeface",
+            "kind": "unknown"
+          },
+          {
+            "text": "settings",
+            "kind": "setting"
+          },
+          {
+            "text": "preview",
+            "kind": "unknown"
+          },
+          {
+            "text": "commit action",
+            "kind": "unknown"
+          }
+        ],
+        "unclassified": [
+          "three tokens",
+          "one typeface",
+          "preview",
+          "commit action"
+        ],
+        "appliedGuidance": [
+          "'nav' gap 24px from 'ObjectInspector' balanced density.",
+          "Relationship rule carried into build: Context rows reference the subject explicitly."
+        ],
+        "note": "Derived from 1 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
+      },
+      "intent": {
+        "availableInformation": [
+          "three tokens",
+          "one typeface",
+          "settings",
+          "preview",
+          "commit action"
+        ],
+        "primaryDecision": "Build with only three tokens and one typeface",
+        "decisionKind": "inspect",
+        "canvas": {
+          "width": 1440,
+          "height": 900,
+          "grid": 8
+        }
+      },
+      "regions": [
+        {
+          "id": "nav",
+          "role": "navigation",
+          "composition": "instrument",
+          "width": 208,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "orientation"
+        },
+        {
+          "id": "subject",
+          "role": "primary-visual",
+          "composition": "canvas",
+          "width": "fill",
+          "height": "fill",
+          "grow": 2,
+          "gap": 24,
+          "padding": 32,
+          "because": "the thing being understood (the stated decision), given the most room"
+        },
+        {
+          "id": "context",
+          "role": "inspector",
+          "composition": "split-view",
+          "width": 360,
+          "height": "fill",
+          "grow": 0,
+          "gap": 24,
+          "because": "surrounding state that gives the subject meaning (the stated decision)"
+        }
+      ],
+      "warnings": [
+        "No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling."
+      ],
+      "checks": {
+        "hasRegions": true,
+        "uniqueRegionIds": true,
+        "regionRationales": true,
+        "taskDerived": true,
+        "noMetricCardWall": true,
+        "hasExplicitFallbackReason": true
+      },
+      "passedChecks": 6,
+      "totalChecks": 6,
+      "status": "PASS",
+      "visualEvidence": "NOT_CAPTURED",
+      "note": "Planner/structure benchmark only; not a screenshot or rendered-design quality score."
+    }
+  ]
+}

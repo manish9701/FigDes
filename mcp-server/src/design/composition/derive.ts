@@ -44,7 +44,7 @@ const KIND_PATTERNS: Array<{ kind: InfoKind; pattern: RegExp }> = [
   { kind: "setting", pattern: /setting|config|parameter|polic|preference|tune|threshold|schedule/i },
   { kind: "event", pattern: /event|log|activit|deploy|audit|history|incident|alert stream/i },
   { kind: "signal", pattern: /utili[sz]ation|errors?|health|status|pressure|cpu|signal|throughput|alerts?|live|watt|temp|disk|network|gpu|storage|load/i },
-  { kind: "option", pattern: /model name|device|machine|provider|endpoint|option|choice|candidate|variant|running models/i },
+  { kind: "option", pattern: /model name|device|machine|provider|endpoint|option|choice|candidate|variant|running models|filter|facet|\bresults?\b|\brows?\b|listing/i },
   { kind: "attribute", pattern: /memory|vram|fit|throughput|version|size|spec|benchmark|score|statistic/i },
   { kind: "detail", pattern: /descri|document|sample|snippet|endpoint detail|credential/i },
 ];
@@ -80,6 +80,16 @@ export interface Derivation {
   strategy: "task-derived" | "shell-fallback";
   pattern: string | null;
   infoKinds: InfoKind[];
+  /**
+   * Every classified item with its raw text preserved.
+   *
+   * Previously only `infoKinds` survived and the raw strings were lost, so
+   * nothing downstream could verify what the plan was actually built from.
+   * The raw text is the evidence; the kind is the interpretation.
+   */
+  information: ClassifiedInfo[];
+  /** Items that matched nothing. Named so the caller can ask for better data. */
+  unclassified: string[];
   /** Every pattern rule actually applied, so guidance is auditable. */
   appliedGuidance: string[];
   note: string;
@@ -314,6 +324,8 @@ export function deriveRegions(input: {
       strategy: "task-derived",
       pattern: input.pattern?.id ?? null,
       infoKinds: [...kinds],
+      information: classified,
+      unclassified: classified.filter((i) => i.kind === "unknown").map((i) => i.text),
       appliedGuidance,
       note: `Derived from ${known.length} classified information item(s) for the '${kind}' decision; pattern '${input.pattern?.name ?? "none"}' applied as guidance, not structure.`,
     },

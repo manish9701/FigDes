@@ -166,18 +166,20 @@ export function scoreLiveBenchmark(input: {
 /**
  * Summarizes a recorded benchmark run. This intentionally does not claim to
  * render Figma screens: the caller must first generate screens and record
- * evidence-backed scores for each case.
+ * evidence-backed scores for each case. The `cases` parameter defaults to the
+ * pinned v1 baseline so existing callers are unaffected; the expanded suite
+ * passes its own case list and version.
  */
-export function summarizeBenchmarkRun(results: BenchmarkResult[]): BenchmarkSuiteReport {
+export function summarizeBenchmarkRun(results: BenchmarkResult[], cases: readonly BenchmarkCase[] = BENCHMARKS): BenchmarkSuiteReport {
   const byCase = new Map<string, BenchmarkResult>();
   for (const result of results) {
-    if (BENCHMARKS.some((benchmark) => benchmark.id === result.caseId)) byCase.set(result.caseId, result);
+    if (cases.some((benchmark) => benchmark.id === result.caseId)) byCase.set(result.caseId, result);
   }
-  const completed = BENCHMARKS.filter((benchmark) => byCase.has(benchmark.id)).map((benchmark) => byCase.get(benchmark.id)!);
+  const completed = cases.filter((benchmark) => byCase.has(benchmark.id)).map((benchmark) => byCase.get(benchmark.id)!);
   const scores = completed.map((result) => result.total);
-  const missingCases = BENCHMARKS.filter((benchmark) => !byCase.has(benchmark.id)).map((benchmark) => benchmark.id);
+  const missingCases = cases.filter((benchmark) => !byCase.has(benchmark.id)).map((benchmark) => benchmark.id);
   return {
-    expectedCases: BENCHMARKS.length,
+    expectedCases: cases.length,
     completedCases: completed.length,
     missingCases,
     averageScore: scores.length ? Math.round((scores.reduce((sum, score) => sum + score, 0) / scores.length) * 10) / 10 : null,
@@ -279,5 +281,130 @@ export function compareBenchmarkRuns(
       comparisons.length === 0
         ? "No shared cases between baseline and candidate runs."
         : `${improvements}/${comparisons.length} improved, ${regressions.length} regressed${regressions.length > 0 ? ` (${regressions.join(", ")})` : ""}.`,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Expanded suite v2 (Phase 1.4): the uncovered categories, versioned apart    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The v1 baseline (BENCHMARKS, 9 cases) is frozen: existing tests pin its
+ * length and its runner asserts its shape. The expanded suite covers the
+ * eight §11 categories v1 never exercised, under its own version, so results
+ * compare across suites without weakening the original tests.
+ */
+export const EXPANDED_SUITE_VERSION = "benchmark-v2";
+
+export const EXPANDED_BENCHMARKS: BenchmarkCase[] = [
+  { id: "agent-builder-workflow", brief: "Agent builder: compose a diagnose-then-act workflow", decisionKind: "author", patternId: "canvas-workspace" },
+  { id: "empty-loading-error-states", brief: "Empty, loading and error states for a telemetry screen", decisionKind: "monitor", patternId: "monitoring-instrument" },
+  { id: "multi-screen-coherence", brief: "Two screens, one journey: choose a model then watch it run", decisionKind: "compare", patternId: "editorial-focus" },
+  { id: "existing-file-extension", brief: "Extend the file's own components instead of rebuilding", decisionKind: "inspect", patternId: "object-inspector" },
+  { id: "unfamiliar-domain", brief: "Harbour logistics: berth congestion at a container terminal", decisionKind: "topology", patternId: "spatial-topology" },
+  { id: "spatial-canvas-challenge", brief: "Free-form canvas: arrange a cluster upgrade plan", decisionKind: "topology", patternId: "relationship-graph" },
+  { id: "responsive-adaptation", brief: "Find results on any viewport: the same explore screen at 1440 and 768 wide", decisionKind: "explore", patternId: "exploration-surface" },
+  { id: "constrained-design-system", brief: "Build with only three tokens and one typeface", decisionKind: "configure", patternId: "configuration-workbench" },
+];
+
+/* -------------------------------------------------------------------------- */
+/* Three-outcome challenge scoring (Phase 3)                                    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One challenge, three independent verdicts:
+ * - structural: the plan and the Figma structure are valid;
+ * - visual: the rendered design meets quality criteria;
+ * - product: the design serves the intended task and preserves context.
+ *
+ * Each outcome is PASS, FAIL, PENDING or NOT_APPLICABLE with its own reasons.
+ * Aggregation never hides a critical failure behind a good average: any FAIL
+ * on a required outcome is an overall FAIL; a PENDING required outcome keeps
+ * the whole challenge PENDING.
+ */
+
+export type ChallengeOutcome = "PASS" | "FAIL" | "PENDING" | "NOT_APPLICABLE";
+
+export interface OutcomeInput {
+  status: ChallengeOutcome;
+  reasons?: string[];
+  /** Finding or evidence ids backing this outcome. */
+  evidenceIds?: string[];
+}
+
+export interface ChallengeScore {
+  caseId: string;
+  suiteVersion: string;
+  structural: OutcomeInput & { required: true };
+  visual: OutcomeInput & { required: true };
+  product: OutcomeInput & { required: true };
+  overall: ChallengeOutcome;
+  reason: string;
+  notVerified: string[];
+}
+
+export function scoreChallenge(input: {
+  caseId: string;
+  suiteVersion?: string;
+  structural: OutcomeInput;
+  visual: OutcomeInput;
+  product: OutcomeInput;
+  /** Outcomes that may be NOT_APPLICABLE without failing the challenge. */
+  optionalOutcomes?: Array<"visual" | "product">;
+}): ChallengeScore {
+  const suiteVersion = input.suiteVersion ?? EXPANDED_SUITE_VERSION;
+  const optional = new Set(input.optionalOutcomes ?? []);
+  const outcomes = {
+    structural: { ...input.structural, required: true as const },
+    visual: { ...input.visual, required: true as const },
+    product: { ...input.product, required: true as const },
+  };
+  const notVerified: string[] = [];
+  for (const [name, outcome] of Object.entries(outcomes) as Array<[string, OutcomeInput]>) {
+    if (outcome.status === "PENDING" || outcome.status === "NOT_APPLICABLE") {
+      notVerified.push(`${name}: ${outcome.reasons?.[0] ?? "not evaluated"}`);
+    }
+  }
+
+  const fail = (["structural", "visual", "product"] as const).find((name) => outcomes[name].status === "FAIL");
+  if (fail) {
+    return {
+      caseId: input.caseId, suiteVersion,
+      ...outcomes,
+      overall: "FAIL",
+      reason: `${fail} failed: ${outcomes[fail].reasons?.[0] ?? "see evidence"}. A good average never clears a failed outcome.`,
+      notVerified,
+    };
+  }
+  const pending = (["structural", "visual", "product"] as const).find(
+    (name) => outcomes[name].status === "PENDING" && !optional.has(name as "visual" | "product"),
+  );
+  if (pending) {
+    return {
+      caseId: input.caseId, suiteVersion,
+      ...outcomes,
+      overall: "PENDING",
+      reason: `${pending} is still pending: ${outcomes[pending].reasons?.[0] ?? "see evidence"}. Pending stays pending.`,
+      notVerified,
+    };
+  }
+  const naRequired = (["structural", "visual", "product"] as const).find(
+    (name) => outcomes[name].status === "NOT_APPLICABLE" && !optional.has(name as "visual" | "product"),
+  );
+  if (naRequired) {
+    return {
+      caseId: input.caseId, suiteVersion,
+      ...outcomes,
+      overall: "PENDING",
+      reason: `${naRequired} was marked not applicable but is required for this challenge. Evaluate it or declare it optional explicitly.`,
+      notVerified,
+    };
+  }
+  return {
+    caseId: input.caseId, suiteVersion,
+    ...outcomes,
+    overall: "PASS",
+    reason: "Structural, visual and product outcomes each passed on their own evidence.",
+    notVerified,
   };
 }

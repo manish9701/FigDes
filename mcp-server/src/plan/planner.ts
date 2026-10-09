@@ -66,6 +66,20 @@ export interface ScreenIntent {
   components?: ComponentKnowledge[];
   /** The model's own preference, used only as a tiebreaker. */
   desiredComposition?: Composition;
+  /**
+   * Visual direction in words ("technical-instrument", "editorial"...).
+   *
+   * Previously this never reached the planner — it was injected into the
+   * program downstream, so planning ignored it. Now it biases pattern
+   * matching and is recorded in the derivation, so the plan reflects it.
+   */
+  visualDirection?: string;
+  /**
+   * Explicit density preference from the artDirection stage ("low" |
+   * "medium" | "high"). Overrides pattern density for gap guidance only;
+   * it never reorders regions or changes grow.
+   */
+  densityPreference?: "low" | "medium" | "high";
   canvas?: { width?: number; height?: number; grid?: number };
   name?: string;
 }
@@ -459,6 +473,12 @@ export interface ScreenPlan {
   intent: {
     goal?: string;
     audience?: string;
+    /** Raw information items the plan was derived from. Survives classification. */
+    availableInformation?: string[];
+    /** File patterns the plan was asked to respect. */
+    existingPatterns?: string[];
+    /** Visual direction that biased pattern selection. */
+    visualDirection?: string;
     primaryDecision: string;
     decisionKind: DecisionKind;
     canvas: { width: number; height: number; grid: number };
@@ -585,7 +605,10 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   // Task-driven derivation first: regions serve the actual information for the
   // stated decision, with the pattern as guidance. Shells are the explicit
   // fallback when there is nothing classifiable to derive from.
-  const patternForPlan = bestPattern(decisionKind, intent.goal ?? intent.primaryDecision);
+  // The visual direction biases pattern matching (a stated "editorial" manner
+  // should pull the editorial pattern up) but never overrides the decision
+  // kind: manner is a preference, the task is the requirement.
+  const patternForPlan = bestPattern(decisionKind, [intent.goal ?? intent.primaryDecision, intent.visualDirection ?? ""].join(" "));
   const derived = deriveRegions({
     decisionKind,
     primaryDecision: intent.primaryDecision,
@@ -612,15 +635,31 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     derivation = derived.derivation;
   } else {
     regions = SHELLS[decisionKind](intent);
+    const attempted = classifyInformation(intent.availableInformation ?? []);
     derivation = {
       strategy: "shell-fallback",
       pattern: patternForPlan?.id ?? null,
       infoKinds: [],
+      information: attempted,
+      unclassified: attempted.filter((i) => i.kind === "unknown").map((i) => i.text),
       appliedGuidance: [],
       note: "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
     };
   }
 
+  // An explicit density preference overrides pattern gap guidance only. It
+  // never reorders regions or changes grow: manner adjusts spacing, the task
+  // still decides structure. Recorded so the override is auditable.
+  if (intent.densityPreference !== undefined && derived) {
+    const gap = intent.densityPreference === "low" ? 32 : intent.densityPreference === "high" ? 12 : 24;
+    for (const r of regions) r.gap = gap;
+    derivation.appliedGuidance.push(`Explicit density preference '${intent.densityPreference}': region gaps set to ${gap}px, pattern density overridden for spacing only.`);
+  }
+  // A stated visual direction biased pattern selection above; record what it
+  // did so the choice is auditable rather than invisible.
+  if (intent.visualDirection !== undefined) {
+    derivation.appliedGuidance.push(`Visual direction '${intent.visualDirection}': pattern matching biased toward it; selected pattern '${patternForPlan?.name ?? "none"}' for the '${decisionKind}' decision.`);
+  }
   // An explicit preference wins, but only among compositions that make sense for
   // the roles in play. Overriding to `canvas` for a topology screen would produce
   // a map with no room for it.
@@ -732,6 +771,9 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     intent: {
       ...(intent.goal !== undefined ? { goal: intent.goal } : {}),
       ...(intent.audience !== undefined ? { audience: intent.audience } : {}),
+      ...(intent.availableInformation !== undefined ? { availableInformation: intent.availableInformation } : {}),
+      ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
+      ...(intent.visualDirection !== undefined ? { visualDirection: intent.visualDirection } : {}),
       primaryDecision: intent.primaryDecision,
       decisionKind,
       canvas: { width, height, grid },
@@ -901,6 +943,7 @@ function directArt(
     ...warnings,
     ...(focal === null ? ["No region earns focal status: the screen may read as a set of equal panels."] : []),
     ...(regions.length > 4 ? [`${regions.length} regions compete for attention; verify each earns its surface.`] : []),
+    ...audienceGuidance(intent.audience),
   ];
 
   return {
@@ -916,6 +959,29 @@ function directArt(
   };
 }
 
+
+/**
+ * Audience shapes density and vocabulary — previously a passive label that
+ * travelled with the plan but changed nothing. Each audience gets one
+ * concrete, build-actionable guidance string, recorded as a design risk so it
+ * is seen at build time rather than buried in a field nobody reads.
+ */
+function audienceGuidance(audience: ScreenIntent["audience"]): string[] {
+  switch (audience) {
+    case "leadership":
+      return ["Audience is leadership: sparse density, one verdict-first headline, outcomes over mechanics. Compress telemetry into a single trend plus the decision it implies."];
+    case "operator":
+      return ["Audience is operator: dense but structured into continuous fields, never card stacks. State markers on the trace, intervention action unambiguous and always visible."];
+    case "engineer":
+      return ["Audience is engineer: precise technical vocabulary, monospaced values, full context available. Do not simplify away the detail this reader decides with."];
+    case "developer":
+      return ["Audience is developer: identifiers, endpoints and states named exactly as in the system. Copy-pasteable values beat paraphrase."];
+    case "general":
+      return ["Audience is general consumer: plain language over jargon, progressive disclosure for anything technical. The first read must need no domain knowledge."];
+    default:
+      return [];
+  }
+}
 
 function buildVisualDirections(
   kind: DecisionKind,

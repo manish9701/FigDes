@@ -7,16 +7,19 @@
  * scores: those require screenshots from a live Figma/plugin render.
  *
  * Usage: npm run benchmark:design
+ *        npm run benchmark:design -- --expanded   (also run the v2 suite)
  * Output: artifacts/design-benchmark/latest.json
+ *         artifacts/design-benchmark/expanded.json (with --expanded)
  */
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { planScreen } from "../mcp-server/dist-test/plan/planner.js";
-import { BENCHMARKS } from "../mcp-server/dist-test/design/benchmark/suite.js";
+import { BENCHMARKS, EXPANDED_BENCHMARKS, EXPANDED_SUITE_VERSION } from "../mcp-server/dist-test/design/benchmark/suite.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outPath = resolve(root, process.env.FIGDES_BENCHMARK_OUTPUT ?? "artifacts/design-benchmark/latest.json");
+const runExpanded = process.argv.includes("--expanded");
 
 const taskByCase = {
   "exo-compute-topology": "Find the weakest link in the EXO compute topology and identify which device needs attention",
@@ -40,6 +43,15 @@ const informationByCase = {
   "data-heavy-workspace": ["events", "incidents", "errors", "owner", "status", "last updated"],
   "spatial-relationship": ["nodes", "edges", "dependencies", "latency", "bandwidth", "weak link"],
   "editorial-product-page": ["model name", "run cost", "latency", "quality", "fit state", "recommendation"],
+  // Expanded v2 tasks: unfamiliar domains and uncovered categories.
+  "agent-builder-workflow": ["trigger event", "diagnosis steps", "actions", "approvals", "run history"],
+  "empty-loading-error-states": ["telemetry stream", "loading state", "empty state", "error state", "retry action"],
+  "multi-screen-coherence": ["model name", "fit state", "run status", "throughput", "shared selection"],
+  "existing-file-extension": ["existing status pill", "existing inspector", "new telemetry", "component reuse"],
+  "unfamiliar-domain": ["berth names", "vessel queue", "crane assignments", "congestion signals", "tide window"],
+  "spatial-canvas-challenge": ["cluster nodes", "upgrade order", "dependencies", "risk flags", "rollback plan"],
+  "responsive-adaptation": ["search filters", "result rows", "facets", "density at 768 wide", "density at 1440 wide"],
+  "constrained-design-system": ["three tokens", "one typeface", "settings", "preview", "commit action"],
 };
 
 function inspectPlan(benchmark, plan) {
@@ -110,3 +122,41 @@ console.log(JSON.stringify({
 }, null, 2));
 
 if (results.length !== BENCHMARKS.length) process.exitCode = 1;
+
+// Expanded v2 suite: same structural checks, separate versioned output. The
+// v1 baseline above is untouched — this file appends, never weakens.
+if (runExpanded) {
+  const expandedResults = [];
+  for (const benchmark of EXPANDED_BENCHMARKS) {
+    const plan = planScreen({
+      primaryDecision: benchmark.brief,
+      availableInformation: informationByCase[benchmark.id] ?? [],
+    });
+    expandedResults.push(inspectPlan(benchmark, plan));
+  }
+  const expandedReport = {
+    schemaVersion: 1,
+    suiteVersion: EXPANDED_SUITE_VERSION,
+    generatedAt: new Date().toISOString(),
+    runner: "FigDes executable planning benchmark (expanded)",
+    mode: "offline-planner-structural",
+    expectedCases: EXPANDED_BENCHMARKS.length,
+    completedCases: expandedResults.length,
+    passedCases: expandedResults.filter((result) => result.status === "PASS").length,
+    reviewCases: expandedResults.filter((result) => result.status !== "PASS").map((result) => result.caseId),
+    visualBenchmarkComplete: false,
+    visualBenchmarkReason: "Live Figma screenshots are not captured by the offline planner runner; do not interpret structural checks as visual approval.",
+    results: expandedResults,
+  };
+  const expandedPath = resolve(root, "artifacts/design-benchmark/expanded.json");
+  await writeFile(expandedPath, JSON.stringify(expandedReport, null, 2) + "\n", "utf8");
+  console.log(JSON.stringify({
+    output: expandedPath,
+    suiteVersion: EXPANDED_SUITE_VERSION,
+    expectedCases: expandedReport.expectedCases,
+    completedCases: expandedReport.completedCases,
+    passedCases: expandedReport.passedCases,
+    reviewCases: expandedReport.reviewCases,
+  }, null, 2));
+  if (expandedResults.length !== EXPANDED_BENCHMARKS.length) process.exitCode = 1;
+}

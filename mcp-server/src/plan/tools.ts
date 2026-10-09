@@ -163,6 +163,10 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       : {}),
     ...(args.desiredComposition !== undefined ? { desiredComposition: args.desiredComposition } : {}),
     ...(args.name !== undefined ? { name: args.name } : {}),
+    // Visual direction and density reach the planner itself now, not just the
+    // program downstream: direction biases pattern matching, density sets gaps.
+    ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
+    ...(args.artDirection?.density !== undefined ? { densityPreference: args.artDirection.density } : {}),
     // Deck format overrides any canvas size: slides are fixed 1920x1080, and a
     // custom size here would promise geometry the build cannot produce.
     ...(args.format === "deck" ? { canvas: { width: 1920, height: 1080, grid: 8 } } : args.canvas !== undefined ? { canvas: args.canvas } : {}),
@@ -270,6 +274,7 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
   const pattern = bestPattern(plan.intent.decisionKind, intent.goal ?? intent.primaryDecision);
   const designContext = buildDesignContext({
     ...(args.audience !== undefined ? { audience: [args.audience] } : {}),
+    ...(args.visualDirection !== undefined ? { visualDirection: directionFor(args.visualDirection) } : {}),
   });
   const compositionPlan = buildCompositionPlan({
     pattern,
@@ -335,6 +340,8 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       role: r.role,
       why: r.because,
       grow: r.grow,
+      ...(r.gap !== undefined ? { gap: r.gap } : {}),
+      ...(r.padding !== undefined ? { padding: r.padding } : {}),
       ...(r.reuse !== undefined ? { reuse: r.reuse } : {}),
     })),
 
@@ -344,6 +351,22 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
      * shell-fallback when there was nothing classifiable to derive from.
      */
     derivation: plan.derivation,
+
+    /**
+     * The user context this plan was built from, echoed verbatim.
+     *
+     * Previously the raw inputs were classified and then lost: nothing
+     * downstream could verify what the plan was actually built from. Now the
+     * raw information, patterns, direction and audience travel with the plan
+     * into the build, so a screen built from assumed data is detectable.
+     */
+    context: {
+      ...(plan.intent.availableInformation !== undefined ? { availableInformation: plan.intent.availableInformation } : { availableInformation: [] }),
+      ...(plan.intent.existingPatterns !== undefined ? { existingPatterns: plan.intent.existingPatterns } : { existingPatterns: [] }),
+      ...(plan.intent.visualDirection !== undefined ? { visualDirection: plan.intent.visualDirection } : { visualDirection: null }),
+      ...(plan.intent.audience !== undefined ? { audience: plan.intent.audience } : { audience: null }),
+      ...(plan.intent.goal !== undefined ? { goal: plan.intent.goal } : {}),
+    },
 
     /** The art director's decisions: focal, hierarchy, strategies, states, risks. */
     artDirection: plan.artDirection,
@@ -400,6 +423,19 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(opts.notes !== undefined && opts.notes.length > 0 ? { projectMemory: opts.notes } : {}),
     ...(opts.screen !== undefined ? { screen: opts.screen } : {}),
   };
+}
+
+/**
+ * Maps a free-form visual-direction string onto the design-context enum.
+ * Keyword-based and conservative: anything unrecognised is "custom", never
+ * forced into a direction the user did not ask for.
+ */
+function directionFor(visualDirection: string): "spatial-field" | "editorial-focus" | "technical-instrument" | "custom" {
+  const s = visualDirection.toLowerCase();
+  if (/editorial|calm|premium|quiet|narrative/.test(s)) return "editorial-focus";
+  if (/spatial|topology|canvas|field|diagram|map/.test(s)) return "spatial-field";
+  if (/instrument|technical|dense|telemetry|operational/.test(s)) return "technical-instrument";
+  return "custom";
 }
 
 /** The dashboard shape: chrome around a table, executed literally. */

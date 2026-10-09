@@ -24,6 +24,8 @@ export const DesignBriefArgs = z
     screen: z.string().max(120).optional().describe("Screen name or id, in the file's own language."),
     /** consumer | operator | engineer | leadership... */
     user: z.string().max(120).optional().describe("Who this screen serves."),
+    /** Structured audience. Preferred over `user` when the caller knows it. */
+    audience: z.enum(["developer", "operator", "engineer", "leadership", "general"]).optional().describe("Who this screen serves, as a structured audience. Shapes density and vocabulary."),
     goal: z.string().max(400).optional().describe("What the user is trying to accomplish, in their words."),
     primaryDecision: z.string().min(2).max(200).describe("What the user decides here. A short noun phrase: 'select a model'."),
     availableInformation: z.array(z.string().max(120)).max(30).optional().describe("Data you actually have. Named, not assumed."),
@@ -50,8 +52,10 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
   const intent: ScreenIntent = {
     primaryDecision: args.primaryDecision,
     ...(args.goal !== undefined ? { goal: args.goal } : {}),
+    ...(args.audience !== undefined ? { audience: args.audience } : {}),
     ...(args.availableInformation !== undefined ? { availableInformation: args.availableInformation } : {}),
     ...(args.existingPatterns !== undefined ? { existingPatterns: args.existingPatterns } : {}),
+    ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
     ...(args.name !== undefined ? { name: args.name } : {}),
     ...(args.canvas !== undefined ? { canvas: args.canvas } : {}),
   };
@@ -67,6 +71,7 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
     status: "ok",
     screen: args.screen ?? plan.program.canvas.name,
     user: args.user ?? "general",
+    ...(args.audience !== undefined ? { audience: args.audience } : {}),
     userGoal: args.goal ?? "(not stated — ask before drawing)",
     decision: {
       primaryDecision: plan.intent.primaryDecision,
@@ -74,6 +79,9 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
     },
     primaryObject: primary !== undefined ? { id: primary.id, why: primary.why } : null,
     secondaryInformation: secondary.map((s) => ({ id: s.id, why: s.why })),
+    availableInformation: plan.intent.availableInformation ?? [],
+    existingPatterns: plan.intent.existingPatterns ?? [],
+    derivation: plan.derivation,
     visualDirection: args.visualDirection ?? null,
     visualDirectionNote:
       args.visualDirection !== undefined

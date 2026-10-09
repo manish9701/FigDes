@@ -254,6 +254,51 @@ test("genericity passes an authored spatial screen", () => {
   assert.ok(report.score < GENERICITY_FAIL_AT);
 });
 
+test("card-wall is semantic: topology + inspector members are structure, not peers", () => {
+  const boxes = new Map([
+    ["map", { id: "map", x: 0, y: 0, w: 824, h: 600 }],
+    ["hub", { id: "hub", x: 44, y: 254, w: 150, h: 92 }],
+    ["n1", { id: "n1", x: 304, y: 100, w: 160, h: 92 }],
+    ["n2", { id: "n2", x: 304, y: 408, w: 170, h: 92 }],
+    ["insp", { id: "insp", x: 1104, y: 112, w: 312, h: 600 }],
+    ["s1", { id: "s1", x: 1124, y: 200, w: 272, h: 66 }],
+    ["s2", { id: "s2", x: 1124, y: 280, w: 272, h: 66 }],
+  ]);
+  const ops = ["hub", "n1", "n2"].map((id) => ({ type: "createFrame", id, width: 160, height: 92, stroke: "#E0E0E0", cornerRadius: 8, fill: "#FFFFFF" }))
+    .concat(["s1", "s2"].map((id) => ({ type: "createFrame", id, width: 272, height: 66, stroke: "#E0E0E0", cornerRadius: 8, fill: "#FFFDF9" })));
+  const report = evaluateGenericity({
+    boxes,
+    operations: ops,
+    regions: [{ id: "map", role: "topology" }, { id: "insp", role: "inspector" }],
+  });
+  assert.ok(!report.findings.some((f) => f.id === "card-wall"), `topology+inspector must not read as peer cards: ${JSON.stringify(report.findings)}`);
+});
+
+test("card-wall still triggers for peer metrics in a plain region (negative control)", () => {
+  const boxes = new Map([
+    ["dash", { id: "dash", x: 0, y: 0, w: 1440, h: 900 }],
+    ["m1", { id: "m1", x: 0, y: 0, w: 1440, h: 90 }],
+    ["m2", { id: "m2", x: 0, y: 98, w: 1440, h: 90 }],
+    ["m3", { id: "m3", x: 0, y: 196, w: 1440, h: 90 }],
+  ]);
+  const report = evaluateGenericity({
+    boxes,
+    operations: ["m1", "m2", "m3"].map((id) => ({ type: "createFrame", id, width: 1440, height: 90, fill: "#FFFFFF", cornerRadius: 8 })),
+    regions: [{ id: "dash", role: "content" }],
+  });
+  assert.ok(report.findings.some((f) => f.id === "card-wall"), "three peer metric cards must still trigger");
+  const finding = report.findings.find((f) => f.id === "card-wall");
+  assert.match(finding.evidence, /m1.*m2.*m3|peer/, "evidence names the counted nodes");
+});
+
+test("approved EXO tokens are never penalized for hue", () => {
+  const base = { boxes: new Map(), operations: [], regions: [] };
+  const flagged = evaluateGenericity({ ...base, fills: ["#8B5CF6"] });
+  assert.ok(flagged.findings.some((f) => f.id === "ai-aesthetic"), "unlisted violet still flags");
+  const approved = evaluateGenericity({ ...base, fills: ["#8B5CF6"], semantics: { approvedTokens: ["#8b5cf6"] } });
+  assert.ok(!approved.findings.some((f) => f.id === "ai-aesthetic"), "approved token must not flag");
+});
+
 test("repair planner prioritizes hierarchy over polish", () => {
   const repairs = planRepairs({
     genericity: { score: 80, blocking: true, findings: [{ id: "card-wall", evidence: "4 equal", repair: "Remove 3 cards" }], repairs: ["Remove 3 cards"] },

@@ -24,7 +24,36 @@ export interface GenericityReport {
 }
 
 interface Box { id: string; x: number; y: number; w: number; h: number }
-interface Op { type?: string; width?: number; height?: number; stroke?: unknown; cornerRadius?: number; fill?: unknown }
+interface Op { id?: unknown; type?: string; width?: number; height?: number; stroke?: unknown; cornerRadius?: number; fill?: unknown }
+
+/**
+ * Semantic hints the callers know but bare operations do not carry.
+ *
+ * - `containers`: region ids whose members are layout containers, never peer
+ *   cards (topology fields, inspectors), in addition to role-based exemption.
+ * - `approvedTokens`: fills (hex or token names) never penalized for hue.
+ *   An approved EXO semantic token is not "decorative violet" just because it
+ *   is violet; unlisted accents still flag.
+ */
+export interface GenericitySemantics {
+  containers?: string[];
+  approvedTokens?: string[];
+}
+
+/**
+ * Region roles whose members are layout containers, never peer cards.
+ * Topology nodes, inspector sections, rails and split views are structure;
+ * only unassigned content regions can form a peer-card wall. Navigation and
+ * header are deliberately NOT exempt — dashboard shells stay scrutinized.
+ */
+const EXEMPT_CONTAINER_ROLES = new Set([
+  "topology",
+  "primary-visual",
+  "hero",
+  "inspector",
+  "split-view",
+  "status-rail",
+]);
 
 const GENERIC_BLOCKING = 70;
 
@@ -34,30 +63,75 @@ export function evaluateGenericity(input: {
   regions: Array<{ id: string; role: string }>;
   composition?: string;
   fills?: string[];
+  semantics?: GenericitySemantics;
 }): GenericityReport {
   const boxes: Box[] = [...input.boxes.values()];
   const ops = input.operations as Op[];
   const findings: GenericityFinding[] = [];
   let score = 0;
 
-  // 1. Card wall: many equal cards.
+  const regionById = new Map(input.regions.map((r) => [r.id, r]));
+  const regionBoxById = new Map<string, Box>();
+  for (const b of boxes) {
+    if (regionById.has(b.id)) regionBoxById.set(b.id, b);
+  }
+  const extraContainers = new Set(input.semantics?.containers ?? []);
+
+  /** Smallest region containing the box, or null when unlocated/outside. */
+  const containerOf = (id: string | undefined, w: number, h: number): { id: string; role: string } | null => {
+    if (typeof id !== "string" || !input.boxes.has(id)) return null;
+    const b = input.boxes.get(id)!;
+    let best: { id: string; role: string; area: number } | null = null;
+    for (const [rid, rb] of regionBoxById) {
+      if (rid === id) continue;
+      if (b.x >= rb.x && b.y >= rb.y && b.x + b.w <= rb.x + rb.w && b.y + b.h <= rb.y + rb.h) {
+        const area = rb.w * rb.h;
+        if (!best || area < best.area) {
+          const role = regionById.get(rid)?.role ?? "";
+          best = { id: rid, role, area };
+        }
+      }
+    }
+    return best ? { id: best.id, role: best.role } : null;
+  };
+
+  const isExempt = (container: { id: string; role: string } | null): boolean => {
+    if (!container) return false;
+    return EXEMPT_CONTAINER_ROLES.has(container.role) || extraContainers.has(container.id);
+  };
+
+  // 1. Card wall: many equal PEER cards — same size, same unexempt container.
+  //    Topology nodes, inspector sections and rails are structure, not peers.
   const cards = ops.filter((o) => {
     if (o.type !== "createFrame" && o.type !== "createRectangle") return false;
     const w = o.width ?? 0; const h = o.height ?? 0;
     const bordered = o.stroke !== undefined || (typeof o.cornerRadius === "number" && o.cornerRadius >= 4);
     return bordered && w > 40 && h > 24;
   });
-  if (cards.length >= 3) {
-    const groups = new Map<string, number>();
-    for (const c of cards) groups.set(`${Math.round((c.width ?? 0) / 8)}x${Math.round((c.height ?? 0) / 8)}`, (groups.get(`${Math.round((c.width ?? 0) / 8)}x${Math.round((c.height ?? 0) / 8)}`) ?? 0) + 1);
-    const biggest = Math.max(...groups.values());
-    if (biggest >= 3) {
-      score += 30;
-      findings.push({ id: "card-wall", evidence: `${biggest} equal bordered surfaces`, repair: `Remove ${Math.max(1, biggest - 1)} cards; promote the runtime object; convert metrics into contextual annotations.` });
-    } else {
-      score += 12;
-      findings.push({ id: "card-wall", evidence: `${cards.length} bordered surfaces`, repair: "Convert one cluster into a visual field, chart or topology." });
-    }
+  const peers = cards.filter((c) => {
+    const id = typeof c.id === "string" ? c.id : undefined;
+    return !isExempt(containerOf(id, c.width ?? 0, c.height ?? 0));
+  });
+  const peerGroups = new Map<string, { count: number; ids: string[] }>();
+  for (const c of peers) {
+    const key = `${Math.round((c.width ?? 0) / 8)}x${Math.round((c.height ?? 0) / 8)}`;
+    const g = peerGroups.get(key) ?? { count: 0, ids: [] as string[] };
+    g.count += 1;
+    if (typeof c.id === "string") g.ids.push(c.id);
+    peerGroups.set(key, g);
+  }
+  const biggest = [...peerGroups.values()].reduce((m, g) => Math.max(m, g.count), 0);
+  if (biggest >= 3) {
+    const group = [...peerGroups.entries()].find(([, g]) => g.count === biggest)!;
+    score += 30;
+    findings.push({
+      id: "card-wall",
+      evidence: `${biggest} equal peer-bordered surfaces at ${group[0]} (ids: ${group[1].ids.join(", ") || "unlocated ops"}; exempt containers excluded)`,
+      repair: `Remove ${Math.max(1, biggest - 1)} cards; promote the runtime object; convert metrics into contextual annotations.`,
+    });
+  } else if (peers.length >= 3) {
+    score += 12;
+    findings.push({ id: "card-wall", evidence: `${peers.length} peer-bordered surfaces, mixed sizes`, repair: "Convert one cluster into a visual field, chart or topology." });
   }
 
   // 2. Dashboard syndrome: sidebar + header + metric cards + chart + table.
@@ -94,11 +168,14 @@ export function evaluateGenericity(input: {
   }
 
   // 6. Generic AI aesthetic: gradients/glow/purple on neutral products.
+  // Token-aware: an approved EXO semantic token is never penalized for hue —
+  // only unlisted decorative accents flag.
+  const approved = new Set((input.semantics?.approvedTokens ?? []).map((t) => String(t).toLowerCase()));
   const fills = (input.fills ?? []).map((f) => String(f).toLowerCase());
-  const purple = fills.filter((f) => /8b5cf6|a855f7|7c3aed|9333ea|6366f1/.test(f)).length;
+  const purple = fills.filter((f) => /8b5cf6|a855f7|7c3aed|9333ea|6366f1/.test(f) && !approved.has(f)).length;
   if (purple > 0) {
     score += 10;
-    findings.push({ id: "ai-aesthetic", evidence: `${purple} purple/blue-violet accent fill(s)`, repair: "Use product state colour (action/health) instead of decorative violet." });
+    findings.push({ id: "ai-aesthetic", evidence: `${purple} unapproved purple/blue-violet accent fill(s)`, repair: "Use product state colour (action/health) instead of decorative violet." });
   }
 
   // 7. Unresolved composition.

@@ -34,6 +34,17 @@ import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesign
 import { clients } from "./clients/registry";
 import { exportCode } from "./code/export";
 import { UseFigmaArgs, InspectVisualArgs, ReadContextArgs, figdesUseFigmaHandler, figdesInspectVisualHandler, figdesReadContextHandler } from "./native/use-figma";
+import { validateTransaction } from "./preflight";
+import { EditScreenArgs, editScreenTool } from "./review/edit-screen";
+import {
+  recordDuplicateRetry,
+  recordPreflightCatch,
+  recordRollback,
+  recordToolCall,
+  recordTransaction,
+  snapshot as metricsSnapshot,
+} from "./metrics";
+import { randomUUID } from "node:crypto";
 
 /* -------------------------------------------------------------------------- */
 /* Shared arg fragments                                                        */
@@ -458,6 +469,78 @@ function assertTransaction(result: TransactionResult): TransactionResult {
 }
 
 /**
+ * Tracked, idempotent, preflighted dispatch for every mutating plugin call.
+ *
+ * One transactionId → one ledger record → one result. A retry with the SAME
+ * transactionId returns the prior result instead of duplicating nodes; a bad
+ * request fails in preflight before the WebSocket/document is contacted; every
+ * outcome updates the job ledger and the latency/rollback metrics.
+ */
+async function dispatchTransaction(
+  registry: SessionRegistry,
+  session: Session,
+  tool: "create_design" | "modify_design" | "update_component" | "native_design",
+  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[] },
+): Promise<TransactionResult> {
+  const transactionId = payload.transactionId ?? `txn_${randomUUID().slice(0, 8)}`;
+  const ops = payload.operations as unknown[];
+
+  const prior = registry.jobs.priorResult(transactionId);
+  if (prior && (prior as { status?: string }).status === "success") {
+    recordDuplicateRetry();
+    return prior as TransactionResult;
+  }
+
+  const preflight = validateTransaction(ops);
+  if (!preflight.ok) {
+    recordPreflightCatch(preflight.issues.length);
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.complete(transactionId, "failed", { error: preflight.issues[0]?.message ?? "preflight failed" });
+    const first = preflight.issues[0]!;
+    throw new Error(
+      `Preflight rejected the plan before contacting Figma (${preflight.issues.length} issue(s)):\n` +
+        preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
+        `\nFirst failure at operation #${first.index} (${first.opType}). Fix every issue and retry with the SAME transactionId.`,
+    );
+  }
+
+  registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+  registry.jobs.update(transactionId, { state: "preflight", label: `preflight passed (${ops.length} ops)` });
+  registry.jobs.update(transactionId, { state: "applying", done: 0, label: "dispatching" });
+
+  const t0 = Date.now();
+  let result: TransactionResult;
+  try {
+    result = (await session.request(tool, { ...payload, transactionId })) as TransactionResult;
+  } catch (err) {
+    registry.jobs.complete(transactionId, "failed", { error: err instanceof Error ? err.message : String(err) });
+    recordToolCall(tool, Date.now() - t0, { ops: ops.length });
+    throw err;
+  }
+  const ms = Date.now() - t0;
+  recordToolCall(tool, ms, { ops: ops.length, nodes: result.status === "success" ? result.createdNodes.length + (result.modifiedNodes?.length ?? 0) : 0 });
+
+  if (result.status === "success") {
+    recordTransaction(
+      result.timings
+        ? { apply: result.timings.apply, total: result.timings.total, operationCount: ops.length, nodeCount: result.createdNodes.length + (result.modifiedNodes?.length ?? 0) }
+        : { total: ms, operationCount: ops.length },
+    );
+    registry.jobs.complete(transactionId, "committed", { done: ops.length, createdIds: result.createdNodes.map((n) => n.figmaNodeId) }, result);
+    return assertTransaction({ ...result, ...(preflight.warnings.length > 0 ? { warnings: [...((result as { warnings?: string[] }).warnings ?? []), ...preflight.warnings.map((w) => w.message)] } : {}) });
+  }
+
+  recordRollback(result.rollbackStatus ?? (result.rolledBack ? "full" : "none"));
+  registry.jobs.complete(
+    transactionId,
+    result.rollbackStatus === "full" ? "rolled-back" : result.rollbackStatus === "partial" ? "partial-rollback" : "failed",
+    { error: result.error.message, createdIds: result.removedIds ?? [] },
+    result,
+  );
+  return assertTransaction(result);
+}
+
+/**
  * Pulls measurements from the plugin, runs the rule engine, and shapes the
  * result. The reviewer never mutates Figma (spec §31) — fixes travel back as
  * `suggestedOperations` for the model to pass to modify_design explicitly.
@@ -558,6 +641,8 @@ export const TOOLS: ToolDefinition[] = [
       const { sessionId } = StatusArgs.parse(args ?? {});
       const { connections, activity } = clients.snapshot();
       const recent = activity.slice(0, 10);
+      const metrics = metricsSnapshot();
+      const jobs = registry.jobs.recent(10);
       try {
         const session = registry.resolve(sessionId);
         const status = session.status();
@@ -567,9 +652,11 @@ export const TOOLS: ToolDefinition[] = [
           sessionName: `${status.fileName} — ${status.pageName || "?"}`,
           clients: connections,
           activity: recent,
+          metrics,
+          recentJobs: jobs,
         };
       } catch (err) {
-        if (registry.connected().length === 0) return { ...DISCONNECTED, clients: connections, activity: recent };
+        if (registry.connected().length === 0) return { ...DISCONNECTED, clients: connections, activity: recent, metrics, recentJobs: jobs };
         throw err;
       }
     },
@@ -734,7 +821,18 @@ export const TOOLS: ToolDefinition[] = [
       });
       if (gate) return gate;
 
-      return viaPlugin(session, "update_component", rest);
+      if ((rest as { dryRun?: boolean }).dryRun) {
+        return viaPlugin(session, "update_component", rest);
+      }
+      const preflight = validateTransaction((rest.operations ?? []) as unknown[]);
+      if (!preflight.ok) {
+        recordPreflightCatch(preflight.issues.length);
+        throw new Error(`Preflight rejected the component edit before contacting Figma: ${preflight.issues[0]?.message ?? "invalid"} Fix: ${preflight.issues[0]?.fix ?? ""}`);
+      }
+      const t0 = Date.now();
+      const out = await viaPlugin(session, "update_component", rest);
+      recordToolCall("update_component", Date.now() - t0, { ops: ((rest.operations ?? []) as unknown[]).length });
+      return out;
     },
   },
 
@@ -776,13 +874,21 @@ export const TOOLS: ToolDefinition[] = [
       });
       if (gate) return gate;
 
-      const result = (await session.request("create_design", {
+      if (parsed.dryRun) {
+        const result = (await session.request("create_design", {
+          description: "Seed the canonical exo token set",
+          operations,
+          dryRun: true,
+          transactionId: parsed.transactionId,
+        })) as TransactionResult;
+        return { ...assertTransaction(result), seeded: counts };
+      }
+      const result = await dispatchTransaction(registry, session, "create_design", {
         description: "Seed the canonical exo token set",
-        operations,
-        dryRun: parsed.dryRun ?? false,
+        operations: operations as unknown[],
         transactionId: parsed.transactionId,
-      })) as TransactionResult;
-      return { ...assertTransaction(result), seeded: counts };
+      });
+      return { ...result, seeded: counts };
     },
   },
 
@@ -1021,11 +1127,11 @@ export const TOOLS: ToolDefinition[] = [
       });
       if (gate) return gate;
 
-      const result = (await session.request("create_design", {
+      const result = await dispatchTransaction(registry, session, "create_design", {
         description: `Migrate ${operations.length} fills to variables`,
-        operations,
-      })) as TransactionResult;
-      return { ...assertTransaction(result), matches };
+        operations: operations as unknown[],
+      });
+      return { ...result, matches };
     },
   },
 
@@ -1111,13 +1217,20 @@ export const TOOLS: ToolDefinition[] = [
       });
       if (gate) return gate;
 
-      const result = (await session.request("create_design", {
+      if (parsed.dryRun) {
+        const result = (await session.request("create_design", {
+          description: parsed.description ?? `Prototype flow: ${operations.length} link(s)`,
+          operations,
+          dryRun: true,
+          transactionId: parsed.transactionId,
+        })) as TransactionResult;
+        return assertTransaction(result);
+      }
+      return dispatchTransaction(registry, session, "create_design", {
         description: parsed.description ?? `Prototype flow: ${operations.length} link(s)`,
-        operations,
-        dryRun: parsed.dryRun ?? false,
+        operations: operations as unknown[],
         transactionId: parsed.transactionId,
-      })) as TransactionResult;
-      return assertTransaction(result);
+      });
     },
   },
 
@@ -1217,7 +1330,7 @@ inputSchema: CompileArgs,
     name: "compare_visuals",
     title: "Compare two visual states",
     description:
-      "The compare step of the review loop (inspect -> render -> critique -> modify -> render -> compare). Renders two nodes, returns both screenshots and measurable before/after structural evidence (node, surface, area, density deltas) with an explicit render status per side. It never claims one version is better automatically: the measured deltas are evidence, the judgement is yours. Failure states (missing node, failed render, empty image) are reported rather than silently skipped.",
+      "The compare step of the review loop (inspect -> render -> critique -> modify -> render -> compare). Defaults to low-detail thumbnails (region crops for local changes via the node ids); renders two nodes, returns both screenshots and measurable before/after structural evidence plus a machine-readable delta (new overlaps, moved nodes, changed tokens, text overflow, contrast change) with an explicit render status per side. It never claims one version is better automatically: the measured deltas are evidence, the judgement is yours. Failure states (missing node, failed render, empty image) are reported rather than silently skipped. Render budget and actual cost stay visible.",
     inputSchema: CompareVisualsArgs,
     handler: async (args, registry) => {
       const parsed = CompareVisualsArgs.parse(args);
@@ -1280,6 +1393,38 @@ inputSchema: CompileArgs,
             }
           : null;
 
+      // Machine-readable visual delta (P2): overlaps, movement, token drift,
+      // text overflow and contrast signals — computed from fresh metrics, not
+      // guessed from pixels.
+      const machineDelta = (() => {
+        if (!beforeCollect.report || !afterCollect.report) return null;
+        const b = new Map(beforeCollect.report.nodes.map((n) => [n.id, n]));
+        const moved = afterCollect.report.nodes.filter((n) => {
+          const prev = b.get(n.id);
+          return prev && (Math.abs(n.x - prev.x) > 1 || Math.abs(n.y - prev.y) > 1);
+        }).length;
+        const fillsBefore = new Set(beforeCollect.report.nodes.map((n) => n.fill).filter(Boolean));
+        const changedTokens = afterCollect.report.nodes.filter((n) => n.fill && !fillsBefore.has(n.fill)).length;
+        const textOverflow = afterCollect.report.nodes.filter((n) => n.text?.truncated).length;
+        // New overlaps: overflow-rule findings now that were absent before.
+        const { runRules: rules } = { runRules } as unknown as { runRules: typeof runRules };
+        void rules;
+        let newOverlaps = 0;
+        let contrastChange = 0;
+        try {
+          const beforeFindings = runRules(beforeCollect.report, "review");
+          const afterFindings = runRules(afterCollect.report, "review");
+          const beforeOverflow = new Set(beforeFindings.filter((f) => f.rule === "overflow").map((f) => f.nodeIds.join("+")));
+          newOverlaps = afterFindings.filter((f) => f.rule === "overflow" && !beforeOverflow.has(f.nodeIds.join("+"))).length;
+          const beforeContrast = beforeFindings.filter((f) => /contrast/i.test(f.rule)).length;
+          const afterContrast = afterFindings.filter((f) => /contrast/i.test(f.rule)).length;
+          contrastChange = afterContrast - beforeContrast;
+        } catch {
+          /* rules are best-effort evidence */
+        }
+        return { newOverlaps, movedNodes: moved, changedTokens, textOverflow, contrastChange };
+      })();
+
       const failures: string[] = [];
       if (!beforeCollect.ok) failures.push(`before metrics failed: ${beforeCollect.error}`);
       if (!afterCollect.ok) failures.push(`after metrics failed: ${afterCollect.error}`);
@@ -1298,6 +1443,11 @@ inputSchema: CompileArgs,
           nextActions.push("The change added rounded surfaces: check whether it drifted toward a card wall.");
         }
       }
+      if (machineDelta) {
+        if (machineDelta.newOverlaps > 0) nextActions.push(`${machineDelta.newOverlaps} new overlap(s) appeared: fix geometry before calling it done.`);
+        if (machineDelta.textOverflow > 0) nextActions.push(`${machineDelta.textOverflow} text node(s) truncate: widen the frame or shorten the copy.`);
+        if (machineDelta.contrastChange > 0) nextActions.push("Contrast findings increased: re-check text against its composited background.");
+      }
       if (nextActions.length === 0) nextActions.push("Compare the two images: does the intended focal point read more clearly after than before?");
 
       // Finding verification (point D): the repair loop must show its work.
@@ -1311,6 +1461,13 @@ inputSchema: CompileArgs,
         nextActions.push("Prior findings were supplied without a fresh after-report: judge the AFTER image and pass currentFindings to verify resolution.");
       }
 
+      const renderCost = {
+        beforeTokens: beforeRender.estimatedTokens ?? 0,
+        afterTokens: afterRender.estimatedTokens ?? 0,
+        detail: "low" as const,
+        note: "Low-detail thumbnails by default; re-render the affected region at high detail only for text-level questions.",
+      };
+
       const content: any[] = [
         {
           type: "text",
@@ -1320,6 +1477,8 @@ inputSchema: CompileArgs,
               before,
               after,
               delta,
+              machineDelta,
+              renderCost,
               resolution,
               renderStatus: { before: beforeRender.ok ? "ok" : "failed", after: afterRender.ok ? "ok" : "failed" },
               failures,
@@ -1443,13 +1602,30 @@ inputSchema: CreateArgs,
       });
       if (gate) return gate;
 
-      const result = (await session.request("create_design", {
+      if (parsed.dryRun) {
+        // Dry runs validate without ledger noise: preflight + trace only.
+        const preflight = validateTransaction(parsed.operations as unknown[]);
+        if (!preflight.ok) {
+          recordPreflightCatch(preflight.issues.length);
+          throw new Error(
+            `Preflight rejected the plan (${preflight.issues.length} issue(s)):\n` +
+              preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n"),
+          );
+        }
+        const result = (await session.request("create_design", {
+          description: parsed.description,
+          operations: parsed.operations,
+          dryRun: true,
+          transactionId: parsed.transactionId,
+        })) as TransactionResult;
+        return assertTransaction(result);
+      }
+
+      return dispatchTransaction(registry, session, "create_design", {
         description: parsed.description,
-        operations: parsed.operations,
-        dryRun: parsed.dryRun ?? false,
+        operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
-      })) as TransactionResult;
-      return assertTransaction(result);
+      });
     },
   },
 
@@ -1473,15 +1649,114 @@ inputSchema: ModifyArgs,
       });
       if (gate) return gate;
 
-      const result = (await session.request("modify_design", {
+      if (parsed.dryRun) {
+        const preflight = validateTransaction(parsed.operations as unknown[]);
+        if (!preflight.ok) {
+          recordPreflightCatch(preflight.issues.length);
+          throw new Error(
+            `Preflight rejected the plan (${preflight.issues.length} issue(s)):\n` +
+              preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n"),
+          );
+        }
+        const result = (await session.request("modify_design", {
+          targets: parsed.targets,
+          description: parsed.description,
+          operations: parsed.operations,
+          dryRun: true,
+          transactionId: parsed.transactionId,
+        })) as TransactionResult;
+        return assertTransaction(result);
+      }
+
+      return dispatchTransaction(registry, session, "modify_design", {
         targets: parsed.targets,
         description: parsed.description,
-        operations: parsed.operations,
-        dryRun: parsed.dryRun ?? false,
+        operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
-      })) as TransactionResult;
-      return assertTransaction(result);
+      });
     },
+  },
+
+  {
+    name: "get_job_status",
+    title: "Check a transaction's durable status",
+    description:
+      "Report the ledger state for a transactionId (queued, preflight, applying, verifying, committed, rolled-back, partial-rollback, failed) with progress and final node ids. Call this after any reconnect or timeout before retrying — a retry must reuse the SAME transactionId and is idempotent, never a blind duplicate.",
+    inputSchema: z.object({ transactionId: z.string().min(1).max(200), sessionId: SessionArg }).strict(),
+    handler: async (args, registry) => {
+      const parsed = (z.object({ transactionId: z.string().min(1).max(200), sessionId: SessionArg }).strict()).parse(args ?? {});
+      const job = registry.jobs.get(parsed.transactionId);
+      if (!job) {
+        return {
+          status: "unknown",
+          transactionId: parsed.transactionId,
+          howToProceed: "No ledger record for this id. It either predates this server run or never dispatched. Re-send with the SAME transactionId once; if it was already applied you will get a duplicate-safe result instead of duplicated nodes.",
+          recentJobs: registry.jobs.recent(5),
+        };
+      }
+      return { status: "ok", job, metrics: metricsSnapshot() };
+    },
+  },
+
+  {
+    name: "resume_job",
+    title: "Resume a transaction after reconnect",
+    description:
+      "Rebind a timed-out or disconnected transaction to the live session and report whether it committed, rolled back, or needs a safe idempotent retry. Never silently retargets across files: when multiple files are open you must pass an explicit sessionId.",
+    inputSchema: z
+      .object({
+        transactionId: z.string().min(1).max(200),
+        sessionId: SessionArg,
+        operations: z.array(z.record(z.unknown())).max(2000).optional().describe("Only for a safe retry when the ledger says the job never committed. Reuses the same transactionId."),
+        description: z.string().max(1000).optional(),
+      })
+      .strict(),
+    handler: async (args, registry) => {
+      const parsed = (
+        z
+          .object({
+            transactionId: z.string().min(1).max(200),
+            sessionId: SessionArg,
+            operations: z.array(z.record(z.unknown())).max(2000).optional(),
+            description: z.string().max(1000).optional(),
+          })
+          .strict()
+      ).parse(args ?? {});
+      const job = registry.jobs.get(parsed.transactionId);
+      if (!job) {
+        return {
+          status: "unknown",
+          transactionId: parsed.transactionId,
+          howToProceed: "No ledger record. Pass operations with this transactionId once to dispatch it idempotently.",
+        };
+      }
+      if (job.state === "committed") {
+        const prior = registry.jobs.priorResult(parsed.transactionId);
+        return { status: "already-committed", job, result: prior ?? null, howToProceed: "Do not retry: the work already landed. Inspect the created ids from the ledger." };
+      }
+      if (job.state === "rolled-back" || job.state === "partial-rollback" || job.state === "failed") {
+        if (!parsed.operations) {
+          return { status: "needs-retry-payload", job, howToProceed: "Pass operations with the SAME transactionId to retry safely; preflight runs before Figma is contacted." };
+        }
+        const session = registry.resolve(parsed.sessionId ?? job.sessionId);
+        return dispatchTransaction(registry, session, "modify_design", {
+          description: parsed.description ?? `resume ${parsed.transactionId}`,
+          operations: parsed.operations as unknown[],
+          transactionId: parsed.transactionId,
+        });
+      }
+      // Still in flight (queued/preflight/applying/verifying): report, don't duplicate.
+      return { status: "in-flight", job, howToProceed: "The job is still tracked as in-flight. Wait for progress, then call get_job_status again — do not dispatch a duplicate transaction." };
+    },
+  },
+
+  {
+    name: "edit_screen",
+    title: "Edit a screen in one tracked pass",
+    description:
+      "The reliable edit loop in one call: discover the target subtree once, preflight the patch (Figma is never contacted on failure), commit as one ledger-tracked transaction with one id, render a low-detail thumbnail, review geometry/accessibility/token consistency, produce a machine-readable before/after delta, and run one targeted token-aware repair pass. One transaction id, one timeline, one diff. Final QA still needs your fresh render judgement.",
+    inputSchema: EditScreenArgs,
+    handler: async (args, registry) => editScreenTool(registry, args),
   },
 
   {

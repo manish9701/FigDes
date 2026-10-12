@@ -45,6 +45,13 @@ export function extendCritique(input: {
   productName?: string;
   /** Actual fills extracted from the rendered/native operations, not inferred from names. */
   fills?: string[];
+  /**
+   * Semantic context (P1 false-positive fix): region ids that are layout
+   * containers rather than peer cards, plus approved token fills never
+   * penalized for hue. Without this, topology + inspector layouts misread as
+   * generic dashboard card walls.
+   */
+  semantics?: { containers?: string[]; approvedTokens?: string[] };
 }): ExtendedCritique {
   const genericity = evaluateGenericity({
     boxes: input.boxes,
@@ -52,6 +59,7 @@ export function extendCritique(input: {
     regions: input.regions,
     ...(input.composition !== undefined ? { composition: input.composition } : {}),
     ...(input.fills !== undefined ? { fills: input.fills } : {}),
+    ...(input.semantics !== undefined ? { semantics: input.semantics } : {}),
   });
   const extra: ExtendedDimension[] = [
     relationshipClarity(input.links ?? []),

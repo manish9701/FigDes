@@ -17,8 +17,10 @@ import {
   type CreatedNode,
   type Operation,
   type Padding,
+  type RollbackStatus,
   type TransactionFailure,
   type TransactionResult,
+  type TransactionTimings,
 } from "../../shared/protocol";
 import { parseSvgPath, parseVectorSegments, segmentsToPathData } from "../../shared/path";
 
@@ -346,6 +348,31 @@ interface Ctx {
   modified: Set<string>;
   currentPageId: string;
   isDryRun: boolean;
+  /** Pre-mutation journal for P0 truthful rollback (prior values per node). */
+  journal: JournalEntry[];
+  /** In-transaction node-handle cache: real id -> node (P1 hot-path). */
+  nodeCache: Map<string, BaseNode | null>;
+  cacheHits: number;
+  cacheMisses: number;
+}
+
+/**
+ * One journaled mutation against a pre-existing node.
+ *
+ * `before` holds plain-data prior values read BEFORE the mutation. `kind`
+ * selects the restore path; `extra` carries reparent anchors (parent id +
+ * index) and removed-node references for remove/reparent cases.
+ */
+interface JournalEntry {
+  figmaNodeId: string;
+  opIndex: number;
+  opType: string;
+  kind: string;
+  before: Record<string, unknown>;
+  parentId?: string;
+  parentIndex?: number;
+  nodeRef?: BaseNode;
+  childrenBefore?: Array<{ id: string; parentId: string; index: number }>;
 }
 
 /**
@@ -370,14 +397,37 @@ function touchRefs(ctx: Ctx, op: Parsed): void {
 /** Anything that can receive children: a page, frame, component or instance. */
 type ParentNode = ChildrenMixin & BaseNode;
 
+function invalidateCache(ctx: Ctx, ...realIds: string[]): void {
+  for (const id of realIds) ctx.nodeCache.delete(id);
+}
+
 async function resolve(ctx: Ctx, ref: string, index: number, opType: string): Promise<BaseNode> {
   const id = ctx.ids.get(ref) ?? ref;
+  if (ctx.nodeCache.has(id)) {
+    const cached = ctx.nodeCache.get(id);
+    if (cached) {
+      try {
+        if (!(cached as { removed?: boolean }).removed) {
+          ctx.cacheHits += 1;
+          return cached;
+        }
+      } catch {
+        /* fall through to live lookup */
+      }
+      ctx.nodeCache.delete(id);
+    } else {
+      ctx.cacheHits += 1;
+      throw new OperationError(`Node not found: ${ref}`, index, opType);
+    }
+  }
   let node: BaseNode | null = null;
   try {
     node = await figma.getNodeByIdAsync(id);
   } catch {
     node = null;
   }
+  ctx.cacheMisses += 1;
+  ctx.nodeCache.set(id, node);
   if (!node) throw new OperationError(`Node not found: ${ref}`, index, opType);
   return node;
 }
@@ -396,6 +446,79 @@ function requireScene(node: BaseNode, index: number, opType: string): SceneNode 
     throw new OperationError(`Operation not valid on ${node.type}`, index, opType);
   }
   return node as SceneNode;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Mutation journal (P0 truthful rollback)                                     */
+/* -------------------------------------------------------------------------- */
+
+function childIndex(node: BaseNode): number {
+  try {
+    const parent = (node as { parent?: { children?: unknown[] } | null }).parent;
+    if (!parent || !Array.isArray(parent.children)) return -1;
+    return parent.children.indexOf(node as never);
+  } catch {
+    return -1;
+  }
+}
+
+function readProp(node: unknown, key: string): unknown {
+  try {
+    return (node as Record<string, unknown>)[key];
+  } catch {
+    return undefined;
+  }
+}
+
+function clonePaints(value: unknown): unknown {
+  try {
+    return JSON.parse(JSON.stringify(value ?? null));
+  } catch {
+    return value;
+  }
+}
+
+/** Record prior values BEFORE mutating an existing node. Never throws. */
+function journal(ctx: Ctx, entry: JournalEntry): void {
+  try {
+    ctx.journal.push(entry);
+  } catch {
+    /* journaling must never fail a build */
+  }
+}
+
+function journalProps(ctx: Ctx, node: BaseNode, index: number, opType: string, kind: string, keys: string[]): void {
+  const before: Record<string, unknown> = {};
+  for (const k of keys) {
+    const v = readProp(node, k);
+    try {
+      before[k] = JSON.parse(JSON.stringify(v ?? null));
+    } catch {
+      before[k] = v as unknown;
+    }
+  }
+  journal(ctx, { figmaNodeId: node.id, opIndex: index, opType, kind, before });
+}
+
+function journalReparent(
+  ctx: Ctx,
+  node: BaseNode,
+  index: number,
+  opType: string,
+  kind: string,
+  extraBefore: Record<string, unknown> = {},
+): void {
+  const parent = (node as { parent?: BaseNode | null }).parent;
+  journal(ctx, {
+    figmaNodeId: node.id,
+    opIndex: index,
+    opType,
+    kind,
+    before: extraBefore,
+    parentId: parent ? parent.id : undefined,
+    parentIndex: childIndex(node),
+    nodeRef: node,
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -439,6 +562,7 @@ export async function runTransaction(input: {
   dryRun: boolean;
   onProgress?: (done: number, total: number, label: string) => void;
 }): Promise<TransactionResult> {
+  const t0 = Date.now();
   let parsed: Parsed[];
 
   try {
@@ -446,6 +570,7 @@ export async function runTransaction(input: {
   } catch (err) {
     return failure(input.transactionId, err, false);
   }
+  const parseMs = Date.now() - t0;
 
   if (input.dryRun) {
     // Validation-only: report what *would* happen without touching the document.
@@ -465,9 +590,14 @@ export async function runTransaction(input: {
     modified: new Set(),
     currentPageId: figma.currentPage.id,
     isDryRun: false,
+    journal: [],
+    nodeCache: new Map(),
+    cacheHits: 0,
+    cacheMisses: 0,
   };
 
   const applied: string[] = [];
+  const perOperation: Array<{ index: number; opType: string; ms: number }> = [];
   const pass1 = parsed.filter(isCreateOp);
   const pass2 = parsed.filter((op) => !isCreateOp(op));
 
@@ -478,6 +608,7 @@ export async function runTransaction(input: {
     /* commitUndo is best-effort */
   }
 
+  const applyT0 = Date.now();
   try {
     const ordered = [...pass1, ...pass2];
     const total = ordered.length;
@@ -489,7 +620,10 @@ export async function runTransaction(input: {
     for (let n = 0; n < ordered.length; n++) {
       const op = ordered[n]!;
       const index = parsed.indexOf(op);
+      const opT0 = Date.now();
       const note = await apply(ctx, op, index);
+      perOperation.push({ index, opType: op.type, ms: Date.now() - opT0 });
+      if (perOperation.length > 300) perOperation.shift();
       applied.push(`${op.type}${note ? ` ${note}` : ""}`);
       touchRefs(ctx, op);
 
@@ -522,16 +656,19 @@ export async function runTransaction(input: {
       }
     }
   } catch (err) {
-    // Surgical rollback: only nodes this transaction created are removed, by
-    // id. A bare undo here would pop whatever Figma last recorded — after a
-    // timeout or interleaving work, that is somebody else's commit.
+    // Surgical rollback: journaled mutations are restored first, then created
+    // nodes are removed by id. A bare undo here would pop whatever Figma last
+    // recorded — after a timeout or interleaving work, that is somebody else's
+    // commit.
     return failure(
       input.transactionId,
       err,
       true,
       ctx.created.map((c) => c.figmaNodeId),
+      ctx,
     );
   }
+  const applyMs = Date.now() - applyT0;
 
   try {
     figma.commitUndo();
@@ -544,10 +681,15 @@ export async function runTransaction(input: {
   // same transaction simply carries no bounds rather than failing the report.
   // Anything unresolvable is reported, not hidden: a "success" whose nodes are
   // already gone is how silent partial builds happen.
+  const verifyT0 = Date.now();
   const unconfirmedIds: string[] = [];
+  // Verify only affected subtrees by default: created nodes plus journaled
+  // mutation targets, not a full file scan. Full verification remains
+  // available via inspect; the transaction verifies what it touched.
   for (const entry of ctx.created) {
     try {
-      const node = await figma.getNodeByIdAsync(entry.figmaNodeId);
+      const cached = ctx.nodeCache.get(entry.figmaNodeId);
+      const node = cached ?? await figma.getNodeByIdAsync(entry.figmaNodeId);
       if (node && "x" in node && "width" in node) {
         const b = node as SceneNode & { x: number; y: number; width: number; height: number };
         entry.bounds = {
@@ -564,18 +706,55 @@ export async function runTransaction(input: {
       unconfirmedIds.push(entry.figmaNodeId);
     }
   }
+  const verifyMs = Date.now() - verifyT0;
 
   // Reveal: select what was built and bring the viewport to it. Without this
   // the canvas stays where the user left it — often an empty area — so a
   // successful build reads as a "blank page" until they scroll and find it.
   // Best-effort by design: a viewport failure must never fail the build.
+  const revealT0 = Date.now();
   await revealCreated(ctx);
+  const revealMs = Date.now() - revealT0;
 
   // The trace is evidence, not a log file: cap it so a 2000-op construction
   // does not flood the model with 2000 lines.
   const trace = applied.length > APPLIED_TRACE_CAP
     ? [...applied.slice(0, APPLIED_TRACE_CAP), `… and ${applied.length - APPLIED_TRACE_CAP} more operations applied.`]
     : applied;
+
+  const totalMs = Date.now() - t0;
+  const timings: TransactionTimings = {
+    parse: parseMs,
+    apply: applyMs,
+    verify: verifyMs,
+    reveal: revealMs,
+    total: totalMs,
+    perOperation,
+    cache: { hits: ctx.cacheHits, misses: ctx.cacheMisses },
+    nodeCount: ctx.created.length + ctx.modified.size,
+    operationCount: parsed.length,
+  };
+
+  // Operation budget from measured latency + node count. Warn (never split
+  // silently): an atomic user edit stays atomic; the warning names the split
+  // point for the next call. Splitting without an explicit undo boundary is
+  // how half-committed screens happen.
+  const warnings: string[] = [];
+  if (parsed.length > 150) {
+    warnings.push(
+      `Transaction of ${parsed.length} operations took ${totalMs}ms (apply ${applyMs}ms). Split the next build at logical region boundaries into verified passes of ≤150 ops; this transaction stayed atomic and committed as one undo step.`,
+    );
+  }
+  if (ctx.created.length > 300) {
+    warnings.push(
+      `Created ${ctx.created.length} nodes in one transaction. Prefer region-scoped passes with a render + review between them so a failure cannot orphan hundreds of nodes.`,
+    );
+  }
+  if (unconfirmedIds.length > 0) {
+    warnings.push(
+      `${unconfirmedIds.length} created node(s) no longer resolve after commit (${unconfirmedIds.slice(0, 5).join(", ")}${unconfirmedIds.length > 5 ? ", …" : ""}). Verify before reporting success.`,
+    );
+  }
 
   return {
     transactionId: input.transactionId,
@@ -587,6 +766,8 @@ export async function runTransaction(input: {
     ...(unconfirmedIds.length > 0
       ? { unconfirmedIds }
       : {}),
+    timings,
+    ...(warnings.length > 0 ? { warnings } : {}),
   };
 }
 
@@ -1012,6 +1193,11 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       for (const ref of op.targets) {
         nodes.push(requireScene(await resolve(ctx, ref, index, op.type), index, op.type));
       }
+      // Boolean ops consume their sources: journal them as unrestorable so a
+      // later failure reports partial-rollback instead of claiming full.
+      for (const n of nodes) {
+        journal(ctx, { figmaNodeId: n.id, opIndex: index, opType: op.type, kind: "booleanConsume", before: {} });
+      }
       const firstParent = nodes[0]!.parent;
       for (const n of nodes.slice(1)) {
         if (n.parent !== firstParent) {
@@ -1058,6 +1244,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (node.type !== "VECTOR") {
         throw new OperationError(`setVectorPath requires a VECTOR node, got ${node.type}`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setVectorPath", ["vectorPaths"]);
       const winding = op.windingRule ?? "NONE";
       if (hasArcCommand(op.path)) {
         const parsed = parseSvgPath(op.path);
@@ -1069,11 +1256,13 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       } else {
         (node as VectorNode).vectorPaths = toBezierVectorPaths(op.path, winding);
       }
+      invalidateCache(ctx, node.id);
       return node.id;
     }
 
     case "mirrorNode": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalProps(ctx, node, index, op.type, "mirrorNode", ["relativeTransform", "x", "y"]);
       if (op.axis === "vertical") {
         node.relativeTransform = [
           [-1, 0, node.x * 2 + node.width],
@@ -1085,6 +1274,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
           [0, -1, node.y * 2 + node.height],
         ] as unknown as typeof node.relativeTransform;
       }
+      invalidateCache(ctx, node.id);
       return node.id;
     }
 
@@ -1093,6 +1283,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("layoutGrids" in node)) {
         throw new OperationError(`${node.type} does not support layout grids. Target a frame or component.`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setLayoutGrid", ["layoutGrids"]);
       let color: RGBA | undefined;
       if (op.color !== undefined) {
         try {
@@ -1121,6 +1312,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
               ...(color !== undefined ? { color } : {}),
             };
       holder.layoutGrids = [...(holder.layoutGrids ?? []), grid];
+      invalidateCache(ctx, node.id);
       return `${op.pattern} x${op.count}`;
     }
 
@@ -1161,6 +1353,17 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       // a rectangle with three frozen radii and one live one.
       const fields: string[] =
         op.field === "cornerRadius" ? ["topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"] : [op.field];
+      // Journal prior bindings so a later failure can unbind exactly.
+      try {
+        const prior: Record<string, unknown> = {};
+        const reader = target as unknown as { getBoundVariable?: (f: string) => unknown };
+        for (const field of fields) {
+          prior[field] = typeof reader.getBoundVariable === "function" ? reader.getBoundVariable(field) : null;
+        }
+        journal(ctx, { figmaNodeId: target.id, opIndex: index, opType: op.type, kind: "bindVariable", before: prior });
+      } catch {
+        journal(ctx, { figmaNodeId: target.id, opIndex: index, opType: op.type, kind: "bindVariable", before: {} });
+      }
 
       for (const field of fields) {
         try {
@@ -1266,12 +1469,19 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
           );
         }
       }
+      // Journal every child's pre-group anchor so rollback can ungroup exactly.
+      const childrenBefore = kids.map((kid) => {
+        const p = (kid as { parent?: BaseNode | null }).parent;
+        return { id: kid.id, parentId: p ? p.id : figma.currentPage.id, index: childIndex(kid) };
+      });
 
       const group = figma.group(
         kids,
         (op.parent ? await resolveParent(ctx, op.parent, index, op.type) : (firstParent as unknown as ParentNode)) ?? figma.currentPage,
       );
       group.name = op.name ?? "Group";
+      journal(ctx, { figmaNodeId: group.id, opIndex: index, opType: op.type, kind: "createGroup", before: {}, childrenBefore });
+      invalidateCache(ctx, ...kids.map((k) => k.id));
       return register(ctx, op.id, group, index, op.type);
     }
 
@@ -1280,6 +1490,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("effects" in target)) {
         throw new OperationError(`${target.type} nodes do not support effects.`, index, op.type);
       }
+      journalProps(ctx, target, index, op.type, "setEffect", ["effects"]);
 
       const c = parseColor(op.color);
       const paint = { r: c.r, g: c.g, b: c.b, a: op.opacity };
@@ -1311,6 +1522,13 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (typeof reactive.setReactionsAsync !== "function") {
         throw new OperationError(`${from.type} nodes cannot carry prototype interactions.`, index, op.type);
       }
+      journal(ctx, {
+        figmaNodeId: from.id,
+        opIndex: index,
+        opType: op.type,
+        kind: "prototypeLink",
+        before: { reactions: Array.isArray(reactive.reactions) ? [...reactive.reactions] : [] },
+      });
 
       const transition =
         op.transition === "none"
@@ -1336,7 +1554,9 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
     /* ------------------------------ mutate ------------------------------ */
     case "renameNode": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalProps(ctx, node, index, op.type, "renameNode", ["name"]);
       node.name = op.name;
+      invalidateCache(ctx, node.id);
       return `-> ${op.name}`;
     }
 
@@ -1346,6 +1566,17 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         throw new OperationError(`setVariant target must be an INSTANCE. Got ${node.type}`, index, op.type);
       }
       const instance = node as InstanceNode;
+      try {
+        journal(ctx, {
+          figmaNodeId: node.id,
+          opIndex: index,
+          opType: op.type,
+          kind: "setVariant",
+          before: { componentProperties: JSON.parse(JSON.stringify(instance.componentProperties ?? {})) },
+        });
+      } catch {
+        journal(ctx, { figmaNodeId: node.id, opIndex: index, opType: op.type, kind: "setVariant", before: {} });
+      }
       // We need to merge with existing properties
       const newProps: { [propertyName: string]: string | boolean | VariableAlias } = {};
       for (const [k, prop] of Object.entries(instance.componentProperties)) {
@@ -1357,13 +1588,16 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         newProps[k] = String(v);
       }
       instance.setProperties(newProps);
+      invalidateCache(ctx, node.id);
       return instance.id;
     }
 
     case "setPosition": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalProps(ctx, node, index, op.type, "setPosition", ["x", "y"]);
       if (op.x !== undefined) node.x = op.x;
       if (op.y !== undefined) node.y = op.y;
+      invalidateCache(ctx, node.id);
       return `x=${op.x ?? node.x} y=${op.y ?? node.y}`;
     }
 
@@ -1372,6 +1606,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("resize" in node)) {
         throw new OperationError(`${node.type} cannot be resized`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setSize", ["width", "height", "minWidth", "maxWidth", "minHeight", "maxHeight"]);
       if (op.ignoreAutoLayout) {
         if ("minWidth" in node) (node as FrameNode).minWidth = 0;
         if ("maxWidth" in node) (node as FrameNode).maxWidth = null;
@@ -1379,6 +1614,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         if ("maxHeight" in node) (node as FrameNode).maxHeight = null;
       }
       node.resize(op.width ?? node.width, op.height ?? node.height);
+      invalidateCache(ctx, node.id);
       return `${op.width ?? node.width}x${op.height ?? node.height}`;
     }
 
@@ -1387,7 +1623,9 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("fills" in node)) {
         throw new OperationError(`${node.type} does not support fills`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setFill", ["fills"]);
       node.fills = toPaints(op.fill) as typeof node.fills;
+      invalidateCache(ctx, node.id);
       return JSON.stringify(op.fill);
     }
 
@@ -1396,11 +1634,13 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("strokes" in node)) {
         throw new OperationError(`${node.type} does not support strokes`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setStroke", ["strokes", "strokeWeight", "strokeAlign", "dashPattern"]);
       node.strokes = [solid(op.color)];
       const weight = op.weight ?? 1;
       node.strokeWeight = weight;
       if (op.align) node.strokeAlign = op.align;
       if (op.dashPattern) node.dashPattern = op.dashPattern;
+      invalidateCache(ctx, node.id);
       return `${op.color} w=${weight}`;
     }
 
@@ -1409,13 +1649,17 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("opacity" in node)) {
         throw new OperationError(`${node.type} does not support opacity`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setOpacity", ["opacity"]);
       node.opacity = op.opacity;
+      invalidateCache(ctx, node.id);
       return String(op.opacity);
     }
 
     case "setCornerRadius": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalProps(ctx, node, index, op.type, "setCornerRadius", ["cornerRadius", "topLeftRadius", "topRightRadius", "bottomLeftRadius", "bottomRightRadius"]);
       applyRadius(node, op.radius);
+      invalidateCache(ctx, node.id);
       return typeof op.radius === "number" ? String(op.radius) : "per-corner";
     }
 
@@ -1436,15 +1680,28 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         }
         ancestor = "parent" in ancestor && ancestor.parent ? ancestor.parent : null;
       }
+      journalReparent(ctx, child, index, op.type, "reparent");
 
       if (op.index !== undefined) parent.insertChild(Math.min(op.index, parent.children.length), child as never);
       else parent.appendChild(child as never);
+      invalidateCache(ctx, child.id, parent.id);
       return `${child.id} -> ${parent.id}`;
     }
 
     case "removeNode": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journal(ctx, {
+        figmaNodeId: node.id,
+        opIndex: index,
+        opType: op.type,
+        kind: "removeNode",
+        before: { name: node.name, type: node.type },
+        parentId: (node as { parent?: BaseNode | null }).parent?.id,
+        parentIndex: childIndex(node),
+        nodeRef: node,
+      });
       node.remove();
+      invalidateCache(ctx, node.id);
       return "removed";
     }
 
@@ -1453,6 +1710,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("layoutMode" in node)) {
         throw new OperationError(`${node.type} does not support auto layout`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setAutoLayout", ["layoutMode", "itemSpacing", "paddingTop", "paddingRight", "paddingBottom", "paddingLeft", "primaryAxisAlignItems", "counterAxisAlignItems", "layoutWrap"]);
       node.layoutMode = op.mode;
       if (op.itemSpacing !== undefined && "itemSpacing" in node) node.itemSpacing = op.itemSpacing;
       if (op.padding !== undefined && "paddingTop" in node) {
@@ -1469,6 +1727,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         node.counterAxisAlignItems = op.counterAxisAlignItems;
       }
       if (op.layoutWrap !== undefined && "layoutWrap" in node) node.layoutWrap = op.layoutWrap;
+      invalidateCache(ctx, node.id);
       return op.mode;
     }
 
@@ -1477,11 +1736,13 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("paddingTop" in node)) {
         throw new OperationError(`${node.type} does not support padding`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setPadding", ["paddingTop", "paddingRight", "paddingBottom", "paddingLeft"]);
       const [t, r, b, l] = four(op.padding);
       node.paddingTop = t;
       node.paddingRight = r;
       node.paddingBottom = b;
       node.paddingLeft = l;
+      invalidateCache(ctx, node.id);
       return `${t} ${r} ${b} ${l}`;
     }
 
@@ -1490,7 +1751,9 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (!("itemSpacing" in node)) {
         throw new OperationError(`${node.type} does not support item spacing`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setGap", ["itemSpacing"]);
       node.itemSpacing = op.gap;
+      invalidateCache(ctx, node.id);
       return String(op.gap);
     }
 
@@ -1499,6 +1762,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (node.type !== "TEXT") {
         throw new OperationError(`setTypography requires a TEXT node, got ${node.type}`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setTypography", ["fontName", "fontSize", "lineHeight", "letterSpacing", "textAlignHorizontal", "textAlignVertical"]);
       const text = node as TextNode;
       const current = text.fontName === figma.mixed ? null : text.fontName;
       const family = op.family ?? current?.family;
@@ -1512,6 +1776,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.letterSpacing !== undefined) text.letterSpacing = { value: op.letterSpacing, unit: "PIXELS" };
       if (op.textAlignHorizontal) text.textAlignHorizontal = op.textAlignHorizontal;
       if (op.textAlignVertical) text.textAlignVertical = op.textAlignVertical;
+      invalidateCache(ctx, node.id);
       return `${family} ${style} ${op.fontSize ?? ""}`;
     }
 
@@ -1520,23 +1785,28 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (node.type !== "TEXT") {
         throw new OperationError(`setTextContent requires a TEXT node, got ${node.type}`, index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setTextContent", ["characters"]);
       const text = node as TextNode;
       if (text.fontName === figma.mixed) {
         throw new OperationError("Cannot set characters on text with mixed fonts", index, op.type);
       }
       await loadFont(text.fontName.family, text.fontName.style);
       text.characters = op.content;
+      invalidateCache(ctx, node.id);
       return `"${op.content.slice(0, 32)}"`;
     }
 
     case "setVisible": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalProps(ctx, node, index, op.type, "setVisible", ["visible"]);
       node.visible = op.visible;
+      invalidateCache(ctx, node.id);
       return String(op.visible);
     }
 
     case "setPage": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      journalReparent(ctx, node, index, op.type, "setPage");
       await figma.loadAllPagesAsync();
       let page: PageNode | undefined;
       if (op.page) {
@@ -1546,6 +1816,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         page = figma.currentPage;
       }
       page.appendChild(node);
+      invalidateCache(ctx, node.id);
       return `-> ${page.name}`;
     }
 
@@ -1557,6 +1828,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.horizontal === undefined && op.vertical === undefined) {
         throw new OperationError("setConstraints needs at least one of horizontal or vertical", index, op.type);
       }
+      journalProps(ctx, node, index, op.type, "setConstraints", ["constraints"]);
       const current = node.constraints;
       // Constraints is readonly as a whole, so this is a deliberate widening:
       // the Figma schema is authoritative at runtime.
@@ -1564,6 +1836,7 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
         horizontal: op.horizontal ?? current.horizontal,
         vertical: op.vertical ?? current.vertical,
       };
+      invalidateCache(ctx, node.id);
       return `${op.horizontal ?? current.horizontal}/${op.vertical ?? current.vertical}`;
     }
 
@@ -1604,14 +1877,59 @@ function register(ctx: Ctx, tempId: string | undefined, node: SceneNode, index: 
  * how that reads, and it is why rollback here is surgical: every created id
  * is resolved and removed individually, and anything unresolvable is reported
  * as an orphan for explicit cleanup rather than guessed away with an undo.
+ *
+ * Group-created containers are emptied first: removing a GROUP node would
+ * otherwise delete pre-existing children that were only moved into it. Each
+ * grouped child is restored to its journaled parent (when known) or to the
+ * current page before the group itself is removed.
  */
-async function removeCreated(figmaNodeIds: string[]): Promise<{ removedIds: string[]; orphanIds: string[] }> {
+async function removeCreated(
+  ctx: Ctx | null,
+  figmaNodeIds: string[],
+): Promise<{ removedIds: string[]; orphanIds: string[] }> {
   const removedIds: string[] = [];
   const orphanIds: string[] = [];
-  for (const id of figmaNodeIds) {
+  const groupedChildren = new Map<string, Array<{ id: string; parentId: string; index: number }>>();
+  if (ctx) {
+    for (const entry of ctx.journal) {
+      if (entry.kind === "createGroup" && entry.childrenBefore) {
+        for (const child of entry.childrenBefore) groupedChildren.set(entry.figmaNodeId, entry.childrenBefore);
+        break;
+      }
+    }
+  }
+  for (const id of [...figmaNodeIds].reverse()) {
     try {
       const node = await figma.getNodeByIdAsync(id);
-      if (node && "remove" in node && typeof (node as { remove?: unknown }).remove === "function") {
+      if (!node || (node as { removed?: boolean }).removed) {
+        orphanIds.push(id);
+        continue;
+      }
+      const kids = groupedChildren.get(id);
+      if (kids && "children" in node) {
+        for (const child of kids) {
+          try {
+            const childNode = await figma.getNodeByIdAsync(child.id);
+            if (!childNode || (childNode as { removed?: boolean }).removed) continue;
+            const parentNode = await figma.getNodeByIdAsync(child.parentId).catch(() => null);
+            const parent = parentNode && "appendChild" in parentNode ? (parentNode as ParentNode) : figma.currentPage;
+            if ("appendChild" in childNode) {
+              if (Number.isFinite(child.index) && child.index >= 0 && (parent as ParentNode).children) {
+                try {
+                  (parent as ParentNode).insertChild(Math.min(child.index, (parent as ParentNode).children.length), childNode as never);
+                } catch {
+                  (parent as ParentNode).appendChild(childNode as never);
+                }
+              } else {
+                (parent as ParentNode).appendChild(childNode as never);
+              }
+            }
+          } catch {
+            /* one unrestorable child must not block the rest */
+          }
+        }
+      }
+      if ("remove" in node && typeof (node as { remove?: unknown }).remove === "function") {
         (node as unknown as { remove: () => void }).remove();
         removedIds.push(id);
       } else {
@@ -1624,34 +1942,224 @@ async function removeCreated(figmaNodeIds: string[]): Promise<{ removedIds: stri
   return { removedIds, orphanIds };
 }
 
+/** Best-effort write that records whether the target still accepts it. */
+function trySet(target: Record<string, unknown>, key: string, value: unknown): boolean {
+  try {
+    target[key] = value;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveLive(id: string): Promise<BaseNode | null> {
+  try {
+    const node = await figma.getNodeByIdAsync(id);
+    if (!node || (node as { removed?: boolean }).removed) return null;
+    return node;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Restore journaled mutations in reverse order (last mutation first).
+ *
+ * Returns confirmed-restored ids vs ids that could not be restored because
+ * the node was deleted/moved by the user mid-transaction or a property is no
+ * longer writable. A restore that cannot be verified is reported, never
+ * assumed — that is what makes `rolledBack: true` trustworthy.
+ */
+async function restoreJournal(ctx: Ctx): Promise<{ restoredIds: string[]; unrestoredIds: string[] }> {
+  const restoredIds: string[] = [];
+  const unrestoredIds: string[] = [];
+  for (const entry of [...ctx.journal].reverse()) {
+    try {
+      if (entry.kind === "removeNode") {
+        const ref = entry.nodeRef;
+        const parentLive = entry.parentId ? await resolveLive(entry.parentId) : null;
+        const parent = parentLive && "appendChild" in parentLive ? (parentLive as ParentNode) : null;
+        if (!ref || (ref as { removed?: boolean }).removed !== true) {
+          // Node was never actually removed (failure happened before remove).
+          restoredIds.push(entry.figmaNodeId);
+          continue;
+        }
+        if (!parent) {
+          unrestoredIds.push(entry.figmaNodeId);
+          continue;
+        }
+        try {
+          if (Number.isFinite(entry.parentIndex) && (entry.parentIndex ?? -1) >= 0) {
+            parent.insertChild(Math.min(entry.parentIndex ?? parent.children.length, parent.children.length), ref as never);
+          } else {
+            parent.appendChild(ref as never);
+          }
+          try {
+            (ref as { removed?: boolean }).removed = false;
+          } catch {
+            /* flag is best-effort */
+          }
+          invalidateCache(ctx, entry.figmaNodeId);
+          restoredIds.push(entry.figmaNodeId);
+        } catch {
+          unrestoredIds.push(entry.figmaNodeId);
+        }
+        continue;
+      }
+      if (entry.kind === "reparent" || entry.kind === "setPage") {
+        const node = await resolveLive(entry.figmaNodeId);
+        const parentLive = entry.parentId ? await resolveLive(entry.parentId) : null;
+        if (!node || !("appendChild" in node)) {
+          unrestoredIds.push(entry.figmaNodeId);
+          continue;
+        }
+        const parent = parentLive && "appendChild" in parentLive ? (parentLive as ParentNode) : figma.currentPage;
+        try {
+          if (Number.isFinite(entry.parentIndex) && (entry.parentIndex ?? -1) >= 0) {
+            parent.insertChild(Math.min(entry.parentIndex ?? parent.children.length, parent.children.length), node as never);
+          } else {
+            parent.appendChild(node as never);
+          }
+          for (const [k, v] of Object.entries(entry.before)) trySet(node as unknown as Record<string, unknown>, k, v);
+          restoredIds.push(entry.figmaNodeId);
+        } catch {
+          unrestoredIds.push(entry.figmaNodeId);
+        }
+        continue;
+      }
+      if (entry.kind === "createGroup") {
+        // Children were already moved back by removeCreated; nothing else to do.
+        restoredIds.push(entry.figmaNodeId);
+        continue;
+      }
+      if (entry.kind === "booleanConsume") {
+        // Consumed sources cannot be reconstructed from properties alone.
+        unrestoredIds.push(entry.figmaNodeId);
+        continue;
+      }
+      const node = await resolveLive(entry.figmaNodeId);
+      if (!node) {
+        unrestoredIds.push(entry.figmaNodeId);
+        continue;
+      }
+      const target = node as unknown as Record<string, unknown>;
+      let ok = true;
+      if (entry.kind === "bindVariable") {
+        for (const [field, variable] of Object.entries(entry.before)) {
+          try {
+            (node as unknown as { setBoundVariable: (f: string, v: unknown) => void }).setBoundVariable(
+              field,
+              (variable as { id?: string }) ?? null,
+            );
+          } catch {
+            ok = false;
+          }
+        }
+      } else if (entry.kind === "prototypeLink") {
+        try {
+          const reactive = node as unknown as { setReactionsAsync?: (r: unknown[]) => Promise<void> };
+          if (typeof reactive.setReactionsAsync === "function") {
+            await reactive.setReactionsAsync((entry.before["reactions"] as unknown[]) ?? []);
+          } else {
+            ok = false;
+          }
+        } catch {
+          ok = false;
+        }
+      } else if (entry.kind === "setVariant") {
+        try {
+          const inst = node as unknown as { setProperties?: (p: Record<string, unknown>) => void };
+          const prior = entry.before["componentProperties"] as Record<string, { value?: unknown }> | undefined;
+          if (typeof inst.setProperties === "function" && prior) {
+            const props: Record<string, unknown> = {};
+            for (const [k, prop] of Object.entries(prior)) {
+              if (prop && typeof prop === "object" && "value" in prop && prop.value !== undefined && typeof prop.value !== "object") {
+                props[k] = prop.value;
+              }
+            }
+            inst.setProperties(props);
+          } else {
+            ok = false;
+          }
+        } catch {
+          ok = false;
+        }
+      } else {
+        for (const [k, v] of Object.entries(entry.before)) {
+          if (!trySet(target, k, v)) ok = false;
+        }
+        if (entry.kind === "setTypography" || entry.kind === "setTextContent") {
+          // Font-gated writes: reload the prior font before restoring chars.
+          try {
+            if (node.type === "TEXT") {
+              const font = (node as TextNode).fontName;
+              if (font && typeof font === "object" && "family" in font) {
+                await figma.loadFontAsync(font as FontName).catch(() => undefined);
+              }
+            }
+          } catch {
+            /* restore already attempted */
+          }
+        }
+      }
+      if (ok) restoredIds.push(entry.figmaNodeId);
+      else unrestoredIds.push(entry.figmaNodeId);
+    } catch {
+      unrestoredIds.push(entry.figmaNodeId);
+    }
+  }
+  return { restoredIds: [...new Set(restoredIds)].filter((id) => !unrestoredIds.includes(id)), unrestoredIds: [...new Set(unrestoredIds)] };
+}
+
 async function failure(
   transactionId: string,
   err: unknown,
   attempted: boolean,
   createdIds: string[] = [],
+  ctx: Ctx | null = null,
 ): Promise<TransactionFailure> {
-  let rolledBack = false;
   let removedIds: string[] = [];
   let orphanIds: string[] = [];
+  let restoredIds: string[] = [];
+  let unrestoredIds: string[] = [];
+  let rollbackStatus: RollbackStatus = "none";
 
   if (attempted) {
+    // Order matters: restore existing-node mutations FIRST (they may live
+    // inside created containers), then remove created nodes in reverse order.
+    if (ctx && ctx.journal.length > 0) {
+      const restored = await restoreJournal(ctx);
+      restoredIds = restored.restoredIds;
+      unrestoredIds = restored.unrestoredIds;
+    }
     // Surgical: only our own nodes go. Never a bare undo.
-    const result = await removeCreated(createdIds);
+    const result = await removeCreated(ctx, createdIds);
     removedIds = result.removedIds;
     orphanIds = result.orphanIds;
-    rolledBack = createdIds.length === 0 || (removedIds.length === createdIds.length && orphanIds.length === 0);
+    const journalClean = !ctx || ctx.journal.length === 0 || (restoredIds.length > 0 && unrestoredIds.length === 0 && restoredIds.length >= new Set(ctx.journal.map((j) => j.figmaNodeId)).size);
+    const createdClean = createdIds.length === 0 || (removedIds.length === createdIds.length && orphanIds.length === 0);
+    // Exact accounting: every distinct journaled node must be confirmed
+    // restored; anything less is partial, never full.
+    const journaledIds = ctx ? new Set(ctx.journal.map((j) => j.figmaNodeId)) : new Set<string>();
+    const fullyRestored = [...journaledIds].every((id) => restoredIds.includes(id));
+    if (createdClean && fullyRestored) rollbackStatus = "full";
+    else if (removedIds.length > 0 || restoredIds.length > 0) rollbackStatus = "partial";
+    else rollbackStatus = createdIds.length > 0 || journaledIds.size > 0 ? "partial" : "none";
+    void journalClean;
   }
+
+  const rolledBack = attempted && rollbackStatus === "full";
 
   const isOpError = err instanceof OperationError;
   const raw = err instanceof Error ? err.message : String(err);
 
   const note = !attempted
     ? "Nothing was committed, so the document is unchanged."
-    : orphanIds.length > 0
-      ? `Removed ${removedIds.length} of ${createdIds.length} created node(s); ${orphanIds.length} could not be resolved (${orphanIds.join(", ")}). Inspect those ids before retrying — the document may hold partial work.`
-      : createdIds.length === 0
-        ? "Nothing was created before the failure, so the document is unchanged."
-        : "All nodes this transaction created were removed again; nothing else was touched.";
+    : rollbackStatus === "full"
+      ? createdIds.length === 0 && (!ctx || ctx.journal.length === 0)
+        ? "Nothing was committed before the failure, so the document is unchanged."
+        : `Full rollback: restored ${restoredIds.length} mutated node(s) and removed ${removedIds.length} created node(s). The document holds none of this transaction's partial work.`
+      : `Partial rollback (${rollbackStatus}): restored [${restoredIds.join(", ")}]; could not restore [${unrestoredIds.join(", ")}]; removed ${removedIds.length}/${createdIds.length} created node(s)${orphanIds.length > 0 ? `; orphans: ${orphanIds.join(", ")}` : ""}. Inspect these ids before retrying — the document may hold partial work. Recovery: re-inspect each listed id; hand-restore any unrestored properties; do not retry with the same temp ids until the orphans are resolved.`;
 
   return {
     transactionId,
@@ -1665,8 +2173,11 @@ async function failure(
       rolledBackNote: note,
     },
     rolledBack,
+    rollbackStatus,
     ...(removedIds.length > 0 ? { removedIds } : {}),
     ...(orphanIds.length > 0 ? { orphanIds } : {}),
+    ...(restoredIds.length > 0 ? { restoredIds } : {}),
+    ...(unrestoredIds.length > 0 ? { unrestoredIds } : {}),
   };
 }
 

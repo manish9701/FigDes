@@ -9,11 +9,14 @@ import { randomUUID } from "node:crypto";
 import type { WebSocket } from "ws";
 import type {
   ClientMessage,
+  JobRecord,
+  JobState,
   ResultMessage,
   ServerMessage,
   StatusResult,
   PluginToolName,
 } from "../../shared/protocol";
+import { recordDisconnect, recordReconnect, recordUnknownSession } from "./metrics";
 
 const REQUEST_TIMEOUT_MS = 60_000;
 /** Long builds (fonts + hundreds of ops) legitimately take minutes. Timing out
@@ -230,22 +233,134 @@ export class Session {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Transaction/job ledger (P0 reconnect recovery)                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Durable status/resume record for every mutating transaction.
+ *
+ * Keyed by `transactionId` so a retry reuses the SAME id and is idempotent
+ * instead of blindly creating the same objects again. Survives connection
+ * loss: the ledger lives on the server, not on the socket, so a reconnect can
+ * report the correct job state and resume or safely retry without duplicating
+ * created nodes.
+ */
+export class JobLedger {
+  private readonly jobs = new Map<string, JobRecord>();
+  /** Completed transaction results for idempotent retry (bounded). */
+  private readonly results = new Map<string, unknown>();
+  private order: string[] = [];
+
+  begin(input: { transactionId: string; tool: string; session: Session; operationCount: number }): JobRecord {
+    const rec: JobRecord = {
+      transactionId: input.transactionId,
+      state: "queued",
+      tool: input.tool,
+      sessionId: input.session.id,
+      fileKey: input.session.fileKey,
+      fileName: input.session.fileName,
+      operationCount: input.operationCount,
+      done: 0,
+      updatedAt: Date.now(),
+    };
+    this.jobs.set(input.transactionId, rec);
+    this.order.push(input.transactionId);
+    if (this.order.length > 200) {
+      const drop = this.order.splice(0, this.order.length - 200);
+      for (const id of drop) {
+        if (this.jobs.get(id)?.state === "committed" || this.jobs.get(id)?.state === "rolled-back") {
+          // Keep terminal records longer than the window would suggest? No:
+          // bounded memory wins; get_job_status reports "unknown" with hints.
+        }
+        this.jobs.delete(id);
+        this.results.delete(id);
+      }
+    }
+    return rec;
+  }
+
+  update(transactionId: string, patch: Partial<JobRecord>): JobRecord | undefined {
+    const rec = this.jobs.get(transactionId);
+    if (!rec) return undefined;
+    Object.assign(rec, patch, { updatedAt: Date.now() });
+    return rec;
+  }
+
+  get(transactionId: string): JobRecord | undefined {
+    return this.jobs.get(transactionId);
+  }
+
+  complete(transactionId: string, state: JobState, extra?: Partial<JobRecord>, result?: unknown): JobRecord | undefined {
+    const rec = this.update(transactionId, { state, ...(extra ?? {}) });
+    if (result !== undefined) {
+      this.results.set(transactionId, result);
+      if (this.results.size > 200) {
+        const first = this.results.keys().next().value;
+        if (first) this.results.delete(first);
+      }
+    }
+    return rec;
+  }
+
+  priorResult(transactionId: string): unknown | undefined {
+    return this.results.get(transactionId);
+  }
+
+  recent(limit = 20): JobRecord[] {
+    return [...this.jobs.values()].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit);
+  }
+
+  forSession(sessionId: string, limit = 20): JobRecord[] {
+    return [...this.jobs.values()]
+      .filter((j) => j.sessionId === sessionId)
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, limit);
+  }
+}
 
 export class SessionRegistry {
   private readonly sessions = new Map<string, Session>();
   private readonly wsToSession = new WeakMap<WebSocket, Session>();
+  /** Stable job identity across reconnects. */
+  readonly jobs = new JobLedger();
+  /** old session id -> replacement, so stale ids recover with a hint. */
+  private readonly lineage = new Map<string, { to: string; fileKey: string | null; fileName: string; at: number }>();
+  private readonly recentDisconnects: Array<{ sessionId: string; fileKey: string | null; fileName: string; at: number }> = [];
 
   add(socket: WebSocket): Session {
     const session = new Session(socket);
+    // Stable lineage: if a recent disconnect shares a fileKey, this connection
+    // is its generation successor — never silently retargeted, always explicit.
+    const prior = [...this.recentDisconnects].reverse().find((d) => d.fileKey !== null && d.fileKey === session.fileKey);
+    void prior;
     this.sessions.set(session.id, session);
     this.wsToSession.set(socket, session);
 
     socket.on("close", () => {
+      recordDisconnect();
+      this.recentDisconnects.push({ sessionId: session.id, fileKey: session.fileKey, fileName: session.fileName, at: Date.now() });
+      if (this.recentDisconnects.length > 20) this.recentDisconnects.splice(0, this.recentDisconnects.length - 20);
       session.dispose("The Figma plugin closed the connection.");
       this.sessions.delete(session.id);
     });
 
     return session;
+  }
+
+  /**
+   * Called when a registered session's file identity arrives: links the new
+   * generation to any prior disconnected session on the same fileKey so a
+   * reconnect can report "your old session X is now Y on the same file".
+   */
+  linkGeneration(session: Session): { reboundFrom?: string; readyMs?: number } {
+    const match = [...this.recentDisconnects].reverse().find((d) => d.fileKey !== null && d.fileKey === session.fileKey);
+    if (!match) return {};
+    this.lineage.set(match.sessionId, { to: session.id, fileKey: session.fileKey, fileName: session.fileName, at: Date.now() });
+    const idx = this.recentDisconnects.indexOf(match);
+    if (idx >= 0) this.recentDisconnects.splice(idx, 1);
+    const readyMs = Date.now() - match.at;
+    recordReconnect(readyMs);
+    return { reboundFrom: match.sessionId, readyMs };
   }
 
   get(id: string): Session | undefined {
@@ -273,8 +388,23 @@ export class SessionRegistry {
   resolve(sessionId?: string): Session {
     if (sessionId) {
       const found = this.sessions.get(sessionId);
-      if (!found) throw new Error(`Unknown plugin session: ${sessionId}`);
-      if (!found.reachable) throw new Error(`Plugin session ${sessionId} exists but is not connected.`);
+      if (!found) {
+        recordUnknownSession();
+        const rebound = this.lineage.get(sessionId);
+        const candidates = this.all()
+          .filter((s) => s.reachable)
+          .map((s) => `  ${s.id}  ${s.describe()}`)
+          .join("\n");
+        const hint = rebound
+          ? ` That session reconnected as ${rebound.to} on "${rebound.fileName}". Retry with sessionId "${rebound.to}" and the SAME transactionId; the job ledger will report whether it committed instead of duplicating nodes.`
+          : this.recentDisconnects.length > 0 || this.all().length > 0
+            ? ` If you just reconnected, your session id changed: call figma_status with no sessionId to get the live id, then retry with the SAME transactionId and check get_job_status first.`
+            : ` No plugin sessions are known at all: open the plugin in the target file first, then check get_job_status with your transactionId before retrying with the SAME transactionId.`;
+        throw new Error(
+          `Unknown plugin session: ${sessionId}.${hint}${candidates ? `\nConnected sessions:\n${candidates}` : ""}`,
+        );
+      }
+      if (!found.reachable) throw new Error(`Plugin session ${sessionId} exists but is not connected. Reconnect the plugin, then use get_job_status with your transactionId before retrying — the ledger survives the disconnect.`);
       return found;
     }
 

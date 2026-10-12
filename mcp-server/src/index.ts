@@ -174,7 +174,8 @@ wss.on("connection", (ws: WebSocket) => {
         }
         clearTimeout(registrationGuard);
         session.register(msg);
-        console.log(`[ws] registered ${session.id} → "${session.fileName}" / "${session.pageName}"`);
+        const linked = registry.linkGeneration(session);
+        console.log(`[ws] registered ${session.id} → "${session.fileName}" / "${session.pageName}"${linked.reboundFrom ? ` (rebound from ${linked.reboundFrom} in ${linked.readyMs}ms)` : ""}`);
         session.send({ type: "welcome", sessionId: session.id, heartbeatMs: 5000 });
         break;
       }
@@ -191,6 +192,9 @@ wss.on("connection", (ws: WebSocket) => {
         // Upstream build heartbeat: extends the request timeout (sliding
         // window) so long builds log instead of timing out mid-apply.
         session.touchProgress(msg.requestId, msg.done, msg.total, msg.label);
+        if (msg.transactionId) {
+          registry.jobs.update(msg.transactionId, { state: "applying", done: msg.done, label: msg.label, sessionId: session.id });
+        }
         if (msg.phase === "failed") {
           console.log(`[ws] ${session.id} build ${msg.phase}: ${msg.done}/${msg.total} ${msg.label}`);
         }

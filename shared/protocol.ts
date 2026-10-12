@@ -734,7 +734,38 @@ export interface TransactionSuccess {
    * reporting success — this is the honest answer to "did it actually land".
    */
   unconfirmedIds?: string[];
+  /**
+   * Stage + per-operation timing (P1 latency instrumentation).
+   * All values are milliseconds measured inside the plugin. Absent on older
+   * bundles; never required for correctness.
+   */
+  timings?: TransactionTimings;
+  /**
+   * Non-blocking advisories: operation-budget warnings, cache notes, split
+   * suggestions. A transaction with warnings still committed; the warnings
+   * tell the caller how to stay inside budget next time.
+   */
+  warnings?: string[];
 }
+
+export interface TransactionStageTimings {
+  parse?: number;
+  apply?: number;
+  verify?: number;
+  reveal?: number;
+  total?: number;
+}
+
+export interface TransactionTimings extends TransactionStageTimings {
+  /** Per-operation durations in execution order (ms). Capped for trace size. */
+  perOperation?: Array<{ index: number; opType: string; ms: number }>;
+  /** Nodes resolved from the in-transaction handle cache vs live lookups. */
+  cache?: { hits: number; misses: number };
+  nodeCount?: number;
+  operationCount?: number;
+}
+
+export type RollbackStatus = "full" | "partial" | "none";
 
 export interface TransactionFailure {
   transactionId: string;
@@ -750,12 +781,19 @@ export interface TransactionFailure {
     rolledBackNote: string;
   };
   /**
-   * True when every node this transaction created was removed again, so the
-   * document holds none of its partial work. Removal is by explicit node id —
-   * never a bare undo, which would pop whatever Figma last recorded regardless
-   * of which transaction put it there.
+   * True ONLY when every mutation is confirmed restored AND every created node
+   * was removed again. A transaction that only touched existing nodes reports
+   * true only when the journal restore is verified; a transaction with no
+   * mutations at all reports true trivially. Never true on partial restore.
    */
   rolledBack: boolean;
+  /**
+   * Machine-readable rollback outcome. "full" == rolledBack true; "partial" ==
+   * some but not all state restored; "none" == nothing was committed or
+   * nothing could be restored. Added so callers do not have to parse
+   * rolledBackNote prose to decide whether a retry is safe.
+   */
+  rollbackStatus?: RollbackStatus;
   /** Created ids that were removed again during rollback. */
   removedIds?: string[];
   /**
@@ -764,6 +802,55 @@ export interface TransactionFailure {
    * before retrying rather than assuming a clean slate.
    */
   orphanIds?: string[];
+  /** Existing-node mutations confirmed restored to their prior values. */
+  restoredIds?: string[];
+  /**
+   * Existing-node mutations that could not be restored (node gone, moved by
+   * the user mid-transaction, or property no longer writable). Non-empty always
+   * forces rollbackStatus "partial" and rolledBack false, with exact ids plus
+   * a recovery action in rolledBackNote.
+   */
+  unrestoredIds?: string[];
+}
+
+/** Durable job/transaction ledger state (P0 reconnect recovery). */
+export type JobState =
+  | "queued"
+  | "preflight"
+  | "applying"
+  | "verifying"
+  | "committed"
+  | "rolled-back"
+  | "partial-rollback"
+  | "failed";
+
+export interface JobRecord {
+  transactionId: string;
+  state: JobState;
+  tool: string;
+  sessionId: string;
+  fileKey: string | null;
+  fileName: string;
+  operationCount: number;
+  done: number;
+  label?: string;
+  createdIds?: string[];
+  error?: string;
+  updatedAt: number;
+}
+
+export interface PreflightIssue {
+  index: number;
+  opType: string;
+  message: string;
+  fix: string;
+}
+
+export interface PreflightResult {
+  ok: boolean;
+  issues: PreflightIssue[];
+  warnings: Array<{ index: number; opType: string; message: string }>;
+  operationCount: number;
 }
 
 export type TransactionResult = TransactionSuccess | TransactionFailure;
@@ -1162,6 +1249,9 @@ export const TOOL_NAMES = [
   "figdes_inspect_visual",
   "figdes_read_context",
   "compare_visuals",
+  "get_job_status",
+  "resume_job",
+  "edit_screen",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

@@ -130,7 +130,46 @@ export function runRules(metrics: MetricsReport, ruleset: RuleSet): Finding[] {
     }
   }
 
+  // Evidence provenance (P1): every finding carries source type, confidence,
+  // target ids, coordinate space and rule version — so a stale or heuristic
+  // result can never certify as geometry, and a local/absolute mismatch
+  // downgrades instead of hard-failing (see overflow above).
+  for (const f of trimmed) {
+    if (f.ruleVersion === undefined) f.ruleVersion = RULE_VERSION;
+    if (f.evidenceType === undefined) f.evidenceType = evidenceTypeFor(f.rule);
+    if (f.coordinateSpace === undefined) {
+      const spaces = f.nodeIds
+        .map((id) => byId.get(id)?.coordSpace)
+        .filter((s): s is NonNullable<typeof s> => s !== undefined);
+      f.coordinateSpace = spaces.includes("local-unverified") ? "local-unverified" : spaces.includes("parent-local") ? "parent-local" : "legacy";
+      if (f.coordinateSpace === "local-unverified" && f.confidence === "high") f.confidence = "low";
+    }
+  }
+
   return trimmed;
+}
+
+const RULE_VERSION = "figdes-evaluator-1";
+
+function evidenceTypeFor(rule: string): Finding["evidenceType"] {
+  switch (rule) {
+    case "text-contrast":
+    case "tiny-technical-text":
+      return "accessibility";
+    case "overflow":
+    case "off-grid-geometry":
+    case "off-scale-spacing":
+    case "tap-target-size":
+    case "duplicate-siblings":
+    case "vector-stroke-system":
+      return "geometry";
+    case "unstyled-text":
+    case "unnamed-frame-children":
+    case "font-family-count":
+      return "design-system";
+    default:
+      return "heuristic";
+  }
 }
 
 function compareFindings(a: Finding, b: Finding): number {
@@ -493,7 +532,7 @@ function tinyTechnicalText(n: NodeMetrics): Finding[] {
  * A warning, never a failure: sometimes the screen genuinely is a card grid,
  * and a critic that fails those is a critic that gets ignored.
  */
-const EXEMPT_CARD_CONTAINERS = /topolog|map|field|graph|inspector|rail|panel|band|decision/i;
+const EXEMPT_CARD_CONTAINERS = /topolog|map|field|graph|inspector|rail|panel|band|decision|primary-visual|hero|status-rail|split-view|cluster-field|instrument-rail/i;
 
 function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
   // One screen, one verdict: only the top-level frame is judged, so a file
@@ -553,13 +592,26 @@ function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
   if (share < 0.4) return [];
 
   const parentName = peerParent ? (c.byId.get(peerParent)?.name ?? peerParent) : "screen";
+  // Semantic downgrade (P1 false-positive fix): peers with distinct labels are
+  // distinct objects (devices, models, rows) — not a generic peer-card wall.
+  // A true SaaS wall repeats the same metric-card shape AND the same kind of
+  // content; topology/inspector members differ by label, stroke or content.
+  const peerTexts = new Set(
+    peers.flatMap((p) => {
+      const kids = c.childrenOf.get(p.id) ?? [];
+      const own = c.byId.get(p.id)?.text?.content?.trim() ?? "";
+      const kidTexts = kids.map((k) => k.text?.content?.trim() ?? "").filter((t) => t.length > 0);
+      return [...(own ? [own.slice(0, 40)] : []), ...kidTexts.map((t) => t.slice(0, 40))];
+    }),
+  );
+  const distinctContent = peerTexts.size >= peers.length;
   return [
     {
       rule: "card-wall",
-      confidence: "medium",
+      confidence: distinctContent ? "low" : "medium",
       severity: "minor",
-      title: `${peers.length} bordered cards cover ${Math.round(share * 100)}% of the screen`,
-      evidence: { cards: peers.length, areaShare: Math.round(share * 100), peerParent: parentName, peerIds: peers.slice(0, 6).map((card) => card.id).join(",") },
+      title: `${peers.length} bordered cards cover ${Math.round(share * 100)}% of the screen${distinctContent ? " (distinct content — likely structured members, not peers)" : ""}`,
+      evidence: { cards: peers.length, areaShare: Math.round(share * 100), peerParent: parentName, peerIds: peers.slice(0, 6).map((card) => card.id).join(","), distinctLabels: peerTexts.size },
       nodeIds: peers.slice(0, 12).map((card) => card.id),
       guidance:
         "Consider converting one card cluster into a visual field, chart, topology, or open composition. Cards are containers, not content.",

@@ -339,15 +339,36 @@ function arcTangent(g: ArcGeometry, angle: number): Point {
  * the full ellipse, which would inflate the box for a quarter-arc and crop the
  * artwork at the node edge.
  */
+/**
+ * Every point on an arc that can lie on its bounding box.
+ *
+ * The endpoints plus the *stationary* points of the parameterisation, where
+ * dx/dθ or dy/dθ is zero, restricted to the angles actually swept. These are
+ * exactly the box edges of the drawn arc — not an over-estimate of the full
+ * ellipse, which would inflate the box for a quarter-arc and crop the artwork
+ * at the node edge.
+ *
+ * The stationary angles are derived, not assumed:
+ *
+ *   x(θ) = cx + rx·cosθ·cosφ − ry·sinθ·sinφ   ⇒   θx = atan2(−ry·sinφ, rx·cosφ)
+ *   y(θ) = cy + rx·cosθ·sinφ + ry·sinθ·cosφ   ⇒   θy = atan2( ry·cosφ, rx·sinφ)
+ *
+ * Sampling at multiples of 90° happens to be right only when φ = 0. A rotated
+ * ellipse is the normal case in logo work, and hard stress test #10 shipped a
+ * generator bug here once already: the unrotated assumption silently under-
+ * bounded every rotated arc until an independent oracle caught it.
+ */
 function arcExtremes(g: ArcGeometry): Point[] {
   const lo = Math.min(g.startAngle, g.startAngle + g.sweepAngle);
   const hi = Math.max(g.startAngle, g.startAngle + g.sweepAngle);
   const EPS = 1e-9;
   const out: Point[] = [];
-  // Stationary points sit at multiples of 90 degrees. The swept range is under a
-  // full turn, so checking one turn either side of each is sufficient.
-  for (let k = 0; k < 4; k++) {
-    const base = (k * Math.PI) / 2;
+
+  const thetaX = Math.atan2(-g.ry * g.sinPhi, g.rx * g.cosPhi);
+  const thetaY = Math.atan2(g.ry * g.cosPhi, g.rx * g.sinPhi);
+
+  for (const base of [thetaX, thetaX + Math.PI, thetaY, thetaY + Math.PI]) {
+    // The swept range is under a full turn, so one turn either side suffices.
     for (let turn = -1; turn <= 1; turn++) {
       const angle = base + turn * 2 * Math.PI;
       if (angle < lo - EPS || angle > hi + EPS) continue;

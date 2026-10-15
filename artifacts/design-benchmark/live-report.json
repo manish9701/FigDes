@@ -1,14 +1,65 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-10-09T08:04:25.766Z",
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-15T18:50:28.212Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
-  "expectedCases": 9,
+  "expectedCases": 10,
   "foundCases": 9,
   "completeCases": 9,
-  "missingCases": [],
-  "liveBenchmarkComplete": true,
-  "liveBenchmarkReason": "All 9 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes.",
+  "missingCases": [
+    "hard-stress-test"
+  ],
+  "liveBenchmarkComplete": false,
+  "liveBenchmarkReason": "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
+  "stressFrame": {
+    "caseId": "hard-stress-test",
+    "canvas": {
+      "width": 1600,
+      "height": 1100
+    },
+    "mustResolve": [
+      "empty-guard-snapshot",
+      "off-canvas-geometry",
+      "unresolved-connectors",
+      "arc-bounds",
+      "contrast-repair",
+      "review-semantics"
+    ],
+    "evidenceShape": {
+      "canvasWidth": 1600,
+      "canvasHeight": 1100,
+      "nativeFrameId": "<figma node id of the 1600x1100 frame>",
+      "mutations": [
+        {
+          "revision": "<revision hash>",
+          "summary": "<what changed>"
+        }
+      ],
+      "postMutationRender": {
+        "revision": "<must equal the last mutation's revision>",
+        "screenshotReference": "<png path>"
+      },
+      "postMutationReview": {
+        "revision": "<same revision>",
+        "findings": [
+          {
+            "rule": "<id>",
+            "detail": "<what was seen in the render>"
+          }
+        ],
+        "resolved": [
+          "empty-guard-snapshot",
+          "off-canvas-geometry",
+          "unresolved-connectors",
+          "arc-bounds",
+          "contrast-repair",
+          "review-semantics"
+        ],
+        "stillOpen": []
+      },
+      "unresolved": []
+    }
+  },
   "cases": [
     {
       "file": "case-data-heavy-workspace.json",

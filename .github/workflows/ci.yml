@@ -28,3 +28,16 @@ jobs:
           name: figdes-design-benchmark
           path: artifacts/design-benchmark/latest.json
           if-no-files-found: error
+      # Live Figma evidence cannot be produced on a runner, so this step does not
+      # gate the build. It publishes the live report so the stress frame
+      # (issue #10's "rendered and reviewed after the final mutation") stays
+      # visible rather than quietly unevidenced. Run `npm run benchmark:live --
+      # strict` locally with the plugin connected to make it a hard gate.
+      - name: Report live Figma evidence
+        run: npm run benchmark:live
+      - name: Upload live evidence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: figdes-live-report
+          path: artifacts/design-benchmark/live-report.json
+          if-no-files-found: warn

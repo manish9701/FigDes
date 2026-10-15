@@ -204,6 +204,13 @@ export function compileIR(ir: DesignIR): CompileResult {
     intent?.contrast === "bold" ? 1.15 : intent?.contrast === "muted" ? 0.9 : 1;
   const alignGrid = intent?.alignment === "strong" ? Math.max(1, Math.round(canvas.grid)) : 0;
 
+  // Normalise input before anything reads it. `planLayout` spreads each region
+  // into a ResolvedRegion, so a missing `children` array would be baked into the
+  // resolved geometry and then fail far downstream in content emission.
+  for (const region of ir.regions) {
+    if (!Array.isArray(region.children)) region.children = [];
+  }
+
   let regions = planLayout(ir, defaultGutter(canvas.grid) * rhythmScale);
   if (alignGrid > 0) {
     regions = regions.map((r) => ({
@@ -232,6 +239,8 @@ export function compileIR(ir: DesignIR): CompileResult {
   // that such a node was never emitted *and* every connector naming it reported
   // "unknown node", which is a misleading diagnosis for a node that is right
   // there in `content`. Adopting matches the interpreter, and is reported rather
+  // than done silently.
+  //
   // than done silently.
   {
     const claimed = new Set(ir.regions.flatMap((r) => r.children));

@@ -20,7 +20,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const liveDir = resolve(root, "artifacts/design-benchmark/live");
+const liveDir = resolve(process.env.FIGDES_LIVE_DIR ?? resolve(root, "artifacts/design-benchmark/live"));
 const outPath = resolve(root, process.env.FIGDES_LIVE_REPORT ?? "artifacts/design-benchmark/live-report.json");
 const strict = process.argv.includes("--strict");
 
@@ -34,6 +34,42 @@ const EXPECTED = [
   "data-heavy-workspace",
   "spatial-relationship",
   "editorial-product-page",
+  // Issue #10's hard stress frame. Carried here rather than left as a note in
+  // the issue because an acceptance criterion nobody can run is not a criterion.
+  "hard-stress-test",
+];
+
+/**
+ * The stress frame (issue #10) has to prove something the other nine cannot:
+ * that the *same* 1600x1100 frame still renders and reviews clean **after** the
+ * final mutation that fixed the reported defects.
+ *
+ * A screenshot that merely exists is not that proof — a render taken before the
+ * fix passes the same check while proving nothing. So the render is bound to a
+ * revision, and the revision must equal the last recorded mutation's. That turns
+ * "rendered and reviewed after the final mutation" into something a validator
+ * can check rather than something a human must be trusted to remember.
+ */
+const STRESS_CASE_ID = "hard-stress-test";
+const STRESS_REQUIRED_EVIDENCE = [
+  "canvasWidth",
+  "canvasHeight",
+  "nativeFrameId",
+  "mutations",
+  "postMutationRender",
+  "postMutationReview",
+  "unresolved",
+];
+const STRESS_CANVAS = { width: 1600, height: 1100 };
+
+/** Issues #10 fixed; the review must show these are actually gone. */
+const STRESS_MUST_RESOLVE = [
+  "empty-guard-snapshot",
+  "off-canvas-geometry",
+  "unresolved-connectors",
+  "arc-bounds",
+  "contrast-repair",
+  "review-semantics",
 ];
 
 /** Handoff §9 required evidence per live case. */
@@ -55,6 +91,55 @@ try {
   files = [];
 }
 
+/**
+ * Checks the stress frame's post-mutation evidence.
+ *
+ * Returns a list of problems, empty when the evidence actually proves the claim.
+ * Three things must hold: the canvas is the one the issue named, the render is
+ * bound to the last mutation (not a pre-fix screenshot), and the review shows
+ * each reported defect resolved rather than merely re-listed.
+ */
+function validateStressFrame(parsed) {
+  const problems = [];
+
+  if (parsed.canvasWidth !== STRESS_CANVAS.width || parsed.canvasHeight !== STRESS_CANVAS.height) {
+    problems.push(
+      `canvas is ${parsed.canvasWidth}x${parsed.canvasHeight}, but issue #10 fixed a ${STRESS_CANVAS.width}x${STRESS_CANVAS.height} frame. Rendering a different size proves nothing about that fix.`,
+    );
+  }
+
+  const mutations = Array.isArray(parsed.mutations) ? parsed.mutations : [];
+  if (mutations.length === 0) {
+    problems.push("no mutations recorded: there is no 'final mutation' for the render to follow.");
+  } else {
+    const last = mutations[mutations.length - 1];
+    const render = parsed.postMutationRender ?? {};
+    if (!render.revision) {
+      problems.push("postMutationRender carries no revision, so it cannot be shown to follow the final mutation.");
+    } else if (last && last.revision && render.revision !== last.revision) {
+      problems.push(
+        `postMutationRender is revision '${render.revision}' but the final mutation is '${last.revision}'. A render taken before the last change proves nothing about it.`,
+      );
+    }
+  }
+
+  const review = parsed.postMutationReview ?? {};
+  const resolved = new Set(Array.isArray(review.resolved) ? review.resolved : []);
+  const stillOpen = new Set(Array.isArray(review.stillOpen) ? review.stillOpen : []);
+  for (const defect of STRESS_MUST_RESOLVE) {
+    if (stillOpen.has(defect)) {
+      problems.push(`'${defect}' is still open after the final mutation.`);
+    } else if (!resolved.has(defect)) {
+      problems.push(`'${defect}' is neither resolved nor still open: the review did not say.`);
+    }
+  }
+  if (!Array.isArray(review.findings) || review.findings.length === 0) {
+    problems.push("postMutationReview carries no findings: a review that found nothing must still say it looked.");
+  }
+
+  return problems;
+}
+
 for (const file of files) {
   let parsed = null;
   try {
@@ -64,19 +149,36 @@ for (const file of files) {
     continue;
   }
   const caseId = typeof parsed.caseId === "string" ? parsed.caseId : null;
-  const missing = REQUIRED_EVIDENCE.filter((key) => {
+  const required = caseId === STRESS_CASE_ID ? [...REQUIRED_EVIDENCE, ...STRESS_REQUIRED_EVIDENCE] : REQUIRED_EVIDENCE;
+  const missing = required.filter((key) => {
     const v = parsed[key];
-    if (Array.isArray(v)) return v.length === 0 && key !== "unresolved" && key !== "structuralFindings" && key !== "repairs";
+    // An empty array is legitimate for the evidence keys that describe an
+    // absence (no findings, no repairs, nothing unresolved). It is *not*
+    // legitimate for `mutations`: the whole point of the stress case is that
+    // there was a final mutation for the render to follow.
+    if (Array.isArray(v)) return v.length === 0 && !["unresolved", "structuralFindings", "repairs", "resolved", "findings"].includes(key);
     return v === undefined || v === null || v === "";
   });
   const fixtureOk = Array.isArray(parsed.fixtures)
     ? parsed.fixtures.every((f) => f && f.fixture === true)
     : true;
+
+  // The stress frame additionally has to prove it was rendered *after* the fix
+  // and that the fix held, so a plain "keys are present" check is not enough.
+  const stressProblems = caseId === STRESS_CASE_ID ? validateStressFrame(parsed) : [];
+  const unresolvedStress = Array.isArray(parsed.unresolved)
+    ? parsed.unresolved.filter((u) => typeof u === "string" && STRESS_MUST_RESOLVE.includes(u))
+    : [];
+
   cases.push({
     file,
     caseId,
-    status: missing.length === 0 && fixtureOk ? "COMPLETE" : "INCOMPLETE",
+    status: missing.length === 0 && fixtureOk && stressProblems.length === 0 && unresolvedStress.length === 0 ? "COMPLETE" : "INCOMPLETE",
     missing,
+    ...(stressProblems.length > 0 ? { stressProblems } : {}),
+    ...(unresolvedStress.length > 0
+      ? { unresolvedDefects: unresolvedStress, note: "a defect from issue #10 is listed as still unresolved" }
+      : {}),
     ...(fixtureOk ? {} : { fixtureViolation: "fixtures must be marked {fixture:true}; no real-looking invented data" }),
   });
 }
@@ -87,7 +189,7 @@ const complete = cases.filter((c) => c.status === "COMPLETE");
 const liveBenchmarkComplete = missingCases.length === 0 && cases.length === EXPECTED.length && complete.length === EXPECTED.length;
 
 const report = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   runner: "FigDes live benchmark validator",
   mode: "live-plugin",
@@ -97,8 +199,27 @@ const report = {
   missingCases,
   liveBenchmarkComplete,
   liveBenchmarkReason: liveBenchmarkComplete
-    ? "All 9 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes."
-    : "Live Figma evidence is incomplete: run the 9 cases against a connected plugin (render → critique → repair → verify) and re-run this validator. Offline structural results must not be presented as visual approval.",
+    ? `All ${EXPECTED.length} live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes, and the ${STRESS_CANVAS.width}x${STRESS_CANVAS.height} stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved.`
+    : "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
+  stressFrame: {
+    caseId: STRESS_CASE_ID,
+    canvas: STRESS_CANVAS,
+    mustResolve: STRESS_MUST_RESOLVE,
+    evidenceShape: {
+      canvasWidth: STRESS_CANVAS.width,
+      canvasHeight: STRESS_CANVAS.height,
+      nativeFrameId: "<figma node id of the 1600x1100 frame>",
+      mutations: [{ revision: "<revision hash>", summary: "<what changed>" }],
+      postMutationRender: { revision: "<must equal the last mutation's revision>", screenshotReference: "<png path>" },
+      postMutationReview: {
+        revision: "<same revision>",
+        findings: [{ rule: "<id>", detail: "<what was seen in the render>" }],
+        resolved: STRESS_MUST_RESOLVE,
+        stillOpen: [],
+      },
+      unresolved: [],
+    },
+  },
   cases,
 };
 

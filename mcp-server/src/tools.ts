@@ -19,7 +19,7 @@ import {
   type PluginToolName,
   type TransactionResult,
 } from "../../shared/protocol";
-import { SessionRegistry, type Session } from "./sessions";
+import { SessionRegistry, type Session, TransactionTimeoutError, SessionDisconnectedError } from "./sessions";
 import { runRules, summarise, type RuleSet } from "./review/rules";
 import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue } from "./runtime/tools";
 import { renderDesign } from "./render-tool";
@@ -475,6 +475,12 @@ function assertTransaction(result: TransactionResult): TransactionResult {
  * transactionId returns the prior result instead of duplicating nodes; a bad
  * request fails in preflight before the WebSocket/document is contacted; every
  * outcome updates the job ledger and the latency/rollback metrics.
+ *
+ * Timeout/disconnect semantics: the Figma main thread keeps running after the
+ * server stops waiting, so those paths mark the job `timed-out` (outcome
+ * unknown) instead of `failed`. A late plugin answer reconciles the record via
+ * the socket router; until then any same-id retry is refused with a
+ * reconcile-first error rather than dispatched as a duplicate.
  */
 async function dispatchTransaction(
   registry: SessionRegistry,
@@ -489,6 +495,21 @@ async function dispatchTransaction(
   if (prior && (prior as { status?: string }).status === "success") {
     recordDuplicateRetry();
     return prior as TransactionResult;
+  }
+
+  // Same-id retry while the first attempt is still in flight (or timed out
+  // with an unknown outcome) must NOT dispatch a second copy: if the first run
+  // commits late, the duplicate creates the same nodes twice.
+  const existing = registry.jobs.get(transactionId);
+  if (existing && (existing.state === "queued" || existing.state === "preflight" || existing.state === "applying" || existing.state === "verifying")) {
+    throw new Error(
+      `Transaction ${transactionId} is already ${existing.state} (${existing.done}/${existing.operationCount} ops). Do not dispatch a duplicate: wait for progress, then call get_job_status with this transactionId. A retry must reuse the SAME transactionId only after the ledger settles to committed, rolled-back, partial-rollback, failed or timed-out.`,
+    );
+  }
+  if (existing && existing.state === "timed-out") {
+    throw new Error(
+      `Transaction ${transactionId} timed out with an unknown outcome and has not reconciled yet. Do NOT retry blindly: call get_job_status with this transactionId first — a late result may already have committed it. Inspect the target subtree for partial work, then retry with the SAME transactionId only once the ledger shows a terminal state or you have confirmed nothing landed.`,
+    );
   }
 
   const preflight = validateTransaction(ops);
@@ -513,6 +534,22 @@ async function dispatchTransaction(
   try {
     result = (await session.request(tool, { ...payload, transactionId })) as TransactionResult;
   } catch (err) {
+    const unknownOutcome =
+      err instanceof TransactionTimeoutError ||
+      err instanceof SessionDisconnectedError ||
+      (err instanceof Error && /outcome unknown|did not respond|disconnected while executing/i.test(err.message));
+    if (unknownOutcome) {
+      const msg = err instanceof Error ? err.message : String(err);
+      registry.jobs.complete(transactionId, "timed-out", { error: msg, label: "awaiting late-result reconciliation" });
+      recordToolCall(tool, Date.now() - t0, { ops: ops.length });
+      // The cancel was already sent best-effort by the session; surface the
+      // reconcile-first path, not a plain "failed".
+      throw new Error(
+        `Transaction ${transactionId} to ${tool} timed out with an UNKNOWN outcome: the Figma plugin may still be applying it (a cancel was requested, but a late commit is still possible).\n` +
+          `${msg}\n` +
+          `Reconcile before retrying: 1) get_job_status {transactionId} — a late result reconciles automatically; 2) inspect the target subtree for partial work (17/32 applied is possible); 3) retry only with the SAME transactionId once settled. Do not mint a new id.`,
+      );
+    }
     registry.jobs.complete(transactionId, "failed", { error: err instanceof Error ? err.message : String(err) });
     recordToolCall(tool, Date.now() - t0, { ops: ops.length });
     throw err;
@@ -940,10 +977,10 @@ export const TOOLS: ToolDefinition[] = [
     name: "runtime_primitives",
     title: "List the design runtime primitives",
     description:
-      "List every primitive design_runtime accepts, with its kind and description. Call this if you are unsure what vocabulary is available before writing a program.",
+      "List every primitive design_runtime accepts: its kind, description, the exact arguments it takes (name, type, accepted values) and a worked example call. Call this before writing a program rather than guessing argument names — an unrecognised argument is rejected, and this is where the accepted set is defined.",
     inputSchema: z.object({}).strict(),
     handler: async () => ({
-      note: "These are the complete vocabulary. There is no eval path; nothing is executed as code.",
+      note: "These are the complete vocabulary, and each entry carries the exact arguments it accepts. There is no eval path; nothing is executed as code.",
       primitives: runtimeCatalogue(),
     }),
   },
@@ -1681,7 +1718,7 @@ inputSchema: ModifyArgs,
     name: "get_job_status",
     title: "Check a transaction's durable status",
     description:
-      "Report the ledger state for a transactionId (queued, preflight, applying, verifying, committed, rolled-back, partial-rollback, failed) with progress and final node ids. Call this after any reconnect or timeout before retrying — a retry must reuse the SAME transactionId and is idempotent, never a blind duplicate.",
+      "Report the ledger state for a transactionId (queued, preflight, applying, verifying, committed, rolled-back, partial-rollback, failed, timed-out) with progress and final node ids. Call this after any reconnect or timeout before retrying — a retry must reuse the SAME transactionId and is idempotent, never a blind duplicate. timed-out means unknown outcome: the plugin may still commit late, and a late result reconciles automatically.",
     inputSchema: z.object({ transactionId: z.string().min(1).max(200), sessionId: SessionArg }).strict(),
     handler: async (args, registry) => {
       const parsed = (z.object({ transactionId: z.string().min(1).max(200), sessionId: SessionArg }).strict()).parse(args ?? {});
@@ -1692,6 +1729,17 @@ inputSchema: ModifyArgs,
           transactionId: parsed.transactionId,
           howToProceed: "No ledger record for this id. It either predates this server run or never dispatched. Re-send with the SAME transactionId once; if it was already applied you will get a duplicate-safe result instead of duplicated nodes.",
           recentJobs: registry.jobs.recent(5),
+        };
+      }
+      if (job.state === "timed-out") {
+        const prior = registry.jobs.priorResult(parsed.transactionId);
+        return {
+          status: "ok",
+          job,
+          reconciledResult: prior ?? null,
+          metrics: metricsSnapshot(),
+          howToProceed:
+            "Outcome unknown: the server stopped waiting but Figma may still commit late (a cancel was requested). Wait a beat, call get_job_status again — a late plugin answer reconciles automatically — inspect the target subtree for partial work, and only then resume with the SAME transactionId. Never mint a new id for the same edit.",
         };
       }
       return { status: "ok", job, metrics: metricsSnapshot() };
@@ -1733,6 +1781,23 @@ inputSchema: ModifyArgs,
       if (job.state === "committed") {
         const prior = registry.jobs.priorResult(parsed.transactionId);
         return { status: "already-committed", job, result: prior ?? null, howToProceed: "Do not retry: the work already landed. Inspect the created ids from the ledger." };
+      }
+      if (job.state === "timed-out") {
+        if (!parsed.operations) {
+          return {
+            status: "needs-reconciliation",
+            job,
+            reconciledResult: registry.jobs.priorResult(parsed.transactionId) ?? null,
+            howToProceed:
+              "Outcome unknown: call get_job_status again (a late result reconciles automatically), inspect the target subtree for partial work, then pass operations with the SAME transactionId to retry only once you have confirmed what landed. The plugin dedupes by transactionId, so a same-id retry never duplicates a late commit.",
+          };
+        }
+        const session = registry.resolve(parsed.sessionId ?? job.sessionId);
+        return dispatchTransaction(registry, session, "modify_design", {
+          description: parsed.description ?? `resume ${parsed.transactionId}`,
+          operations: parsed.operations as unknown[],
+          transactionId: parsed.transactionId,
+        });
       }
       if (job.state === "rolled-back" || job.state === "partial-rollback" || job.state === "failed") {
         if (!parsed.operations) {

@@ -38,6 +38,7 @@ import {
 import { compileIR, TYPE_SCALE } from "./compile";
 import { parseConstraint } from "./constraints";
 import { compileVisual } from "./visual";
+import { validatePrimitiveArgs } from "./primitive-schema";
 import { resolveStyleTokens, presetAlignment } from "./visual-presets";
 import { VisualConceptSchema } from "../../../shared/ir";
 
@@ -182,6 +183,10 @@ const CONTENT_ARGS = new Set([
   // Logo marks
   "mark",
   "size",
+  // Logo construction grid. Read by logoGrid but previously absent from this
+  // set, so a correctly-spelled `divisions` was rejected as unknown — the
+  // discovery gap behind hard stress test #10.
+  "divisions",
   // Semantic component props
   "label",
   "value",
@@ -224,6 +229,7 @@ const CONTENT_ARGS = new Set([
   "detail",
   "used",
   "total",
+  "remaining",
   "usedLabel",
   "totalLabel",
   "unit",
@@ -281,6 +287,31 @@ export const RuntimeCallSchema = z.object({
 export function unknownArgs(fn: PrimitiveName, args: Record<string, unknown>): string[] {
   const allowed = RUNTIME_PRIMITIVES[fn].kind === "region" ? REGION_ARGS : CONTENT_ARGS;
   return Object.keys(args).filter((k) => !allowed.has(k));
+}
+
+/**
+ * One warning line per argument problem, schema-driven.
+ *
+ * The old behaviour was a single sentence listing rejected keys, which named
+ * the mistake and nothing else — so a caller could not tell a typo from a
+ * deliberate new argument, and had no way to discover the right one. Hard
+ * stress test #10 hit exactly this on `vectorPlan`, `logoGrid` and `logoLockup`.
+ * Each issue now states what was passed, what was expected and, for a
+ * near-miss, the accepted key it probably meant.
+ */
+export function argumentWarnings(fn: PrimitiveName, args: Record<string, unknown>): string[] {
+  const issues = validatePrimitiveArgs(fn, args);
+  if (issues.length > 0) return issues.map((i) => i.message);
+
+  // Fallback for anything the schema table does not cover: the flat allowlist
+  // still catches strays, so removing an entry from one table cannot silently
+  // start accepting anything.
+  const stray = unknownArgs(fn, args);
+  if (stray.length === 0) return [];
+  return [
+    `'${fn}' does not accept ${stray.map((k) => `'${k}'`).join(", ")}. ` +
+      `This runtime takes declarative arguments only and never executes code strings.`,
+  ];
 }
 
 export type RuntimeCall = z.infer<typeof RuntimeCallSchema>;
@@ -861,13 +892,8 @@ const args = call.args as Record<string, unknown>;
       effectiveParent = claimed;
     }
 
-    const stray = unknownArgs(call.fn, args);
-    if (stray.length > 0) {
-      warnings.push(
-        `'${call.fn}' does not accept ${stray.map((k) => `'${k}'`).join(", ")}. ` +
-          `This runtime takes declarative arguments only and never executes code strings.`,
-      );
-    }
+    const stray = argumentWarnings(call.fn, args);
+    for (const warning of stray) warnings.push(warning);
 
     // Tokens and styles are document-level, not drawn inside a region, so they
     // claim no parent. Adding them to `children` would make the compiler look

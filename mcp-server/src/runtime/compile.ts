@@ -94,10 +94,24 @@ export function styleLook(raw: string | string[] | undefined): StyleLook {
     look.valueSize = 32;
   } else if (name === "technical-editorial" || name === "gallery-warm") {
     look.navTracking = 20;
+    look.headerScale = 1.15;
+  } else if (name === "calm-technical") {
+    // Subtle, geometry-free: values step up one weight class and headers
+    // breathe slightly more. No spacing, alignment or colour change, which is
+    // what keeps this preset safe for automatic assignment.
+    look.valueSize = 30;
+    look.headerScale = 1.05;
+  } else if (name === "high-contrast-ops") {
+    // Bold contrast is load-bearing here: body text steps to semibold and
+    // headers gain presence so state reads across the room.
+    look.headerScale = 1.1;
+  } else if (name === "editorial-bold") {
+    look.navTracking = 20;
+    look.headerScale = 1.3;
+    look.valueSize = 34;
   }
 
   if (mechanics.numbers === "mono-first") look.valueMono = true;
-  if (name === "technical-editorial" || name === "gallery-warm") look.headerScale = 1.15;
   if (mechanics.spacing === "12px-loose") look.panelPaddingScale = 1.5;
   if (mechanics.contrast === "bold") look.bodyWeight = 600;
 
@@ -209,6 +223,31 @@ export function compileIR(ir: DesignIR): CompileResult {
   }
   const regionIds = new Set(ir.regions.map((r) => r.id));
   let reflowed = 0;
+
+  // Content declared but never parented to a region is adopted rather than
+  // dropped. The runtime interpreter already defaults an unparented call to the
+  // first region, so a program that reaches `compileIR` through `design_runtime`
+  // never arrives in this state; a hand-written IR sent to `compile_ir` does,
+  // because `RegionSchema.children` defaults to []. The live consequence was
+  // that such a node was never emitted *and* every connector naming it reported
+  // "unknown node", which is a misleading diagnosis for a node that is right
+  // there in `content`. Adopting matches the interpreter, and is reported rather
+  // than done silently.
+  {
+    const claimed = new Set(ir.regions.flatMap((r) => r.children));
+    const orphans = ir.content.filter((c) => !claimed.has(c.id) && c.kind !== "connector");
+    if (orphans.length > 0 && ir.regions.length > 0) {
+      const host = ir.regions[0]!;
+      host.children.push(...orphans.map((c) => c.id));
+      violations.push({
+        rule: "content-parent",
+        message: `${orphans.length} content node(s) were declared without a parent region and were placed in '${host.id}': ${orphans
+          .slice(0, 6)
+          .map((c) => `'${c.id}'`)
+          .join(", ")}${orphans.length > 6 ? ", …" : ""}. Add a parent to place them deliberately.`,
+      });
+    }
+  }
 
   /**
    * Deck mode: one region, one slide.
@@ -440,6 +479,19 @@ export function compileIR(ir: DesignIR): CompileResult {
 
   /* -------------------------------------------------------- constraints --- */
 
+  // Run last, on the geometry that is actually returned and actually drawn.
+  // Anything earlier would be checking a layout that later passes still move.
+  if (!deck) {
+    assertResolvedGeometry(
+      ir,
+      regions,
+      boxes,
+      canvasSize(canvas.width, 1440),
+      canvasSize(canvas.height, 900),
+      violations,
+    );
+  }
+
   checkConstraints(ir, composition, violations);
 
   return {
@@ -632,9 +684,20 @@ function emitConnectors(
 
     const route = routeConnector(spec, boxes.get(spec.from), boxes.get(spec.to));
     if (!route) {
+      // Distinguish "you never drew it" from "you drew it but it got no
+      // geometry". Collapsing both into "unknown node" sent the reader looking
+      // for a missing node that was sitting right there in `content` — the live
+      // defect behind hard stress test #10, where `device-a` and `model` were
+      // both declared and both reported unknown.
+      const declared = new Set(ir.content.map((c) => c.id));
+      const describe = (id: string): string =>
+        declared.has(id)
+          ? `'${id}' (declared in content but never placed — give it a parent region)`
+          : `'${id}' (not declared anywhere in this IR)`;
+      const missing = [!boxes.has(spec.from) ? spec.from : null, !boxes.has(spec.to) ? spec.to : null].filter((v): v is string => v !== null);
       violations.push({
         rule: "connector",
-        message: `Connector '${spec.id}' references unknown node(s): ${!boxes.has(spec.from) ? spec.from : ""}${!boxes.has(spec.from) && !boxes.has(spec.to) ? " and " : ""}${!boxes.has(spec.to) ? spec.to : ""}. Draw the nodes before connecting them.`,
+        message: `Connector '${spec.id}' references ${missing.map(describe).join(" and ")}. Draw the nodes before connecting them.`,
       });
       continue;
     }
@@ -2286,6 +2349,126 @@ function emitComponent(
       break;
     }
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Post-layout geometry assertions                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Slack allowed on a canvas edge before a region counts as spilling. */
+const CANVAS_TOLERANCE = 1;
+
+/**
+ * Proves the layout actually produced the geometry the program asked for.
+ *
+ * ## Why this pass exists
+ *
+ * The shell layout stacks regions and the relation solver moves them, but
+ * neither checked the result. Hard stress test #10 produced a dry run with zero
+ * warnings and zero violations whose inspector started at y=1239 on a 1100px
+ * canvas: three fixed-height regions overflowed the canvas, the relation pushed
+ * the inspector past the right edge, and nothing said so. A layout engine that
+ * can emit geometry it does not endorse is worse than no engine, because the
+ * numbers look authoritative.
+ *
+ * So every resolved region is checked against the canvas, and every declared
+ * relation is re-measured against the geometry that came out the other end. The
+ * relation check is the important half: the solver reports only unknown anchors
+ * and cycles, so a relation it silently failed to honour — because the anchor
+ * moved afterwards, or because a later fit pass reflowed the box — was
+ * indistinguishable from one it applied.
+ *
+ * Reported as violations rather than thrown, because the caller still gets a
+ * usable operation list and a repairable report.
+ */
+function assertResolvedGeometry(
+  ir: DesignIR,
+  regions: ResolvedRegion[],
+  boxes: Map<string, PlacedBox>,
+  canvasW: number,
+  canvasH: number,
+  violations: CompileResult["violations"],
+): void {
+  const span = (r: ResolvedRegion): string => `${Math.round(r.w)}x${Math.round(r.h)} at (${Math.round(r.x)}, ${Math.round(r.y)})`;
+
+  for (const region of regions) {
+    if (!Number.isFinite(region.x) || !Number.isFinite(region.y) || !Number.isFinite(region.w) || !Number.isFinite(region.h)) {
+      violations.push({
+        rule: "geometry",
+        message: `Region '${region.id}' resolved to a non-finite box (${span(region)}). It will not be drawn.`,
+      });
+      continue;
+    }
+
+    // A zero-extent region is the symptom of an over-constrained stack: the
+    // fixed heights already consumed the canvas, so the flexible one was handed
+    // nothing. Reporting "height 0" is the only clue that the sum was wrong.
+    if (region.w <= 0 || region.h <= 0) {
+      violations.push({
+        rule: "geometry",
+        message: `Region '${region.id}' resolved to ${span(region)}. The canvas is ${canvasW}x${canvasH}: the regions above it do not leave room for it. Reduce a fixed height or height:'fill' a single region.`,
+      });
+      continue;
+    }
+
+    const spills: string[] = [];
+    if (region.x < -CANVAS_TOLERANCE) spills.push("left");
+    if (region.y < -CANVAS_TOLERANCE) spills.push("top");
+    if (region.x + region.w > canvasW + CANVAS_TOLERANCE) spills.push("right");
+    if (region.y + region.h > canvasH + CANVAS_TOLERANCE) spills.push("bottom");
+    if (spills.length > 0) {
+      violations.push({
+        rule: "geometry",
+        message: `Region '${region.id}' spills past the ${spills.join(" and ")} edge of the ${canvasW}x${canvasH} canvas: ${span(region)}.`,
+      });
+    }
+  }
+
+  // Every declared relation must survive into the final geometry. Measured, not
+  // assumed: the solver can apply a relation and a later fit pass can undo it.
+  for (const relation of ir.relations) {
+    const box = boxes.get(relation.id);
+    if (!box) continue;
+    const problem = checkRelation(relation, box, boxes, canvasW, canvasH);
+    if (problem) violations.push({ rule: "relation", message: problem });
+  }
+}
+
+/** Re-measures one relation against the geometry that was actually produced. */
+function checkRelation(
+  relation: DesignIR["relations"][number],
+  box: PlacedBox,
+  boxes: Map<string, PlacedBox>,
+  canvasW: number,
+  canvasH: number,
+): string | null {
+  const TOLERANCE = 1;
+
+  if (relation.rightOf !== undefined) {
+    const anchor = boxes.get(relation.rightOf);
+    if (!anchor) return `Relation on '${relation.id}' names unknown anchor '${relation.rightOf}'; no side-by-side position was applied.`;
+    const expectedX = relation.left !== undefined ? anchor.x + relation.left : anchor.x + anchor.w + (relation.gap ?? 0);
+    if (Math.abs(box.x - expectedX) > TOLERANCE) {
+      return `Relation '${relation.id}' rightOf '${relation.rightOf}' asked for x=${Math.round(expectedX)} but the region resolved to x=${Math.round(box.x)}. The relationship was not honoured.`;
+    }
+    if (box.x + box.w > canvasW + CANVAS_TOLERANCE) {
+      return `Relation '${relation.id}' rightOf '${relation.rightOf}' pushed it to x=${Math.round(box.x)} on a ${canvasW}px canvas, so ${Math.round(box.x + box.w - canvasW)}px of it is off-canvas. Reduce its width or the anchor's.`;
+    }
+  }
+
+  if (relation.below !== undefined) {
+    const anchor = boxes.get(relation.below);
+    if (!anchor) return `Relation on '${relation.id}' names unknown anchor '${relation.below}'; no stacked position was applied.`;
+    const expectedY = relation.top !== undefined ? anchor.y + relation.top : anchor.y + anchor.h + (relation.gap ?? 0);
+    if (Math.abs(box.y - expectedY) > TOLERANCE) {
+      return `Relation '${relation.id}' below '${relation.below}' asked for y=${Math.round(expectedY)} but the region resolved to y=${Math.round(box.y)}. The relationship was not honoured.`;
+    }
+    if (box.y + box.h > canvasH + CANVAS_TOLERANCE) {
+      return `Relation '${relation.id}' below '${relation.below}' pushed it to y=${Math.round(box.y)} on a ${canvasH}px canvas, so ${Math.round(box.y + box.h - canvasH)}px of it is off-canvas.`;
+    }
+  }
+
+  return null;
 }
 
 /* -------------------------------------------------------------------------- */

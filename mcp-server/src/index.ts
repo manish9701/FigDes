@@ -184,9 +184,61 @@ wss.on("connection", (ws: WebSocket) => {
         session.applyState(msg);
         break;
 
-      case "result":
-        session.settleResult(msg);
+      case "result": {
+        const late = session.settleResult(msg);
+        if (late?.late) {
+          // Late-result reconciliation: the server already told the caller
+          // "timed out, outcome unknown". The plugin's real answer just
+          // arrived — bind it to the ledger so get_job_status tells the truth
+          // instead of leaving the job stuck at timed-out forever.
+          const data = late.data as { status?: string; transactionId?: string; createdNodes?: Array<{ figmaNodeId: string }>; rollbackStatus?: string; rolledBack?: boolean } | undefined;
+          const transactionId = late.transactionId ?? data?.transactionId;
+          const commitNote = late.ok ? "late commit" : `late failure: ${late.error ?? "unknown"}`;
+          if (transactionId) {
+            const existing = registry.jobs.get(transactionId);
+            if (existing) {
+              if (late.ok && data?.status === "success") {
+                registry.jobs.complete(
+                  transactionId,
+                  "committed",
+                  {
+                    done: existing.operationCount,
+                    label: `${commitNote} reconciled after timeout`,
+                    createdIds: data?.createdNodes?.map((n) => n.figmaNodeId),
+                    error: undefined,
+                  },
+                  late.data,
+                );
+              } else if (!late.ok || data?.status === "failed") {
+                const rb = data?.rollbackStatus ?? (data && (data as { rolledBack?: boolean }).rolledBack ? "full" : undefined);
+                registry.jobs.complete(
+                  transactionId,
+                  rb === "full" ? "rolled-back" : rb === "partial" ? "partial-rollback" : "failed",
+                  { error: (data as { error?: { message?: string } } | undefined)?.error?.message ?? late.error ?? "late failure", label: `${commitNote} reconciled after timeout` },
+                  late.data,
+                );
+              } else {
+                registry.jobs.update(transactionId, { label: `${commitNote} (unrecognised shape)` });
+              }
+              console.log(`[ws] ${session.id} late result reconciled ${transactionId}: ok=${late.ok} (was timed-out)`);
+            } else {
+              // No ledger record (server restart, or unknown id): keep the
+              // result retrievable under the transaction id so a same-id retry
+              // stays idempotent instead of duplicating nodes.
+              console.log(`[ws] ${session.id} late result for unknown transaction ${transactionId ?? late.requestId}: ok=${late.ok}`);
+            }
+          } else {
+            const byReq = registry.jobs.byRequestId(late.requestId);
+            if (byReq) {
+              registry.jobs.update(byReq.transactionId, { label: `${commitNote} (by request id)` });
+              console.log(`[ws] ${session.id} late result reconciled by request ${late.requestId}: ok=${late.ok}`);
+            } else {
+              console.log(`[ws] ${session.id} late result for unknown request ${late.requestId}: ok=${late.ok}`);
+            }
+          }
+        }
         break;
+      }
 
       case "progress": {
         // Upstream build heartbeat: extends the request timeout (sliding

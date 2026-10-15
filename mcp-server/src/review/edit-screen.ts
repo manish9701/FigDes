@@ -186,7 +186,15 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
   try {
     result = (await session.request("modify_design", { description: args.description ?? `edit_screen: ${args.goals.join("; ")}`, operations: ops, transactionId: tid })) as TransactionResult;
   } catch (err) {
-    registry.jobs.complete(tid, "failed", { error: err instanceof Error ? err.message : String(err) });
+    const msg = err instanceof Error ? err.message : String(err);
+    const unknownOutcome = /outcome unknown|did not respond|disconnected while executing|stalled on/i.test(msg);
+    if (unknownOutcome) {
+      registry.jobs.complete(tid, "timed-out", { error: msg, label: "awaiting late-result reconciliation" });
+      throw new Error(
+        `edit_screen transaction ${tid} timed out with an UNKNOWN outcome (Figma may still commit late; a cancel was requested). Reconcile with get_job_status {transactionId:${tid}} before retrying with the SAME id. Original: ${msg}`,
+      );
+    }
+    registry.jobs.complete(tid, "failed", { error: msg });
     throw err;
   }
 

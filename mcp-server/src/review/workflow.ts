@@ -531,13 +531,36 @@ export const RefineArgs = z
   })
   .strict();
 
+interface RefineSkip {
+  rule: string;
+  /** Why this finding could not be repaired automatically. */
+  reason: string;
+}
+
+/**
+ * Why a high-confidence finding produced no fix.
+ *
+ * A bare list of rule names told the reader nothing actionable: hard stress test
+ * #10 reported eight skipped contrast findings with no indication that the rule
+ * simply had no `suggestedOperations`, which is a repairable gap rather than a
+ * judgement call. Every skip now names its cause so the next step is obvious.
+ */
+function skipReason(f: Finding, preserve: Set<string>): string {
+  if (preserve.has(f.rule)) return `rule '${f.rule}' is in preserve[]`;
+  if (f.nodeIds.some((id) => preserve.has(id))) return "touches a node in preserve[]";
+  if ((f.suggestedOperations?.length ?? 0) === 0) return `rule '${f.rule}' proposes no operation — fix it by hand`;
+  return `confidence '${f.confidence}' is below the auto-apply threshold`;
+}
+
 interface RefineIteration {
   iteration: number;
   highConfidenceFindings: number;
   appliedFixes: number;
   appliedRules: string[];
-  skipped: string[];
+  skipped: RefineSkip[];
   remainingHigh: number;
+  /** What this iteration observed, recorded so the accounting matches the trace. */
+  observed: string;
 }
 
 export async function refineScreenTool(session: Session | null, rawArgs: unknown): Promise<unknown> {
@@ -576,10 +599,18 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     const actionable = findings.filter(
       (f) => !preserve.has(f.rule) && f.suggestedOperations && f.suggestedOperations.length > 0 && !f.nodeIds.some((id) => preserve.has(id)),
     );
-    const skipped = findings.filter((f) => !actionable.includes(f)).map((f) => f.rule);
+    const skipped: RefineSkip[] = findings.filter((f) => !actionable.includes(f)).map((f) => ({ rule: f.rule, reason: skipReason(f, preserve) }));
 
     if (actionable.length === 0) {
-      iterations.push({ iteration: i, highConfidenceFindings: findings.length, appliedFixes: 0, appliedRules: [], skipped, remainingHigh: findings.length });
+      iterations.push({
+        iteration: i,
+        highConfidenceFindings: findings.length,
+        appliedFixes: 0,
+        appliedRules: [],
+        skipped,
+        remainingHigh: findings.length,
+        observed: `${findings.length} high-confidence finding(s), none with an applicable fix`,
+      });
       converged = findings.length === 0;
       break;
     }
@@ -614,6 +645,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         appliedRules: [],
         skipped,
         remainingHigh: findings.length,
+        observed: `the fix transaction failed: ${applied.error?.message ?? "no error detail"}`,
       });
       return {
         status: "fix-failed",
@@ -630,6 +662,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       appliedRules: actionable.map((f) => f.rule),
       skipped,
       remainingHigh: -1,
+      observed: `${actionable.length} fix(es) committed, re-measuring`,
     });
 
     if (i === args.maxIterations) break;
@@ -644,15 +677,39 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     }
   }
 
+  const ran = iterations.length;
+  const last = iterations[iterations.length - 1];
+  const outstanding = last?.remainingHigh ?? 0;
+  const blocked = last?.skipped ?? [];
+
   return {
     status: converged ? "converged" : "budget-exhausted",
     iterations,
     visualGoals: goals,
+    // The summary counts iterations that actually ran, not the budget. The old
+    // message interpolated `maxIterations`, so a loop that broke after one
+    // unfixable review reported "after 3 iterations" — hard stress test #10 saw
+    // exactly one visible iteration described as three.
+    summary: {
+      iterationsRun: ran,
+      iterationBudget: args.maxIterations,
+      highConfidenceRemaining: outstanding,
+      skippedFixes: blocked.length,
+    },
+    ...(blocked.length > 0
+      ? {
+          whyNothingWasApplied: blocked.map((s) => `${s.rule}: ${s.reason}`),
+          howToApplyThoseFixes:
+            "Each skipped finding names its cause. A finding with no proposed operation has to be fixed by hand, or the rule has to be taught to propose one.",
+        }
+      : {}),
     howToProceed: converged
       ? (compositionLed
         ? "No high-confidence structural findings remain. Run a successful low-detail render and judge the image before design_guard."
         : "No high-confidence findings remain. Render at low detail to judge hierarchy, then run design_guard before calling it done.")
-      : `Still ${iterations[iterations.length - 1]?.remainingHigh ?? "?"} high-confidence finding(s) after ${args.maxIterations} iteration(s). Widen maxIterations (max 5) or fix the rest by hand.`,
+      : blocked.length > 0 && outstanding === blocked.length
+        ? `Stopped after ${ran} iteration(s): all ${outstanding} remaining finding(s) were skipped rather than fixed (${blocked.length} skipped). Nothing further will change by re-running — read whyNothingWasApplied and either fix by hand or widen the rules.`
+        : `Still ${outstanding} high-confidence finding(s) after ${ran} iteration(s). Widen maxIterations (max ${args.maxIterations + 2 > 5 ? 5 : args.maxIterations + 2}) or fix the rest by hand.`,
   };
 }
 
@@ -701,6 +758,37 @@ function consistencyInputsFromProgram(operations: unknown[]): { fills: string[];
 }
 
 /**
+ * Counts interaction-state signals in compiled operations.
+ *
+ * States in this system are expressed as non-default semantic variants
+ * (`tone: healthy|warning|…`, `health: degraded|offline`, `variant:
+ * loading|destructive`, `selected/disabled/pressured/active/skipped`) rather
+ * than a dedicated op, so the count reads the same args the builders do.
+ * Structural repetition of the SAME state (ten healthy pills) counts once per
+ * distinct state name: evidence is variety, not volume.
+ */
+export function countStateSignals(operations: Array<Record<string, unknown>>): number {
+  const STATE_KEYS = ["tone", "health", "variant", "state", "selected", "disabled", "active", "skipped"];
+  const values = new Set<string>();
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      for (const v of value) walk(v);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (STATE_KEYS.includes(k) && (typeof v === "string" || typeof v === "boolean") && v !== "" && v !== false) {
+        values.add(`${k}=${String(v)}`);
+      } else if (typeof v === "object" && v !== null) {
+        walk(v);
+      }
+    }
+  };
+  walk(operations);
+  return values.size;
+}
+
+/**
  * The §33 quality gate: one checklist, five areas, one verdict.
  *
  * Each item is measured or explicitly marked unmeasurable — never guessed. A
@@ -734,11 +822,19 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       m.designGuardTool(session, { ...(args.project !== undefined ? { project: args.project } : {}), program: args.program }),
     )) as { verdict?: string; findings?: Array<{ verdict?: string; rule?: string }> };
     const failed = (guarded.findings ?? []).filter((f) => f.verdict === "FAIL");
+    // An indeterminate guard checked nothing, so it cannot certify the screen.
+    // Treating it as "no violations" is the exact substitution issue #10 caught
+    // inside the guard itself, one level up.
+    const indeterminate = guarded.verdict === "INDETERMINATE";
     items.push({
       area: "PRODUCT",
       check: "no product-truth violations",
-      pass: failed.length === 0,
-      detail: failed.length === 0 ? `guard: ${guarded.verdict ?? "PASS"}` : `failing rules: ${failed.map((f) => f.rule).join(", ")}`,
+      pass: indeterminate ? null : failed.length === 0,
+      detail: indeterminate
+        ? `guard: INDETERMINATE — the guard measured nothing, so no product rule was evaluated. Re-run it against a resolvable target.`
+        : failed.length === 0
+          ? `guard: ${guarded.verdict ?? "PASS"}`
+          : `failing rules: ${failed.map((f) => f.rule).join(", ")}`,
     });
 
     // Final visual-quality gate (§18): eight scored dimensions with the
@@ -757,6 +853,11 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     // repair introduced unapproved fills.
     const consistency = evaluateConsistency(consistencyInputsFromProgram(runtime.operations));
     const consistencyBlocking = consistency.blocking ? [`Consistency: ${consistency.evidence.find((e) => e.startsWith("BLOCKING")) ?? "unapproved fills"}`] : [];
+    // States evidence (general-use quality lift): a screen with zero
+    // interaction states reads as unfinished. Counted from the compiled
+    // program's state-bearing args (tones, variants, health, selection,
+    // disabled/loading), never guessed.
+    const statesDeclared = countStateSignals(runtime.operations as Array<Record<string, unknown>>);
     const finalGate = evaluateFinalGate({
       scores: {
         hierarchy: dimension("Hierarchy") * 10,
@@ -769,9 +870,16 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       },
       genericity,
       blockingIssues: [...failed.map((f) => String(f.rule ?? "guard")), ...consistencyBlocking],
+      states: { declared: statesDeclared },
     });
     items.push(
       { area: "SYSTEM", check: "design tokens consistent", pass: consistency.blocking ? false : consistency.score >= 70 ? true : null, detail: `consistency ${consistency.score}/100: ${consistency.evidence.slice(0, 2).join("; ")}` },
+      {
+        area: "COMPOSITION",
+        check: "interaction states declared",
+        pass: statesDeclared > 0 ? true : null,
+        detail: statesDeclared > 0 ? `${statesDeclared} state signal(s) in the program` : "no states: add one hover, selected or non-default tone so the screen reads as finished",
+      },
       {
       area: "VISUAL",
       check: "final visual-quality gate",

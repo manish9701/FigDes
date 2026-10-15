@@ -12,5 +12,10 @@ export {
   round2,
   evaluateTextContrast,
   isBoldStyle,
+  repairTextColour,
+  rgbToHex,
+  rgbToHsl,
+  hslToHex,
   type RGB,
+  type ColourRepair,
 } from "../../../shared/contrast";

@@ -20,7 +20,7 @@ import {
   type MetricsReport,
   type Operation,
 } from "../../../shared/protocol";
-import { contrastRatio, requiredRatio, round2 } from "./contrast";
+import { contrastRatio, repairTextColour, requiredRatio, round2 } from "./contrast";
 
 const BOLD_STYLES = /bold|black|heavy/i;
 const INTERACTIVE = /button|btn|link|toggle|switch|checkbox|radio|tab|chip|cta|close|action/i;
@@ -223,6 +223,20 @@ function textContrast(n: NodeMetrics): Finding[] {
   const required = requiredRatio(n.text.size, bold);
   if (ratio >= required) return [];
 
+  // A measured, palette-safe repair, proposed with the finding.
+  //
+  // Without one this rule is arithmetic but unactionable, which is why
+  // `refine_screen` skipped every contrast finding it raised: hard stress test
+  // #10 found eight `#777777`-on-white labels at 4.48:1, applied zero fixes and
+  // returned budget-exhausted. A high-confidence finding that arrives with no
+  // `suggestedOperations` is invisible to every automated repair loop, and the
+  // rule reads as noise rather than as work.
+  //
+  // The candidate moves the fill along its own hue towards the reachable end of
+  // the lightness range, so the design keeps its voice. The achieved ratio is
+  // reported in the evidence so the repair can be verified rather than trusted.
+  const repair = repairTextColour(n.text.color, n.background, required);
+
   return [
     {
       rule: "text-contrast",
@@ -237,10 +251,26 @@ function textContrast(n: NodeMetrics): Finding[] {
         fontSize: n.text.size,
         bold,
         layerName: n.name,
+        ...(repair
+          ? {
+              proposedFill: repair.hex,
+              proposedRatio: repair.ratio,
+              repairVerified: repair.ratio >= required,
+            }
+          : {
+              repairUnavailable:
+                "No text colour reaches the required ratio against this surface. Change the surface, not the text.",
+            }),
       },
       nodeIds: [n.id],
-      guidance:
-        "Darken or lighten the text fill, or lighten the surface behind it. Stay inside the palette already used by this file rather than introducing a new hue.",
+      ...(repair
+        ? {
+            suggestedOperations: validated([{ type: "setFill", target: n.id, fill: repair.hex }]),
+          }
+        : {}),
+      guidance: repair
+        ? `Set this layer's fill to ${repair.hex} to reach ${repair.ratio}:1, holding the hue and moving only lightness.`
+        : "Lighten or darken the surface behind it — no text colour reaches this ratio on ${n.background} without changing the design's voice.",
     },
   ];
 }
@@ -454,22 +484,78 @@ function subtreeHasText(n: NodeMetrics, c: Ctx): boolean {
   return false;
 }
 
-/** A control with no text anywhere inside it. */
+/**
+ * A label drawn *beside* a shape rather than inside it.
+ *
+ * ## Why this exists
+ *
+ * Hard stress test #10 flagged a green state dot as "colour only" while the word
+ * ONLINE sat next to it as a sibling, and a primary action's background
+ * rectangle as an unlabelled control while its caption sat beside it. Both are
+ * the same mistake in the reviewer: it read one primitive node in isolation and
+ * treated the absence of a *descendant* as the absence of a label.
+ *
+ * In real files a control is a *group* — a background rectangle with a caption
+ * layered over it, or a dot with a word beside it. So a sibling text node that
+ * sits within the same row (vertically overlapping) and whose centre falls
+ * inside the shape's horizontal span counts as the label.
+ *
+ * The check is deliberately geometric rather than semantic: it does not guess
+ * that "ONLINE" describes the dot, only that the two occupy the same row and
+ * overlap horizontally. A label far away, in another column, or on a different
+ * row is not accepted, so the finding still fires where it should.
+ */
+function hasSiblingLabel(n: NodeMetrics, c: Ctx): boolean {
+  if (!n.parentId) return false;
+  const siblings = c.childrenOf.get(n.parentId) ?? [];
+  const right = n.x + n.w;
+  const centreY = n.y + n.h / 2;
+  const LABEL_PADDING = 4;
+
+  for (const s of siblings) {
+    if (s.id === n.id) continue;
+    if (s.type !== "TEXT" || !s.text) continue;
+    if (s.text.content.trim().length === 0) continue;
+
+    const sCentreY = s.y + s.h / 2;
+    // Same row: the two verticals overlap by most of the smaller box.
+    const overlapY = Math.min(n.y + n.h, s.y + s.h) - Math.max(n.y, s.y);
+    const minHeight = Math.min(n.h, s.h);
+    if (overlapY <= 0 || overlapY < minHeight * 0.5) continue;
+
+    // Horizontally adjacent or overlapping, with a small tolerance so a label
+    // flush to the edge still counts.
+    const horizontalGap = Math.max(0, Math.max(n.x - (s.x + s.w), s.x - right));
+    if (horizontalGap > LABEL_PADDING * 4) continue;
+
+    // Not a caption for something far above or below this row.
+    if (Math.abs(sCentreY - centreY) > Math.max(n.h, s.h)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** True when the node is text, or has text, or has a label drawn beside it. */
+function hasVisibleLabel(n: NodeMetrics, c: Ctx): boolean {
+  return subtreeHasText(n, c) || hasSiblingLabel(n, c);
+}
+
+/** A control with no text anywhere inside it or beside it. */
 function iconOnlyControl(n: NodeMetrics, c: Ctx): Finding[] {
   if (!INTERACTIVE.test(n.name)) return [];
   if (DECORATIVE.test(n.type) || n.type === "GROUP" || n.type === "TEXT") return [];
-  if (subtreeHasText(n, c)) return [];
+  if (hasVisibleLabel(n, c)) return [];
 
   return [
     {
       rule: "icon-only-control",
       confidence: "medium",
       severity: "serious",
-      title: `"${n.name}" looks interactive but contains no text label`,
-      evidence: { nodeType: n.type, size: `${n.w}x${n.h}` },
+      title: `"${n.name}" looks interactive but carries no text label`,
+      evidence: { nodeType: n.type, size: `${n.w}x${n.h}`, searched: "subtree and adjacent siblings" },
       nodeIds: [n.id],
       guidance:
-        "An icon alone is ambiguous to sighted users and invisible to assistive tech. Add a visible label, or at minimum a tooltip and an accessible name.",
+        "An icon alone is ambiguous to sighted users and invisible to assistive tech. Add a visible label beside or inside it, or at minimum a tooltip and an accessible name.",
     },
   ];
 }
@@ -478,7 +564,7 @@ function iconOnlyControl(n: NodeMetrics, c: Ctx): Finding[] {
 function colorOnlyState(n: NodeMetrics, c: Ctx): Finding[] {
   if (!/status|pill|badge|health|state|dot|indicator/i.test(n.name)) return [];
   if (n.type === "TEXT") return [];
-  if (subtreeHasText(n, c)) return [];
+  if (hasVisibleLabel(n, c)) return [];
 
   return [
     {
@@ -486,7 +572,7 @@ function colorOnlyState(n: NodeMetrics, c: Ctx): Finding[] {
       confidence: "medium",
       severity: "serious",
       title: `"${n.name}" communicates state with no text`,
-      evidence: { nodeType: n.type, fill: n.fill ?? null },
+      evidence: { nodeType: n.type, fill: n.fill ?? null, searched: "subtree and adjacent siblings" },
       nodeIds: [n.id],
       guidance:
         "Colour alone does not survive color-blindness, greyscale or a glance. Put the state in words next to the colour: Healthy, Degraded, Error.",
@@ -619,13 +705,38 @@ function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
   ];
 }
 
+/**
+ * A structural rule rather than a duplicated object.
+ *
+ * A 1px divider, a column guide or a hairline separator is *supposed* to repeat
+ * identically — that repetition is the rhythm. Hard stress test #10 reported a
+ * table's row separators as "3 identical children", which is the reviewer
+ * mistaking a table for three copies of something.
+ *
+ * Identified by shape, not by name, because a designer names the rows "Row 1",
+ * "Row 2", "Row 3" and leaves the rules named "Line". A rule is anything that
+ * spans most of its container's width while being too thin to carry content.
+ */
+function isStructuralSeparator(s: NodeMetrics, parentWidth: number): boolean {
+  const thinEnough = s.h <= 2 || s.w <= 2;
+  const spansContainer = parentWidth > 0 && s.w >= parentWidth * 0.6;
+  const nameSaysSo = /divider|separator|rule|stroke|hairline|guide|border|spacer/i.test(s.name);
+  const noContent = !s.text?.content?.trim();
+  return noContent && (nameSaysSo || (thinEnough && spansContainer));
+}
+
 /** Siblings identical in type, size, fill and content. */
 function duplicateSiblings(n: NodeMetrics, c: Ctx): Finding[] {
   const siblings = c.childrenOf.get(n.id);
   if (!siblings || siblings.length < 3) return [];
 
+  // Separators are excluded before grouping: a table's rules are not copies of
+  // an object, so counting them here only ever produces a false positive.
+  const candidates = siblings.filter((s) => !isStructuralSeparator(s, n.w));
+  if (candidates.length < 3) return [];
+
   const groups = new Map<string, NodeMetrics[]>();
-  for (const s of siblings) {
+  for (const s of candidates) {
     // Stroke and descendant text are part of identity: nodes that differ by
     // health ring or by label are distinct objects, not copies. Without this,
     // every topology map flagged its machines as duplicates.

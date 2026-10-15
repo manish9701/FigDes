@@ -160,7 +160,13 @@ export function createTransport(options: TransportOptions): Transport {
 
   const settle = (requestId: string, ok: boolean, data?: unknown, error?: string): void => {
     const entry = pending.get(requestId);
-    if (!entry) return;
+    if (!entry) {
+      // Late main-thread answer after the transport already reported a
+      // timeout: forward it anyway so the server reconciles the timed-out job
+      // instead of leaving "failure" to hide a late commit.
+      send({ type: "result", requestId, ok, ...(data !== undefined ? { data } : {}), ...(error !== undefined ? { error } : {}) });
+      return;
+    }
     pending.delete(requestId);
     clearTimeout(entry.timer);
     if (ok) entry.resolve(data);
@@ -246,18 +252,46 @@ export function createTransport(options: TransportOptions): Transport {
           },
           // A timeout the main thread never answers must still produce a `result`,
           // or the server waits forever and the MCP call hangs rather than failing.
+          // The pending entry is dropped but the late main-thread answer is still
+          // forwarded by settle() for ledger reconciliation — and the main
+          // thread is asked to abort so the late outcome rolls back.
           timer: setTimeout(() => {
             pending.delete(requestId);
             send({
               type: "result",
               requestId,
               ok: false,
-              error: `Plugin timed out after ${budget}ms executing ${msg.tool}.`,
+              error: `Plugin timed out after ${budget}ms executing ${msg.tool}. Outcome unknown: the main thread may still commit late; the definitive result will follow as a late result.`,
             });
+            try {
+              const payload = msg.payload as { transactionId?: unknown };
+              postToMain({
+                kind: "cancel",
+                requestId,
+                ...(typeof payload?.transactionId === "string" ? { transactionId: payload.transactionId } : {}),
+                reason: `transport timeout after ${budget}ms`,
+              } as unknown as UiToMain);
+            } catch {
+              /* cancel is best-effort */
+            }
           }, budget),
         });
 
         postToMain({ kind: "request", requestId, tool: msg.tool, payload: msg.payload } as unknown as UiToMain);
+        break;
+      }
+
+      case "cancel": {
+        // Server stopped waiting: ask the main thread to abort between ops
+        // (it rolls back) while keeping the transport open for the definitive
+        // late result that reconciles the ledger.
+        postToMain({
+          kind: "cancel",
+          requestId: msg.requestId,
+          ...(msg.transactionId ? { transactionId: msg.transactionId } : {}),
+          reason: msg.reason ?? "server timeout",
+        } as unknown as UiToMain);
+        log("warn", `Cancel forwarded for ${msg.transactionId ?? msg.requestId}.`);
         break;
       }
 

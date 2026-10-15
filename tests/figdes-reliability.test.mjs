@@ -227,3 +227,76 @@ test("plugin bundle exposes rollbackStatus on failure", async () => {
   // Plan-level failures never touched the document.
   assert.equal(reply.data.rolledBack, false);
 });
+
+/* --------- Timeout / cancel / late-result (32-op stall fix) ------------- */
+
+test("timed-out is a distinct ledger state with a reconcile-first hint", async () => {
+  const registry = new SessionRegistry();
+  const fake = { id: "session_1", fileKey: "k1", fileName: "F" };
+  registry.jobs.begin({ transactionId: "txn-timeout-1", tool: "modify_design", session: fake, operationCount: 32 });
+  registry.jobs.complete("txn-timeout-1", "timed-out", { error: "stalled at 17/32" });
+  assert.equal(registry.jobs.get("txn-timeout-1").state, "timed-out");
+});
+
+test("same transactionId success does not duplicate nodes (late-commit safe)", async () => {
+  const { figma: f, doc: d } = loadPlugin();
+  const before = d.page.children.length;
+  const ops = [{ type: "createFrame", id: "idem-retry", name: "Idem", width: 100, height: 100 }];
+  const first = await ask(f, "create_design", { transactionId: "txn-idem-retry", operations: ops });
+  assert.equal(first.data.status, "success");
+  const afterFirst = d.page.children.length;
+  const second = await ask(f, "create_design", { transactionId: "txn-idem-retry", operations: ops });
+  assert.equal(second.data.status, "success");
+  assert.equal(d.page.children.length, afterFirst, "cached retry must not create again");
+  assert.ok(afterFirst > before);
+});
+
+test("cancel before dispatch aborts cleanly; the same id can retry after", async () => {
+  const { figma: f, doc: d } = loadPlugin();
+  const target = d.root.children[0];
+  const beforeName = target.name;
+  const handler = f.ui.onmessage;
+
+  // Pre-cancel: the flag lands before the transaction is dispatched, so the
+  // run aborts deterministically instead of racing a 5ms window.
+  await handler({ kind: "cancel", requestId: "unknown-req", transactionId: "txn-cancel-precancel", reason: "test timeout" });
+  const reply = await ask(f, "create_design", {
+    transactionId: "txn-cancel-precancel",
+    operations: [
+      { type: "renameNode", target: target.id, name: "Mutated" },
+      { type: "createFrame", id: "cx1", name: "CX1", width: 50, height: 50 },
+    ],
+  });
+  assert.equal(reply.data.status, "failed");
+  assert.match(reply.data.error.message, /cancel/i);
+  assert.equal(reply.data.rolledBack, false, "nothing was committed, so there is nothing to roll back");
+  assert.equal(f.__node(target.id).name, beforeName, "document untouched");
+  assert.equal(d.page.children.some((c) => c.name === "CX1"), false);
+
+  // A retry with the SAME id runs normally: a cancellation is one-shot.
+  const retry = await ask(f, "create_design", {
+    transactionId: "txn-cancel-precancel",
+    operations: [{ type: "renameNode", target: target.id, name: "Retried" }],
+  });
+  assert.equal(retry.data.status, "success");
+  assert.equal(f.__node(target.id).name, "Retried");
+});
+
+test("cancel after completion is a harmless no-op", async () => {
+  const { figma: f, doc: d } = loadPlugin();
+  const target = d.root.children[0];
+  const handler = f.ui.onmessage;
+  f.__posted.length = 0;
+  const requestId = `test_cancel_late_${Date.now()}`;
+  const promise = handler({
+    kind: "request",
+    requestId,
+    tool: "create_design",
+    payload: { transactionId: "txn-cancel-late", operations: [{ type: "renameNode", target: target.id, name: "Done" }] },
+  });
+  // Fire the cancel well after the op list, then await the reply.
+  await new Promise((r) => setTimeout(r, 60));
+  await handler({ kind: "cancel", requestId, transactionId: "txn-cancel-late", reason: "server timeout" });
+  await promise;
+  assert.equal(f.__node(target.id).name, "Done", "a completed transaction is not cancelled retroactively");
+});

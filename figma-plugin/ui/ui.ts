@@ -252,7 +252,14 @@ function request(tool: "figma_status", payload: unknown = {}): Promise<unknown> 
 
 function settle(requestId: string, ok: boolean, data?: unknown, error?: string): void {
   const entry = pending.get(requestId);
-  if (!entry) return;
+  if (!entry) {
+    // Late main-thread answer after the iframe already timed out and reported
+    // failure. Forward it anyway: the server keeps timed-out bindings precisely
+    // so this second frame reconciles the job ledger instead of vanishing.
+    // Without this, "failure" hides a late commit.
+    send({ type: "result", requestId, ok, ...(data !== undefined ? { data } : {}), ...(error !== undefined ? { error } : {}) });
+    return;
+  }
   window.clearTimeout(entry.timer);
   pending.delete(requestId);
   if (ok) entry.resolve(data);
@@ -543,16 +550,48 @@ function route(msg: ServerMessage): void {
         },
         timer: window.setTimeout(() => {
           pending.delete(requestId);
+          // Report the timeout, but KEEP waiting for the main thread: its
+          // eventual answer arrives via settle() with no pending entry and is
+          // forwarded as a late result for ledger reconciliation. Failing the
+          // visible promise here while dropping the late answer is what hid
+          // late commits.
           send({
             type: "result",
             requestId,
             ok: false,
-            error: `Plugin timed out after ${budget}ms executing ${msg.tool}.`,
+            error: `Plugin timed out after ${budget}ms executing ${msg.tool}. Outcome unknown: the main thread may still commit late; the definitive result will follow as a late result. Reconcile with get_job_status before retrying with the SAME transactionId.`,
           });
+          // Ask the main thread to abort between ops and roll back, so the
+          // late outcome is rolled-back/partial instead of a silent commit.
+          try {
+            const payload = msg.payload as { transactionId?: unknown };
+            toMain({
+              kind: "cancel",
+              requestId,
+              ...(typeof payload?.transactionId === "string" ? { transactionId: payload.transactionId } : {}),
+              reason: `iframe timeout after ${budget}ms`,
+            });
+          } catch {
+            /* cancel is best-effort */
+          }
         }, budget),
       });
 
       toMain({ kind: "request", requestId, tool: msg.tool, payload: msg.payload });
+      break;
+    }
+
+    case "cancel": {
+      // Server gave up waiting but the main thread is still running: forward
+      // the abort (cooperative — the run loop rolls back between ops) while
+      // keeping the pending entry open for the definitive late result.
+      toMain({
+        kind: "cancel",
+        requestId: msg.requestId,
+        ...(msg.transactionId ? { transactionId: msg.transactionId } : {}),
+        reason: msg.reason ?? "server timeout",
+      });
+      appendLog("warn", `Cancel requested for ${msg.transactionId ?? msg.requestId}: waiting for the definitive result.`);
       break;
     }
 

@@ -822,7 +822,8 @@ export type JobState =
   | "committed"
   | "rolled-back"
   | "partial-rollback"
-  | "failed";
+  | "failed"
+  | "timed-out";
 
 export interface JobRecord {
   transactionId: string;
@@ -837,6 +838,14 @@ export interface JobRecord {
   createdIds?: string[];
   error?: string;
   updatedAt: number;
+  /**
+   * Wire request id for the in-flight dispatch, when known.
+   *
+   * Lets a late plugin result (arriving after the server-side timeout fired)
+   * rebind to this record instead of being dropped as "unknown request".
+   * Without it a reported failure can hide a late commit.
+   */
+  requestId?: string;
 }
 
 export interface PreflightIssue {
@@ -1160,6 +1169,28 @@ export interface DisconnectMessage {
 }
 
 /**
+ * Server -> plugin cancellation for an in-flight request.
+ *
+ * A request timeout on the server does NOT stop the Figma main thread: the
+ * transaction keeps applying unless somebody asks it to stop. Without this
+ * frame the timeout path is "report failure, keep mutating", which is how a
+ * 32-op batch times out at 17/32 and still lands the rest late. The iframe
+ * forwards it to the main thread, which aborts between operations and runs
+ * the normal journaled rollback — so a cancelled transaction reports
+ * rolled-back/partial instead of silently committing late.
+ *
+ * Best-effort by design: older panels ignore unknown frames, and a cancel
+ * that arrives after commit is a no-op acknowledged by the late-result path.
+ */
+export interface CancelMessage {
+  type: "cancel";
+  requestId: string;
+  /** Transaction id, when the request carried one. Lets the main thread abort the right run. */
+  transactionId?: string;
+  reason: string;
+}
+
+/**
  * A one-way server-to-plugin notification.
  *
  * Requests demand answers; notifications do not. This is the live-streaming
@@ -1193,7 +1224,7 @@ export interface ProgressMessage {
   at: number;
 }
 
-export type ServerMessage = WelcomeMessage | RequestMessage | DisconnectMessage | NotifyMessage;
+export type ServerMessage = WelcomeMessage | RequestMessage | DisconnectMessage | NotifyMessage | CancelMessage;
 export type ClientMessage = RegisterMessage | StateMessage | ResultMessage | ProgressMessage;
 
 /* -------------------------------------------------------------------------- */
@@ -1536,7 +1567,8 @@ export type UiToMain =
   | { kind: "config"; url: string; secret?: string }
   | { kind: "refresh-panel" }
   | { kind: "select-node"; nodeId: string }
-  | { kind: "request"; requestId: string; tool: PluginToolName; payload: unknown };
+  | { kind: "request"; requestId: string; tool: PluginToolName; payload: unknown }
+  | { kind: "cancel"; requestId: string; transactionId?: string; reason?: string };
 
 export type MainToUi =
   | { kind: "server-config"; url: string; secret?: string; pluginVersion: string }

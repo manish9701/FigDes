@@ -119,7 +119,134 @@ export const STYLES: Record<string, StylePreset> = {
     description: "Gallery warm: airy, centered, warm surfaces for showcase content.",
     why: "Showcase content is looked at, not operated; air and warmth invite the eye to linger.",
   },
+  "editorial-bold": {
+    name: "editorial-bold",
+    density: "airy",
+    spacing: "12px-loose",
+    align: "centered",
+    contrast: "bold",
+    typography: "editorial",
+    colorUsage: "ink-on-paper",
+    surfaces: "open",
+    contentDensity: "airy",
+    numbers: "proportional",
+    shape: "geometric",
+    sizing: "generous",
+    warmth: "warm",
+    description: "Editorial bold: oversized type, one message, generous warm air.",
+    why: "Announcements and verdicts are read, not operated; scale and air do all the hierarchy work.",
+  },
+  "dense-admin": {
+    name: "dense-admin",
+    density: "dense",
+    spacing: "4px-tight",
+    align: "strict-grid",
+    contrast: "muted",
+    typography: "quiet",
+    colorUsage: "ink-on-paper",
+    surfaces: "bordered",
+    contentDensity: "compact",
+    numbers: "tabular",
+    shape: "geometric",
+    sizing: "compact",
+    warmth: "neutral",
+    description: "Dense admin: tight rows, strict grid, quiet chrome for heavy data work.",
+    why: "Admin screens are scanned in rows; chrome must disappear so density stays readable.",
+  },
+  "soft-modern": {
+    name: "soft-modern",
+    density: "balanced",
+    spacing: "8px-even",
+    align: "relaxed-left",
+    contrast: "muted",
+    typography: "quiet",
+    colorUsage: "ink-on-paper",
+    surfaces: "open",
+    contentDensity: "roomy",
+    numbers: "proportional",
+    shape: "organic",
+    sizing: "comfortable",
+    warmth: "neutral",
+    description: "Soft modern: quiet surfaces, breathing layout, hierarchy from type not borders.",
+    why: "Consumer-grade products read as considered when chrome recedes and type carries weight.",
+  },
 };
+
+/**
+ * Presets safe to assign WITHOUT the model asking.
+ *
+ * Every preset here is density "balanced" (gap scale 1 → grid and layout
+ * unchanged), warmth "neutral" (root fill stays white) and align
+ * "relaxed-left" (bridged to "loose", which is the default snapping
+ * behaviour). Auto art direction can therefore only change typographic voice
+ * and surface manner — never geometry or colour — which is what makes it safe
+ * to apply to programs that state no taste of their own.
+ */
+const AUTO_STYLE_ELIGIBLE = new Set(["calm-technical", "technical-editorial", "high-contrast-ops", "soft-modern"]);
+
+export interface ArtDirectionInput {
+  /** Deck mode: slides read from the back of the room. */
+  deck?: boolean;
+  /** Region primitive names in order ("hero", "navigation", "inspector", …). */
+  regionFns: string[];
+  /** How many regions the program declares. */
+  regionCount: number;
+}
+
+export interface ArtDirection {
+  style: string;
+  why: string;
+  source: "auto";
+}
+
+/**
+ * Infers a curated art direction for programs that state none.
+ *
+ * General-purpose by design — no product vocabulary, only composition shape:
+ * decks read at distance (editorial scale), sparse screens are typographic
+ * (editorial), dense multi-region app shells stay calm (restraint, tabular
+ * numbers), and everything else defaults to calm-technical. Deterministic:
+ * the same program shape always gets the same direction, so rebuilds never
+ * change manner underneath the caller.
+ *
+ * Returns null when the caller should stay hands-off (empty program).
+ */
+export function inferArtDirection(input: ArtDirectionInput): ArtDirection | null {
+  if (input.regionCount === 0) return null;
+  const fns = new Set(input.regionFns.map((f) => String(f).toLowerCase()));
+
+  if (input.deck === true) {
+    return {
+      style: "technical-editorial",
+      why: "Deck: slides read from metres away, so editorial type scale and tracked nav carry the room.",
+      source: "auto",
+    };
+  }
+  if (input.regionCount <= 2 || fns.has("hero") || fns.has("slide") || fns.has("stage")) {
+    return {
+      style: "technical-editorial",
+      why: "Sparse composition: the screen is typographic, so headline scale and generous air do the hierarchy.",
+      source: "auto",
+    };
+  }
+  if (input.regionCount >= 5 || fns.has("inspector") || fns.has("status-rail")) {
+    return {
+      style: "calm-technical",
+      why: "Dense app shell: restraint, even spacing and quiet labels keep many regions readable.",
+      source: "auto",
+    };
+  }
+  return {
+    style: "calm-technical",
+    why: "Default direction: calm technical reads as considered for any product screen.",
+    source: "auto",
+  };
+}
+
+/** True when a style token is safe for automatic assignment (geometry-neutral). */
+export function isAutoStyleEligible(style: string): boolean {
+  return AUTO_STYLE_ELIGIBLE.has(style);
+}
 
 /**
  * Accordion words: shorthands that unfold to full directives. "compact"

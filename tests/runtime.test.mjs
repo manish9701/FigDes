@@ -19,7 +19,7 @@ import { routeConnector } from "../mcp-server/dist-test/runtime/connectors.js";
 import { normalizePath, parseSvgPath } from "../mcp-server/dist-test/shared/path.js";
 import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { LOGO_MARKS, coerceLogoMark, logoMarkPath, polygonPath, ringPath, starPath } from "../mcp-server/dist-test/runtime/marks.js";
-import { STYLES, ACCORDION } from "../mcp-server/dist-test/runtime/visual-presets.js";
+import { STYLES, ACCORDION, inferArtDirection, presetAlignment } from "../mcp-server/dist-test/runtime/visual-presets.js";
 import { critiqueVisual } from "../mcp-server/dist-test/review/critique.js";
 import { OperationSchema } from "../mcp-server/dist-test/shared/protocol.js";
 
@@ -2240,6 +2240,91 @@ test("a surface directive passes through and is flagged for style binding", () =
   const bind = result.operations.find((o) => o.type === "bindVariable" && o.target === "p1");
   assert.equal(bind.variable, "surface-02");
   assert.ok(result.intentNotes.some((n) => /surface-02.*bind/i.test(n)));
+});
+
+/* -------------------------------------------------------------------------- */
+/* Auto art direction + new curated presets (general-use quality lift)          */
+/* -------------------------------------------------------------------------- */
+
+test("auto art direction picks a geometry-neutral preset for every shape", () => {
+  const checks = [
+    { deck: true, regionFns: ["slide", "slide"], regionCount: 2 },
+    { regionFns: ["hero", "navigation"], regionCount: 2 },
+    { regionFns: ["navigation", "hero", "inspector", "status-rail", "frame"], regionCount: 5 },
+    { regionFns: ["frame", "frame"], regionCount: 2 },
+  ];
+  for (const input of checks) {
+    const direction = inferArtDirection(input);
+    assert.ok(direction, "every non-empty shape gets a direction");
+    assert.ok(STYLES[direction.style], `inferred style '${direction.style}' is a registered preset`);
+    assert.equal(STYLES[direction.style].density, "balanced", "auto style must not change layout density");
+    assert.equal(STYLES[direction.style].warmth, "neutral", "auto style must not change the root fill");
+    assert.equal(presetAlignment(STYLES[direction.style].align), "loose", "auto style must not change snapping");
+    assert.equal(direction.source, "auto");
+  }
+  assert.equal(inferArtDirection({ regionFns: [], regionCount: 0 }), null, "an empty program stays hands-off");
+});
+
+test("auto art direction is deterministic across rebuilds", () => {
+  const shape = { deck: false, regionFns: ["navigation", "hero", "inspector"], regionCount: 3 };
+  assert.deepEqual(inferArtDirection(shape), inferArtDirection({ ...shape }));
+});
+
+test("new curated presets resolve to real mechanics and distinct looks", () => {
+  for (const name of ["editorial-bold", "dense-admin", "soft-modern"]) {
+    assert.ok(STYLES[name], `${name} registered`);
+    assert.ok(STYLES[name].spacing && STYLES[name].contrast && STYLES[name].typography, `${name} defines all five mechanics`);
+  }
+  const soft = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "navigation", id: "nav", args: { width: 240 } }],
+    content: [{ fn: "navItem", id: "home", parent: "nav", args: { label: "Home" } }],
+    visualIntent: { style: "soft-modern" },
+  });
+  const editorialBold = executeRuntime({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "navigation", id: "nav", args: { width: 240 } }],
+    content: [{ fn: "navItem", id: "home", parent: "nav", args: { label: "Home" } }],
+    visualIntent: { style: "editorial-bold" },
+  });
+  assert.notDeepEqual(soft.operations, editorialBold.operations, "presets render differently");
+});
+
+test("the tool boundary applies auto art direction when the program states none", async () => {
+  const { applyAutoArtDirection, reuseAdvisory } = await import("../mcp-server/dist-test/runtime/tools.js");
+
+  // No visualIntent at all: a curated style is inferred and eligible presets only.
+  const bare = applyAutoArtDirection({
+    canvas: { name: "T", width: 800, height: 600, grid: 8 },
+    regions: [{ fn: "navigation", id: "nav", args: { width: 240 } }, { fn: "hero", id: "hero", args: { grow: 2 } }],
+    content: [],
+  });
+  assert.ok(bare.direction, "a styleless program is art-directed");
+  assert.ok(STYLES[bare.direction.style], `inferred style '${bare.direction.style}' registered`);
+  assert.equal(bare.program.visualIntent.style, bare.direction.style);
+
+  // Explicit style always wins.
+  const styled = applyAutoArtDirection({
+    regions: [{ fn: "frame", id: "m", args: {} }],
+    visualIntent: { style: "quiet-instrument" },
+  });
+  assert.equal(styled.direction, null);
+  assert.equal(styled.program.visualIntent.style, "quiet-instrument");
+
+  // A plan already carries the planner's direction: never double-direct.
+  const planned = applyAutoArtDirection({ plan: { visualIntent: { style: "quiet-instrument" } }, regions: [] });
+  assert.equal(planned.direction, null);
+  assert.equal(planned.program.visualIntent, undefined);
+
+  // Component-first advisory: 3+ identical-size frames suggest instancing.
+  const advisories = reuseAdvisory([
+    { type: "createFrame", id: "a1", width: 320, height: 120 },
+    { type: "createFrame", id: "a2", width: 320, height: 120 },
+    { type: "createFrame", id: "a3", width: 320, height: 120 },
+  ]);
+  assert.equal(advisories.length, 1);
+  assert.match(advisories[0], /create_component/);
+  assert.equal(reuseAdvisory([{ type: "createFrame", id: "x", width: 320, height: 120 }]).length, 0);
 });
 
 /* -------------------------------------------------------------------------- */

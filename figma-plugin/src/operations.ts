@@ -30,6 +30,60 @@ const MAX_CREATED_NODES = 500;
 const APPLIED_TRACE_CAP = 300;
 
 /**
+ * Idempotency + cancellation for the semantic transaction path.
+ *
+ * The server dedupes by transactionId, but a server-side timeout used to mean
+ * a same-id retry executed the whole plan a second time on the plugin — which
+ * is how timed-out batches duplicated nodes when the first run committed
+ * late. The plugin now keeps the last N *successful* results keyed by
+ * transactionId: a retry with the same id returns the prior success without
+ * touching the document. Failures are NOT cached (a fully rolled-back plan is
+ * safe to re-run), which keeps the retry path open.
+ *
+ * Cancellation is cooperative: the main thread cannot be pre-empted
+ * mid-`await`, so a cancel request sets a flag the run loop checks between
+ * operations. The in-flight op finishes, then the transaction aborts into the
+ * normal journaled rollback — the same path as any other failure, so a
+ * cancelled batch reports rolled-back/partial instead of committing late.
+ */
+const TRANSACTION_CACHE_CAP = 50;
+const transactionResults = new Map<string, TransactionResult>();
+const cancelledTransactions = new Set<string>();
+
+/** Mark a transaction as cancelled. The run loop aborts between operations and rolls back. */
+export function cancelTransaction(transactionId: string): boolean {
+  if (!transactionId) return false;
+  if (transactionResults.has(transactionId)) return false;
+  cancelledTransactions.add(transactionId);
+  return true;
+}
+
+export function isTransactionCancelled(transactionId: string): boolean {
+  return cancelledTransactions.has(transactionId);
+}
+
+function takeCancellation(transactionId: string): boolean {
+  if (cancelledTransactions.has(transactionId)) {
+    cancelledTransactions.delete(transactionId);
+    return true;
+  }
+  return false;
+}
+
+function cacheTransactionResult(transactionId: string, result: TransactionResult): void {
+  if (!transactionId || result.status !== "success" || result.dryRun) return;
+  transactionResults.set(transactionId, result);
+  if (transactionResults.size > TRANSACTION_CACHE_CAP) {
+    const first = transactionResults.keys().next().value;
+    if (first) transactionResults.delete(first);
+  }
+}
+
+export function getCachedTransactionResult(transactionId: string): TransactionResult | undefined {
+  return transactionResults.get(transactionId);
+}
+
+/**
  * Estimates the width of a hug-sized pill, button or nav item.
  *
  * Figma's FrameNode has no `resize` mode that shrinks to content, so a compact
@@ -584,6 +638,26 @@ export async function runTransaction(input: {
     };
   }
 
+  // Idempotent retry: a same-id re-dispatch after a server timeout must not
+  // execute the plan twice. Successes are cached; failures roll back and stay
+  // re-runnable, so only successes short-circuit here.
+  const cached = getCachedTransactionResult(input.transactionId);
+  if (cached) return cached;
+  // A cancel that arrived before the first op still counts: abort into the
+  // normal rollback path (nothing committed → "nothing was committed").
+  if (isTransactionCancelled(input.transactionId)) {
+    takeCancellation(input.transactionId);
+    return failure(
+      input.transactionId,
+      new OperationError(
+        `Transaction ${input.transactionId} was cancelled before it started (server timeout). Nothing was committed; retry with the SAME transactionId after checking get_job_status.`,
+        -1,
+        "cancelled",
+      ),
+      false,
+    );
+  }
+
   const ctx: Ctx = {
     ids: new Map(),
     created: [],
@@ -618,6 +692,18 @@ export async function runTransaction(input: {
     let pinned = false;
 
     for (let n = 0; n < ordered.length; n++) {
+      // Cooperative cancellation: the server's timeout fires outside this
+      // runner while a native op is stalled, so the only safe stop is here,
+      // between ops. The in-flight op finishes, then we abort into the normal
+      // journaled rollback instead of committing the tail late.
+      if (isTransactionCancelled(input.transactionId)) {
+        takeCancellation(input.transactionId);
+        throw new OperationError(
+          `Transaction ${input.transactionId} was cancelled after ${n}/${total} operations (server timeout). Rolling back the ${n} applied operation(s); the document will hold none of this transaction's partial work if rollback is full — check rolledBack/rollbackStatus, then retry with the SAME transactionId in smaller verified passes.`,
+          n < parsed.length ? parsed.indexOf(ordered[n]!) : -1,
+          "cancelled",
+        );
+      }
       const op = ordered[n]!;
       const index = parsed.indexOf(op);
       const opT0 = Date.now();
@@ -659,7 +745,8 @@ export async function runTransaction(input: {
     // Surgical rollback: journaled mutations are restored first, then created
     // nodes are removed by id. A bare undo here would pop whatever Figma last
     // recorded — after a timeout or interleaving work, that is somebody else's
-    // commit.
+    // commit. Consume any cancel flag so a same-id retry starts clean.
+    takeCancellation(input.transactionId);
     return failure(
       input.transactionId,
       err,
@@ -756,7 +843,7 @@ export async function runTransaction(input: {
     );
   }
 
-  return {
+  const success: TransactionResult = {
     transactionId: input.transactionId,
     status: "success",
     dryRun: false,
@@ -769,6 +856,9 @@ export async function runTransaction(input: {
     timings,
     ...(warnings.length > 0 ? { warnings } : {}),
   };
+  takeCancellation(input.transactionId);
+  cacheTransactionResult(input.transactionId, success);
+  return success;
 }
 
 /**
@@ -2190,6 +2280,9 @@ async function failure(
 function hintFor(message: string, opType: string): string {
   const m = message;
 
+  if (/was cancelled/i.test(m) || opType === "cancelled") {
+    return "The transaction was cancelled (usually a server timeout asking the plugin to stop). Check rolledBack/rollbackStatus: full means nothing landed and a same-transactionId retry in smaller verified passes is safe; partial means inspect the listed ids first. Use get_job_status with the SAME transactionId before retrying.";
+  }
   if (/Node not found/i.test(m)) {
     return "Call inspect_selection or inspect_file to get current node ids. Reference ids that exist rather than guessing, and never reuse ids from a previous transaction after a rollback.";
   }

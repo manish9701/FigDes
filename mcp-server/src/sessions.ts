@@ -26,12 +26,69 @@ const REQUEST_TIMEOUT_MS = 60_000;
 const LONG_BUILD_TIMEOUT_MS = 300_000;
 const STALE_AFTER_MS = 60_000;
 
+/**
+ * A server-side timeout is NOT proof the document stayed unchanged.
+ *
+ * The Figma main thread keeps applying after we give up waiting: a 32-op
+ * batch can time out at 17/32 with the rest still landing late. Callers must
+ * be able to distinguish "the plugin said no" from "we stopped waiting", so
+ * timeouts (and disconnects mid-apply) reject with this instead of a generic
+ * Error. Dispatch marks the ledger `timed-out` and the late-result path
+ * reconciles when the plugin eventually answers.
+ */
+export class TransactionTimeoutError extends Error {
+  readonly isTimeout = true;
+  constructor(
+    message: string,
+    readonly requestId: string,
+    readonly tool: PluginToolName,
+    readonly transactionId: string | undefined,
+    readonly timeoutMs: number,
+  ) {
+    super(message);
+    this.name = "TransactionTimeoutError";
+  }
+}
+
+/** Socket died while a request was in flight: same unknown-outcome shape as a timeout. */
+export class SessionDisconnectedError extends Error {
+  readonly isDisconnect = true;
+  constructor(
+    message: string,
+    readonly requestId: string,
+    readonly tool: PluginToolName,
+    readonly transactionId: string | undefined,
+  ) {
+    super(message);
+    this.name = "SessionDisconnectedError";
+  }
+}
+
+function transactionIdOf(payload: unknown): string | undefined {
+  if (payload && typeof payload === "object" && "transactionId" in payload) {
+    const v = (payload as Record<string, unknown>).transactionId;
+    if (typeof v === "string" && v.length > 0) return v;
+  }
+  return undefined;
+}
+
+export function timeoutHint(tool: string, transactionId: string | undefined, timeoutMs: number): string {
+  const id = transactionId ? ` transaction ${transactionId}` : " the transaction";
+  return (
+    `Outcome unknown: the plugin may still be applying${transactionId ? ` (${transactionId})` : ""}. ` +
+    `Do NOT retry blindly with a new id — that duplicates nodes if the first run commits late. ` +
+    `Call get_job_status with${id} to reconcile, inspect the target subtree for partial work, ` +
+    `then resume/retry with the SAME transactionId once the ledger settles (timed out after ${timeoutMs}ms on ${tool}).`
+  );
+}
+
 function timeoutForTool(tool: PluginToolName): number {
   switch (tool) {
     case "create_design":
     case "modify_design":
     case "update_component":
     case "native_design":
+    case "execute_figma_script":
       return LONG_BUILD_TIMEOUT_MS;
     case "render_node":
       return 120_000;
@@ -46,6 +103,25 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
   tool: PluginToolName;
   timeoutMs: number;
+  requestId: string;
+  transactionId: string | undefined;
+}
+
+interface TimedOut {
+  tool: PluginToolName;
+  transactionId: string | undefined;
+  timeoutMs: number;
+  at: number;
+}
+
+export interface LateResult {
+  late: true;
+  requestId: string;
+  tool: PluginToolName;
+  transactionId: string | undefined;
+  ok: boolean;
+  data?: unknown;
+  error?: string;
 }
 
 export class Session {
@@ -64,6 +140,12 @@ export class Session {
   editorType = "figma";
 
   private readonly pending = new Map<string, Pending>();
+  /**
+   * Requests that timed out (or died with the socket) but may still commit
+   * late on the Figma side. Kept so a late `result` frame reconciles the job
+   * ledger instead of being dropped as "unknown request".
+   */
+  private readonly timedOut = new Map<string, TimedOut>();
   private closed = false;
 
   constructor(readonly socket: WebSocket) {
@@ -153,15 +235,62 @@ export class Session {
 
     const budget = timeoutMs ?? timeoutForTool(tool);
     const requestId = `r_${randomUUID()}`;
+    const transactionId = transactionIdOf(payload);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
-        reject(new Error(`The Figma plugin did not respond to ${tool} within ${budget}ms. Is the plugin still open?`));
+        // Keep the binding for the late-result path: the Figma main thread
+        // keeps running after we stop waiting. Dropping it here is what turned
+        // a stall into "failure, then everything pops at once anyway".
+        this.timedOut.set(requestId, { tool, transactionId, timeoutMs: budget, at: Date.now() });
+        if (this.timedOut.size > 50) {
+          const first = this.timedOut.keys().next().value;
+          if (first) this.timedOut.delete(first);
+        }
+        // Best-effort cancel: ask the plugin to abort between ops and roll
+        // back, so the late outcome is rolled-back/partial instead of a silent
+        // commit. Older panels ignore the frame; that is fine.
+        this.cancel(requestId, transactionId, `server timeout after ${budget}ms`);
+        reject(
+          new TransactionTimeoutError(
+            `The Figma plugin did not respond to ${tool} within ${budget}ms. ${timeoutHint(tool, transactionId, budget)}`,
+            requestId,
+            tool,
+            transactionId,
+            budget,
+          ),
+        );
       }, budget);
 
-      this.pending.set(requestId, { resolve, reject, timer, tool, timeoutMs: budget });
+      this.pending.set(requestId, { resolve, reject, timer, tool, timeoutMs: budget, requestId, transactionId });
       this.send({ type: "request", requestId, tool, payload });
     });
+  }
+
+  /**
+   * Ask the plugin to abort an in-flight request.
+   *
+   * Fire-and-forget: the transaction may already have committed (then the
+   * cancel is a no-op and the late-result path reports the commit), or the
+   * panel may be too old to understand it (then the timeout ledger state still
+   * forces reconciliation before any retry).
+   */
+  cancel(requestId: string, transactionId: string | undefined, reason: string): void {
+    try {
+      this.send({ type: "cancel", requestId, ...(transactionId ? { transactionId } : {}), reason });
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /** True while a request is still awaiting its plugin answer. */
+  hasPending(requestId: string): boolean {
+    return this.pending.has(requestId);
+  }
+
+  /** Binding kept for a timed-out request, if any (late-result reconciliation). */
+  timedOutBinding(requestId: string): TimedOut | undefined {
+    return this.timedOut.get(requestId);
   }
 
   /**
@@ -179,7 +308,17 @@ export class Session {
     clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
       this.pending.delete(requestId);
-      entry.reject(new Error(`The Figma plugin did not respond to ${entry.tool} within ${entry.timeoutMs}ms. Is the plugin still open?`));
+      this.timedOut.set(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+      this.cancel(requestId, entry.transactionId, `server timeout after ${entry.timeoutMs}ms without progress`);
+      entry.reject(
+        new TransactionTimeoutError(
+          `The Figma plugin stalled on ${entry.tool} (last progress ${done}/${total} ${label}). ${timeoutHint(entry.tool, entry.transactionId, entry.timeoutMs)}`,
+          requestId,
+          entry.tool,
+          entry.transactionId,
+          entry.timeoutMs,
+        ),
+      );
     }, entry.timeoutMs);
     // Refresh the liveness window without re-arming unref concerns; the timer
     // above is the budget that matters.
@@ -190,19 +329,52 @@ export class Session {
     this.lastSeen = Date.now();
   }
 
-  settleResult(msg: ResultMessage): void {
+  /**
+   * Settle an upstream result.
+   *
+   * Returns a LateResult when the request had already timed out: the awaiting
+   * promise is gone, but the ledger still needs the true outcome. Callers
+   * (the socket router) must reconcile the job record from it instead of
+   * dropping the frame.
+   */
+  settleResult(msg: ResultMessage): LateResult | null {
     const entry = this.pending.get(msg.requestId);
-    if (!entry) return;
-    clearTimeout(entry.timer);
-    this.pending.delete(msg.requestId);
-    if (msg.ok) entry.resolve(msg.data);
-    else entry.reject(new Error(msg.error ?? "The Figma plugin reported an unknown error."));
+    if (entry) {
+      clearTimeout(entry.timer);
+      this.pending.delete(msg.requestId);
+      if (msg.ok) entry.resolve(msg.data);
+      else entry.reject(new Error(msg.error ?? "The Figma plugin reported an unknown error."));
+      return null;
+    }
+    const timed = this.timedOut.get(msg.requestId);
+    if (!timed) return null;
+    this.timedOut.delete(msg.requestId);
+    return {
+      late: true,
+      requestId: msg.requestId,
+      tool: timed.tool,
+      transactionId: timed.transactionId,
+      ok: msg.ok,
+      ...(msg.data !== undefined ? { data: msg.data } : {}),
+      ...(msg.error !== undefined ? { error: msg.error } : {}),
+    };
   }
 
   failAllPending(reason: string): void {
-    for (const [, entry] of this.pending) {
+    for (const [requestId, entry] of this.pending) {
       clearTimeout(entry.timer);
-      entry.reject(new Error(reason));
+      // A disconnect mid-apply has the same unknown outcome as a timeout: the
+      // main thread may still commit. Keep the binding for reconciliation and
+      // reject with a disconnect-shaped error the dispatcher marks timed-out.
+      this.timedOut.set(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+      entry.reject(
+        new SessionDisconnectedError(
+          `${reason} Outcome unknown${entry.transactionId ? ` for transaction ${entry.transactionId}` : ""} — the Figma main thread may still commit late. ${timeoutHint(entry.tool, entry.transactionId, entry.timeoutMs)}`,
+          requestId,
+          entry.tool,
+          entry.transactionId,
+        ),
+      );
     }
     this.pending.clear();
   }
@@ -251,7 +423,7 @@ export class JobLedger {
   private readonly results = new Map<string, unknown>();
   private order: string[] = [];
 
-  begin(input: { transactionId: string; tool: string; session: Session; operationCount: number }): JobRecord {
+  begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string }): JobRecord {
     const rec: JobRecord = {
       transactionId: input.transactionId,
       state: "queued",
@@ -262,6 +434,7 @@ export class JobLedger {
       operationCount: input.operationCount,
       done: 0,
       updatedAt: Date.now(),
+      ...(input.requestId ? { requestId: input.requestId } : {}),
     };
     this.jobs.set(input.transactionId, rec);
     this.order.push(input.transactionId);
@@ -304,6 +477,20 @@ export class JobLedger {
 
   priorResult(transactionId: string): unknown | undefined {
     return this.results.get(transactionId);
+  }
+
+  /**
+   * Find a job by its wire request id (late-result reconciliation).
+   *
+   * A late plugin answer names the request, not the transaction — and on a
+   * reconnect the transaction id may be the only stable key. Scanning is
+   * bounded (≤200 records) and only used for reconciliation, never dispatch.
+   */
+  byRequestId(requestId: string): JobRecord | undefined {
+    for (const rec of this.jobs.values()) {
+      if (rec.requestId === requestId) return rec;
+    }
+    return undefined;
   }
 
   recent(limit = 20): JobRecord[] {

@@ -21,7 +21,7 @@ import {
   type MainToUi,
   type UiToMain,
 } from "../../shared/protocol";
-import { undoLastOperation, runTransaction, type UndoResult } from "./operations";
+import { undoLastOperation, runTransaction, cancelTransaction, type UndoResult } from "./operations";
 import { executeNativeCall } from "./native/index";
 import { executeFigmaScript } from "./native/script";
 import { countByType, DEFAULT_INSPECT, inspectNodes, inspectTopLevelFrames, listPages } from "./inspector";
@@ -121,6 +121,8 @@ async function pushPanelSummary(): Promise<void> {
 
 let ready = false;
 const queue: MainToUi[] = [];
+/** In-flight main-thread requests: requestId -> transactionId (when known). */
+const activeRequests = new Map<string, string | undefined>();
 
 function showUI(): void {
   figma.showUI(__html__, { width: 340, height: 260, themeColors: true });
@@ -540,6 +542,14 @@ figma.ui.onmessage = async (msg: UiToMain) => {
           post({ kind: "response", requestId: msg.requestId, ok: false, error: `Unknown tool: ${msg.tool}` });
           break;
         }
+        // Track the live transaction so a later `cancel` frame aborts the
+        // right run. The mapping is best-effort: unknown payloads simply have
+        // no transaction to cancel.
+        const txnOf = (p: unknown): string | undefined =>
+          p && typeof p === "object" && "transactionId" in (p as Record<string, unknown>) && typeof (p as Record<string, unknown>).transactionId === "string"
+            ? ((p as Record<string, unknown>).transactionId as string)
+            : undefined;
+        activeRequests.set(msg.requestId, txnOf(msg.payload));
         try {
           const data = await handle(msg.tool, msg.payload);
           post({ kind: "response", requestId: msg.requestId, ok: true, data });
@@ -550,6 +560,23 @@ figma.ui.onmessage = async (msg: UiToMain) => {
             ok: false,
             error: err instanceof Error ? err.message : String(err),
           });
+        } finally {
+          activeRequests.delete(msg.requestId);
+        }
+        break;
+      }
+
+      case "cancel": {
+        // Cooperative abort: flag the transaction; runTransaction checks the
+        // flag between operations and rolls back instead of committing late.
+        // Unknown ids (already finished, or a native script) are no-ops —
+        // never a blind undo of somebody else's work.
+        const target = msg.transactionId ?? activeRequests.get(msg.requestId);
+        if (target) {
+          const ok = cancelTransaction(target);
+          log("warn", ok ? `Cancelling ${target}: ${msg.reason ?? "server timeout"}` : `${target} already finished; cancel is a no-op.`);
+        } else {
+          log("warn", `Cancel for unknown request ${msg.requestId}; nothing to abort.`);
         }
         break;
       }

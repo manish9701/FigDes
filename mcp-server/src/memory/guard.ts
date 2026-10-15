@@ -51,6 +51,19 @@ export interface GuardSnapshot {
   metrics?: Record<string, number>;
   /** Screen id, for matching memory notes. */
   screen?: string;
+  /**
+   * How the snapshot was obtained, and whether the target actually resolved.
+   *
+   * `live defect (hard stress test #10): design_guard(inspect:true)` reported
+   * `nodes: 0` / `textNodes: 0` for a 751-node page and still returned PASS for
+   * 13 rules, because every rule passes on absence. The emptiness has to be a
+   * first-class fact of the snapshot so the verdict can refuse to be PASS.
+   */
+  source?: "program" | "live";
+  /** Set by the producer when the requested target could not be resolved. */
+  resolved?: boolean;
+  /** Why resolution failed, when it did. Shown verbatim in the finding. */
+  unresolvedReason?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -81,7 +94,42 @@ const COMPARISONS: Record<"operator" | string, ((a: number, b: number) => boolea
 function worst(findings: Array<{ verdict: Verdict }>): Verdict {
   if (findings.some((f) => f.verdict === "FAIL")) return "FAIL";
   if (findings.some((f) => f.verdict === "WARNING")) return "WARNING";
+  if (findings.some((f) => f.verdict === "INDETERMINATE")) return "INDETERMINATE";
   return "PASS";
+}
+
+/**
+ * Whether a snapshot carries anything a rule could have been measured against.
+ *
+ * "Never fail on absence" (above) is the right default for a screen that
+ * genuinely contains no forbidden copy. It is the wrong default for a target
+ * that resolved to nothing at all: there is no screen, so there is no absence
+ * to observe. This is the single distinction the whole guard hinges on, so it
+ * is one predicate rather than a rule-by-rule judgement.
+ */
+export function snapshotHasEvidence(snapshot: GuardSnapshot): boolean {
+  if (snapshot.resolved === false) return false;
+  if ((snapshot.nodeNames?.length ?? 0) > 0) return true;
+  if ((snapshot.texts?.length ?? 0) > 0) return true;
+  if ((snapshot.components?.length ?? 0) > 0) return true;
+  if (snapshot.composition !== undefined) return true;
+  // Metrics alone are evidence only when something was actually counted. A
+  // snapshot carrying `nodes: 0, textNodes: 0` is the empty case, not a screen
+  // whose rules all pass.
+  return Object.values(snapshot.metrics ?? {}).some((v) => Number.isFinite(v) && v > 0);
+}
+
+/** Human-readable explanation used as the INDETERMINATE finding's evidence. */
+function emptyEvidence(snapshot: GuardSnapshot): string {
+  if (snapshot.unresolvedReason) return snapshot.unresolvedReason;
+  const m = snapshot.metrics ?? {};
+  return [
+    `source=${snapshot.source ?? "unknown"}`,
+    `nodes=${m.nodes ?? (snapshot.nodeNames?.length ?? 0)}`,
+    `textNodes=${m.textNodes ?? (snapshot.texts?.length ?? 0)}`,
+    `components=${snapshot.components?.length ?? 0}`,
+    `composition=${snapshot.composition ?? "unknown"}`,
+  ].join(" ");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -210,6 +258,30 @@ function evaluate(evidence: RuleEvidence, snapshot: GuardSnapshot): CheckOutcome
  * were unmeasurable.
  */
 export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardResult {
+  // An empty snapshot short-circuits before any rule runs. Every rule here
+  // passes on absence, so a guard with nothing to measure reports PASS for all
+  // of them — which reads as "the guard approved this design" when in truth
+  // nothing was inspected. Hard stress test #10 found exactly that: PASS for 13
+  // rules against `nodes: 0` on a page of 751.
+  if (!snapshotHasEvidence(snapshot)) {
+    const evidence = emptyEvidence(snapshot);
+    return {
+      verdict: "INDETERMINATE",
+      findings: [
+        {
+          verdict: "INDETERMINATE",
+          rule: "snapshot",
+          message:
+            "The guard had nothing to measure, so no rule was evaluated. This is not a pass: resolve the target first, then re-run.",
+          evidence,
+          nextStep:
+            "Select the frame to check (or pass a program), confirm it is not inside a locked/hidden layer, and re-run design_guard. An empty result must never be read as approval.",
+        },
+      ],
+      stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+    };
+  }
+
   const findings: GuardFinding[] = [];
   let passed = 0;
   let warnings = 0;
@@ -300,6 +372,9 @@ export function snapshotFromIR(ir: {
 
   return {
     composition: resolved.composition,
+    source: "program",
+    resolved: ir.regions.length > 0,
+    ...(ir.regions.length === 0 ? { unresolvedReason: "the program declared no regions, so there is nothing to guard" } : {}),
     components,
     nodeNames: ir.regions.map((r) => r.id),
     texts: ir.content.filter((n) => n.kind === "text").map((n) => n.text ?? ""),

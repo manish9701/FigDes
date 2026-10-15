@@ -178,16 +178,27 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
   const result = runGuard(memory.rules, snapshot);
 
   return {
-    status: "ok",
+    // `indeterminate` is deliberately not `ok`: nothing was checked, so there
+    // is no outcome to report as a success. A caller keying on `status` must
+    // not treat an empty snapshot as a clean run.
+    status: result.verdict === "INDETERMINATE" ? "indeterminate" : "ok",
     project: key,
     verdict: result.verdict,
     findings: result.findings,
     stats: result.stats,
     snapshot: {
+      source: snapshot.source ?? "unknown",
+      resolved: snapshot.resolved ?? true,
       composition: snapshot.composition,
       components: snapshot.components,
       metrics: snapshot.metrics,
     },
+    ...(result.verdict === "INDETERMINATE"
+      ? {
+          howToProceed:
+            "Resolve the target and re-run. An empty snapshot means no rule was evaluated — it is never evidence that the design passes.",
+        }
+      : {}),
     ...(problem ? { warning: problem } : {}),
   };
 }
@@ -196,27 +207,62 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
 function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapshot {
   const textNode = (node: Record<string, unknown>): string => (typeof node.characters === "string" ? node.characters : "");
 
-  const walk = (node: Record<string, unknown>, names: string[], texts: string[]): void => {
+  let maxNodes: number | undefined;
+  let truncated: boolean | undefined;
+
+  const walk = (node: Record<string, unknown>, names: string[], texts: string[], instances: Array<{ type: string }>): void => {
     if (typeof node.name === "string") names.push(node.name);
     const t = textNode(node);
     if (t) texts.push(t);
 
+    // Instances carry their component's semantics, which is what `maxInstances`
+    // rules are measured against. A live snapshot that dropped them could only
+    // ever report zero components.
+    if (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
+      const name = typeof node.name === "string" && node.name.length > 0 ? node.name : String(node.type);
+      instances.push({ type: name });
+    }
+
     const children = node.children;
     if (Array.isArray(children)) {
-      for (const child of children) if (child && typeof child === "object") walk(child as Record<string, unknown>, names, texts);
+      for (const child of children) if (child && typeof child === "object") walk(child as Record<string, unknown>, names, texts, instances);
     }
   };
 
   const names: string[] = [];
   const texts: string[] = [];
-  const selected = inspected.selection;
-  if (selected && typeof selected === "object") walk(selected as Record<string, unknown>, names, texts);
+  const instances: Array<{ type: string }> = [];
+  const selection = inspected.selection;
+  const selected = Array.isArray(selection) ? selection[0] : selection;
+  if (selected && typeof selected === "object") walk(selected as Record<string, unknown>, names, texts, instances);
 
   const composition = typeof inspected.composition === "string" ? inspected.composition : undefined;
 
+  if (typeof inspected.maxNodes === "number") maxNodes = inspected.maxNodes;
+  if (inspected.truncated === true) truncated = true;
+
+  // Component counts are the one metric a truncated scan cannot make safe to
+  // reason about: nodes past the cap were never walked, so "no forbidden
+  // component" is an artefact of the cap rather than an observation.
+  const capped = truncated === true;
+
+  const components = new Map<string, number>();
+  for (const i of instances) components.set(i.type, (components.get(i.type) ?? 0) + 1);
+
+  const resolved = names.length > 0 && !capped;
+  const unresolvedReason =
+    names.length === 0
+      ? "The plugin returned an empty selection: nothing was measured, so every rule would pass by default. Select the frame to check and re-run."
+      : capped
+        ? `The inspection was capped at ${maxNodes ?? "the plugin limit"} nodes, so absence-based rules would pass on nodes that were never scanned. Narrow the target or re-run on a smaller frame.`
+        : undefined;
+
   return {
     composition,
-    components: [],
+    source: "live",
+    resolved,
+    ...(unresolvedReason ? { unresolvedReason } : {}),
+    components: [...components].map(([type, count]) => ({ type, count })),
     nodeNames: names,
     texts,
     metrics: { nodes: names.length, textNodes: texts.length },

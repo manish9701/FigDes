@@ -132,7 +132,10 @@ function describeVector(node: VectorNode): Record<string, unknown> {
     const d = p.data;
     for (let i = 0; i < d.length; i++) {
       const ch = d[i];
-      if (ch === "C" || ch === "Q") curveCount += 1;
+      // A is a curve too. Omitting it reported an arc-built ring as 0 curves,
+      // which is how the 54x1 arc-bounds defect hid behind plausible-looking
+      // inspect output (issue #10).
+      if (ch === "C" || ch === "Q" || ch === "A") curveCount += 1;
     }
   }
   return {
@@ -146,6 +149,10 @@ function describeVector(node: VectorNode): Record<string, unknown> {
     subpaths: paths.map((p) => ({ windingRule: p.windingRule, data: p.data.slice(0, 2000) })),
     subpathCount: paths.length,
     curveCount,
+    // Zero extent in one axis on a node that reports curves means the path
+    // data and the node box disagree, which is the visible symptom of bad
+    // normalisation rather than of an intentionally flat shape.
+    degenerateBounds: (node.width <= 1 || node.height <= 1) && curveCount > 0,
     fills: "fills" in node ? (node.fills as unknown) : undefined,
     strokes: "strokes" in node ? (node.strokes as unknown) : undefined,
     strokeWeight: "strokeWeight" in node ? (node as VectorNode).strokeWeight : undefined,

@@ -236,31 +236,37 @@ function flattenQuadratic(p0: Point, c: Point, p1: Point): Point[] {
 }
 
 /**
- * Flattens an SVG elliptical arc into a polyline.
+ * Endpoint-to-centre arc geometry, per the SVG specification.
  *
- * Endpoint-to-centre conversion per the SVG specification, then each span of at
- * most 90 degrees becomes one cubic (the standard approximation, exact enough
- * that the flattening tolerance dominates the error). A degenerate arc — zero
- * radii, or start equal to end — becomes a straight line rather than throwing,
- * because that is what the SVG spec mandates and a logo path with a zero-radius
- * corner should not fail a whole transaction.
+ * Shared by the flattener and the bounding-box calculation because both must
+ * agree exactly. A bounds routine with its own copy of this maths drifts from
+ * the geometry it is supposed to measure, and the drift is invisible until a
+ * ring renders as a 54x1 sliver.
  */
-function flattenArc(
-  from: Point,
-  rx: number,
-  ry: number,
-  rotationDeg: number,
-  largeArc: boolean,
-  sweep: boolean,
-  to: Point,
-): Point[] {
+interface ArcGeometry {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+  cosPhi: number;
+  sinPhi: number;
+  startAngle: number;
+  sweepAngle: number;
+}
+
+/** True when the arc degenerates to a straight line per the SVG spec. */
+function arcIsDegenerate(from: Point, rx: number, ry: number, to: Point): boolean {
+  return (
+    Math.abs(rx) < 1e-9 ||
+    Math.abs(ry) < 1e-9 ||
+    (Math.abs(from.x - to.x) < 1e-9 && Math.abs(from.y - to.y) < 1e-9)
+  );
+}
+
+function arcGeometry(from: Point, rx: number, ry: number, rotationDeg: number, largeArc: boolean, sweep: boolean, to: Point): ArcGeometry | null {
   const rxA = Math.abs(rx);
   const ryA = Math.abs(ry);
-
-  // Degenerate cases per spec: zero radii or coincident endpoints draw a line.
-  if (rxA < 1e-9 || ryA < 1e-9 || (Math.abs(from.x - to.x) < 1e-9 && Math.abs(from.y - to.y) < 1e-9)) {
-    return [{ x: to.x, y: to.y }];
-  }
+  if (arcIsDegenerate(from, rxA, ryA, to)) return null;
 
   const phi = ((rotationDeg % 360) * Math.PI) / 180;
   const cosPhi = Math.cos(phi);
@@ -301,35 +307,92 @@ function flattenArc(
   if (!sweep && sweepAngle > 0) sweepAngle -= 2 * Math.PI;
   if (sweep && sweepAngle < 0) sweepAngle += 2 * Math.PI;
 
+  return { cx, cy, rx: rxS, ry: ryS, cosPhi, sinPhi, startAngle, sweepAngle };
+}
+
+/** Point on the arc at parameter `angle`. */
+function arcPoint(g: ArcGeometry, angle: number): Point {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    x: g.cx + g.rx * c * g.cosPhi - g.ry * s * g.sinPhi,
+    y: g.cy + g.rx * c * g.sinPhi + g.ry * s * g.cosPhi,
+  };
+}
+
+/** Tangent direction at `angle`, for the cubic control-point distance. */
+function arcTangent(g: ArcGeometry, angle: number): Point {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return {
+    x: -g.rx * s * g.cosPhi - g.ry * c * g.sinPhi,
+    y: -g.rx * s * g.sinPhi + g.ry * c * g.cosPhi,
+  };
+}
+
+/**
+ * Every point on an arc that can lie on its bounding box.
+ *
+ * The endpoints plus the four stationary points of the parameterisation (where
+ * dx/dtheta or dy/dtheta is zero), restricted to the angles actually swept.
+ * These are exactly the box edges of the drawn arc — not an over-estimate of
+ * the full ellipse, which would inflate the box for a quarter-arc and crop the
+ * artwork at the node edge.
+ */
+function arcExtremes(g: ArcGeometry): Point[] {
+  const lo = Math.min(g.startAngle, g.startAngle + g.sweepAngle);
+  const hi = Math.max(g.startAngle, g.startAngle + g.sweepAngle);
+  const EPS = 1e-9;
+  const out: Point[] = [];
+  // Stationary points sit at multiples of 90 degrees. The swept range is under a
+  // full turn, so checking one turn either side of each is sufficient.
+  for (let k = 0; k < 4; k++) {
+    const base = (k * Math.PI) / 2;
+    for (let turn = -1; turn <= 1; turn++) {
+      const angle = base + turn * 2 * Math.PI;
+      if (angle < lo - EPS || angle > hi + EPS) continue;
+      out.push(arcPoint(g, angle));
+      break;
+    }
+  }
+  return out;
+}
+
+/**
+ * Flattens an SVG elliptical arc into a polyline.
+ *
+ * Endpoint-to-centre conversion per the SVG specification, then each span of at
+ * most 90 degrees becomes one cubic (the standard approximation, exact enough
+ * that the flattening tolerance dominates the error). A degenerate arc — zero
+ * radii, or start equal to end — becomes a straight line rather than throwing,
+ * because that is what the SVG spec mandates and a logo path with a zero-radius
+ * corner should not fail a whole transaction.
+ */
+function flattenArc(
+  from: Point,
+  rx: number,
+  ry: number,
+  rotationDeg: number,
+  largeArc: boolean,
+  sweep: boolean,
+  to: Point,
+): Point[] {
+  // Degenerate cases per spec: zero radii or coincident endpoints draw a line.
+  const g = arcGeometry(from, rx, ry, rotationDeg, largeArc, sweep, to);
+  if (!g) return [{ x: to.x, y: to.y }];
+
   // One cubic per 90 degrees or less keeps the approximation error far below
   // the flattening tolerance.
-  const segments = Math.max(1, Math.ceil(Math.abs(sweepAngle) / (Math.PI / 2)));
+  const segments = Math.max(1, Math.ceil(Math.abs(g.sweepAngle) / (Math.PI / 2)));
   const out: Point[] = [];
 
-  const onEllipse = (angle: number): Point => {
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
-    return {
-      x: cx + rxS * c * cosPhi - ryS * s * sinPhi,
-      y: cy + rxS * c * sinPhi + ryS * s * cosPhi,
-    };
-  };
-  const tangent = (angle: number): Point => {
-    const c = Math.cos(angle);
-    const s = Math.sin(angle);
-    return {
-      x: -rxS * s * cosPhi - ryS * c * sinPhi,
-      y: -rxS * s * sinPhi + ryS * c * cosPhi,
-    };
-  };
-
   for (let i = 0; i < segments; i++) {
-    const a1 = startAngle + (sweepAngle * i) / segments;
-    const a2 = startAngle + (sweepAngle * (i + 1)) / segments;
-    const p1 = onEllipse(a1);
-    const p2 = onEllipse(a2);
-    const d1 = tangent(a1);
-    const d2 = tangent(a2);
+    const a1 = g.startAngle + (g.sweepAngle * i) / segments;
+    const a2 = g.startAngle + (g.sweepAngle * (i + 1)) / segments;
+    const p1 = arcPoint(g, a1);
+    const p2 = arcPoint(g, a2);
+    const d1 = arcTangent(g, a1);
+    const d2 = arcTangent(g, a2);
     // The classic control-point distance, exact for circles and close for
     // ellipses at these spans.
     const alpha = (4 / 3) * Math.tan((a2 - a1) / 4);
@@ -572,7 +635,69 @@ export function segmentsToPathData(segments: VectorSegment[]): string {
   return parts.join(" ");
 }
 
-/** Bounding box over segment endpoints and bezier control points. */
+/**
+ * Roots of the derivative of a univariate cubic, i.e. the parameters where a
+ * bezier is at its extreme on one axis.
+ *
+ * Control points are a *hull*, not the curve: a curve can never leave the
+ * control polygon, but it need not touch it either. Bounding a bezier by its
+ * control points therefore over-estimates (safe for a box that must enclose the
+ * artwork) — except when it is used to *place* the node, where an over-estimate
+ * is the visible defect. Hard stress test #10: an arc-based ring emitted as a
+ * `createVector` of width 54 and height 1, because the arc contributed only
+ * its endpoint to the box. Both arcs and beziers are now measured at their true
+ * extrema.
+ */
+function cubicExtremaRoots(p0: number, p1: number, p2: number, p3: number): number[] {
+  // B'(t) = 3[(p1-p0)(1-t)^2 + 2(p2-p1)t(1-t) + (p3-p2)t^2]
+  const a = -p0 + 3 * p1 - 3 * p2 + p3;
+  const b = 2 * (p0 - 2 * p1 + p2);
+  const c = p1 - p0;
+  const out: number[] = [];
+
+  const push = (t: number): void => {
+    if (t > 0 && t < 1) out.push(t);
+  };
+
+  if (Math.abs(a) < 1e-12) {
+    if (Math.abs(b) > 1e-12) push(-c / b);
+    return out;
+  }
+  const disc = b * b - 4 * a * c;
+  if (disc < 0) return out;
+  const root = Math.sqrt(disc);
+  push((-b + root) / (2 * a));
+  push((-b - root) / (2 * a));
+  return out;
+}
+
+const cubicAt = (p0: number, p1: number, p2: number, p3: number, t: number): number => {
+  const mt = 1 - t;
+  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+};
+
+/**
+ * Every point where a cubic can sit on its own bounding box.
+ *
+ * The union of the roots of *both* axis polynomials. Evaluating the Y extremes
+ * only at the X roots looks like a simplification and is not: a curve that
+ * runs left-to-right is monotonic in X, so it has no interior X roots, and its
+ * vertical bulge would never be sampled. That is the common case — a curve
+ * drawn as a smooth swell across the box — and it is exactly where a
+ * control-point hull and a true bound differ most.
+ */
+function cubicExtremes(
+  x0: number, x1: number, x2: number, x3: number,
+  y0: number, y1: number, y2: number, y3: number,
+): Point[] {
+  const ts = new Set<number>([...cubicExtremaRoots(x0, x1, x2, x3), ...cubicExtremaRoots(y0, y1, y2, y3)]);
+  return [...ts].map((t) => ({
+    x: cubicAt(x0, x1, x2, x3, t),
+    y: cubicAt(y0, y1, y2, y3, t),
+  }));
+}
+
+/** Bounding box over segment endpoints and curve extrema. */
 export function segmentsBounds(segments: VectorSegment[]): PathBounds {
   let minX = Infinity;
   let minY = Infinity;
@@ -584,21 +709,59 @@ export function segmentsBounds(segments: VectorSegment[]): PathBounds {
     if (x > maxX) maxX = x;
     if (y > maxY) maxY = y;
   };
+
+  let cx = 0;
+  let cy = 0;
+
   for (const s of segments) {
-    if (s.cmd === "Z") continue;
-    if (s.cmd === "C") {
-      eat(s.x1, s.y1);
-      eat(s.x2, s.y2);
-      eat(s.x, s.y);
-    } else if (s.cmd === "Q") {
-      eat(s.x1, s.y1);
-      eat(s.x, s.y);
-    } else if (s.cmd === "A") {
-      eat(s.x, s.y);
-    } else {
-      eat(s.x, s.y);
+    switch (s.cmd) {
+      case "Z":
+        break;
+
+      case "M":
+      case "L":
+        eat(s.x, s.y);
+        cx = s.x;
+        cy = s.y;
+        break;
+
+      case "C": {
+        eat(s.x, s.y);
+        // Roots from *both* axes. Sampling only the X polynomial misses the
+        // vertical extremes of every horizontally-monotonic curve — which is
+        // most curves, and is how a bulging bezier gets a flat bounding box.
+        for (const t of cubicExtremes(cx, s.x1, s.x2, s.x, cy, s.y1, s.y2, s.y)) eat(t.x, t.y);
+        cx = s.x;
+        cy = s.y;
+        break;
+      }
+
+      case "Q": {
+        eat(s.x, s.y);
+        // A quadratic is a cubic with both controls at two thirds of the way to
+        // the single control point, so one extremum routine covers both.
+        const ax = cx + (2 / 3) * (s.x1 - cx);
+        const bx = s.x + (2 / 3) * (s.x1 - s.x);
+        const ay = cy + (2 / 3) * (s.y1 - cy);
+        const by = s.y + (2 / 3) * (s.y1 - s.y);
+        for (const t of cubicExtremes(cx, ax, bx, s.x, cy, ay, by, s.y)) eat(t.x, t.y);
+        cx = s.x;
+        cy = s.y;
+        break;
+      }
+
+      case "A": {
+        const to = { x: s.x, y: s.y };
+        eat(to.x, to.y);
+        const g = arcGeometry({ x: cx, y: cy }, s.rx, s.ry, s.rotation, s.largeArc, s.sweep, to);
+        if (g) for (const p of arcExtremes(g)) eat(p.x, p.y);
+        cx = to.x;
+        cy = to.y;
+        break;
+      }
     }
   }
+
   if (!Number.isFinite(minX)) return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }

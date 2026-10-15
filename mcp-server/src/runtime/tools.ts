@@ -7,8 +7,10 @@
  */
 import { z } from "zod";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
+import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
 import { placeRootFrame } from "./placement";
+import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import type { Session } from "../sessions";
@@ -36,6 +38,18 @@ const RUNTIME_GUIDE = [
   "              density rescales the spacing system; visualWeight becomes growth;",
   "              the focal region absorbs slack first. Omit it freely: every field",
   "              has a neutral default and omission degrades to current behaviour.",
+  "  style presets (one name or a comma list of directives):",
+  "    calm-technical     generous whitespace, quiet labels, tabular numerals",
+  "    technical-editorial  report-like: headline carries the decision",
+  "    quiet-instrument   dense, strict grid, values first and mono",
+  "    high-contrast-ops  bold emphasis for state that must be seen",
+  "    gallery-warm       airy, centered, warm showcase surfaces",
+  "    editorial-bold     oversized type, one message, warm air",
+  "    dense-admin        tight rows, strict grid, quiet chrome",
+  "    soft-modern        quiet surfaces; hierarchy from type, not borders",
+  "    shorthands: compact, airy, minimal, editorial, instrument, warm.",
+  "    Omitting style is fine — a curated direction is inferred from the",
+  "    composition shape and reported as artDirection in the result.",
   "",
   "Reusable patterns:",
   "  define a template once in 'templates', then stamp it with",
@@ -186,23 +200,115 @@ export const CompileArgs = z.object({ ir: DesignIRSchema, dryRun: z.boolean().op
 /* Catalogue                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** The primitive catalogue, so the model can discover what exists. */
+/**
+ * The primitive catalogue, so the model can discover what exists.
+ *
+ * Names and descriptions were not enough: hard stress test #10 found a model
+ * guessing `vectorPlan`, `logoGrid` and `logoLockup` arguments and having each
+ * guess rejected with no way to discover the right one. The accepted argument
+ * schemas, their types and a worked example now travel with the name, so
+ * discovery *is* the schema rather than a pointer to one.
+ */
 export function runtimeCatalogue() {
-  return PRIMITIVE_NAMES.map((name) => ({
-    name,
-    kind: RUNTIME_PRIMITIVES[name].kind,
-    description: RUNTIME_PRIMITIVES[name].description,
-  }));
+  return PRIMITIVE_NAMES.map((name) => {
+    const spec = RUNTIME_PRIMITIVES[name];
+    const args = PRIMITIVE_ARGUMENTS[name] ?? [];
+    const example = PRIMITIVE_EXAMPLES[name];
+    return {
+      name,
+      kind: spec.kind,
+      description: spec.description,
+      args: args.map((a) => ({
+        name: a.name,
+        type: a.type,
+        description: a.description,
+        ...(a.values !== undefined && a.values.length > 0 ? { values: [...a.values] } : {}),
+        ...(a.example !== undefined ? { example: a.example } : {}),
+      })),
+      ...(example ? { example } : {}),
+    };
+  });
 }
 
 /* -------------------------------------------------------------------------- */
 /* Tools                                                                       */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Auto art direction (general-use quality lift).
+ *
+ * Most models omit `visualIntent`, and an unstated taste defaults to the
+ * flattest possible output. Rather than leaving quality to per-call
+ * improvisation, the tool boundary infers a curated style preset from the
+ * program's composition shape and applies it when (and only when) the program
+ * states no style of its own.
+ *
+ * Safety contract, by construction:
+ * - only geometry-neutral presets are eligible (balanced density → grid
+ *   unchanged; neutral warmth → white root fill unchanged; relaxed align →
+ *   default snapping unchanged), so layout math is bit-identical;
+ * - a program with a `plan` is skipped (the planner already art-directs);
+ * - an explicit `visualIntent.style` always wins;
+ * - the choice is deterministic, so the same program rebuilds identically.
+ */
+export function applyAutoArtDirection(program: unknown): { program: unknown; direction: ReturnType<typeof inferArtDirection> } {
+  if (program === null || typeof program !== "object" || Array.isArray(program)) {
+    return { program, direction: null };
+  }
+  const p = program as Record<string, unknown>;
+  // A plan already carries the planner's art direction; never double-direct.
+  if (p["plan"] !== undefined) return { program, direction: null };
+  const intent = p["visualIntent"];
+  if (intent !== null && typeof intent === "object" && !Array.isArray(intent)) {
+    const declared = intent as Record<string, unknown>;
+    if (typeof declared["style"] === "string" && declared["style"].length > 0) {
+      return { program, direction: null };
+    }
+  }
+  const regions = Array.isArray(p["regions"]) ? (p["regions"] as Array<Record<string, unknown>>) : [];
+  const canvas = (p["canvas"] ?? {}) as Record<string, unknown>;
+  const direction = inferArtDirection({
+    deck: canvas["deck"] === true,
+    regionFns: regions.map((r) => String(r["fn"] ?? "")),
+    regionCount: regions.length,
+  });
+  if (!direction || !isAutoStyleEligible(direction.style)) {
+    return { program, direction: null };
+  }
+  const base = intent !== null && typeof intent === "object" && !Array.isArray(intent) ? (intent as Record<string, unknown>) : {};
+  return {
+    program: { ...p, visualIntent: { ...base, style: direction.style } },
+    direction,
+  };
+}
+
+/** Detects repeated identical-size frames so the payload can advise component reuse. */
+export function reuseAdvisory(operations: Array<Record<string, unknown>>): Array<string> {
+  const frames = operations.filter(
+    (o) => (o.type === "createFrame" || o.type === "createRectangle") && typeof o.id === "string",
+  );
+  const groups = new Map<string, number>();
+  for (const f of frames) {
+    const key = `${Math.round(Number(f.width ?? 0) / 4)}x${Math.round(Number(f.height ?? 0) / 4)}`;
+    groups.set(key, (groups.get(key) ?? 0) + 1);
+  }
+  const advisories: Array<string> = [];
+  for (const [key, count] of groups) {
+    if (count >= 3) {
+      advisories.push(
+        `${count} identical ${key.replace("x", "x")} surfaces: consider create_component + create_instance so shared changes stay in sync (find_component first — one may already exist).`,
+      );
+      break;
+    }
+  }
+  return advisories;
+}
+
 export async function runRuntimeTool(session: Session | null, args: unknown): Promise<unknown> {
   const parsed = RuntimeArgs.parse(args);
-  const { program, dryRun, description, transactionId, approved, reason, chunked } = parsed;
+  const { dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
+  const { program, direction } = applyAutoArtDirection(parsed.program);
   const result = executeRuntime(program);
 
   // Surface anything that was dropped before it can be mistaken for success.
@@ -210,6 +316,7 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     console.log(`[runtime] ${result.warnings.length} warning(s): ${result.warnings.join("; ")}`);
   }
 
+  const advisories = reuseAdvisory(result.operations as Array<Record<string, unknown>>);
   const payload = {
     status: result.violations.length > 0 ? "completed-with-violations" : "completed",
     dryRun: dryRun ?? false,
@@ -228,6 +335,10 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     reflowed: result.reflowed,
     /** What the visual intent changed, so taste is visible rather than silent. */
     intentNotes: result.intentNotes,
+    /** The curated art direction applied when the program stated none. */
+    ...(direction !== null ? { artDirection: direction } : {}),
+    /** Component-reuse advisories measured from the compiled operations. */
+    ...(advisories.length > 0 ? { reuse: advisories } : {}),
     violations: result.violations,
     warnings: result.warnings,
     operations: result.operations,

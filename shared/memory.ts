@@ -183,7 +183,17 @@ export type ProductRule = z.infer<typeof ProductRuleSchema>;
 /* Guard verdicts                                                               */
 /* -------------------------------------------------------------------------- */
 
-export const VerdictSchema = z.enum(["PASS", "WARNING", "FAIL"]);
+/**
+ * Guard verdicts.
+ *
+ * `INDETERMINATE` is not a softer PASS — it is the verdict for "the guard had
+ * nothing to look at". A snapshot that resolved to zero nodes cannot satisfy a
+ * forbidden-text rule by absence in any meaningful sense, because absence here
+ * means the target was never found rather than the copy being absent. Live
+ * defect: `design_guard(inspect:true)` returned PASS for 13 rules while its own
+ * snapshot reported `nodes: 0` on a page holding 751 nodes.
+ */
+export const VerdictSchema = z.enum(["PASS", "WARNING", "FAIL", "INDETERMINATE"]);
 
 export type Verdict = z.infer<typeof VerdictSchema>;
 

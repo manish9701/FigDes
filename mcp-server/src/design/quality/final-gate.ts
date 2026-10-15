@@ -98,6 +98,17 @@ export function evaluateFinalGate(input: {
   expectedRevision?: string;
   evidenceRevision?: string | null;
   /**
+   * Interaction-state evidence (general-use quality lift), opt-in by shape.
+   *
+   * A screen with zero declared states (one hover, one selected, one
+   * non-default tone) reads as unfinished even when every structural check
+   * passes. When the caller measures state signals and reports
+   * `states.declared === 0`, the gate refuses PASS — it downgrades to REVIEW
+   * with the reason named, never FAIL, because a stateless screen can still
+   * be genuinely complete (a static slide, a placeholder).
+   */
+  states?: { declared: number };
+  /**
    * Adjudicated issues stop blocking only as false-positive/intentional WITH
    * a tested rule correction and retained rationale. Confirmed, unresolved,
    * or correction-less rulings keep blocking. The moved issues land in
@@ -169,7 +180,8 @@ export function evaluateFinalGate(input: {
   const needsReview =
     input.visualEvidenceVerified !== true ||
     scores.hierarchy < FINAL_THRESHOLDS.hierarchyReviewBelow || scores.productFit < FINAL_THRESHOLDS.productFitReviewBelow;
-  if (needsReview) {
+  const stateless = input.states !== undefined && input.states.declared === 0;
+  if (needsReview || stateless) {
     return {
       status: "REVIEW",
       scores,
@@ -178,7 +190,9 @@ export function evaluateFinalGate(input: {
       renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
       reason: input.visualEvidenceVerified !== true
         ? "Structural checks are incomplete as final evidence: inspect a fresh rendered screenshot before marking PASS."
-        : "No blocking issues, but hierarchy or product fit needs a human look before done.",
+        : stateless
+          ? "No interaction states declared: add at least one hover, selected or non-default state so the screen reads as finished."
+          : "No blocking issues, but hierarchy or product fit needs a human look before done.",
       adjudicated,
     };
   }

@@ -370,6 +370,32 @@ test("final gate fails a stale screenshot revision, never PASS", () => {
   assert.equal(fresh.status, "PASS");
 });
 
+test("final gate refuses PASS on a stateless screen (REVIEW, not FAIL)", async () => {
+  const { countStateSignals } = await import("../mcp-server/dist-test/review/workflow.js");
+  const good = { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 };
+  const stateless = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, states: { declared: 0 } });
+  assert.equal(stateless.status, "REVIEW");
+  assert.match(stateless.reason, /interaction states/i);
+  const stated = evaluateFinalGate({ scores: good, visualEvidenceVerified: true, states: { declared: 3 } });
+  assert.equal(stated.status, "PASS");
+  // Opt-in by shape: existing callers without `states` are unaffected.
+  const untouched = evaluateFinalGate({ scores: good, visualEvidenceVerified: true });
+  assert.equal(untouched.status, "PASS");
+  // The signal counter reads the same state args the builders emit.
+  assert.equal(countStateSignals([{ type: "statusPill", args: { tone: "healthy" } }]), 1);
+  assert.equal(
+    countStateSignals([
+      { type: "statusPill", args: { tone: "healthy" } },
+      { type: "statusPill", args: { tone: "healthy" } },
+      { type: "deviceNode", args: { health: "degraded" } },
+      { type: "button", args: { variant: "loading" } },
+    ]),
+    3,
+    "variety counts, not volume",
+  );
+  assert.equal(countStateSignals([{ type: "createFrame", args: { width: 100 } }]), 0);
+});
+
 test("adjudicated false positives stop blocking only with retained evidence and a tested correction", () => {
   const good = { hierarchy: 90, composition: 90, typography: 90, readability: 90, density: 90, distinctiveness: 90, genericity: 90, productFit: 90 };
   const base = { scores: good, visualEvidenceVerified: true };

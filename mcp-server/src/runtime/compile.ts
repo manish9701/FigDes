@@ -532,11 +532,19 @@ export function compileIR(ir: DesignIR): CompileResult {
               w: Math.max(0, box.w - pad.left - pad.right),
               h: Math.max(0, box.h - pad.top - pad.bottom),
             };
+            // Re-pack into the region's *own* column count.
+            //
+            // This hardcoded 1, so shrinking a four-column metrics row to make
+            // room for an inspector stacked its four cards in a single column
+            // that then overflowed the region (issue #13, live apply gate).
+            // The re-pack has to reproduce the layout that would have happened
+            // had the region been this size all along, and that layout had four
+            // columns in it.
             const repacked = packContent({
               region: inner,
               items: moved.map((m) => ({ id: m.id, height: m.box.h })),
               gap,
-              columns: 1,
+              columns: repackColumns(region ?? {}, moved.length, canvas.grid),
             });
             for (const m of moved) {
               const at = repacked.get(m.id);
@@ -2913,7 +2921,12 @@ function checkRelation(
     }
   }
 
-  const expected = expectedRelationBox(relation, parent, (id) => boxes.get(id));
+  const expected = expectedRelationBox(relation, parent, (id) => boxes.get(id), {
+    x: box.x,
+    y: box.y,
+    w: box.w,
+    h: box.h,
+  });
   const near = (a: number, b: number): boolean => Math.abs(a - b) <= TOLERANCE;
 
   if (expected) {
@@ -3183,19 +3196,48 @@ function patchEmit(
 ): void {
   const localX = origin ? patch.x - origin.x : patch.x;
   const localY = origin ? patch.y - origin.y : patch.y;
+  // Every create type that owns a box, not just the frame-shaped ones.
+  //
+  // This list omitted `createText` and `createVector`, so when a relation
+  // resized a region, its text and vector operations kept the geometry they were
+  // emitted with: "'h-title' is emitted 1140 wide but its resolved box is 820"
+  // and a route vector left 240px above where it actually drew (issue #13, live
+  // apply gate). The resolved boxes were right and the operations were stale, so
+  // the mismatch check was reporting a real disagreement — the fix was here, not
+  // in the check.
+  const PATCHABLE = new Set(["createFrame", "createRectangle", "createEllipse", "createText", "createVector", "createComponent"]);
   for (let i = operations.length - 1; i >= 0; i--) {
     const candidate = operations[i] as { type?: string; id?: string; parent?: unknown } & Record<string, unknown>;
     if (candidate.id !== id) continue;
-    if (candidate.type !== "createFrame" && candidate.type !== "createRectangle" && candidate.type !== "createEllipse") continue;
+    if (!candidate.type || !PATCHABLE.has(candidate.type)) continue;
     // A root-parented node has no offset to subtract; anything else is
     // parent-local and must be converted.
     const parentIsRoot = candidate.parent === undefined || candidate.parent === "root";
     candidate.x = parentIsRoot ? patch.x : localX;
     candidate.y = parentIsRoot ? patch.y : localY;
     candidate.width = patch.width;
-    candidate.height = patch.height;
+    // Text auto-resizes to its content in Figma, so a height would be a second,
+    // competing answer. Vectors need theirs or the path is scaled.
+    if (candidate.type !== "createText") candidate.height = patch.height;
     return;
   }
+}
+
+/**
+ * How many columns a region's children should re-pack into.
+ *
+ * The same decision `emitContent` makes, read back from the region rather than
+ * recomputed, so a re-pack after a resize lands on the arrangement the region
+ * would have had all along.
+ */
+function repackColumns(region: { columns?: number; layout?: string; role?: string }, childCount: number, grid: number): number {
+  if (typeof region.columns === "number" && region.columns > 0) return Math.min(region.columns, Math.max(1, childCount));
+  // A grid or masonry region with no declared count: fit what is there.
+  if (region.layout === "grid" || region.layout === "masonry") {
+    return Math.max(1, Math.min(6, Math.round(Math.sqrt(Math.max(1, childCount)))));
+  }
+  // Everything else is a single column: a nav rail, an inspector list, a header.
+  return region.role === "footer" || region.role === "navigation" ? Math.max(1, childCount) : 1;
 }
 
 /**

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-10-16T10:53:44.889Z",
+  "generatedAt": "2026-10-16T11:00:25.887Z",
   "totals": {
-    "total": 15,
-    "pass": 12,
+    "total": 16,
+    "pass": 13,
     "fail": 0,
     "blocked": 3
   },
@@ -211,6 +211,26 @@
             "aside @ 100,466 1020x434"
           ]
         }
+      }
+    },
+    {
+      "id": "X13-resize",
+      "title": "A relation that resizes a region re-packs its content to the new size",
+      "group": "compiler",
+      "requirement": "Shrinking a region with a relation keeps its grid, its text widths and its vector positions in step with the new box.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "inapplicableReasons": [],
+        "violations": [],
+        "regions": [
+          "nav @ 0,0 220x900",
+          "header @ 252,0 868x97",
+          "metrics @ 252,129 868x138",
+          "stage @ 252,299 868x601",
+          "inspector @ 1120,0 320x900"
+        ]
       }
     },
     {

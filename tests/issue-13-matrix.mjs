@@ -429,6 +429,74 @@ export const CASES = [
     },
   },
 
+  {
+    id: "X13-resize",
+    title: "A relation that resizes a region re-packs its content to the new size",
+    group: "compiler",
+    requirement: "Shrinking a region with a relation keeps its grid, its text widths and its vector positions in step with the new box.",
+    run: () => {
+      const metrics = Array.from({ length: 4 }, (_, i) => component(`m${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 11}%` } }));
+      const ir = {
+        canvas: canvas({ name: "X13 Resize", width: 1440, height: 900 }),
+        regions: [
+          region({ id: "nav", role: "navigation", width: 220, height: "fill", children: [] }),
+          region({ id: "header", role: "header", width: "fill", height: 72, padding: 24, children: ["h-title"] }),
+          region({ id: "metrics", role: "secondary", layout: "grid", columns: 4, width: "fill", height: "hug", padding: 24, children: metrics.map((m) => m.id) }),
+          region({ id: "stage", role: "primary-visual", composition: "canvas", width: "fill", height: "fill", padding: 24, children: ["route-1"] }),
+          region({ id: "inspector", role: "inspector", width: 320, height: "fill", children: [] }),
+        ],
+        content: [
+          text("h-title", { text: "Fleet overview", role: "title" }),
+          ...metrics,
+          { id: "route-1", kind: "vector", path: "M 0 0 L 180 0 L 180 140 L 360 140", strokeWeight: 1.5 },
+        ],
+        relations: [
+          { id: "header", width: "fill", right: 320 },
+          { id: "metrics", width: "fill", right: 320 },
+          { id: "stage", width: "fill", right: 320, height: "fill" },
+          { id: "inspector", right: 0, top: 0, width: 320, height: "fill" },
+        ],
+        tokens: [],
+        links: [],
+        constraints: { maxMetricCards: 6 },
+      };
+      return compileCase(ir, (r) => {
+        const metricsRegion = r.regions.find((x) => x.id === "metrics");
+        const header = r.regions.find((x) => x.id === "header");
+        const boxes = metrics.map((m) => r.boxes.get(m.id)).filter(Boolean);
+        const xs = [...new Set(boxes.map((b) => Math.round(b.x)))];
+        const title = r.boxes.get("h-title");
+        const route = r.boxes.get("route-1");
+        const titleOp = r.operations.find((o) => o.id === "h-title");
+        const routeOp = r.operations.find((o) => o.id === "route-1");
+        const stage = r.regions.find((x) => x.id === "stage");
+        const unmet = [];
+
+        // 1. The four-column row stays four columns after the resize.
+        if (xs.length !== 4) unmet.push(`the metrics row re-packed into ${xs.length} columns, expected 4`);
+
+        // 2. Text width follows the region's new inner box.
+        if (header && title && Math.abs(title.w - (header.w - 48)) > 1) {
+          unmet.push(`'h-title' resolved ${Math.round(title.w)}px wide inside a ${Math.round(header.w)}px region`);
+        }
+        if (titleOp && title && Math.abs(Math.round(titleOp.width) - Math.round(title.w)) > 1) {
+          unmet.push(`'h-title' is emitted ${Math.round(titleOp.width)}px wide but resolves to ${Math.round(title.w)}px`);
+        }
+
+        // 3. The vector moved with its region and is emitted where it draws.
+        if (routeOp && route && stage) {
+          if (Math.abs(routeOp.x - (route.x - stage.x)) > 1 || Math.abs(routeOp.y - (route.y - stage.y)) > 1) {
+            unmet.push(`'route-1' is emitted at (${Math.round(routeOp.x)}, ${Math.round(routeOp.y)}) relative to its region but resolves to (${Math.round(route.x - stage.x)}, ${Math.round(route.y - stage.y)})`);
+          }
+        }
+
+        if (r.stats.traceMismatches > 0) unmet.push(`${r.stats.traceMismatches} emitted-vs-resolved mismatches remain`);
+        if (r.applicable === false) unmet.push(`not applicable: ${r.inapplicableReasons.join(" | ")}`);
+        return unmet;
+      });
+    },
+  },
+
   /* ---- review-engine counterparts --------------------------------------- */
   {
     id: "X09-route",

@@ -301,16 +301,27 @@ export function expectedRelationBox(
   c: ConstraintSpec,
   parent: PlacedBox,
   resolve: (id: string) => PlacedBox | undefined,
+  /**
+   * Where the box already is, before this relation.
+   *
+   * The solver leaves unmentioned axes alone, so the expectation has to as well.
+   * Defaulting an unspecified `x` to `parent.x` assumed every region sits at the
+   * canvas origin, which is false in a side-rail shell where the content column
+   * starts at x=252: `{ width: "fill", right: 320 }` expected x=0 and reported
+   * "asked for x=0 but the box resolved to x=252" on a program that was entirely
+   * correct. A verifier that invents a constraint is worse than no verifier.
+   */
+  current?: { x?: number; y?: number; w?: number; h?: number },
 ): { x: number; y: number; w: number; h: number } | null {
   const anchor =
     c.rightOf !== undefined ? resolve(c.rightOf) : c.below !== undefined ? resolve(c.below) : undefined;
 
   // An explicit size is authoritative and is applied before positioning.
-  let w: number | undefined = typeof c.width === "number" ? c.width : undefined;
-  let h: number | undefined = typeof c.height === "number" ? c.height : undefined;
+  let w: number | undefined = typeof c.width === "number" ? c.width : current?.w;
+  let h: number | undefined = typeof c.height === "number" ? c.height : current?.h;
 
-  let x: number | undefined;
-  let y: number | undefined;
+  let x: number | undefined = current?.x;
+  let y: number | undefined = current?.y;
 
   if (anchor && c.rightOf !== undefined) {
     x = round(c.left !== undefined ? anchor.x + c.left : anchor.x + anchor.w + (c.gap ?? 0));

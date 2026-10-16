@@ -632,9 +632,18 @@ export const CASES = [
  * disposable stress-test frame and inspect the render." These report BLOCKED
  * rather than PASS, because claiming a render nobody produced is precisely the
  * failure the whole status vocabulary exists to prevent.
+ *
+ * An attempt was made and it earned its keep: compiling the stress program
+ * through the connected server exposed three real defects — the `right` edge
+ * semantics, a verifier that invented a position, and stale text/vector
+ * operations after a region resize — all now fixed and committed. The apply
+ * itself is waiting on the hosted MCP server rebuilding from those commits; the
+ * server is a remote deployment, so it does not pick up a local push until it
+ * redeploys, and applying a build with known bugs would produce a render that
+ * evidences nothing.
  */
 export const BLOCKED_CASES = [
-  ["L01", "Apply to a dedicated disposable stress-test frame", "Requires a write to a named frame in the live file and approval to do it. No operations have been applied to the Exo Labs file."],
+  ["L01", "Apply to a dedicated disposable stress-test frame", "Requires a write to a named frame in the live file, and the connected server to be running a build that includes the fixes this gate found. It is a remote deployment and has not yet rebuilt from those commits. No operations have been applied to the Exo Labs file."],
   ["L02", "Render the applied frame and inspect the result visually", "Requires a screenshot of a frame an apply produced. No such frame exists yet."],
   ["L03", "Re-inspect native geometry after apply and reconcile with traces", "Requires reading back native node ids, which only exist once L01 has written them."],
 ].map(([id, title, reason]) => ({

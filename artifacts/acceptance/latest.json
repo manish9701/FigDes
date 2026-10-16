@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T11:00:25.887Z",
+  "generatedAt": "2026-10-16T11:02:38.228Z",
   "totals": {
     "total": 16,
     "pass": 13,
@@ -292,7 +292,7 @@
       "group": "live",
       "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
       "status": "BLOCKED",
-      "detail": "Requires a write to a named frame in the live file and approval to do it. No operations have been applied to the Exo Labs file. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "detail": "Requires a write to a named frame in the live file, and the connected server to be running a build that includes the fixes this gate found. It is a remote deployment and has not yet rebuilt from those commits. No operations have been applied to the Exo Labs file. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
       "raw": {
         "evidence": "none — this is not a live render or apply result"
       }

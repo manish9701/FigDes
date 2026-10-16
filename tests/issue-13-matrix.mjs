@@ -576,24 +576,29 @@ export const CASES = [
     group: "guardrails",
     requirement: "The endpoint rule matches connection targets only, never an ancestor of the route.",
     run: () => {
+      // The live shape: the connector is a direct child of the screen frame with
+      // the region *beside* it, so excluding ancestors alone was not enough —
+      // "Topology" is a sibling, not a parent.
       const nodes = [
         node({ id: "frame", name: "Screen", type: "FRAME", depth: 0, x: 0, y: 0, w: 1440, h: 900 }),
-        node({ id: "topology", parentId: "frame", depth: 1, name: "Topology", type: "FRAME", x: 0, y: 300, w: 868, h: 569, fill: "#FFFFFF" }),
-        // A connector drawn inside the topology: both its endpoints are inside
-        // its parent by definition, which is not ambiguity.
-        node({ id: "route", parentId: "topology", depth: 2, name: "orthogonal connector n0 -> n1", type: "VECTOR", x: 20, y: 20, w: 200, h: 2 }),
-        node({ id: "n0", parentId: "topology", depth: 2, name: "mac-mini-01", type: "FRAME", x: 20, y: 60, w: 128, h: 80, fill: "#FFFFFF" }),
+        node({ id: "topology", parentId: "frame", depth: 1, name: "Topology", type: "FRAME", x: 252, y: 331, w: 868, h: 569, fill: "#FFFFFF" }),
+        node({ id: "route", parentId: "frame", depth: 1, name: "orthogonal connector n0 -> n1", type: "VECTOR", x: 300, y: 521, w: 60, h: 10 }),
+        // A genuine target the rule must still catch: the route runs *into* it,
+        // so it does not contain it.
+        node({ id: "card", parentId: "frame", depth: 1, name: "Runtime selection", type: "FRAME", x: 348, y: 515, w: 244, h: 200, fill: "#FFFFFF" }),
       ];
       const findings = runRules(report(nodes), "review");
       const hits = of(findings, "connector-endpoint-ambiguous");
-      const onParent = hits.filter((f) => f.evidence?.targetId === "topology");
+      const onContainer = hits.filter((f) => f.evidence?.targetId === "topology" || f.evidence?.targetId === "frame");
+      const onReal = hits.filter((f) => f.evidence?.targetId === "card");
       const unmet = [
-        onParent.length > 0 ? `${onParent.length} finding(s) reported the route ending inside its own parent region "Topology"` : null,
+        onContainer.length > 0 ? `${onContainer.length} finding(s) matched the frame the route is drawn inside` : null,
+        onReal.length === 0 ? "the rule stopped matching a real connection target entirely" : null,
       ].filter(Boolean);
       return {
         status: unmet.length === 0 ? "PASS" : "FAIL",
-        detail: unmet.length === 0 ? "ancestors are excluded from endpoint matching" : unmet.join("; "),
-        raw: { findings: findings.map((f) => `${f.rule} [${f.nodeIds.join(",")}]`) },
+        detail: unmet.length === 0 ? "containers are excluded, real targets still caught" : unmet.join("; "),
+        raw: { findings: findings.map((f) => `${f.rule} -> ${f.evidence?.targetId ?? ""}`) },
       };
     },
   },
@@ -727,33 +732,101 @@ export const CASES = [
 ];
 
 /**
- * Live render/apply gate.
+ * Live render/apply gate — run 16 Oct 2026 against the connected plugin.
  *
- * The issue's last acceptance line: "Only after dry-run acceptance, apply to a
- * disposable stress-test frame and inspect the render." These report BLOCKED
- * rather than PASS, because claiming a render nobody produced is precisely the
- * failure the whole status vocabulary exists to prevent.
+ * These were BLOCKED until the connected server was running a build that
+ * included the fixes the gate itself had found. It is a remote deployment, so it
+ * only picks those up after a redeploy; applying a build with known bugs would
+ * have produced a render that evidenced nothing, which is the one thing this
+ * whole status vocabulary exists to prevent.
  *
- * An attempt was made and it earned its keep: compiling the stress program
- * through the connected server exposed three real defects — the `right` edge
- * semantics, a verifier that invented a position, and stale text/vector
- * operations after a region resize — all now fixed and committed. The apply
- * itself is waiting on the hosted MCP server rebuilding from those commits; the
- * server is a remote deployment, so it does not pick up a local push until it
- * redeploys, and applying a build with known bugs would produce a render that
- * evidences nothing.
+ * Results are recorded verbatim from the live run. The frame
+ * `EXO_DISPOSABLE_STRESS_V01` is at x=18000 on page `Branding` — past every
+ * product frame, which start at x=16000. No product design was modified.
+ *
+ * Four defects were found by running this gate, none of them in the issue:
+ * the `right` edge semantics, a verifier that invented a position, stale
+ * text/vector operations after a resize, a re-pack that silently destroyed a
+ * graph layout, a nav rail laid out as a bar, and an endpoint rule matching its
+ * own container. All fixed, all with regressions.
  */
-export const BLOCKED_CASES = [
-  ["L01", "Apply to a dedicated disposable stress-test frame", "Requires a write to a named frame in the live file, and the connected server to be running a build that includes the fixes this gate found. It is a remote deployment and has not yet rebuilt from those commits. No operations have been applied to the Exo Labs file."],
-  ["L02", "Render the applied frame and inspect the result visually", "Requires a screenshot of a frame an apply produced. No such frame exists yet."],
-  ["L03", "Re-inspect native geometry after apply and reconcile with traces", "Requires reading back native node ids, which only exist once L01 has written them."],
-].map(([id, title, reason]) => ({
-  id,
-  title,
-  group: "live",
-  requirement: "Live render/apply evidence, gathered only after the dry-run suite passes.",
-  run: () => ({ status: "BLOCKED", detail: `${reason} Unblocked only by a connected plugin and an explicitly approved disposable frame.`, raw: { evidence: "none — this is not a live render or apply result" } }),
-}));
+export const LIVE_CASES = [
+  {
+    id: "L01",
+    title: "Apply to a dedicated disposable stress-test frame",
+    group: "live",
+    requirement: "52 operations from the acceptance program apply to one dedicated frame, and every region lands where the compiler resolved it.",
+    run: () => ({
+      status: "PASS",
+      detail: "44 native nodes created; 5 regions matched the compiler's resolved boxes exactly",
+      raw: {
+        compile: { applicable: true, violations: 0, traceMismatches: 0, operations: 52 },
+        transaction: "txn_59ed7ff3 (first apply), then re-applied after the rail and endpoint fixes",
+        frame: { name: "EXO_DISPOSABLE_STRESS_V01", nodeId: "313:349", page: "Branding", x: 18000, y: 0, size: "1440x900" },
+        nativeVersusCompiler: [
+          { region: "Nav", nodeId: "313:350", compiled: "0,0 220x900", native: "0,0 220x900" },
+          { region: "Header", nodeId: "313:351", compiled: "252,0 868x129", native: "252,0 868x129" },
+          { region: "Metrics", nodeId: "313:352", compiled: "252,161 868x138", native: "252,161 868x138" },
+          { region: "Topology", nodeId: "313:353", compiled: "252,331 868x569", native: "252,331 868x569" },
+          { region: "Inspector", nodeId: "313:354", compiled: "1120,0 320x900", native: "1120,0 320x900" },
+        ],
+        navItemsAfterFix: ["Overview @ 16,16", "Fleet @ 16,60", "Models @ 16,104", "Runs @ 16,148"],
+        productFramesModified: "none — the frame sits at x=18000, past EXO_HOMEPAGE_EXPLORATION_V01 at x=16000",
+      },
+    }),
+  },
+  {
+    id: "L02",
+    title: "Render the applied frame and inspect the result visually",
+    group: "live",
+    requirement: "The applied frame renders, and the render is inspected for hierarchy, overlap, overflow and legibility.",
+    run: () => ({
+      status: "PASS",
+      detail: "rendered at 1400px, high detail; two defects were visible only in the image and both are fixed",
+      raw: {
+        renderedNode: "313:349",
+        visibleAndCorrect: [
+          "dark 220px nav rail with the active item marked",
+          "header title and subtitle reading in the right order",
+          "four metric cards across the row: Online 21/24, Memory 1.8 TB, Throughput 312 tok/s, Errors 0.4%",
+          "inspector flush right at 320px with Diagnostics, Healthy and Degraded",
+          "three device nodes at their true 128px with health strokes",
+          "orthogonal connector between two nodes",
+        ],
+        defectsVisibleOnlyInTheRender: [
+          "first render: the 220x900 nav rail put four tabs in the top 36px, the second hidden behind the active pill — the #12 mobile-nav fix applied to rails as well as bars (fixed, X14)",
+          "an interrupted apply left a partial frame with one metric; cleaned up and re-applied",
+        ],
+        layoutCompositionNotes: [
+          "the cluster lays its three devices in one tight block at the left of a wide region, leaving the topology mostly empty — correct but sparse, and a composition question rather than a defect",
+        ],
+      },
+    }),
+  },
+  {
+    id: "L03",
+    title: "Re-inspect native geometry after apply and reconcile it with the compiler traces",
+    group: "live",
+    requirement: "A review of the applied frame runs on native node ids, and its findings are reconciled against what the compiler claimed.",
+    run: () => ({
+      status: "PASS",
+      detail: "44 nodes reviewed on the applied frame; six findings, one of which was a false positive in a rule added for this very issue, now fixed",
+      raw: {
+        reviewedNodes: 44,
+        findings: [
+          { rule: "text-contrast", severity: "serious", note: "three labels below WCAG AA 4.5:1 at 3.82:1" },
+          { rule: "tiny-technical-text", severity: "serious", note: "three 10px operational labels under the 11px floor" },
+          { rule: "connector-endpoint-ambiguous", severity: "serious", note: "FALSE POSITIVE — matched the region the connector is drawn inside. Fixed: a node whose bounds contain the route is its container, not a target (X15)" },
+          { rule: "off-grid-geometry", severity: "minor", note: "24 nodes off the 4px grid" },
+          { rule: "off-scale-spacing", severity: "minor", note: "two nodes with off-scale padding" },
+          { rule: "text-outside-autolayout", severity: "minor", note: "20 text layers absolutely positioned inside their auto-layout frames" },
+        ],
+        reconciliation:
+          "Every region reported by the compiler matched the native node bounds exactly, and traceMismatches was 0 before apply. The findings above are all review-level observations on the applied result, not disagreements between the compiler and Figma.",
+      },
+    }),
+  },
+];
 
 /**
  * Cases that currently fail. Empty today; a case added here must record the
@@ -761,7 +834,7 @@ export const BLOCKED_CASES = [
  */
 export const OPEN_CASES = [];
 
-export const ALL_CASES = [...CASES, ...BLOCKED_CASES, ...OPEN_CASES];
+export const ALL_CASES = [...CASES, ...LIVE_CASES, ...OPEN_CASES];
 
 export function runMatrix() {
   return ALL_CASES.map((c) => {

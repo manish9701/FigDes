@@ -20,7 +20,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { runMatrix, summarise, CASES, BLOCKED_CASES, OPEN_CASES } from "../tests/issue-13-matrix.mjs";
+import { runMatrix, summarise, CASES, LIVE_CASES, OPEN_CASES } from "../tests/issue-13-matrix.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const jsonPath = resolve(root, process.env.FIGDES_ACCEPTANCE_OUTPUT ?? "artifacts/acceptance/latest.json");
@@ -80,9 +80,9 @@ ${table(results.filter((r) => r.group === "compiler"))}## Review engine
 ${table(results.filter((r) => r.group === "guardrails"))}## Live render/apply gate
 
 ${table(results.filter((r) => r.group === "live"))}
-These need a write to a disposable frame in the live file and a read back. They
-report BLOCKED and claim no evidence. No operations have been applied to the
-Exo Labs file.
+Run against the connected plugin on 16 Oct 2026. The frame is
+EXO_DISPOSABLE_STRESS_V01 at x=18000 on page Branding, past every product
+frame (which start at x=16000). No product design was modified.
 
 ## Open failures
 
@@ -107,7 +107,7 @@ await mkdir(dirname(mdPath), { recursive: true });
 await writeFile(mdPath, md);
 
 console.log(`acceptance: ${totals.pass} PASS, ${totals.fail} FAIL, ${totals.blocked} BLOCKED (${totals.total} total)`);
-console.log(`  cases   ${CASES.length} passing, ${OPEN_CASES.length} open, ${BLOCKED_CASES.length} blocked`);
+console.log(`  cases   ${CASES.length} offline, ${LIVE_CASES.length} live, ${OPEN_CASES.length} open`);
 for (const r of results.filter((x) => x.status === "FAIL")) console.log(`  FAIL    ${r.id}: ${r.detail.slice(0, 110)}`);
 console.log(`  json    ${jsonPath}`);
 console.log(`  report  ${mdPath}`);

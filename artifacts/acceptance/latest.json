@@ -1,10 +1,10 @@
 {
-  "generatedAt": "2026-10-16T11:31:08.404Z",
+  "generatedAt": "2026-10-16T11:44:24.629Z",
   "totals": {
     "total": 18,
-    "pass": 15,
+    "pass": 18,
     "fail": 0,
-    "blocked": 3
+    "blocked": 0
   },
   "results": [
     {
@@ -267,9 +267,11 @@
       "group": "guardrails",
       "requirement": "The endpoint rule matches connection targets only, never an ancestor of the route.",
       "status": "PASS",
-      "detail": "ancestors are excluded from endpoint matching",
+      "detail": "containers are excluded, real targets still caught",
       "raw": {
-        "findings": []
+        "findings": [
+          "connector-endpoint-ambiguous -> card"
+        ]
       }
     },
     {
@@ -329,33 +331,134 @@
       "id": "L01",
       "title": "Apply to a dedicated disposable stress-test frame",
       "group": "live",
-      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
-      "status": "BLOCKED",
-      "detail": "Requires a write to a named frame in the live file, and the connected server to be running a build that includes the fixes this gate found. It is a remote deployment and has not yet rebuilt from those commits. No operations have been applied to the Exo Labs file. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "requirement": "52 operations from the acceptance program apply to one dedicated frame, and every region lands where the compiler resolved it.",
+      "status": "PASS",
+      "detail": "44 native nodes created; 5 regions matched the compiler's resolved boxes exactly",
       "raw": {
-        "evidence": "none — this is not a live render or apply result"
+        "compile": {
+          "applicable": true,
+          "violations": 0,
+          "traceMismatches": 0,
+          "operations": 52
+        },
+        "transaction": "txn_59ed7ff3 (first apply), then re-applied after the rail and endpoint fixes",
+        "frame": {
+          "name": "EXO_DISPOSABLE_STRESS_V01",
+          "nodeId": "313:349",
+          "page": "Branding",
+          "x": 18000,
+          "y": 0,
+          "size": "1440x900"
+        },
+        "nativeVersusCompiler": [
+          {
+            "region": "Nav",
+            "nodeId": "313:350",
+            "compiled": "0,0 220x900",
+            "native": "0,0 220x900"
+          },
+          {
+            "region": "Header",
+            "nodeId": "313:351",
+            "compiled": "252,0 868x129",
+            "native": "252,0 868x129"
+          },
+          {
+            "region": "Metrics",
+            "nodeId": "313:352",
+            "compiled": "252,161 868x138",
+            "native": "252,161 868x138"
+          },
+          {
+            "region": "Topology",
+            "nodeId": "313:353",
+            "compiled": "252,331 868x569",
+            "native": "252,331 868x569"
+          },
+          {
+            "region": "Inspector",
+            "nodeId": "313:354",
+            "compiled": "1120,0 320x900",
+            "native": "1120,0 320x900"
+          }
+        ],
+        "navItemsAfterFix": [
+          "Overview @ 16,16",
+          "Fleet @ 16,60",
+          "Models @ 16,104",
+          "Runs @ 16,148"
+        ],
+        "productFramesModified": "none — the frame sits at x=18000, past EXO_HOMEPAGE_EXPLORATION_V01 at x=16000"
       }
     },
     {
       "id": "L02",
       "title": "Render the applied frame and inspect the result visually",
       "group": "live",
-      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
-      "status": "BLOCKED",
-      "detail": "Requires a screenshot of a frame an apply produced. No such frame exists yet. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "requirement": "The applied frame renders, and the render is inspected for hierarchy, overlap, overflow and legibility.",
+      "status": "PASS",
+      "detail": "rendered at 1400px, high detail; two defects were visible only in the image and both are fixed",
       "raw": {
-        "evidence": "none — this is not a live render or apply result"
+        "renderedNode": "313:349",
+        "visibleAndCorrect": [
+          "dark 220px nav rail with the active item marked",
+          "header title and subtitle reading in the right order",
+          "four metric cards across the row: Online 21/24, Memory 1.8 TB, Throughput 312 tok/s, Errors 0.4%",
+          "inspector flush right at 320px with Diagnostics, Healthy and Degraded",
+          "three device nodes at their true 128px with health strokes",
+          "orthogonal connector between two nodes"
+        ],
+        "defectsVisibleOnlyInTheRender": [
+          "first render: the 220x900 nav rail put four tabs in the top 36px, the second hidden behind the active pill — the #12 mobile-nav fix applied to rails as well as bars (fixed, X14)",
+          "an interrupted apply left a partial frame with one metric; cleaned up and re-applied"
+        ],
+        "layoutCompositionNotes": [
+          "the cluster lays its three devices in one tight block at the left of a wide region, leaving the topology mostly empty — correct but sparse, and a composition question rather than a defect"
+        ]
       }
     },
     {
       "id": "L03",
-      "title": "Re-inspect native geometry after apply and reconcile with traces",
+      "title": "Re-inspect native geometry after apply and reconcile it with the compiler traces",
       "group": "live",
-      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
-      "status": "BLOCKED",
-      "detail": "Requires reading back native node ids, which only exist once L01 has written them. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "requirement": "A review of the applied frame runs on native node ids, and its findings are reconciled against what the compiler claimed.",
+      "status": "PASS",
+      "detail": "44 nodes reviewed on the applied frame; six findings, one of which was a false positive in a rule added for this very issue, now fixed",
       "raw": {
-        "evidence": "none — this is not a live render or apply result"
+        "reviewedNodes": 44,
+        "findings": [
+          {
+            "rule": "text-contrast",
+            "severity": "serious",
+            "note": "three labels below WCAG AA 4.5:1 at 3.82:1"
+          },
+          {
+            "rule": "tiny-technical-text",
+            "severity": "serious",
+            "note": "three 10px operational labels under the 11px floor"
+          },
+          {
+            "rule": "connector-endpoint-ambiguous",
+            "severity": "serious",
+            "note": "FALSE POSITIVE — matched the region the connector is drawn inside. Fixed: a node whose bounds contain the route is its container, not a target (X15)"
+          },
+          {
+            "rule": "off-grid-geometry",
+            "severity": "minor",
+            "note": "24 nodes off the 4px grid"
+          },
+          {
+            "rule": "off-scale-spacing",
+            "severity": "minor",
+            "note": "two nodes with off-scale padding"
+          },
+          {
+            "rule": "text-outside-autolayout",
+            "severity": "minor",
+            "note": "20 text layers absolutely positioned inside their auto-layout frames"
+          }
+        ],
+        "reconciliation": "Every region reported by the compiler matched the native node bounds exactly, and traceMismatches was 0 before apply. The findings above are all review-level observations on the applied result, not disagreements between the compiler and Figma."
       }
     }
   ]

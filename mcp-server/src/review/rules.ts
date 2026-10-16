@@ -15,6 +15,9 @@
 import {
   OperationSchema,
   isDefaultLayerName,
+  RADIUS_SCALE,
+  isOnRadiusScale,
+  nearestRadiusStep,
   type Finding,
   type NodeMetrics,
   type MetricsReport,
@@ -412,30 +415,68 @@ function siblingRadiusMismatch(n: NodeMetrics, c: Ctx): Finding[] {
   const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
 
   const majority = ranked[0]![0];
-  const offenders = withRadius.filter((s) => s.radius !== majority);
-  if (offenders.length === 0) return [];
+
+  // A circle is not an off-scale rectangle.
+  //
+  // Issue #11 asked for dots and circles not to be misclassified. A status dot is
+  // a frame whose radius is half its shortest side; that is the correct value for
+  // that shape, and reporting it as drift is a false positive that also drags a
+  // real repair (`setCornerRadius`) toward destroying the circle.
+  const circular = withRadius.filter((s) => s.radius >= Math.min(s.w, s.h) / 2 - 0.5);
+
+  const offenders = withRadius.filter((s) => s.radius !== majority && !isOnRadiusScale(s.radius) && !circular.includes(s));
+  const offScale = offenders.length > 0;
+
+  // Two different questions, and they need different answers:
+  //  - off-scale values are drift; snap them to the scale step nearest their own.
+  //  - on-scale values that merely disagree with their siblings are a hierarchy
+  //    decision, not a defect. Matching the majority is offered, not asserted.
+  const majorityIsOnScale = isOnRadiusScale(majority);
+
+  // What to propose, and the order of preference:
+  //  1. the majority radius, when the majority is itself on-scale — it is both
+  //     consistent with the siblings and a documented step, so it satisfies both
+  //     questions at once;
+  //  2. otherwise the documented step nearest the value's own intent, which is
+  //     all that can be said when the whole set has drifted off-scale.
+  const propose = (radius: number): number => (majorityIsOnScale ? majority : nearestRadiusStep(radius));
+
+  const offendersToReport = offScale ? offenders : withRadius.filter((s) => s.radius !== majority && !circular.includes(s));
+  if (offendersToReport.length === 0) return [];
 
   const otherValues = ranked
     .slice(1)
     .map(([v, count]) => `${v}px x${count}`)
     .join(", ");
 
+  const proposed = propose;
+
   return [
     {
       rule: "radius-inconsistency",
       confidence: "high",
       severity: "minor",
-      title: `${offenders.length} of ${withRadius.length} sized children of "${n.name}" use a non-standard corner radius`,
+      title: offScale
+        ? `${offendersToReport.length} of ${withRadius.length} sized children of "${n.name}" use a corner radius that is not on the ${RADIUS_SCALE.slice(0, 4).join("/")}px scale`
+        : `${offendersToReport.length} of ${withRadius.length} sized children of "${n.name}" use a different corner radius than their siblings`,
       evidence: {
+        scale: RADIUS_SCALE.slice(0, 4).join("/") + "px",
         majorityRadius: majority,
+        majorityOnScale: majorityIsOnScale,
+        kind: offScale ? "off-scale" : "sibling-divergence",
         otherRadii: otherValues,
-        offenders: offenders.map((o) => `${o.name}=${o.radius}px`).join(", "),
+        circularExcluded: circular.map((o) => `${o.name}=${o.radius}px (circular)`).join(", ") || null,
+        offenders: offendersToReport.map((o) => `${o.name}=${o.radius}px`).join(", "),
       },
-      nodeIds: offenders.map((o) => o.id),
+      nodeIds: offendersToReport.map((o) => o.id),
       suggestedOperations: validated(
-        offenders.map((o) => ({ type: "setCornerRadius", target: o.id, radius: majority })),
+        offendersToReport.map((o) => ({ type: "setCornerRadius", target: o.id, radius: proposed(o.radius) })),
       ),
-      guidance: `Align these to the ${majority}px radius their siblings use.`,
+      guidance: offScale
+        ? `Snap these to the documented scale step nearest their current value (${offendersToReport
+            .map((o) => `${o.radius}->${proposed(o.radius)}`)
+            .join(", ")}), or adopt a scale for this file if these values are deliberate.`
+        : `Align these to the ${majority}px radius their siblings use, or keep them if the difference is a deliberate hierarchy.`,
     },
   ];
 }
@@ -643,21 +684,98 @@ function colorOnlyState(n: NodeMetrics, c: Ctx): Finding[] {
 
 const MONO_FAMILIES = /mono|menlo|consolas|courier|sFMono|jetbrains|code/i;
 
-/** Technical text set below a readable size. */
+/**
+ * Whether a string carries information a user has to read.
+ *
+ * ## Why this exists
+ *
+ * Issue #11 found a homepage where the reviewer flagged twelve 9px technical
+ * labels as too small — correctly, because they were latencies and shard
+ * assignments, which are operational data and not decoration. But the rule had no
+ * way to tell those from a 9px caption marking a decorative boundary, so the
+ * only honest-looking response was to flag every one of them and say nothing
+ * about what to change.
+ *
+ * So text is classified, and the classification decides the minimum. An
+ * identifier, a latency, a count or a status is operational: it is read, not
+ * glanced at, so it must clear the readable baseline. A caption or a separator
+ * label is annotation: it is texture supporting something else, so a smaller size
+ * is a legitimate choice and no finding is raised.
+ */
+type TextRole = "operational" | "annotation";
+
+const OPERATIONAL_HINT =
+  /\b\d+(?:\.\d+)?\s*(?:ms|s|%|mb|gb|tb|k|pb|b|f|x)?\b|\d+\s*[×x]\s*[a-z0-9]+|\b(?:ok|error|warn|fail(?:ed)?|online|offline|degraded|healthy|ready|busy|idle|pending|running|stopped|primary|replica|latency|throughput|shards?|nodes?|devices?|cluster|gpu|cpu|vram|ram|memory|tokens?\/s)\b|^\s*[-#]?\s*[a-z]{2,}[-_a-z0-9]*[-_a-z0-9]+\s*$/i;
+
+const ANNOTATION_HINT = /\b(?:axis|caption|legend|figure|table|note|footnote|section|scroll|hint|label|separator|divider|gridline)\b/i;
+
+function classifyTextRole(content: string, name: string): TextRole {
+  const text = `${name} ${content}`;
+  // An annotation hint wins over an incidental digit: "Grid 12 columns" is a
+  // caption, even though it contains a number.
+  if (ANNOTATION_HINT.test(text)) return "annotation";
+  if (OPERATIONAL_HINT.test(text)) return "operational";
+  // A bare short uppercase tag ("ONLINE", "PRIMARY") is state a user reads.
+  if (content.length <= 24 && /^[A-Z0-9][A-Z0-9 \-./]*$/.test(content.trim())) return "operational";
+  return "annotation";
+}
+
+/**
+ * Minimum size for a role.
+ *
+ * Operational data must be readable at 100% zoom with no effort: 11px is the
+ * floor the existing rule used. Annotation may go smaller, because it is not
+ * meant to be read closely — but it still gets a floor, below which it stops
+ * being texture and starts being noise.
+ */
+const MIN_SIZE: Record<TextRole, number> = { operational: 11, annotation: 9 };
+
+/** Technical text set below the readable minimum for its role. */
 function tinyTechnicalText(n: NodeMetrics): Finding[] {
   if (n.type !== "TEXT" || !n.text) return [];
-  if (n.text.size === null || n.text.size >= 11) return [];
+  if (n.text.size === null || n.text.size === undefined) return [];
   if (!n.text.family || !MONO_FAMILIES.test(n.text.family)) return [];
+
+  const content = n.text.content.trim();
+  if (content.length === 0) return [];
+
+  const role = classifyTextRole(content, n.name);
+  const minimum = MIN_SIZE[role];
+  if (n.text.size >= minimum) return [];
+
+  // The recommended size is the floor, not the next step up: the rule reports
+  // illegibility, and silently enlarging a layer changes the layout the designer
+  // measured.
+  const proposed = minimum;
 
   return [
     {
       rule: "tiny-technical-text",
-      confidence: "medium",
-      severity: "minor",
-      title: `Monospaced text at ${n.text.size}px is below the readable minimum`,
-      evidence: { size: n.text.size, family: n.text.family, minimum: 11, content: n.text.content.slice(0, 40) },
+      confidence: role === "operational" ? "high" : "low",
+      severity: role === "operational" ? "serious" : "minor",
+      title:
+        role === "operational"
+          ? `Operational text at ${n.text.size}px is below the readable minimum of ${minimum}px`
+          : `Annotation text at ${n.text.size}px is below the ${minimum}px floor for its role`,
+      evidence: {
+        size: n.text.size,
+        family: n.text.family,
+        minimum,
+        role,
+        reasoning:
+          role === "operational"
+            ? "this text carries data a user has to read, not decoration"
+            : "this text annotates something else, so a smaller size is a legitimate choice",
+        content: content.slice(0, 40),
+      },
       nodeIds: [n.id],
-      guidance: "Minimum readable technical text is 11px. Identifiers and latencies smaller than that are texture, not information.",
+      // A concrete fix rather than advice. The previous rule had no operation at
+      // all, which is why the repair loop skipped all twelve of them.
+      suggestedOperations: validated([{ type: "setTextStyle", target: n.id, fontSize: proposed }]),
+      guidance:
+        role === "operational"
+          ? `Raise this to ${proposed}px. It is ${content.slice(0, 30)}, which a user has to read — at ${n.text.size}px it is texture, not information.`
+          : `This is annotation, so ${n.text.size}px is defensible down to ${minimum}px. If it must stay smaller, consider removing it.`,
     },
   ];
 }

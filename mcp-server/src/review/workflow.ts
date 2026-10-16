@@ -531,10 +531,73 @@ export const RefineArgs = z
   })
   .strict();
 
+/**
+ * What happened to one finding, stated rather than implied.
+ *
+ * Issue #11: the loop "applied 12 contrast fixes but skipped 22 other findings
+ * because no operation was available. It must distinguish a completed operation
+ * from verified quality convergence." A single `applied: 12` figure cannot carry
+ * that — it reads as "the screen is fixed" when 22 findings are untouched, and a
+ * reader has no way to tell which is which.
+ */
+export type Disposition =
+  /** An operation was applied and the finding is gone on re-measurement. */
+  | "fixed"
+  /** An operation was applied and the finding is still there. */
+  | "fix-did-not-resolve"
+  /** High-confidence, but the rule proposes no operation. Needs a human or a better rule. */
+  | "not-auto-fixable"
+  /** Held back by preserve[], the approval gate, or a failed transaction. */
+  | "blocked"
+  /** Below the auto-apply confidence threshold; a judgement call. */
+  | "needs-human";
+
 interface RefineSkip {
   rule: string;
   /** Why this finding could not be repaired automatically. */
   reason: string;
+}
+
+export interface FindingDisposition {
+  rule: string;
+  disposition: Disposition;
+  /** The nodes the finding is about. */
+  targets: string[];
+  /** What was proposed, in the author's terms. */
+  proposedChange: string | null;
+  /** Why it was or was not applied. */
+  reason: string;
+  /** The measurements that triggered the finding. */
+  before: Record<string, unknown> | null;
+  /** The measurements after the repair ran, when it was applied. */
+  after: Record<string, unknown> | null;
+  confidence: Finding["confidence"];
+}
+
+/** One-line summary of what an operation would do, for a human to judge. */
+function describeChange(f: Finding): string | null {
+  const ops = f.suggestedOperations ?? [];
+  if (ops.length === 0) return null;
+  return ops
+    .map((op) => {
+      const o = op as unknown as Record<string, unknown>;
+      const target = String(o.target ?? o.id ?? "?");
+      switch (o.type) {
+        case "setFill":
+          return `set ${target} fill to ${String(o.fill)}`;
+        case "setCornerRadius":
+          return `set ${target} radius to ${String(o.radius)}px`;
+        case "setTextStyle":
+          return `set ${target} to ${String(o.fontSize ?? o.size)}px`;
+        case "setOpacity":
+          return `set ${target} opacity to ${String(o.opacity)}`;
+        case "renameNode":
+          return `rename ${target}`;
+        default:
+          return `${String(o.type)} on ${target}`;
+      }
+    })
+    .join("; ");
 }
 
 /**
@@ -552,6 +615,23 @@ function skipReason(f: Finding, preserve: Set<string>): string {
   return `confidence '${f.confidence}' is below the auto-apply threshold`;
 }
 
+/** Stable identity for a finding across re-measurements. */
+const findingKey = (f: Finding): string => `${f.rule}:${[...f.nodeIds].sort().join(",")}`;
+
+/**
+ * The measurements worth carrying from one measurement of a finding.
+ *
+ * Kept small on purpose: the point is to show whether the number that triggered
+ * the finding moved, not to mirror the whole evidence object twice.
+ */
+function evidenceSnapshot(f: Finding): Record<string, unknown> {
+  const e = (f.evidence ?? {}) as Record<string, unknown>;
+  const keep = ["ratio", "required", "size", "minimum", "role", "spills", "overlaps", "majorityRadius", "distance"];
+  const out: Record<string, unknown> = {};
+  for (const key of keep) if (e[key] !== undefined) out[key] = e[key];
+  return out;
+}
+
 interface RefineIteration {
   iteration: number;
   highConfidenceFindings: number;
@@ -561,6 +641,8 @@ interface RefineIteration {
   remainingHigh: number;
   /** What this iteration observed, recorded so the accounting matches the trace. */
   observed: string;
+  /** Findings verified gone on the re-measurement that followed this iteration. */
+  verified: number;
 }
 
 export async function refineScreenTool(session: Session | null, rawArgs: unknown): Promise<unknown> {
@@ -591,15 +673,48 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   }
 
   let converged = false;
+  const dispositions = new Map<string, FindingDisposition>();
+
   for (let i = 1; i <= args.maxIterations; i++) {
     const raw = (await session.request("collect_metrics", target)) as MetricsReport;
-    const findings = runRules(raw, "review").filter((f) => f.confidence === "high");
+    const allFindings = runRules(raw, "review");
+    const findings = allFindings.filter((f) => f.confidence === "high");
 
     // Preserve list applies to node ids and to rule names: either skips a fix.
     const actionable = findings.filter(
       (f) => !preserve.has(f.rule) && f.suggestedOperations && f.suggestedOperations.length > 0 && !f.nodeIds.some((id) => preserve.has(id)),
     );
     const skipped: RefineSkip[] = findings.filter((f) => !actionable.includes(f)).map((f) => ({ rule: f.rule, reason: skipReason(f, preserve) }));
+
+    // Every high-confidence finding gets a disposition, including the ones a
+    // previous iteration already fixed — those are what makes "converged" a claim
+    // rather than an assertion.
+    for (const f of actionable) {
+      dispositions.set(findingKey(f), {
+        rule: f.rule,
+        disposition: "blocked",
+        targets: f.nodeIds,
+        proposedChange: describeChange(f),
+        reason: "queued for this iteration",
+        before: evidenceSnapshot(f),
+        after: null,
+        confidence: f.confidence,
+      });
+    }
+    for (const f of findings.filter((f) => !actionable.includes(f))) {
+      const key = findingKey(f);
+      if (dispositions.has(key)) continue;
+      dispositions.set(key, {
+        rule: f.rule,
+        disposition: preserve.has(f.rule) || f.nodeIds.some((id) => preserve.has(id)) ? "blocked" : (f.suggestedOperations?.length ?? 0) === 0 ? "not-auto-fixable" : "needs-human",
+        targets: f.nodeIds,
+        proposedChange: describeChange(f),
+        reason: skipReason(f, preserve),
+        before: evidenceSnapshot(f),
+        after: null,
+        confidence: f.confidence,
+      });
+    }
 
     if (actionable.length === 0) {
       iterations.push({
@@ -609,6 +724,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         appliedRules: [],
         skipped,
         remainingHigh: findings.length,
+        verified: 0,
         observed: `${findings.length} high-confidence finding(s), none with an applicable fix`,
       });
       converged = findings.length === 0;
@@ -625,6 +741,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       return {
         status: "needs-approval",
         iterations,
+        dispositions: [...dispositions.values()],
         question: gate.question,
         ifApproved: gate.ifApproved,
         instead: gate.instead,
@@ -638,6 +755,13 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     })) as { status?: string; error?: { message?: string } };
 
     if (applied.status !== "success") {
+      for (const key of actionable.map(findingKey)) {
+        const d = dispositions.get(key);
+        if (d) {
+          d.disposition = "blocked";
+          d.reason = `the fix transaction failed: ${applied.error?.message ?? "no error detail"}`;
+        }
+      }
       iterations.push({
         iteration: i,
         highConfidenceFindings: findings.length,
@@ -645,11 +769,13 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         appliedRules: [],
         skipped,
         remainingHigh: findings.length,
+        verified: 0,
         observed: `the fix transaction failed: ${applied.error?.message ?? "no error detail"}`,
       });
       return {
         status: "fix-failed",
         iterations,
+        dispositions: [...dispositions.values()],
         error: applied.error?.message ?? "the fix transaction failed",
         howToProceed: "Inspect the target and fix by hand, or narrow preserve[] and retry.",
       };
@@ -662,15 +788,39 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       appliedRules: actionable.map((f) => f.rule),
       skipped,
       remainingHigh: -1,
+      verified: 0,
       observed: `${actionable.length} fix(es) committed, re-measuring`,
     });
 
-    if (i === args.maxIterations) break;
-
-    // Re-review to see what is left; the next iteration decides from evidence.
+    // Re-measure and check each fix individually. "The operations executed" is
+    // not "the finding is gone": a setFill on the wrong node, or a node the
+    // client cannot read back, both execute cleanly and fix nothing. Only a
+    // re-measurement can tell them apart, so it is not optional.
     const recheck = (await session.request("collect_metrics", target)) as MetricsReport;
-    const remaining = runRules(recheck, "review").filter((f) => f.confidence === "high").length;
+    const after = new Map(runRules(recheck, "review").map((f) => [findingKey(f), f]));
+    let verified = 0;
+
+    for (const f of actionable) {
+      const d = dispositions.get(findingKey(f));
+      if (!d) continue;
+      const still = after.get(findingKey(f));
+      if (still) {
+        d.disposition = "fix-did-not-resolve";
+        d.after = evidenceSnapshot(still);
+        d.reason = "the operation was applied but the finding is still reported on re-measurement";
+      } else {
+        d.disposition = "fixed";
+        d.after = null;
+        d.reason = "applied and no longer reported on re-measurement";
+        verified += 1;
+      }
+    }
+
+    iterations[iterations.length - 1]!.verified = verified;
+    const remaining = [...after.values()].filter((f) => f.confidence === "high").length;
     iterations[iterations.length - 1]!.remainingHigh = remaining;
+
+    if (i === args.maxIterations) break;
     if (remaining === 0) {
       converged = true;
       break;
@@ -681,11 +831,29 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   const last = iterations[iterations.length - 1];
   const outstanding = last?.remainingHigh ?? 0;
   const blocked = last?.skipped ?? [];
+  const all = [...dispositions.values()];
+
+  // Overflow is the one class the issue calls out by name: a screen whose
+  // geometry is broken is not converged, whatever its contrast count says.
+  const stillOverflowing = all.filter((d) => d.disposition !== "fixed" && d.rule === "overflow");
+  const structuralOutstanding = stillOverflowing.length + all.filter((d) => d.disposition === "fix-did-not-resolve").length;
+  if (structuralOutstanding > 0) converged = false;
+
+  const counts: Record<string, number> = {};
+  for (const d of all) counts[d.disposition] = (counts[d.disposition] ?? 0) + 1;
 
   return {
     status: converged ? "converged" : "budget-exhausted",
     iterations,
     visualGoals: goals,
+    /**
+     * One line per finding: what it was, what was done, and what was measured
+     * afterwards. This is the artefact that makes the loop auditable — a caller
+     * can tell "fixed and verified" from "could not be fixed" without re-running
+     * anything.
+     */
+    dispositions: all,
+    dispositionCounts: counts,
     // The summary counts iterations that actually ran, not the budget. The old
     // message interpolated `maxIterations`, so a loop that broke after one
     // unfixable review reported "after 3 iterations" — hard stress test #10 saw
@@ -695,7 +863,15 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       iterationBudget: args.maxIterations,
       highConfidenceRemaining: outstanding,
       skippedFixes: blocked.length,
+      fixed: counts["fixed"] ?? 0,
+      unresolvedStructural: structuralOutstanding,
     },
+    ...(stillOverflowing.length > 0
+      ? {
+          unresolvedOverflow: stillOverflowing.map((d) => ({ rule: d.rule, targets: d.targets, reason: d.reason })),
+          note: "Overflow is still reported. This screen is not converged, regardless of how many contrast findings were fixed.",
+        }
+      : {}),
     ...(blocked.length > 0
       ? {
           whyNothingWasApplied: blocked.map((s) => `${s.rule}: ${s.reason}`),

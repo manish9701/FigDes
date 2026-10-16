@@ -93,6 +93,47 @@ export const CornerRadiusSchema = z.union([
   }),
 ]);
 
+/* -------------------------------------------------------------------------- */
+/* Corner radius scale                                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The project's corner-radius steps.
+ *
+ * Issue #11 found a screen carrying 3px, 5px and 6px radii with no way to tell a
+ * deliberate hierarchy from drift, and the reviewer's only lever was "make every
+ * sibling match the majority", which is wrong whenever the file genuinely uses
+ * several steps. A named scale makes the question answerable: a radius is
+ * inconsistent when it is *off-scale*, and a file's own scale can be adopted when
+ * it already has one.
+ *
+ * Steps are multiples of the base unit because radius is spacing. 0, 4, 8, 12
+ * and full are the five that cover sharp, subtle, soft, card and pill — anything
+ * else is a value someone typed rather than chose.
+ */
+export const RADIUS_SCALE = [0, 4, 8, 12, 999] as const;
+
+/** The "pill" sentinel: half the shorter side, which Figma expresses per corner. */
+export const RADIUS_FULL = 999;
+
+/** True when a radius sits on the scale, allowing any full/pill size. */
+export function isOnRadiusScale(radius: number): boolean {
+  if (radius >= RADIUS_FULL) return true;
+  return (RADIUS_SCALE as readonly number[]).includes(radius);
+}
+
+/** The nearest documented step, for a repair that has to pick one. */
+export function nearestRadiusStep(radius: number): number {
+  if (radius <= 2) return 0;
+  const steps = RADIUS_SCALE.filter((s) => s < RADIUS_FULL) as readonly number[];
+  if (steps.length === 0) return 0;
+  let best = steps[0]!;
+  for (const step of steps) {
+    if (Math.abs(step - radius) < Math.abs(best - radius)) best = step;
+  }
+  return best;
+}
+
 export const PaddingSchema = z.union([
   z.number().min(0).max(100000),
   z.object({

@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-10-16T11:18:50.991Z",
+  "generatedAt": "2026-10-16T11:31:08.404Z",
   "totals": {
-    "total": 16,
-    "pass": 13,
+    "total": 18,
+    "pass": 15,
     "fail": 0,
     "blocked": 3
   },
@@ -231,6 +231,45 @@
           "stage @ 252,299 868x601",
           "inspector @ 1120,0 320x900"
         ]
+      }
+    },
+    {
+      "id": "X14-nav",
+      "title": "A tall nav rail stacks; only a short bar runs its destinations across",
+      "group": "compiler",
+      "requirement": "A 220x900 side rail puts its four nav items in a column; a 72px footer bar puts them in a row.",
+      "status": "PASS",
+      "detail": "rail stacks, bar runs across",
+      "raw": {
+        "rail": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "nav @ 0,0 220x900",
+            "body @ 252,0 1188x900"
+          ]
+        },
+        "bar": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "nav @ 0,0 1440x72",
+            "body @ 0,104 1440x796"
+          ]
+        }
+      }
+    },
+    {
+      "id": "X15-endpoint",
+      "title": "A route inside a region is not reported as ending inside its own container",
+      "group": "guardrails",
+      "requirement": "The endpoint rule matches connection targets only, never an ancestor of the route.",
+      "status": "PASS",
+      "detail": "ancestors are excluded from endpoint matching",
+      "raw": {
+        "findings": []
       }
     },
     {

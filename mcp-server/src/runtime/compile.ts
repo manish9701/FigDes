@@ -1025,13 +1025,24 @@ function emitContent(args: {
   // hug nav item then draws at its own width inside its own column, which keeps
   // the rhythm even and leaves the rail left-aligned rather than stretched.
   const flowing = [...textItems, ...components];
+  // Destinations run across only when they are a *bar*. A region of nav items
+  // that is tall is a rail and must stack: the live apply rendered a 220x900
+  // side rail with four tabs crammed into the top 36px, the second hidden behind
+  // the active pill, because "all nav items go in one row" had no idea which of
+  // the two it was looking at.
+  //
+  // A bar is a footer, or any navigation region short enough to be one — a
+  // mobile bottom nav. A rail is `height: "fill"` or a tall fixed height, and
+  // stacks. Issue #12 fixed the mobile case and this widens it back to only the
+  // mobile case.
   const allNav = flowing.length > 0 && flowing.every((c) => c.kind === "component" && c.type === "navItem");
+  const navIsBar = region.role === "footer" || (typeof region.height === "number" && region.height <= 120);
   // Prose is one column. A grid grant exists to arrange *cards and rows* side by
   // side; handing the same three columns to a region's text made a single body
   // paragraph resolve 114px wide on a 390px phone (issue #12, R2/A9: narrow
   // typography stress). A region with no components has nothing to grid.
   const allText = flowing.length > 0 && flowing.every((c) => c.kind === "text");
-  const columns = region.columns ?? (allNav ? Math.max(1, flowing.length) : !grantGrid || allRows || allText ? 1 : 3);
+  const columns = region.columns ?? (allNav && navIsBar ? Math.max(1, flowing.length) : !grantGrid || allRows || allText ? 1 : 3);
   const requested = region.layout;
 
   /* --- graphics routed through a §17 algorithm ---------------------------- */

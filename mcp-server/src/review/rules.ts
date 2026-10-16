@@ -1446,11 +1446,27 @@ function connectorEndpointAmbiguous(n: NodeMetrics, c: Ctx): Finding[] {
 
   // One pixel of slack, so a line that lands exactly on the boundary is fine.
   const INSIDE = 1;
+
+  // A route's own ancestors are not connection targets.
+  //
+  // Every endpoint is inside them by definition — a connector inside a topology
+  // region necessarily ends inside that region — so without this the rule
+  // reported its own container on every single connection. The live apply
+  // produced exactly that: `Route "orthogonal connector n0 -> n1" ends 83px
+  // inside "Topology"`, where Topology is the connector's parent frame and not
+  // a node it could ever be anchoring to.
+  const ancestors = new Set<string>();
+  for (let p = n.parentId, hops = 0; p && hops < 32; hops++) {
+    ancestors.add(p);
+    p = c.byId.get(p)?.parentId ?? null;
+  }
+
   const hits: Array<{ node: NodeMetrics; end: { x: number; y: number; side: string }; depth: number }> = [];
 
   for (const end of ends) {
     for (const s of siblings) {
       if (s.id === n.id || s.type === "TEXT") continue;
+      if (ancestors.has(s.id)) continue;
       // Only a substantial node can be an anchor. Rules and labels are furniture.
       if (s.w < 40 || s.h < 24) continue;
       const insideX = end.x > s.x + INSIDE && end.x < s.x + s.w - INSIDE;

@@ -509,6 +509,95 @@ export const CASES = [
     },
   },
 
+  {
+    id: "X14-nav",
+    title: "A tall nav rail stacks; only a short bar runs its destinations across",
+    group: "compiler",
+    requirement: "A 220x900 side rail puts its four nav items in a column; a 72px footer bar puts them in a row.",
+    run: () => {
+      const build = (role, height) => {
+        const items = ["Overview", "Fleet", "Models", "Runs"].map((label, i) =>
+          component(`tab-${i}`, { type: "navItem", props: { label, ...(i === 0 ? { state: "active" } : {}) } }),
+        );
+        return {
+          canvas: canvas({ name: "X14 Nav", width: 1440, height: 900 }),
+          regions: [
+            region({ id: "nav", role, width: role === "navigation" ? 220 : "fill", height, padding: 16, children: items.map((i) => i.id) }),
+            region({ id: "body", role: "content", width: "fill", height: "fill", children: [] }),
+          ],
+          content: items,
+          relations: [],
+          tokens: [],
+          links: [],
+        };
+      };
+
+      // Rail: tall, so the items must stack.
+      const rail = compileCase(build("navigation", "fill"), (r) => {
+        const nav = r.regions.find((x) => x.id === "nav");
+        const items = nav ? nav.children.map((id) => r.boxes.get(id)).filter(Boolean) : [];
+        const ys = [...new Set(items.map((b) => Math.round(b.y)))];
+        const xs = [...new Set(items.map((b) => Math.round(b.x)))];
+        const navInner = nav ? nav.w - 32 : 0;
+        const tooWide = items.filter((b) => b.x + b.w > navInner + 1);
+        return [
+          items.length !== 4 ? [`expected 4 nav items, got ${items.length}`] : [],
+          ys.length !== 4 ? `a ${Math.round(nav?.h ?? 0)}px rail put its 4 items on ${ys.length} rows (${ys.join(", ")}) — a rail stacks` : null,
+          xs.length !== 1 ? `the rail's items are spread across ${xs.length} columns` : null,
+          tooWide.length > 0 ? `${tooWide.length} nav item(s) extend past the 220px rail: ${tooWide.map((b) => `${Math.round(b.x)}..${Math.round(b.x + b.w)}`).join(", ")}` : null,
+        ].flat().filter(Boolean);
+      });
+
+      // Bar: short, so the items must run across.
+      const bar = compileCase(build("footer", 72), (r) => {
+        const nav = r.regions.find((x) => x.id === "nav");
+        const items = nav ? nav.children.map((id) => r.boxes.get(id)).filter(Boolean) : [];
+        const ys = [...new Set(items.map((b) => Math.round(b.y)))];
+        return [
+          items.length !== 4 ? [`expected 4 nav items, got ${items.length}`] : [],
+          ys.length !== 1 ? `a 72px footer bar put its 4 items on ${ys.length} rows — a bottom nav is one row` : null,
+        ].flat().filter(Boolean);
+      });
+
+      return {
+        status: rail.status === "PASS" && bar.status === "PASS" ? "PASS" : "FAIL",
+        detail:
+          rail.status === "PASS" && bar.status === "PASS"
+            ? "rail stacks, bar runs across"
+            : [rail.detail, bar.detail].filter((d) => d !== "all expectations met").join(" | "),
+        raw: { rail: rail.raw, bar: bar.raw },
+      };
+    },
+  },
+
+  {
+    id: "X15-endpoint",
+    title: "A route inside a region is not reported as ending inside its own container",
+    group: "guardrails",
+    requirement: "The endpoint rule matches connection targets only, never an ancestor of the route.",
+    run: () => {
+      const nodes = [
+        node({ id: "frame", name: "Screen", type: "FRAME", depth: 0, x: 0, y: 0, w: 1440, h: 900 }),
+        node({ id: "topology", parentId: "frame", depth: 1, name: "Topology", type: "FRAME", x: 0, y: 300, w: 868, h: 569, fill: "#FFFFFF" }),
+        // A connector drawn inside the topology: both its endpoints are inside
+        // its parent by definition, which is not ambiguity.
+        node({ id: "route", parentId: "topology", depth: 2, name: "orthogonal connector n0 -> n1", type: "VECTOR", x: 20, y: 20, w: 200, h: 2 }),
+        node({ id: "n0", parentId: "topology", depth: 2, name: "mac-mini-01", type: "FRAME", x: 20, y: 60, w: 128, h: 80, fill: "#FFFFFF" }),
+      ];
+      const findings = runRules(report(nodes), "review");
+      const hits = of(findings, "connector-endpoint-ambiguous");
+      const onParent = hits.filter((f) => f.evidence?.targetId === "topology");
+      const unmet = [
+        onParent.length > 0 ? `${onParent.length} finding(s) reported the route ending inside its own parent region "Topology"` : null,
+      ].filter(Boolean);
+      return {
+        status: unmet.length === 0 ? "PASS" : "FAIL",
+        detail: unmet.length === 0 ? "ancestors are excluded from endpoint matching" : unmet.join("; "),
+        raw: { findings: findings.map((f) => `${f.rule} [${f.nodeIds.join(",")}]`) },
+      };
+    },
+  },
+
   /* ---- review-engine counterparts --------------------------------------- */
   {
     id: "X09-route",

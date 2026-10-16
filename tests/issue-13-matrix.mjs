@@ -39,6 +39,19 @@ const node = (o) => ({ visible: true, depth: 1, parentId: "root", x: 0, y: 0, w:
 const report = (nodes) => ({ target: "root", scope: "root", nodeCount: nodes.length, nodes });
 const of = (findings, rule) => findings.filter((f) => f.rule === rule);
 
+/** WCAG relative luminance contrast, for asserting on emitted colours. */
+function contrastOf(a, b) {
+  const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const lum = (hex) => {
+    const h = /^#?([0-9a-f]{6})$/i.exec(hex.trim())?.[1];
+    if (!h) return 0;
+    const [r, g, bl] = [0, 2, 4].map((i) => lin(parseInt(h.slice(i, i + 2), 16) / 255));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const la = lum(a), lb = lum(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 /** Compile and judge. `assert` returns the unmet expectations. */
 function compileCase(ir, assert) {
   const result = compileIR(ir);
@@ -726,6 +739,86 @@ export const CASES = [
           chain: { applicable: chain.applicable, xs: [a && Math.round(a.x), b && Math.round(b.x), c && Math.round(c.x)] },
           vectors: { applicable: vectors.applicable, operations: vectors.stats.operationCount },
         },
+      };
+    },
+  },
+  {
+    id: "X16-generated",
+    title: "Generated components are readable: contrast follows the surface, data clears 11px, padding is on scale",
+    group: "compiler",
+    requirement:
+      "A nav label on a dark rail meets WCAG AA, device memory text is at least 11px, and status pill padding is a multiple of the base unit.",
+    run: () => {
+      const ir = {
+        canvas: canvas({ name: "X16 Generated", width: 1440, height: 900 }),
+        regions: [
+          region({ id: "nav", role: "navigation", width: 220, height: "fill", fill: "#111111", padding: 16, children: ["nav-0"] }),
+          region({ id: "stage", role: "primary-visual", composition: "canvas", width: "fill", height: "fill", padding: 24, children: ["dev-0", "pill-0"] }),
+        ],
+        content: [
+          component("nav-0", { type: "navItem", props: { label: "Fleet" } }),
+          component("dev-0", { type: "deviceNode", props: { label: "mac-mini-01", health: "healthy", memory: "64 GB" } }),
+          component("pill-0", { type: "statusPill", props: { label: "Healthy", tone: "ok" } }),
+        ],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const ops = r.operations || [];
+        const unmet = [];
+
+        // The nav label is measured against the rail it is actually drawn on.
+        const navLabel = ops.find((o) => o.type === "createText" && o.parent === "nav-0");
+        if (!navLabel) unmet.push("no label operation for the nav item");
+        else if (typeof navLabel.fill === "string" && contrastOf(navLabel.fill, "#111111") < 4.5) {
+          unmet.push(`nav label ${navLabel.fill} on the #111111 rail measures ${contrastOf(navLabel.fill, "#111111").toFixed(2)}:1, under the 4.5:1 minimum`);
+        }
+
+        // Device memory text is operational data, not annotation.
+        const memory = ops.find((o) => o.type === "createText" && /GB/.test(String(o.content ?? "")));
+        if (!memory) unmet.push("no memory label operation on the device node");
+        else if (typeof memory.fontSize === "number" && memory.fontSize < 11) {
+          unmet.push(`device memory label is ${memory.fontSize}px, under the 11px readable floor`);
+        }
+
+        // Padding sits on the base unit.
+        const pad = ops.find((o) => o.id === "pill-0")?.padding;
+        if (!pad || typeof pad !== "object") unmet.push("no padding on the status pill");
+        else {
+          const off = Object.values(pad).filter((v) => typeof v === "number" && v % 4 !== 0);
+          if (off.length > 0) unmet.push(`status pill padding ${JSON.stringify(pad)} is off the 4px scale`);
+        }
+
+        return unmet;
+      });
+    },
+  },
+  {
+    id: "X17-autolayout",
+    title: "A text child of an auto-layout frame is reported only when the file says it is pinned",
+    group: "guardrails",
+    requirement: "Auto-layout children report absolute coordinates by nature, so the rule must not fire on every one of them.",
+    run: () => {
+      const nodes = [
+        node({ id: "frame", name: "Overview", type: "FRAME", depth: 0, x: 0, y: 0, w: 120, h: 36, layoutMode: "HORIZONTAL" }),
+        // An ordinary child: Figma reports absolute x/y for it, which is not a
+        // defect and was previously reported as one on every single child.
+        node({ id: "auto", parentId: "frame", depth: 1, name: "Label", type: "TEXT", x: 12, y: 8, w: 63, h: 17, layoutPositioning: "AUTO", text: { content: "Overview", color: "#111111", size: 14, style: "Regular", family: "Inter", styled: true, length: 8 } }),
+        // A genuinely pinned child.
+        node({ id: "pinned", parentId: "frame", depth: 1, name: "Badge", type: "TEXT", x: 90, y: 2, w: 20, h: 12, layoutPositioning: "ABSOLUTE", text: { content: "3", color: "#111111", size: 9, style: "Regular", family: "Inter", styled: true, length: 1 } }),
+      ];
+      const findings = runRules(report(nodes), "review");
+      const hits = of(findings, "text-outside-autolayout");
+      const flagged = (f) => (f.nodeIds || []).join(",");
+      const unmet = [
+        hits.some((f) => flagged(f) === "auto") ? "an ordinary auto-layout child was reported as absolutely positioned" : null,
+        hits.length !== 1 || flagged(hits[0]) !== "pinned" ? `expected only the pinned child, got ${hits.length}: ${hits.map(flagged).join(",") || "none"}` : null,
+      ].filter(Boolean);
+      return {
+        status: unmet.length === 0 ? "PASS" : "FAIL",
+        detail: unmet.length === 0 ? "one pinned child reported, ordinary children silent" : unmet.join("; "),
+        raw: { findings: findings.map((f) => `${f.rule} [${flagged(f)}]`) },
       };
     },
   },

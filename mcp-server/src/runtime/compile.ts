@@ -1508,7 +1508,7 @@ function emitComponent(
           height: hugSize(spec, grid, typeScale, look)?.h ?? 22,
           fill: p.surface !== undefined ? str("surface", tone.bg) : tone.bg,
           cornerRadius: grid,
-          padding: { top: 2, right: grid, bottom: 2, left: grid },
+          padding: { top: 4, right: grid, bottom: 4, left: grid },
           layoutMode: "HORIZONTAL",
         }),
       );
@@ -1546,16 +1546,16 @@ function emitComponent(
       );
       operations.push(op({ type: "createText", parent: spec.id, name: "Device", content: str("label", "Device"), fontSize: fs(12), weight: 600, fill: "#242521" }));
       if (str("memory")) {
-        operations.push(op({ type: "createText", parent: spec.id, name: "Memory", content: str("memory"), fontSize: fs(10), family: "JetBrains Mono", fill: "#6F716A" }));
+        operations.push(op({ type: "createText", parent: spec.id, name: "Memory", content: str("memory"), fontSize: fs(11), family: "JetBrains Mono", fill: "#6F716A" }));
       }
       // Compute capability and shard assignment ride as caption lines: they are
       // facts about the machine, and facts belong with the machine, not in a
       // tooltip the user never opens.
       if (str("compute")) {
-        operations.push(op({ type: "createText", parent: spec.id, name: "Compute", content: str("compute"), fontSize: fs(10), family: "JetBrains Mono", fill: "#6F716A" }));
+        operations.push(op({ type: "createText", parent: spec.id, name: "Compute", content: str("compute"), fontSize: fs(11), family: "JetBrains Mono", fill: "#6F716A" }));
       }
       if (str("shard")) {
-        operations.push(op({ type: "createText", parent: spec.id, name: "Shard", content: `shard ${str("shard")}`, fontSize: fs(10), weight: 500, fill: "#0B6BCB" }));
+        operations.push(op({ type: "createText", parent: spec.id, name: "Shard", content: `shard ${str("shard")}`, fontSize: fs(11), weight: 500, fill: "#0B6BCB" }));
       }
       break;
     }
@@ -1599,7 +1599,16 @@ function emitComponent(
           fontSize: fs(14),
           ...(active ? { weight: 600 } : {}),
           ...(look.navTracking > 0 ? { letterSpacing: look.navTracking } : {}),
-          fill: active ? "#242521" : str("color", "#6F716A"),
+          // A label colour that works on a light surface is invisible on a dark
+          // one. `#6F716A` on white is a quiet secondary; on the `#111111` nav
+          // rail it measured 3.82:1 and failed WCAG AA — a defect in the design
+          // this component generates, not a threshold to lower (issue #14 B1).
+          //
+          // So the default follows the surface it is being drawn on. An explicit
+          // `props.color` still wins: the author knows what they are doing.
+          fill: active
+            ? "#F2C94C"
+            : str("color", onDarkSurface(region) ? "#A8ABA0" : "#6F716A"),
         }),
       );
       break;
@@ -3655,6 +3664,32 @@ function resolvedSize(
     return { ...box, w: Math.min(box.w, Math.round(spec.maxWidth)) };
   }
   return box;
+}
+
+/**
+ * Whether a region is dark enough that its contents need light text.
+ *
+ * Uses relative luminance rather than a hex-black test, so a deep navy rail and
+ * a warm near-black both count, and a mid-grey chrome surface does not. The
+ * threshold is deliberately conservative: a surface at or below 0.2 luminance is
+ * treated as dark, which catches the `#111111` rail without catching the
+ * `#F7F5EF` canvas.
+ *
+ * This is what lets a component pick a readable default instead of forcing every
+ * author to override `props.color` by hand — the live review measured the
+ * generated nav labels at 3.82:1, and lowering the WCAG threshold would have
+ * hidden a real defect rather than fixed it.
+ */
+function onDarkSurface(region: ResolvedRegion): boolean {
+  const fill = region.fill;
+  if (typeof fill !== "string") return false;
+  const hex = /^#([0-9a-f]{6})$/i.exec(fill.trim())?.[1];
+  if (!hex) return false;
+  const toLinear = (c: number): number => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const r = toLinear(parseInt(hex.slice(0, 2), 16) / 255);
+  const g = toLinear(parseInt(hex.slice(2, 4), 16) / 255);
+  const b = toLinear(parseInt(hex.slice(4, 6), 16) / 255);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b <= 0.2;
 }
 
 /**

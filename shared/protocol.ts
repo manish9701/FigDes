@@ -1092,6 +1092,15 @@ export interface NodeMetrics {
   vector?: { subpathCount: number; curveCount: number };
 
   layoutMode?: "NONE" | "HORIZONTAL" | "VERTICAL";
+  /**
+   * Whether this node participates in its parent's auto layout.
+   *
+   * Figma exposes this directly. Without it there is no way to tell a child that
+   * is genuinely pinned from one the layout placed — every auto-layout child
+   * reports absolute coordinates — so rules that care must stay silent rather
+   * than report every child (issue #14, B4/B6).
+   */
+  layoutPositioning?: "AUTO" | "ABSOLUTE";
   itemSpacing?: number;
   padding?: { top: number; right: number; bottom: number; left: number };
   primaryAxisSizing?: string;

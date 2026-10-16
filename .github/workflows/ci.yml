@@ -17,9 +17,28 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Issue #14's definition of done: reports carry the exact commit and the
+      # totals, so a run can be identified afterwards rather than described from
+      # memory. `git rev-parse HEAD` is written into the GITHUB_STEP_SUMMARY with
+      # the counts, which is the artifact that gets quoted.
+      - name: Record what is being tested
+        run: |
+          echo "commit $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "branch  ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
       - run: npm run typecheck
-      - run: npm test
+      - name: Report test totals
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/test.log
+          {
+            echo ""
+            echo "### Test totals"
+            echo ""
+            echo '```'
+            grep -E "^# (tests|pass|fail|cancelled|skipped)" /tmp/test.log | tail -60 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Run design-planning benchmark
         run: npm run benchmark:design
       # Issue #12: the stress matrix is offline, so it runs here. Strict, because

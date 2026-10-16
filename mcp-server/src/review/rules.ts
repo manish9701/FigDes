@@ -1536,13 +1536,28 @@ function textOutsideAutoLayout(n: NodeMetrics, c: Ctx): Finding[] {
   const parent = c.byId.get(n.parentId);
   if (!parent?.layoutMode || parent.layoutMode === "NONE") return [];
 
+  // Only a child the file says is pinned is a finding.
+  //
+  // This used to fire on every text node inside an auto-layout frame, because
+  // auto-layout children *always* report absolute x/y — there is nothing to
+  // compare, so it had no discriminating power at all. The live review of a
+  // 44-node frame returned twenty of these, all of them noise: the layers were
+  // in the layout, and the rule was reporting the thing Figma always returns.
+  //
+  // `layoutPositioning` is the only field that actually says whether a child
+  // opts out of the layout. When it is absent the honest answer is "do not
+  // know", and not knowing is not a finding (issue #14, B4/B6: improve the
+  // rule's precision rather than suppress legitimate ones — this is the
+  // illegitimate kind).
+  if (n.layoutPositioning !== "ABSOLUTE") return [];
+
   return [
     {
       rule: "text-outside-autolayout",
       confidence: "medium",
       severity: "minor",
       title: `"${n.name}" is absolutely positioned inside the auto-layout frame "${parent.name}"`,
-      evidence: { parentLayout: parent.layoutMode, x: round2(n.x), y: round2(n.y) },
+      evidence: { parentLayout: parent.layoutMode, layoutPositioning: n.layoutPositioning, x: round2(n.x), y: round2(n.y) },
       nodeIds: [n.id],
       guidance:
         "Auto layout normally owns child position. Either accept that this one layer is pinned, or restructure so the text takes part in the layout.",

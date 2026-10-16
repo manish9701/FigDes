@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T10:58:33.139Z",
+  "generatedAt": "2026-10-16T11:58:29.308Z",
   "totals": {
     "total": 28,
     "pass": 24,
@@ -314,7 +314,7 @@
         "regions": 5,
         "content": 31,
         "operations": 61,
-        "violations": 2,
+        "violations": 1,
         "blockingViolations": [
           "geometry: Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 884)."
         ]

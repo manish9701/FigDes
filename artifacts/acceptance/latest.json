@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-10-16T11:44:24.629Z",
+  "generatedAt": "2026-10-16T11:58:28.699Z",
   "totals": {
-    "total": 18,
-    "pass": 18,
+    "total": 20,
+    "pass": 20,
     "fail": 0,
     "blocked": 0
   },
@@ -325,6 +325,36 @@
           "applicable": true,
           "operations": 7
         }
+      }
+    },
+    {
+      "id": "X16-generated",
+      "title": "Generated components are readable: contrast follows the surface, data clears 11px, padding is on scale",
+      "group": "compiler",
+      "requirement": "A nav label on a dark rail meets WCAG AA, device memory text is at least 11px, and status pill padding is a multiple of the base unit.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "inapplicableReasons": [],
+        "violations": [],
+        "regions": [
+          "nav @ 0,0 220x900",
+          "stage @ 252,0 1188x900"
+        ]
+      }
+    },
+    {
+      "id": "X17-autolayout",
+      "title": "A text child of an auto-layout frame is reported only when the file says it is pinned",
+      "group": "guardrails",
+      "requirement": "Auto-layout children report absolute coordinates by nature, so the rule must not fire on every one of them.",
+      "status": "PASS",
+      "detail": "one pinned child reported, ordinary children silent",
+      "raw": {
+        "findings": [
+          "text-outside-autolayout [pinned]"
+        ]
       }
     },
     {

@@ -53,14 +53,15 @@ jobs:
           name: figdes-stress-matrix
           path: artifacts/stress-matrix/latest.json
           if-no-files-found: error
-      # Issue #13/#14's acceptance gate. Not --strict while L04 is open: that case
-      # records `create_design` timing out mid-transaction on the hosted MCP
-      # deployment, which is an availability problem rather than a regression, and
-      # a permanently red step teaches people to ignore it. The suite still
-      # asserts L04 keeps reporting FAIL, so it cannot rot unnoticed, and the
-      # report publishes the failure every run. Flip to --strict when L04 closes.
+      # Issue #13/#14's acceptance gate, strict for the same reason as the stress
+      # matrix above. The three open cases are real defects in the compiler and
+      # the reviewer — an invisible active nav label, a region occluded by its
+      # left sibling, a connector with no endpoints — not an availability
+      # problem, so red here is the gate working. They were listed as
+      # infrastructure failures only while the hosted apply was timing out;
+      # L04 closed once the complete frame landed.
       - name: Run acceptance matrix
-        run: npm run acceptance
+        run: npm run acceptance -- --strict
       - name: Upload acceptance report
         uses: actions/upload-artifact@v4
         with:

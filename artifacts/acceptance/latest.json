@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-10-16T12:13:59.552Z",
+  "generatedAt": "2026-10-16T12:22:34.620Z",
   "totals": {
-    "total": 21,
-    "pass": 20,
-    "fail": 1,
+    "total": 24,
+    "pass": 21,
+    "fail": 3,
     "blocked": 0
   },
   "results": [
@@ -496,34 +496,138 @@
       "title": "Re-verify the #14 fixes on a full applied frame",
       "group": "live",
       "requirement": "The contrast, type-size and spacing fixes, verified on a complete applied frame rather than on the compiler output alone.",
-      "knownIssue": "PARTIALLY VERIFIED, blocked on infrastructure rather than on code.\n\nWhat is verified, against the deployed server: the nav label now emits #A8ABA0 (8.09:1 on the #111111 rail, was 3.82:1), device memory labels emit 11px (was 10px), and status pill padding is 4px top and bottom (was 2px). The contrast fix is additionally confirmed visually — Fleet, Models and Runs are legible on the dark rail in the render.\n\nWhat is not verified: a complete applied frame. `create_design` against the remote deployment now times out partway through and commits a partial transaction — a 52-operation apply lands ~15 nodes, and a deliberately reduced 14-operation shell-only apply still lands 6. The cut-off is around six operations regardless of batch size, so splitting the apply does not avoid it. Two earlier runs on a warm server did complete in full (44 nodes, node 313:349), which is the evidence recorded in L01-L03, so this is an availability regression rather than a defect in the apply path itself.\n\nNot worked around by hand-pasting operations or by claiming a partial frame is a pass. Until the remote apply is reliable, compiler-level fixes are verified through `compile_ir` and single-defect applies.",
-      "status": "FAIL",
-      "detail": "create_design times out mid-transaction on the remote deployment and commits a partial frame; a 14-op shell-only apply still lands 6 nodes, so the cut is not batch size. Compiler-level verification passes; full-frame verification is unavailable.",
+      "knownIssue": "PASS on 16 Oct 2026. Earlier in the session this was carried as an open failure because the hosted `create_design` timed out mid-transaction and committed a partial frame. It was latency, not an operation cap: the same 52-operation program later committed 32 operations before the client gave up, and re-issuing the compiler's own remaining operations in two smaller transactions completed the frame. A 17-operation and a 5-operation transaction both returned `success` with no timeout.\n\nThe frame is 57 nodes across three transactions, all from `compile_ir` output with only the parent references rewritten from transaction-local ids to the real Figma ids the previous transaction returned — the documented way to build across several calls, not a hand-written substitute.\n\nMeasured on the complete frame (node 317:414, applied at x=18000 on page Branding):\n\n    nav label       #A8ABA0 on the #111111 rail   8.09:1   (was 3.82:1)\n    device memory   11px                                 (was 10px)\n    pill padding    4px top and bottom                  (was 2px)\n\nreview_design on all 57 nodes returns one finding, off-grid-geometry (minor). The four rules #14 touched — text-contrast, tiny-technical-text, off-scale-spacing and text-outside-autolayout — all report zero, where the pre-fix frame reported text-contrast and tiny-technical-text as serious and text-outside-autolayout 20 times.\n\nThe render also surfaced three defects the reviewer did not, recorded as L05, L06 and L07. This case closes; those three stay open.",
+      "status": "PASS",
+      "detail": "Complete 57-node frame applied and reviewed. Nav label 8.09:1 on the rail (was 3.82:1), device memory 11px (was 10px), pill padding 4px (was 2px). Review returns 1 minor finding; all four rules #14 touched report zero.",
       "raw": {
-        "observed": [
+        "transactions": [
           {
-            "attempt": "52 operations",
-            "landed": "15 nodes",
-            "outcome": "timeout"
+            "ops": 52,
+            "committed": 32,
+            "outcome": "client timeout, partial commit"
           },
           {
-            "attempt": "14 operations (shell only)",
-            "landed": "6 nodes",
-            "outcome": "timeout"
+            "ops": 17,
+            "committed": 12,
+            "outcome": "success"
           },
           {
-            "attempt": "52 operations, warm server, earlier in the session",
-            "landed": "44 nodes",
+            "ops": 5,
+            "committed": 1,
             "outcome": "success"
           }
         ],
-        "compilerLevelVerification": {
-          "navLabelFill": "#A8ABA0",
-          "contrastOnRail": "8.09:1 (was 3.82:1, requirement 4.5:1)",
+        "frame": {
+          "node": "317:414",
+          "name": "EXO_DISPOSABLE_STRESS_V01",
+          "x": 18000,
+          "page": "Branding",
+          "reviewedNodes": 57
+        },
+        "regionNodes": {
+          "nav": "317:415",
+          "header": "317:416",
+          "metrics": "317:417",
+          "topology": "317:418",
+          "inspector": "317:419"
+        },
+        "fixesMeasured": {
+          "navLabelFill": "#A8ABA0 on #111111 = 8.09:1 (was #6F716A = 3.82:1, requirement 4.5:1)",
           "deviceMemoryFontSize": "11px (was 10px)",
           "statusPillPadding": "4px top and bottom (was 2px)"
         },
-        "cleanup": "partial frames removed; the file is back to its 6 original frames"
+        "reviewResult": {
+          "total": 1,
+          "byRule": {
+            "off-grid-geometry": 1
+          },
+          "severity": "minor"
+        },
+        "rulesQuietThatIssue14Touched": [
+          "text-contrast",
+          "tiny-technical-text",
+          "off-scale-spacing",
+          "text-outside-autolayout"
+        ],
+        "missedByReview": [
+          "L05 active nav label contrast 1.0:1",
+          "L06 topology occluded by nav",
+          "L07 connector is a 10x10 arrowhead"
+        ]
+      }
+    },
+    {
+      "id": "L05",
+      "title": "The active nav item's label takes the same fill as its own background",
+      "group": "review",
+      "requirement": "A navItem with state 'active' paints its pill in the accent fill and must paint its label in a colour that reads against that fill.",
+      "knownIssue": "Label and pill are the same colour, so the active item's label is invisible.\n\nMeasured on the applied frame: node 317:420 (the active pill) and 317:421 (its label) render as the same yellow. Rendering each node in isolation shows the glyphs in the accent fill on a white canvas, and the pill as solid accent. Contrast 1.0:1 against a 4.5:1 requirement.\n\nThe #14 fix made nav labels follow their surface via onDarkSurface(), which is right for the three inactive items on the dark rail and wrong for the active one: the active item's surface is the accent pill, not the rail. The rule keys on the rail, not on the node the label actually sits in.\n\nreview_design reported no text-contrast finding on the 57-node frame that contains this. Either the rule resolves the wrong ancestor for a nav label, or it skips labels whose parent is a component instance. Either way a 1.0:1 pair is being reported as clean, which is the more serious of the two halves.",
+      "status": "FAIL",
+      "detail": "Active nav label fill equals the active pill fill (contrast 1.0:1); review_design reports 0 text-contrast findings on the frame that contains it.",
+      "raw": {
+        "labelNode": "317:421",
+        "pillNode": "317:420",
+        "measuredContrast": "1.0:1 (requirement 4.5:1)",
+        "evidence": "isolated renders of both nodes are the same accent yellow",
+        "reviewerOnFullFrame": {
+          "reviewedNodes": 57,
+          "textContrastFindings": 0
+        }
+      }
+    },
+    {
+      "id": "L06",
+      "title": "A region with width 'fill' ignores the sibling occupying the left edge",
+      "group": "layout",
+      "requirement": "A region declared { width: 'fill', right: <inspector width> } must be laid out in the space left after the other regions, not from x=0.",
+      "knownIssue": "Topology is placed at x=0 with width 1120, while the 220px nav rail occupies x=0..220. The region is therefore underneath the rail, and its contents are occluded.\n\nThe compiler's own trace agrees with itself here — this is not the verifier inventing a position. compile_ir emits setPosition x=0 and setSize width=1120 for node 317:418, and the applied frame matches the emitted geometry exactly. The fill width is canvasWidth - right, with no accounting for a region already placed at the left edge.\n\nThe render shows all three device nodes (mac-mini-01, mac-pro-02, rack-07) drawn inside the dark rail at x=24. They are children of Topology and their coordinates are correct relative to it; the region itself is simply underneath Nav.\n\nreview_design reported no occlusion or overlap finding. overflow only checks a region against its parent's bounds, and a region that is fully inside the frame cannot overflow it — so this class of error is invisible to the current rules.",
+      "status": "FAIL",
+      "detail": "Topology (317:418) is placed at x=0 width=1120 and is fully occluded by the 220px nav rail for its first 220px; three device nodes are buried under it. No review rule covers region-vs-region occlusion.",
+      "raw": {
+        "topology": {
+          "node": "317:418",
+          "x": 0,
+          "width": 1120,
+          "emittedBy": "compile_ir"
+        },
+        "nav": {
+          "node": "317:415",
+          "x": 0,
+          "width": 220
+        },
+        "overlapPx": 220,
+        "occludedChildren": [
+          "mac-mini-01",
+          "mac-pro-02",
+          "rack-07"
+        ],
+        "geometryAgreesWithCompiler": true
+      }
+    },
+    {
+      "id": "L07",
+      "title": "A connector compiles to a 10x10 arrowhead with no reference to its endpoints",
+      "group": "topology",
+      "requirement": "A connector declared { from, to } must carry its endpoints so the route lands on the two nodes it names, and must be sized to span them.",
+      "knownIssue": "link-0 compiles to a createVector 10x10 at (83, 401) whose path is a bare arrowhead outline — 'M 5 2 L 5 6 L 5 6 L 5 10 L 5 2 M 5 10 L 0 0 L 10 0 L 5 10 Z' — with no from, no to, and no span between the two devices.\n\nOn the applied frame this shows as a small grey arrowhead floating in empty canvas, unattached to mac-mini-01 or mac-pro-02. Two are visible rather than one, because the timed-out first transaction committed its own copy of the op before the client gave up; that duplication is a consequence of the partial-commit behaviour recorded in L04, not a separate defect.\n\nIssue #10 added connector adoption and issue #12 added the endpoint rules, and connector-endpoint-ambiguous correctly stayed quiet — there is no route, so there are no endpoints to be ambiguous about. The silence is the rules being right about a connector that should not exist in this form.",
+      "status": "FAIL",
+      "detail": "link-0 emits a 10x10 vector arrowhead with no from/to and no span; renders as an unattached arrowhead in empty canvas rather than a route between mac-mini-01 and mac-pro-02.",
+      "raw": {
+        "op": {
+          "id": "link-0",
+          "type": "createVector",
+          "x": 83,
+          "y": 401,
+          "width": 10,
+          "height": 10
+        },
+        "path": "M 5 2 L 5 6 L 5 6 L 5 10 L 5 2 M 5 10 L 0 0 L 10 0 L 5 10 Z",
+        "hasEndpoints": false,
+        "shouldSpan": [
+          "mac-mini-01 (317:443)",
+          "mac-pro-02"
+        ],
+        "duplicateVisible": "2 — the timed-out transaction committed its own copy; not a separate defect"
       }
     }
   ]

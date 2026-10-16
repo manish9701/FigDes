@@ -488,6 +488,16 @@ export interface RuntimeResult {
   ir: DesignIR;
   operations: unknown[];
   violations: Array<{ rule: string; message: string }>;
+  /**
+   * False when the resolved geometry is not what the program asked for.
+   *
+   * A build tool that reports "completed" while emitting a region outside the
+   * canvas is the failure mode issue #11 opened with, so the caller gets a flag
+   * it can gate on rather than a message to notice in an array.
+   */
+  applicable: boolean;
+  /** Why the plan is not applicable. Empty when it is. */
+  inapplicableReasons: string[];
   stats: {
     calls: number;
     regions: number;
@@ -1102,6 +1112,9 @@ case "shape": {
     ir,
     operations: compiled.operations,
     violations: compiled.violations,
+    /** False when the resolved geometry is not what the program asked for. */
+    applicable: compiled.applicable,
+    inapplicableReasons: compiled.inapplicableReasons,
     boxes: compiled.boxes,
     algorithms: compiled.stats.algorithms,
     constrained: compiled.stats.constrained,

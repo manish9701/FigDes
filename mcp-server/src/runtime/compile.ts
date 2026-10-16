@@ -204,12 +204,23 @@ export function compileIR(ir: DesignIR): CompileResult {
     intent?.contrast === "bold" ? 1.15 : intent?.contrast === "muted" ? 0.9 : 1;
   const alignGrid = intent?.alignment === "strong" ? Math.max(1, Math.round(canvas.grid)) : 0;
 
-  // Normalise input before anything reads it. `planLayout` spreads each region
-  // into a ResolvedRegion, so a missing `children` array would be baked into the
-  // resolved geometry and then fail far downstream in content emission.
+  // Normalise input before anything reads it.
+  //
+  // `compileIR` is reachable with a hand-built object — `compile_ir` validates
+  // through zod first, but tests and internal callers do not — and every one of
+  // these collections is optional in the schema with a default. Reading an
+  // absent one produced a TypeError naming an internal function ("cannot read
+  // properties of undefined (reading 'length')" from `emitContent`) instead of
+  // naming the bad input. `planLayout` additionally spreads each region into a
+  // ResolvedRegion, so a missing `children` would be baked into the resolved
+  // geometry and surface much later as a stray layout fault.
   for (const region of ir.regions) {
     if (!Array.isArray(region.children)) region.children = [];
   }
+  if (!Array.isArray(ir.content)) ir.content = [];
+  if (!Array.isArray(ir.tokens)) ir.tokens = [];
+  if (!Array.isArray(ir.relations)) ir.relations = [];
+  if (!Array.isArray(ir.links)) ir.links = [];
 
   let regions = planLayout(ir, defaultGutter(canvas.grid) * rhythmScale);
   if (alignGrid > 0) {
@@ -454,6 +465,77 @@ export function compileIR(ir: DesignIR): CompileResult {
         if (Math.abs(prior.w - box.w) > 0.5 || Math.abs(prior.h - box.h) > 0.5) {
           operations.push(op({ type: "setSize", target: box.id, width: Math.max(1, Math.round(box.w)), height: Math.max(1, Math.round(box.h)) }));
         }
+
+        // Carry the region's children with it.
+        //
+        // Content was packed against the region where the shell layout left it,
+        // so moving the region moves its frame and leaves its contents behind.
+        // `relayoutRegionText` below rescues TEXT nodes only, which left every
+        // component stranded: a relation that moved an inspector to the right of
+        // the canvas left its status pill at the bottom of the stage. The new
+        // containment check reports this as a geometry violation rather than
+        // letting it reach Figma.
+        const dx = box.x - prior.x;
+        const dy = box.y - prior.y;
+        const resized = Math.abs(prior.w - box.w) > 0.5 || Math.abs(prior.h - box.h) > 0.5;
+        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || resized) {
+          const region = ir.regions.find((r) => r.id === box.id);
+          const childIds = region?.children ?? [];
+          if (childIds.length === 0) continue;
+
+          // Translate into the new origin, then re-pack if the region also
+          // changed size: children were packed against the old inner box, so a
+          // narrower panel would otherwise keep 1168px-wide cards in a 320px
+          // frame. Repacking preserves each child's measured height and its
+          // declaration order, so the arrangement is the same one the layout
+          // would have produced had the region been this size all along.
+          const origin = { x: box.x, y: box.y };
+          const moved: Array<{ id: string; box: PlacedBox }> = [];
+          for (const childId of childIds) {
+            const child = boxes.get(childId);
+            if (!child) continue;
+            const next: PlacedBox = { ...child, x: child.x + dx, y: child.y + dy };
+            moved.push({ id: childId, box: next });
+          }
+
+          if (resized) {
+            const pad = normalizePadding(region?.padding, canvas.grid);
+            const gap = (region as { gap?: number } | undefined)?.gap ?? canvas.grid;
+            const inner: ResolvedBox = {
+              x: box.x + pad.left,
+              y: box.y + pad.top,
+              w: Math.max(0, box.w - pad.left - pad.right),
+              h: Math.max(0, box.h - pad.top - pad.bottom),
+            };
+            const repacked = packContent({
+              region: inner,
+              items: moved.map((m) => ({ id: m.id, height: m.box.h })),
+              gap,
+              columns: 1,
+            });
+            for (const m of moved) {
+              const at = repacked.get(m.id);
+              // Width follows the new inner box: a card packed into a 1168px
+              // stage must not stay 1168px wide inside a 320px inspector.
+              if (at) m.box = { ...m.box, x: at.x, y: at.y, w: at.w };
+            }
+          }
+
+          for (const m of moved) {
+            boxes.set(m.id, m.box);
+            patchEmit(
+              operations,
+              m.id,
+              {
+                x: m.box.x,
+                y: m.box.y,
+                width: Math.max(1, Math.round(m.box.w)),
+                height: Math.max(1, Math.round(m.box.h)),
+              },
+              origin,
+            );
+          }
+        }
       } else {
         patchEmit(operations, box.id, { x: box.x, y: box.y, width: Math.max(1, Math.round(box.w)), height: Math.max(1, Math.round(box.h)) });
       }
@@ -490,6 +572,7 @@ export function compileIR(ir: DesignIR): CompileResult {
 
   // Run last, on the geometry that is actually returned and actually drawn.
   // Anything earlier would be checking a layout that later passes still move.
+  let traceMismatches = 0;
   if (!deck) {
     assertResolvedGeometry(
       ir,
@@ -499,15 +582,29 @@ export function compileIR(ir: DesignIR): CompileResult {
       canvasSize(canvas.height, 900),
       violations,
     );
+    traceMismatches = verifyOperationTrace(operations, boxes, violations);
   }
 
   checkConstraints(ir, composition, violations);
+
+  // A plan whose geometry is not what was asked for is a plan that will draw
+  // the wrong thing, so it is marked inapplicable rather than merely annotated.
+  // The operations are still returned: the caller can inspect and repair the
+  // plan, it just cannot present it as a screen.
+  //
+  // Only the structural rules gate applicability. A product-constraint warning
+  // ("this looks like a card wall") is a judgement about the design, not a
+  // statement that the coordinates are wrong.
+  const BLOCKING = new Set(["geometry", "relation", "operation-trace", "connector", "content-parent"]);
+  const inapplicableReasons = violations.filter((v) => BLOCKING.has(v.rule)).map((v) => v.message);
 
   return {
     operations,
     regions,
     boxes,
     violations,
+    applicable: inapplicableReasons.length === 0,
+    inapplicableReasons,
     stats: {
       regionCount: regions.length,
       contentCount: ir.content.length,
@@ -516,6 +613,7 @@ export function compileIR(ir: DesignIR): CompileResult {
       algorithms,
       constrained,
       reflowed,
+      traceMismatches,
     },
   };
 }
@@ -646,6 +744,23 @@ function emitTokens(ir: DesignIR, operations: Operation[]): void {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * The start and end of a routed connector's main path.
+ *
+ * Reads the two moveto/lineto coordinates rather than re-deriving them, so the
+ * check measures what was actually emitted rather than what the router believed
+ * it emitted.
+ */
+function routeEndpoints(path: string): Array<{ x: number; y: number }> {
+  const numbers = path.match(/-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+  if (!numbers || numbers.length < 4) return [];
+  const n = (i: number): number => Number(numbers[i]);
+  return [
+    { x: n(0), y: n(1) },
+    { x: n(numbers.length - 2), y: n(numbers.length - 1) },
+  ];
+}
+
+/**
  * Emits connectors as vector nodes.
  *
  * A connector compiles to `createVector` rather than a bespoke operation: the
@@ -691,7 +806,9 @@ function emitConnectors(
       parent = fromHome;
     }
 
-    const route = routeConnector(spec, boxes.get(spec.from), boxes.get(spec.to));
+    const fromBox = boxes.get(spec.from);
+    const toBox = boxes.get(spec.to);
+    const route = routeConnector(spec, fromBox, toBox);
     if (!route) {
       // Distinguish "you never drew it" from "you drew it but it got no
       // geometry". Collapsing both into "unknown node" sent the reader looking
@@ -717,6 +834,30 @@ function emitConnectors(
     } catch (error) {
       violations.push({ rule: "connector", message: `Connector '${spec.id}' produced unusable geometry: ${(error as Error).message}` });
       continue;
+    }
+
+    // Endpoints must actually touch the nodes they claim to connect, measured
+    // against the final geometry. Routing already clips to the box edges, so a
+    // line landing far from both nodes means the box the router used was not the
+    // box that ended up in the file — which is what issue #11 asked to prove
+    // rather than assume.
+    if (fromBox && toBox) {
+      const endpoints = routeEndpoints(route.path);
+      const hull = {
+        x: Math.min(fromBox.x, toBox.x),
+        y: Math.min(fromBox.y, toBox.y),
+        right: Math.max(fromBox.x + fromBox.w, toBox.x + toBox.w),
+        bottom: Math.max(fromBox.y + fromBox.h, toBox.y + toBox.h),
+      };
+      const REACH = 2;
+      for (const p of endpoints) {
+        if (p.x >= hull.x - REACH && p.x <= hull.right + REACH && p.y >= hull.y - REACH && p.y <= hull.bottom + REACH) continue;
+        violations.push({
+          rule: "connector",
+          message: `Connector '${spec.id}' has an endpoint at (${Math.round(p.x)}, ${Math.round(p.y)}), outside both '${spec.from}' and '${spec.to}'. The route was not solved against the final node geometry.`,
+        });
+        break;
+      }
     }
 
     operations.push(
@@ -2433,6 +2574,38 @@ function assertResolvedGeometry(
     }
   }
 
+  // Content must live inside the region that owns it.
+  //
+  // Checking regions against the canvas says nothing about whether the text and
+  // components inside them were placed inside it. A region can be perfect and
+  // its contents still spill past its edge, which is what the reviewer then
+  // reports as `overflow` on a frame the compiler considered sound. Measured
+  // from the resolved box, so it moves with the layout.
+  const homeOf = new Map<string, string>();
+  for (const region of ir.regions) for (const child of region.children) homeOf.set(child, region.id);
+  for (const region of regions) {
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (!box || box.w <= 0 || box.h <= 0) continue;
+      const outside =
+        box.x < region.x - CANVAS_TOLERANCE ||
+        box.y < region.y - CANVAS_TOLERANCE ||
+        box.x + box.w > region.x + region.w + CANVAS_TOLERANCE ||
+        box.y + box.h > region.y + region.h + CANVAS_TOLERANCE;
+      if (!outside) continue;
+      violations.push({
+        // Its own rule, and deliberately not a blocking one. Dense content
+        // overflowing its frame is a density problem the review engine already
+        // has an `overflow` rule for, and refusing to build it would break
+        // legitimate dense layouts. What this catches that review cannot is the
+        // *structural* divergence — a region that moved and took its contents
+        // with it, or failed to.
+        rule: "containment",
+        message: `Content '${child}' is placed at (${Math.round(box.x)}, ${Math.round(box.y)}) ${Math.round(box.w)}x${Math.round(box.h)}, outside its region '${region.id}' which spans (${Math.round(region.x)}, ${Math.round(region.y)}) ${span(region)}.`,
+      });
+    }
+  }
+
   // Every declared relation must survive into the final geometry. Measured, not
   // assumed: the solver can apply a relation and a later fit pass can undo it.
   for (const relation of ir.relations) {
@@ -2441,6 +2614,143 @@ function assertResolvedGeometry(
     const problem = checkRelation(relation, box, boxes, canvasW, canvasH);
     if (problem) violations.push({ rule: "relation", message: problem });
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Operation trace / resolved box agreement                                   */
+/* -------------------------------------------------------------------------- */
+
+/** Slack allowed when comparing an emitted position to the resolved box. */
+const TRACE_TOLERANCE = 1;
+
+/**
+ * Proves the operation list and the resolved boxes describe the same screen.
+ *
+ * ## The defect this exists for
+ *
+ * Issue #11 found an IR that "reports requested region boxes but emits
+ * operations with different positions/sizes, including unexpected width
+ * expansion and cumulative vertical offsets". Comparing the two naively does
+ * not work, and the reason is the reason it was hard to see: **they are in
+ * different coordinate spaces.**
+ *
+ * A resolved box is canvas-absolute. An emitted operation is positioned relative
+ * to its Figma parent, because Figma stores child coordinates that way. A
+ * metric card at canvas x=304 inside a region at x=272 is emitted at x=32, and
+ * both are right. A naive comparison reports a 272px disagreement and the
+ * honest checker gets ignored.
+ *
+ * So the parent origin is folded in before comparing, and the check names both
+ * spaces in its failure message. Anything still out by more than a pixel after
+ * that is a genuine disagreement: a layout computed one box and the emitter
+ * used another.
+ *
+ * Returns the number of mismatches so the caller can refuse to present an
+ * inconsistent plan as applicable.
+ */
+function verifyOperationTrace(
+  operations: Operation[],
+  boxes: Map<string, PlacedBox>,
+  violations: CompileResult["violations"],
+): number {
+  // Canvas origin of each parentable node, derived from the resolved boxes.
+  const originOf = new Map<string, { x: number; y: number }>([["root", { x: 0, y: 0 }]]);
+  for (const [id, box] of boxes) originOf.set(id, { x: box.x, y: box.y });
+
+  const resolveOrigin = (parentId: unknown, seen = new Set<string>()): { x: number; y: number } => {
+    if (typeof parentId !== "string") return { x: 0, y: 0 };
+    if (seen.has(parentId)) return { x: 0, y: 0 };
+    seen.add(parentId);
+    return originOf.get(parentId) ?? { x: 0, y: 0 };
+  };
+
+  let mismatches = 0;
+
+  // Final geometry per node, as the trace actually leaves it.
+  //
+  // A `createFrame` emits where the shell layout put the region; a relation then
+  // moves it with `setPosition`. Comparing the create against the resolved box
+  // would report every relation as a mismatch. So mutations are replayed in
+  // order and the *final* state is what gets compared — which is also the only
+  // thing the user will see in Figma.
+  interface FinalGeom {
+    parent: unknown;
+    x?: number;
+    y?: number;
+    w?: number;
+    h?: number;
+  }
+  const finalState = new Map<string, FinalGeom>();
+
+  for (const op of operations) {
+    if (typeof op.type !== "string") continue;
+    const record = op as unknown as Record<string, unknown>;
+    const type = op.type;
+
+    if (type.startsWith("create")) {
+      const id = typeof record.id === "string" ? record.id : undefined;
+      if (!id) continue;
+      finalState.set(id, {
+        parent: record.parent,
+        ...(typeof record.x === "number" ? { x: record.x } : {}),
+        ...(typeof record.y === "number" ? { y: record.y } : {}),
+        ...(typeof record.width === "number" ? { w: record.width } : {}),
+        ...(typeof record.height === "number" ? { h: record.height } : {}),
+      });
+      continue;
+    }
+
+    if (type !== "setPosition" && type !== "setSize") continue;
+    const id = typeof record.target === "string" ? record.target : undefined;
+    if (!id) continue;
+    const state = finalState.get(id);
+    if (!state) continue;
+    if (typeof record.x === "number") state.x = record.x;
+    if (typeof record.y === "number") state.y = record.y;
+    if (typeof record.width === "number") state.w = record.width;
+    if (typeof record.height === "number") state.h = record.height;
+  }
+
+  for (const [id, state] of finalState) {
+    // The root frame is the canvas itself and has no resolved box to match.
+    if (id === "root") continue;
+    const box = boxes.get(id);
+    if (!box) continue;
+
+    const origin = resolveOrigin(state.parent);
+    if (typeof state.x === "number" && typeof state.y === "number") {
+      const canvasX = state.x + origin.x;
+      const canvasY = state.y + origin.y;
+      if (Math.abs(canvasX - box.x) > TRACE_TOLERANCE || Math.abs(canvasY - box.y) > TRACE_TOLERANCE) {
+        mismatches++;
+        violations.push({
+          rule: "operation-trace",
+          message: `'${id}' ends up at (${Math.round(state.x)}, ${Math.round(state.y)}) relative to parent '${String(state.parent ?? "root")}', which is canvas (${Math.round(canvasX)}, ${Math.round(canvasY)}), but its resolved box is (${Math.round(box.x)}, ${Math.round(box.y)}). The operation trace and the resolved geometry disagree.`,
+        });
+        continue;
+      }
+    }
+
+    // Height is optional: Figma auto-sizes text, so a text op legitimately has
+    // none. Width and height are compared independently so a missing dimension
+    // cannot mask a wrong one.
+    if (typeof state.w === "number" && Math.abs(state.w - box.w) > TRACE_TOLERANCE) {
+      mismatches++;
+      violations.push({
+        rule: "operation-trace",
+        message: `'${id}' is emitted ${Math.round(state.w)} wide but its resolved box is ${Math.round(box.w)} wide.`,
+      });
+    }
+    if (typeof state.h === "number" && Math.abs(state.h - box.h) > TRACE_TOLERANCE) {
+      mismatches++;
+      violations.push({
+        rule: "operation-trace",
+        message: `'${id}' is emitted ${Math.round(state.h)} tall but its resolved box is ${Math.round(box.h)} tall.`,
+      });
+    }
+  }
+
+  return mismatches;
 }
 
 /** Re-measures one relation against the geometry that was actually produced. */
@@ -2602,14 +2912,31 @@ function snapshot(boxes: Map<string, PlacedBox>): Map<string, PlacedBox> {
  * re-created. Patching the original op keeps the operation list minimal (which
  * matters: the model may inspect it) and avoids emitting a redundant
  * `setPosition` for a node that has not been created yet in Figma's timeline.
+ *
+ * `origin` is the parent's canvas position, and it is not optional decoration:
+ * a create op parented to a region stores **parent-local** coordinates (Figma's
+ * convention, which the emitters follow), while everything the layout computes
+ * is canvas-absolute. Passing a canvas box without the origin writes the node at
+ * twice its offset — which is exactly the "cumulative vertical offsets" and
+ * "unexpected width expansion" issue #11 reported from the operation trace.
  */
-function patchEmit(operations: Operation[], id: string, patch: { x: number; y: number; width: number; height: number }): void {
+function patchEmit(
+  operations: Operation[],
+  id: string,
+  patch: { x: number; y: number; width: number; height: number },
+  origin?: { x: number; y: number },
+): void {
+  const localX = origin ? patch.x - origin.x : patch.x;
+  const localY = origin ? patch.y - origin.y : patch.y;
   for (let i = operations.length - 1; i >= 0; i--) {
-    const candidate = operations[i] as { type?: string; id?: string } & Record<string, unknown>;
+    const candidate = operations[i] as { type?: string; id?: string; parent?: unknown } & Record<string, unknown>;
     if (candidate.id !== id) continue;
     if (candidate.type !== "createFrame" && candidate.type !== "createRectangle" && candidate.type !== "createEllipse") continue;
-    candidate.x = patch.x;
-    candidate.y = patch.y;
+    // A root-parented node has no offset to subtract; anything else is
+    // parent-local and must be converted.
+    const parentIsRoot = candidate.parent === undefined || candidate.parent === "root";
+    candidate.x = parentIsRoot ? patch.x : localX;
+    candidate.y = parentIsRoot ? patch.y : localY;
     candidate.width = patch.width;
     candidate.height = patch.height;
     return;

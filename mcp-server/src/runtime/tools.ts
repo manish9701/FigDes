@@ -318,7 +318,12 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
 
   const advisories = reuseAdvisory(result.operations as Array<Record<string, unknown>>);
   const payload = {
-    status: result.violations.length > 0 ? "completed-with-violations" : "completed",
+    // A plan whose geometry is not what was asked for is not "completed", and
+    // it is emphatically not "applied". Three distinct states, because issue #11
+    // found geometry landing off-canvas while the tool reported success.
+    status: !result.applicable ? "not-applicable" : result.violations.length > 0 ? "completed-with-violations" : "completed",
+    applicable: result.applicable,
+    ...(result.applicable ? {} : { inapplicableReasons: result.inapplicableReasons }),
     dryRun: dryRun ?? false,
     stats: result.stats,
     regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role, width: r.width, height: r.height, grow: r.grow, layout: r.layout })),
@@ -348,6 +353,19 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
   // require a live plugin connection. That makes it useful while designing a
   // screen with Figma closed.
   if (dryRun) return payload;
+
+  // A non-applicable plan is refused before it reaches Figma. Building it would
+  // draw regions outside the canvas and connectors to nowhere while reporting
+  // success — the exact failure issue #11 opened with. The operations are in the
+  // dry-run payload above, so the plan stays inspectable and repairable.
+  if (!result.applicable) {
+    return {
+      ...payload,
+      howToProceed:
+        `This plan was not built: the resolved geometry is not what the program asked for (${result.inapplicableReasons.length} problem(s)). Fix the causes below, or re-run with dryRun:true to inspect the operations without committing.`,
+      problems: result.inapplicableReasons,
+    };
+  }
 
   if (!session) {
     throw new Error(
@@ -512,12 +530,17 @@ export function compileIrTool(args: unknown): unknown {
   const compiled = compileIR(parsed.ir);
 
   return {
-    status: compiled.violations.length > 0 ? "completed-with-violations" : "completed",
+    status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
+    applicable: compiled.applicable,
+    ...(compiled.applicable ? {} : { problems: compiled.inapplicableReasons }),
     dryRun: parsed.dryRun ?? true,
     stats: compiled.stats,
     regions: compiled.regions.map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h })),
     violations: compiled.violations,
     operations: compiled.operations,
+    howToProceed: compiled.applicable
+      ? undefined
+      : "The resolved geometry is not what the IR asked for. Fix the problems above — an inspector off the canvas, a connector that cannot resolve, or an operation whose position disagrees with its resolved box — then compile again.",
   };
 }
 

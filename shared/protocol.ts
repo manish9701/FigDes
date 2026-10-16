@@ -75,7 +75,12 @@ export const RefSchema = z.string().min(1).max(200);
 const DEFAULT_LAYER_NAME = /^(Frame|Group|Rectangle|Text|Vector|Union|Component|Component Set|Instance|Ellipse|Line|Polygon|Star) ?\d+$/;
 
 export function isDefaultLayerName(name: string): boolean {
-  return DEFAULT_LAYER_NAME.test(name.trim());
+  // Tolerates a nameless node rather than throwing. Every review rule runs over
+  // every measured node, so one node missing its name took the entire review down
+  // with a TypeError from inside a predicate — reported as a crash instead of as
+  // the missing evidence it is. A node with no name cannot be shown to be a
+  // default name, and that is the honest answer.
+  return typeof name === "string" && DEFAULT_LAYER_NAME.test(name.trim());
 }
 
 export const CornerRadiusSchema = z.union([

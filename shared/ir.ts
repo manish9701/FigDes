@@ -554,6 +554,19 @@ export interface CompileResult {
   boxes: Map<string, PlacedBox>;
   /** Populated when a constraint was violated. Never silently ignored. */
   violations: Array<{ rule: string; message: string }>;
+  /**
+   * False when the resolved geometry is not what the program asked for.
+   *
+   * A dry run that produces a region outside the canvas, or a connector that
+   * cannot resolve its endpoints, is not a plan — it is a list of operations
+   * that will draw the wrong thing. Issue #11 asked that such runs "cannot be
+   * applied", which needs a flag the caller can gate on rather than a message
+   * buried in a warnings array. The operations are still returned: a designer
+   * can inspect and repair the plan, they just cannot mistake it for a screen.
+   */
+  applicable: boolean;
+  /** Why `applicable` is false. Empty when it is true. */
+  inapplicableReasons: string[];
   stats: {
     regionCount: number;
     contentCount: number;
@@ -565,5 +578,7 @@ export interface CompileResult {
     constrained: number;
     /** How many text layers were re-flowed because a relation resized a region. */
     reflowed: number;
+    /** Operations whose emitted position disagrees with the resolved box. */
+    traceMismatches: number;
   };
 }

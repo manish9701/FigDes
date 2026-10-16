@@ -13,6 +13,20 @@ import { canvasSize, type DesignIR, type Region, type ResolvedBox, type Resolved
 export type Axis = "row" | "column";
 
 /**
+ * A region's grow weight, defensively read.
+ *
+ * `grow` has a schema default of 0, but the layout engine is also reachable
+ * with a hand-built IR — `compile_ir` validates through zod, tests and internal
+ * callers do not. `Math.max(0, undefined)` is `NaN`, and a single `NaN` in the
+ * weight sum turns every fill child's share into `NaN`, which then surfaces much
+ * later as "Compiler produced an invalid operation (height: received nan)" and
+ * blames the compiler rather than the absent field.
+ */
+function growOf(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
  * A child's size along the stacking axis.
  *
  * `number` is a fixed size, `"fill"` shares the leftover space, and `null`
@@ -78,7 +92,7 @@ export function solveAxis(input: StackInput): number[] {
   // region silently collapses to zero height and the layout looks like a bug with
   // no cause. The baseline of 1 keeps "share the leftover" true for every fill
   // child while still letting `grow: 2` outgrow a `grow: 0` by 3:1.
-  const growWeights = fillIndices.map((i) => 1 + Math.max(0, children[i]!.grow));
+  const growWeights = fillIndices.map((i) => 1 + growOf(children[i]!.grow));
   const totalGrow = growWeights.reduce((a, b) => a + b, 0);
 
   fillIndices.forEach((index, n) => {
@@ -187,7 +201,7 @@ function dominanceScore(region: Pick<Region, "role" | "width" | "grow">): number
             ? 100
             : 0;
 
-  return roleWeight + Math.max(0, region.grow) * 50 + (typeof region.width === "number" ? region.width / 1000 : 1);
+  return roleWeight + growOf(region.grow) * 50 + (typeof region.width === "number" ? region.width / 1000 : 1);
 }
 
 export interface ShellInput {
@@ -277,7 +291,15 @@ function layoutSideRail(input: ShellInput, nav: Region): ResolvedRegion[] {
       ...r,
       x: contentX,
       y: Math.round(y),
-      w: contentW,
+      // An explicit width is honoured and clamped to what is actually available.
+      //
+      // Forcing the full content width here contradicted `layoutStack`, which
+      // honours it, so the same program behaved differently depending on whether
+      // a navigation rail happened to be present. A `rightOf` relation against a
+      // 860px panel then landed 584px off-canvas (issue #11: "unexpected width
+      // expansion"). Clamping rather than trusting keeps an over-wide request
+      // inside the canvas instead of producing another out-of-canvas region.
+      w: typeof r.width === "number" ? Math.min(r.width, contentW) : contentW,
       h: Math.round(heights[i] ?? 0),
     };
     y += (heights[i] ?? 0) + gutter;

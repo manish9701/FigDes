@@ -104,24 +104,12 @@ export function solveConstraints(input: SolveInput): PlacedBox[] {
 
     const anchor = c.rightOf !== undefined ? boxes.get(c.rightOf) : c.below !== undefined ? boxes.get(c.below) : undefined;
 
-    /* ---- sizing, resolved before position so `fill` knows the parent ---- */
+    /* ---- explicit sizes first; `fill` is deferred until after positioning -- */
 
     if (typeof c.width === "number") box.w = c.width;
-    else if (c.width === "fill") {
-      // Fill runs from the box's *current* left edge to the parent's right
-      // boundary. Anchoring the left edge here rather than assuming x = 0 is
-      // what lets `content` fill the space beside a 240px nav rail instead of
-      // jumping back to the canvas edge.
-      const rightEdge = c.right !== undefined ? parent.x + parent.w - c.right : parent.x + parent.w - (c.inset ?? 0);
-      box.w = Math.max(1, round(rightEdge - box.x));
-    }
     // "hug" is left alone: measuring content is the compiler's job.
 
     if (typeof c.height === "number") box.h = c.height;
-    else if (c.height === "fill") {
-      const bottomEdge = c.bottom !== undefined ? parent.y + parent.h - c.bottom : parent.y + parent.h - (c.inset ?? 0);
-      box.h = Math.max(1, round(bottomEdge - box.y));
-    }
 
     /* ------------------------------------------------- positioning ----- */
 
@@ -148,18 +136,28 @@ export function solveConstraints(input: SolveInput): PlacedBox[] {
       if (c.left !== undefined) box.x = round(parent.x + c.left);
       if (c.right !== undefined && c.width !== "fill") box.x = round(parent.x + parent.w - c.right - box.w);
       if (c.bottom !== undefined && c.height !== "fill") box.y = round(parent.y + parent.h - c.bottom - box.h);
-      // `fill` here means "span the parent between these insets". The left edge
-      // only moves when an explicit `left` was given, so a box the shell layout
-      // already positioned keeps its position and simply grows.
-      if (c.width === "fill" && c.left !== undefined) {
-        const right = c.right ?? 0;
-        box.w = Math.max(1, round(parent.w - c.left - right));
-      }
-      if (c.height === "fill" && c.top !== undefined) {
-        const bottom = c.bottom ?? 0;
-        box.h = Math.max(1, round(parent.h - c.top - bottom));
-      }
       align(box, parent, c.alignTo, c.width === "fill" || c.left !== undefined ? "x" : c.height === "fill" || c.top !== undefined ? "y" : undefined);
+    }
+
+    /* ---- `fill` resolved last, from the position this constraint just set --- */
+
+    // `fill` is a measurement from an edge, so it is only meaningful once the
+    // edge is known. Resolving it before positioning measured from wherever the
+    // shell layout had parked the box, which for an anchored region is the wrong
+    // place entirely: `rightOf` plus `height: "fill"` computed the height from
+    // the pre-move y and produced a 1px-tall panel at the far right of the
+    // canvas (issue #11: "ignores intended side-by-side composition").
+    //
+    // Fill is resolved after alignment so an explicit size wins over an
+    // alignment hint: `width:"fill"` and `alignTo:"stretch"` contradict each
+    // other, and the explicit size is the one the author actually typed.
+    if (c.width === "fill") {
+      const rightEdge = c.right !== undefined ? parent.x + parent.w - c.right : parent.x + parent.w - (c.inset ?? 0);
+      box.w = Math.max(1, round(rightEdge - box.x));
+    }
+    if (c.height === "fill") {
+      const bottomEdge = c.bottom !== undefined ? parent.y + parent.h - c.bottom : parent.y + parent.h - (c.inset ?? 0);
+      box.h = Math.max(1, round(bottomEdge - box.y));
     }
   }
 

@@ -968,12 +968,19 @@ await check("design_runtime builds in chunks with per-chunk results", async () =
       content.push({ fn: "text", id: `t${i}_${j}`, parent: `r${i}`, args: { text: `row ${i}.${j}` } });
     }
   }
+  // The canvas is tall enough for what the program asks for. Ten lines per
+  // region grow each to ~312px, so eight regions need ~2800px: the previous
+  // 900px canvas could not hold them and every region after the first spilled
+  // off the bottom. Nothing noticed, because nothing checked. The fixture
+  // encoded an impossible layout and the compiler drew it anyway — which is the
+  // defect issue #11 reported, not a property worth preserving.
   const { data, isError } = await callTool("design_runtime", {
     chunked: true,
-    program: { canvas: { name: "Big", width: 1440, height: 900, grid: 8 }, regions, content },
+    program: { canvas: { name: "Big", width: 1440, height: 3200, grid: 8 }, regions, content },
   });
 
   assert.equal(isError, false);
+  assert.equal(data.applicable, true, `plan must fit: ${JSON.stringify(data.inapplicableReasons ?? [])}`);
   assert.equal(data.chunked, true);
   assert.ok(data.chunks.length > 1, "80+ ops must split into several chunks");
   assert.ok(data.chunks.every((c) => c.status === "success"));

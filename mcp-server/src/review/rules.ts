@@ -200,21 +200,80 @@ export function summarise(findings: Finding[]) {
 /* High-confidence rules                                                        */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The colour a viewer actually sees immediately behind a text node.
+ *
+ * ## Why this is not `n.background`
+ *
+ * The plugin composites ancestor fills, which is right for the common case. It
+ * is blind to the case that dominates real UI: a control drawn as a *pair* of
+ * siblings — a filled rectangle and a text layer sitting on top of it, both
+ * parented to the region rather than to each other. The text's ancestor chain
+ * then leads to the region and the page, so white button text on a dark button
+ * was measured against warm-white and reported as 1.06:1 (issue #11).
+ *
+ * A false positive here is worse than a false negative: it sends a designer to
+ * "fix" a button that is correct, and the repair darkens label text that was
+ * already the right colour.
+ *
+ * Precedence follows paint order. Among the text's own siblings, an opaque one
+ * that encloses the text's box and was painted *earlier* is behind the glyphs,
+ * so it wins over the shared parent. Only when no such sibling exists does the
+ * composited ancestor chain apply.
+ *
+ * The result names its provenance so the finding can be argued with: a reviewer
+ * who disagrees with which surface counts can see which surface was chosen.
+ */
+function effectiveSurface(n: NodeMetrics, c: Ctx, fallback: string): { hex: string; via: string; concrete: boolean } {
+  const siblings = n.parentId ? (c.childrenOf.get(n.parentId) ?? []) : [];
+  const textZ = typeof n.zIndex === "number" ? n.zIndex : 0;
+  const EPS = 1;
+
+  let best: { node: NodeMetrics; z: number } | null = null;
+  for (const s of siblings) {
+    if (s.id === n.id || s.type === "TEXT") continue;
+    if (typeof s.fill !== "string" || s.fill.length === 0) continue;
+    // Only a surface that is opaque enough to *be* the backdrop counts; a 20%
+    // tint is decoration, and treating it as opaque would invent a contrast bug.
+    if (typeof s.fillAlpha === "number" && s.fillAlpha < 0.9) continue;
+    const sZ = typeof s.zIndex === "number" ? s.zIndex : 0;
+    if (sZ > textZ) continue; // painted after the text, so it covers it
+    const encloses =
+      s.x <= n.x + EPS && s.y <= n.y + EPS && s.x + s.w >= n.x + n.w - EPS && s.y + s.h >= n.y + n.h - EPS;
+    if (!encloses) continue;
+    // Later siblings are painted on top of earlier ones, so the highest zIndex
+    // still below the text is the one actually nearest.
+    if (!best || sZ > best.z) best = { node: s, z: sZ };
+  }
+
+  if (best) return { hex: best.node.fill!, via: `sibling surface '${best.node.name}'`, concrete: true };
+  return { hex: fallback, via: "composited ancestor fills", concrete: false };
+}
+
 /** WCAG AA contrast. Arithmetic over colours already composited on the client. */
-function textContrast(n: NodeMetrics): Finding[] {
+function textContrast(n: NodeMetrics, c: Ctx): Finding[] {
   if (n.type !== "TEXT" || !n.text?.color || !n.background) return [];
   if (n.text.family === "mixed" || !n.text.size) return [];
   // Invisible or empty text is not a contrast problem.
   if (n.text.content.trim().length === 0) return [];
 
-  const ratio = contrastRatio(n.text.color, n.background);
+  // Measured against what is actually behind the glyphs, not merely what is
+  // behind the text node's parent.
+  const surface = effectiveSurface(n, c, n.background);
+  const ratio = contrastRatio(n.text.color, surface.hex);
   if (ratio === null) return [];
 
-  // A ratio of exactly 1 means the text colour and the background resolved to
-  // the same value, which means the measurement is wrong, not the design.
-  // Reporting those as critical accessibility failures would be worse than
-  // staying quiet, so the finding is skipped.
-  if (ratio <= 1.001) return [];
+  // A ratio of exactly 1 from the *composited* path means the text colour and the
+  // background resolved to the same value, which usually means the measurement is
+  // wrong rather than the design — opacity, blending or an unresolved variable
+  // that the client could not read. Reporting those floods the reviewer with fake
+  // criticals.
+  //
+  // From a *concrete* sibling surface it means the opposite: there is a known
+  // painted panel, the text is literally on top of it, and both resolve to the
+  // same hex. That is invisible text, and it is exactly as real as any other
+  // contrast defect — so it is reported.
+  if (ratio <= 1.001 && !surface.concrete) return [];
 
   // Fully transparent text is invisible but not a contrast problem.
   if (n.text.length > 0 && n.text.content.trim().length === 0) return [];
@@ -235,7 +294,7 @@ function textContrast(n: NodeMetrics): Finding[] {
   // The candidate moves the fill along its own hue towards the reachable end of
   // the lightness range, so the design keeps its voice. The achieved ratio is
   // reported in the evidence so the repair can be verified rather than trusted.
-  const repair = repairTextColour(n.text.color, n.background, required);
+  const repair = repairTextColour(n.text.color, surface.hex, required);
 
   return [
     {
@@ -245,7 +304,9 @@ function textContrast(n: NodeMetrics): Finding[] {
       title: `Text contrast ${round2(ratio)}:1 is below the WCAG AA minimum of ${required}:1`,
       evidence: {
         textColor: n.text.color,
-        background: n.background,
+        background: surface.hex,
+        /** Which surface the measurement used, so the number can be argued with. */
+        surfaceSource: surface.via,
         ratio: round2(ratio),
         required,
         fontSize: n.text.size,
@@ -909,7 +970,14 @@ function buttonOverload(n: NodeMetrics, c: Ctx): Finding[] {
   if (top.id !== n.id) return [];
 
   const buttons: string[] = [];
+  // Visited set, like every other tree walk in this file. A metrics payload can
+  // name a node as its own parent — which a root node with a stale parentId does
+  // — and an unguarded recursion over that is a stack overflow in the middle of
+  // a review, reported as a crash rather than as a defect.
+  const visited = new Set<string>();
   const visit = (m: NodeMetrics): void => {
+    if (visited.has(m.id)) return;
+    visited.add(m.id);
     if (isButtonLike(m, c) && !insideComponentSet(m, c) && buttons.length < 12) buttons.push(m.id);
     for (const child of c.childrenOf.get(m.id) ?? []) visit(child);
   };

@@ -413,3 +413,124 @@ test("INV-4: a connector naming an undeclared node says so precisely", () => {
   const message = compiled.violations.filter((v) => v.rule === "connector").map((v) => v.message).join(" ");
   assert.match(message, /'does-not-exist' \(not declared anywhere in this IR\)/);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Invariant 5 — "applicable" means the geometry is actually drawable          */
+/* -------------------------------------------------------------------------- */
+
+test("INV-5: an applicable plan has every region inside the canvas", () => {
+  for (const seed of SEEDS) {
+    const r = rng(seed);
+    const canvasW = f(between(r, 800, 2000));
+    const canvasH = f(between(r, 600, 1600));
+    const count = 2 + Math.floor(r() * 3);
+
+    const regions = Array.from({ length: count }, (_, i) => ({
+      id: `r${i}`,
+      role: i === 0 ? "navigation" : "content",
+      width: i === 0 ? f(between(r, 120, 360)) : r() < 0.5 ? "fill" : f(between(r, 200, canvasW)),
+      height: r() < 0.5 ? "fill" : f(between(r, 120, canvasH)),
+      children: [],
+    }));
+
+    const compiled = compileIR({
+      canvas: { name: "Generated", width: canvasW, height: canvasH, grid: 8 },
+      regions,
+      content: [],
+      tokens: [],
+      relations: [],
+    });
+
+    if (!compiled.applicable) {
+      assert.ok(compiled.inapplicableReasons.length > 0, `seed ${seed}: inapplicable with no reason`);
+      continue;
+    }
+
+    for (const region of compiled.regions) {
+      assert.ok(
+        region.x >= -1 && region.y >= -1 && region.x + region.w <= canvasW + 1 && region.y + region.h <= canvasH + 1,
+        `seed ${seed}: plan marked applicable but region ${region.id} sits at (${region.x},${region.y}) ${region.w}x${region.h} on a ${canvasW}x${canvasH} canvas`,
+      );
+      assert.ok(region.w > 0 && region.h > 0, `seed ${seed}: applicable plan contains a collapsed region ${region.id}`);
+    }
+  }
+});
+
+test("INV-5: an applicable plan satisfies every declared relation", () => {
+  for (const seed of SEEDS) {
+    const r = rng(seed);
+    const canvasW = f(between(r, 900, 2000));
+    const canvasH = f(between(r, 600, 1600));
+
+    const compiled = compileIR({
+      canvas: { name: "Generated", width: canvasW, height: canvasH, grid: 8 },
+      regions: [
+        { id: "body", role: "content", width: f(between(r, 200, canvasW * 0.6)), height: canvasH, children: [] },
+        { id: "side", role: "inspector", width: f(between(r, 120, 400)), height: canvasH, children: [] },
+      ],
+      content: [],
+      tokens: [],
+      relations: [{ id: "side", rightOf: "body", gap: f(between(r, 0, 40)), width: f(between(r, 120, 400)) }],
+    });
+
+    if (!compiled.applicable) continue;
+
+    const body = compiled.regions.find((x) => x.id === "body");
+    const side = compiled.regions.find((x) => x.id === "side");
+    const gap = side.x - (body.x + body.w);
+    assert.ok(gap >= -1, `seed ${seed}: applicable plan overlaps body and side by ${-gap}px`);
+    assert.ok(side.x >= body.x - 1, `seed ${seed}: applicable plan put 'side' left of its anchor`);
+  }
+});
+
+test("INV-5: the operation trace and the resolved boxes never disagree", () => {
+  for (const seed of SEEDS) {
+    const r = rng(seed);
+    const compiled = compileIR({
+      canvas: { name: "Generated", width: 1600, height: 1000, grid: 8 },
+      regions: [
+        { id: "nav", role: "navigation", width: f(between(r, 120, 300)), height: "fill", children: ["t1", "m1"] },
+        { id: "body", role: "content", width: "fill", height: "fill", children: ["t2"] },
+      ],
+      content: [
+        { kind: "text", id: "t1", text: "Machines" },
+        { kind: "component", id: "m1", type: "metric", props: { label: "GPUs", value: "8" } },
+        { kind: "text", id: "t2", text: "Topology" },
+      ],
+      tokens: [],
+      relations: [],
+    });
+
+    const trace = compiled.violations.filter((v) => v.rule === "operation-trace");
+    assert.deepEqual(trace, [], `seed ${seed}: operation trace disagrees with resolved geometry`);
+    assert.equal(compiled.stats.traceMismatches, 0, `seed ${seed}: ${compiled.stats.traceMismatches} trace mismatch(es)`);
+  }
+});
+
+test("INV-5: content is never placed outside the region that owns it", () => {
+  for (const seed of SEEDS) {
+    const r = rng(seed);
+    const canvasW = f(between(r, 1200, 2000));
+    const canvasH = f(between(r, 900, 1600));
+    const compiled = compileIR({
+      canvas: { name: "Generated", width: canvasW, height: canvasH, grid: 8 },
+      regions: [
+        { id: "body", role: "content", width: f(between(r, 400, canvasW - 200)), height: f(between(r, 300, canvasH - 200)), children: ["t1", "m1", "p1"] },
+      ],
+      content: [
+        { kind: "text", id: "t1", text: "Machines" },
+        { kind: "component", id: "m1", type: "metric", props: { label: "GPUs", value: "8" } },
+        { kind: "component", id: "p1", type: "statusPill", props: { label: "Online", tone: "healthy" } },
+      ],
+      tokens: [],
+      relations: [],
+    });
+
+    const escaped = compiled.violations.filter((v) => v.rule === "containment");
+    assert.deepEqual(
+      escaped,
+      [],
+      `seed ${seed}: content escaped its region: ${escaped.map((v) => v.message).join(" | ")}`,
+    );
+  }
+});

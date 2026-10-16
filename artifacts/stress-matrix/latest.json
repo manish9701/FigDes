@@ -1,0 +1,446 @@
+{
+  "generatedAt": "2026-10-16T09:23:19.224Z",
+  "totals": {
+    "total": 24,
+    "pass": 16,
+    "fail": 4,
+    "blocked": 4
+  },
+  "results": [
+    {
+      "id": "A2",
+      "title": "Asymmetric split view: fixed inspector, fluid canvas, long labels",
+      "group": "compiler",
+      "requirement": "A fixed-width inspector keeps its width and the fluid canvas takes the rest, regardless of label length.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 2,
+        "content": 2,
+        "operations": 6,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "A5",
+      "title": "Relation chain resolves; a cycle and a missing anchor both fail closed",
+      "group": "compiler",
+      "requirement": "A satisfiable chain is honoured; a cycle is refused rather than guessed at; a missing anchor is named.",
+      "status": "PASS",
+      "detail": "chain honoured; cycle and dangling anchor both fail closed",
+      "raw": {
+        "chain": {
+          "applicable": true,
+          "traceMismatches": 0,
+          "regions": 3,
+          "content": 0,
+          "operations": 6,
+          "violations": 0
+        },
+        "chainPositions": {
+          "a": "0",
+          "b": "216",
+          "c": "432"
+        },
+        "cycle": {
+          "applicable": false,
+          "diagnostic": "Circular constraints could not be resolved (b -> c). None of them were applied, so these nodes are unpositioned relative to each other — break the cycle (a relation needs at least one anchored node) and re-run."
+        },
+        "dangling": {
+          "applicable": false,
+          "diagnostic": "Constraint on 'c' references unknown anchor 'does-not-exist'."
+        }
+      }
+    },
+    {
+      "id": "A7",
+      "title": "Vector path bounds and connector anchor accuracy (straight, orthogonal, curved)",
+      "group": "compiler",
+      "requirement": "Every connector's emitted path starts and ends on the node it names, at all three routings.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": false,
+        "traceMismatches": 6,
+        "regions": 1,
+        "content": 7,
+        "operations": 14,
+        "violations": 6,
+        "blockingViolations": [
+          "operation-trace: 'a' is emitted 128 wide but its resolved box is 1440 wide.",
+          "operation-trace: 'a' is emitted 80 tall but its resolved box is 90 tall.",
+          "operation-trace: 'b' is emitted 128 wide but its resolved box is 1440 wide.",
+          "operation-trace: 'b' is emitted 80 tall but its resolved box is 90 tall.",
+          "operation-trace: 'c' is emitted 128 wide but its resolved box is 1440 wide.",
+          "operation-trace: 'c' is emitted 80 tall but its resolved box is 90 tall."
+        ]
+      }
+    },
+    {
+      "id": "A8",
+      "title": "Invalid input: duplicate ids, dangling relations, unknown connector endpoints",
+      "group": "compiler",
+      "requirement": "Every invalid reference is rejected before apply with a message naming the identifier.",
+      "status": "PASS",
+      "detail": "4 invalid references reported and the run is inapplicable",
+      "raw": {
+        "applicable": false,
+        "inapplicableReasons": [
+          "Region id 'panel' is declared 2 times (entries 1, 2). Region ids must be unique — two regions with one id collapse into one box, and the second is silently dropped.",
+          "Content id 'dup' is declared 2 times (entries 1, 2). Content ids must be unique — operations are emitted per id, so a repeated id emits two operations for one node.",
+          "Region 'panel' lists child 'ghost', which is not a region or content item.",
+          "Content 'dup' is a child of 'panel' and 'panel'. A node has exactly one parent.",
+          "Connector 'c' references 'not-a-node' (not declared anywhere in this IR). Draw the nodes before connecting them.",
+          "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
+          "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
+          "Relation on 'panel' names unknown anchor 'nowhere'; no side-by-side position was applied.",
+          "'dup' ends up at (0, -1435) relative to parent 'panel', which is canvas (0, -703), but its resolved box is (0, -1435). The operation trace and the resolved geometry disagree."
+        ],
+        "violations": [
+          "identity: Region id 'panel' is declared 2 times (entries 1, 2). Region ids must be unique — two regions with one id collapse into one box, and the second is silently dropped.",
+          "identity: Content id 'dup' is declared 2 times (entries 1, 2). Content ids must be unique — operations are emitted per id, so a repeated id emits two operations for one node.",
+          "identity: Region 'panel' lists child 'ghost', which is not a region or content item.",
+          "identity: Content 'dup' is a child of 'panel' and 'panel'. A node has exactly one parent.",
+          "constraint: Constraint on 'panel' references unknown anchor 'nowhere'.",
+          "connector: Connector 'c' references 'not-a-node' (not declared anywhere in this IR). Draw the nodes before connecting them.",
+          "geometry: Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
+          "geometry: Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
+          "containment: Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
+          "containment: Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
+          "relation: Relation on 'panel' names unknown anchor 'nowhere'; no side-by-side position was applied.",
+          "operation-trace: 'dup' ends up at (0, -1435) relative to parent 'panel', which is canvas (0, -703), but its resolved box is (0, -1435). The operation trace and the resolved geometry disagree."
+        ]
+      }
+    },
+    {
+      "id": "A9",
+      "title": "Typography: emitted-vs-resolved width consistency across sizes and wrapping",
+      "group": "compiler",
+      "requirement": "Every emitted text operation agrees with the resolved box it was compiled from.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 1,
+        "content": 5,
+        "operations": 7,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "A10",
+      "title": "Design tokens resolve, and a repeated token name cannot silently drift",
+      "group": "compiler",
+      "requirement": "Tokens compile into variables; two tokens sharing a name are rejected instead of overwriting.",
+      "status": "PASS",
+      "detail": "tokens bind and a repeated token name is rejected",
+      "raw": {
+        "bound": true,
+        "driftApplicable": false,
+        "driftViolations": [
+          "identity: Token name 'surface' is declared 2 times (entries 1, 2). Two tokens with one name bind to the same variable, so the later definition silently overwrites the earlier."
+        ]
+      }
+    },
+    {
+      "id": "B1",
+      "title": "Guard with no selection and an empty snapshot",
+      "group": "guardrails",
+      "requirement": "An empty or unresolved snapshot returns INDETERMINATE and can never read as PASS.",
+      "status": "PASS",
+      "detail": "both empty cases are INDETERMINATE with zero rules checked",
+      "raw": {
+        "unresolved": "INDETERMINATE",
+        "empty": "INDETERMINATE",
+        "rulesChecked": 0,
+        "message": "The guard had nothing to measure, so no rule was evaluated. This is not a pass: resolve the target first, then re-run."
+      }
+    },
+    {
+      "id": "B2",
+      "title": "Guard scope: full frame vs a single selected text node",
+      "group": "guardrails",
+      "requirement": "The verdict names the exact target, and a leaf selection cannot certify a screen.",
+      "status": "PASS",
+      "detail": "leaf is INDETERMINATE, frame evaluates every rule",
+      "raw": {
+        "leaf": "INDETERMINATE",
+        "leafMessage": "The selection is a TEXT named \"Section Label\", not a screen or frame. A product rule cannot be evaluated against a single layer. 1 node(s) were walked, so no rule was evaluated against a design.",
+        "frame": "PASS",
+        "frameRulesChecked": 2
+      }
+    },
+    {
+      "id": "B3",
+      "title": "Review prioritisation: severity leads, repetitive findings group, counts survive",
+      "group": "guardrails",
+      "requirement": "A serious defect outranks twelve minor ones, and twelve identical findings arrive as one grouped finding with its count.",
+      "status": "PASS",
+      "detail": "1 grouped finding covering 14 nodes; the critical contrast defect ranks first",
+      "raw": {
+        "totalFindings": 3,
+        "order": [
+          "text-contrast(critical)",
+          "icon-only-control(serious)",
+          "default-layer-name(minor)"
+        ],
+        "grouped": [
+          {
+            "occurrences": 14,
+            "title": "14 nodes: Layer \"Rectangle 0\" still has a default name",
+            "affected": 14
+          }
+        ]
+      }
+    },
+    {
+      "id": "B4",
+      "title": "Contrast, minimum type, touch targets, clipping, off-canvas content, spacing",
+      "group": "guardrails",
+      "requirement": "Each structural rule fires on a fixture built to violate exactly that rule.",
+      "status": "PASS",
+      "detail": "4 structural rules each fired on their fixture",
+      "raw": {
+        "findings": [
+          "text-contrast/critical/accessibility",
+          "overflow/serious/geometry",
+          "tiny-technical-text/serious/accessibility",
+          "tap-target-size/serious/geometry"
+        ]
+      }
+    },
+    {
+      "id": "B5",
+      "title": "Repeated rows and device indicators are not reported as duplicates",
+      "group": "guardrails",
+      "requirement": "Intentional repetition passes; genuinely duplicated content still fails.",
+      "status": "PASS",
+      "detail": "row furniture exempt, real duplication still caught",
+      "raw": {
+        "repeatedRows": 0,
+        "identicalCards": 1
+      }
+    },
+    {
+      "id": "B6",
+      "title": "Second review after applying fixes reports what changed",
+      "group": "guardrails",
+      "requirement": "Applying the suggested repairs and re-reviewing leaves strictly fewer findings, and the delta is reported.",
+      "status": "PASS",
+      "detail": "1 -> 0 contrast findings after applying 6 proposed repairs",
+      "raw": {
+        "before": 1,
+        "after": 0,
+        "contrastBefore": 1,
+        "contrastAfter": 0,
+        "repairsApplied": 6
+      }
+    },
+    {
+      "id": "A2-note",
+      "title": "Long label stays inside a fixed-width column (maxWidth honoured)",
+      "group": "compiler",
+      "requirement": "A long label wraps inside its column rather than widening or escaping it.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 2,
+        "content": 1,
+        "operations": 4,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "A3-note",
+      "title": "Bottom navigation reads as a compact row",
+      "group": "compiler",
+      "requirement": "Tab items in a 72px footer resolve to a height that fits a 72px footer.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 1,
+        "content": 4,
+        "operations": 10,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "A1-hug",
+      "title": "Hug components emit the size the layout reserved for them",
+      "group": "compiler",
+      "requirement": "A nav item, status pill or button resolves to its own size, and that is the size it is emitted at.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 1,
+        "content": 3,
+        "operations": 8,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "A7-coords",
+      "title": "Shapes and vectors are emitted in parent-relative coordinates",
+      "group": "compiler",
+      "requirement": "Every graphic operation's x/y is relative to the region it is created in, matching what the plugin assigns.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "traceMismatches": 0,
+        "regions": 1,
+        "content": 3,
+        "operations": 5,
+        "violations": 0,
+        "blockingViolations": []
+      }
+    },
+    {
+      "id": "C1",
+      "title": "Apply only to a dedicated disposable stress-test frame",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "An apply is a write to a named frame in the live file, so it cannot be performed or verified by an offline runner. Unblocked only by a connected plugin and an explicit disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "C2",
+      "title": "Render the applied frame and inspect visual hierarchy",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Requires a screenshot of a frame that an apply produced; no such frame exists yet. Unblocked only by a connected plugin and an explicit disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "C3",
+      "title": "Re-inspect native node geometry after apply",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Requires reading back native node ids, which only exist once C1 has written them. Unblocked only by a connected plugin and an explicit disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "C4",
+      "title": "Record plugin version, inputs, verdicts, render evidence",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Cannot be gathered here: recording plugin version and render evidence requires a connected plugin and a frame that an apply actually produced. scripts/run-live-benchmark.mjs does this against the live plugin, not this offline matrix. Unblocked only by a connected plugin and an explicit disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "A1",
+      "title": "Dense 5-region enterprise dashboard, 30+ items, connectors, vectors",
+      "group": "compiler",
+      "requirement": "A dense but legal screen compiles, stays on canvas, and emits geometry that matches its resolved boxes.",
+      "knownIssue": "PARTLY FIXED. The emitted-vs-resolved mismatches are gone — thirteen of them, all of the form 'nav-0 is emitted 64 wide but its resolved box is 168 wide' — by making hug components compute their size once (A1-hug) and by emitting graphics in parent-relative coordinates (A7-coords). Two containment failures remain. (1) A vector placed by the radial/overshoot path resolves outside its parent region: 'trace-1 escapes topology (216,80 32x32 in 232,96 1208x620)'. (2) A five-region shell stacks inspector and timeline below the canvas. Issue #12 additional issue 5: fixed/fill/hug, explicit top/bottom and below/rightOf relations combine into oversize regions and silent position drift; a single authoritative geometry model is still needed.",
+      "status": "FAIL",
+      "detail": "not applicable: Region 'inspector' spills past the bottom edge of the 1440x900 canvas: 320x340 at (232, 748). | Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 1120).; regions off canvas: inspector @ 232,748 320x340, timeline @ 232,1120 1208x482; 1 content nodes escape their region: trace-1 escapes topology (216,80 32x32 in 232,96 1208x620)",
+      "raw": {
+        "applicable": false,
+        "traceMismatches": 0,
+        "regions": 5,
+        "content": 31,
+        "operations": 61,
+        "violations": 3,
+        "blockingViolations": [
+          "geometry: Region 'inspector' spills past the bottom edge of the 1440x900 canvas: 320x340 at (232, 748).",
+          "geometry: Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 1120)."
+        ]
+      }
+    },
+    {
+      "id": "A3",
+      "title": "Narrow/responsive canvas (390x844) with status rail and overflow-prone text",
+      "group": "compiler",
+      "requirement": "A mobile canvas keeps every region inside it.",
+      "knownIssue": "PARTLY FIXED. The nav items themselves are now compact — four tabs resolve 36px tall inside a 72px footer instead of 90px (A3-note) — because hug components size themselves. What remains is placement: the footer is laid out at y=794 with a resolved height of 80, so it ends at 874 on an 844px canvas. A footer is not being pinned to the bottom of the viewport; it is falling out of the flow below it. Issue #12 additional issue 2, reduced to the shell layout rather than the item size.",
+      "status": "FAIL",
+      "detail": "regions off canvas: footer @ 0,794 390x80; not applicable: Region 'footer' spills past the bottom edge of the 390x844 canvas: 390x80 at (0, 794).",
+      "raw": {
+        "applicable": false,
+        "traceMismatches": 0,
+        "regions": 4,
+        "content": 7,
+        "operations": 17,
+        "violations": 1,
+        "blockingViolations": [
+          "geometry: Region 'footer' spills past the bottom edge of the 390x844 canvas: 390x80 at (0, 794)."
+        ]
+      }
+    },
+    {
+      "id": "A4",
+      "title": "Large canvas (1920x1200), nested hierarchy, mixed fixed/fill/hug sizing",
+      "group": "compiler",
+      "requirement": "Mixed sizing modes resolve without any region leaving the canvas.",
+      "knownIssue": "A `cluster` layout inside a `height: \"fill\"` region grows the region to fit its children instead of being bounded by it: 'topology @ 272,816 640x1944' — 1944px tall inside a 1200px canvas, with its three device nodes at y=776, 1728 and 2680, so every one of them is outside the canvas. The graph algorithm is being handed unbounded space, and the region that should have clipped it is being resized to fit. Issue #12 additional issue 5, in its clearest form.",
+      "status": "FAIL",
+      "detail": "regions off canvas: topology @ 272,816 640x1944, inspector @ 272,2792 320x368; 3 nodes escape their region: node-0 escapes topology (208,776 128x80 in 272,816 640x1944); node-1 escapes topology (208,1728 128x80 in 272,816 640x1944); node-2 escapes topology (208,2680 128x80 in 272,816 640x1944); not applicable: Region 'topology' spills past the bottom edge of the 1920x1200 canvas: 640x1944 at (272, 816). | Region 'inspector' spills past the bottom edge of the 1920x1200 canvas: 320x368 at (272, 2792).",
+      "raw": {
+        "applicable": false,
+        "traceMismatches": 0,
+        "regions": 5,
+        "content": 9,
+        "operations": 26,
+        "violations": 5,
+        "blockingViolations": [
+          "geometry: Region 'topology' spills past the bottom edge of the 1920x1200 canvas: 640x1944 at (272, 816).",
+          "geometry: Region 'inspector' spills past the bottom edge of the 1920x1200 canvas: 320x368 at (272, 2792)."
+        ]
+      }
+    },
+    {
+      "id": "A6",
+      "title": "Content containment: long text, dense grid, padding and gap extremes",
+      "group": "compiler",
+      "requirement": "Padding is honoured and overflow is reported rather than silently drawn outside the region.",
+      "knownIssue": "Two failures, both about the grid layout ignoring the box it was handed. (1) `padding: 48` is not honoured — the first cell resolves at x=0 in a region whose origin is x=0, so the 48px inset is simply absent. (2) A 3-column grid of six cells places them at y=678, 707 and 736 inside a region 646px tall, and no violation reports the overflow. Issue #12 additional issue 6: 'content exceeds its region bounds (map region 850x600 while content reached y=699)' — acceptance criterion 4 asks that overflow be contained or explicitly allowed, and currently it is neither.",
+      "status": "FAIL",
+      "detail": "padding 48 not honoured: first cell at x=0, region at 0; 6 nodes escape their region with no violation reported: cell-0 escapes padded (0,678 60x21 in 0,0 400x646); cell-1 escapes padded (0,707 60x21 in 0,0 400x646); cell-2 escapes padded (0,736 60x21 in 0,0 400x646)",
+      "raw": {
+        "applicable": false,
+        "traceMismatches": 0,
+        "regions": 3,
+        "content": 25,
+        "operations": 35,
+        "violations": 14,
+        "blockingViolations": [
+          "identity: Content 'cell-0' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "identity: Content 'cell-1' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "identity: Content 'cell-2' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "identity: Content 'cell-3' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "identity: Content 'cell-4' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "identity: Content 'cell-5' is a child of 'padded' and 'dense'. A node has exactly one parent.",
+          "geometry: Region 'dense' spills past the bottom edge of the 1440x900 canvas: 400x400 at (0, 678).",
+          "geometry: Region 'longtext' spills past the bottom edge of the 1440x900 canvas: 320x200 at (0, 1110)."
+        ]
+      }
+    }
+  ]
+}

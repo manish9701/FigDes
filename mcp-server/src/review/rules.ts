@@ -84,7 +84,12 @@ export function runRules(metrics: MetricsReport, ruleset: RuleSet): Finding[] {
   // cap each rule and state plainly that it was capped. Repeating the same
   // finding 400 times would crowd out the distinct problems in the context
   // window and read as noise rather than signal.
-  const PER_RULE_CAP = 12;
+  //
+  // Generous, because repetition is now collapsed after the fact: the cap
+  // exists to bound traversal, not to decide what the reviewer gets to see. At
+  // 12 it was silently truncating a 64-node audit to 12 and the "+N more"
+  // counts were the only record of the rest (issue #12, B3).
+  const PER_RULE_CAP = 500;
 
   const childrenOf = new Map<string, NodeMetrics[]>();
   for (const n of nodes) {
@@ -123,7 +128,10 @@ export function runRules(metrics: MetricsReport, ruleset: RuleSet): Finding[] {
     }
   }
 
-  const trimmed = dedupe(out).sort(compareFindings);
+  // Dedupe, then collapse repetition, then order by severity. Grouping before
+  // ordering is what stops one repeated rule from occupying the top of the list
+  // regardless of how minor it is.
+  const trimmed = groupRepetitive(dedupe(out)).sort(compareFindings);
 
   // Attach an honest count of what was left out rather than silently dropping it.
   for (const f of trimmed) {
@@ -175,10 +183,138 @@ function evidenceTypeFor(rule: string): Finding["evidenceType"] {
   }
 }
 
+/**
+ * Ordering for the to-do list.
+ *
+ * **Severity first.** This was confidence-first, and it buried real defects.
+ * The live audit of `EXO_HARD_TEST_CLUSTER_ROUTING_V03` (issue #12, B3) returned
+ * twelve `unstyled-text` findings and nothing else, because that rule is
+ * `high` confidence / `minor` severity: twelve cosmetic notes about text styles
+ * outranked any overlap, contrast or tap-target defect, whatever their severity.
+ *
+ * Confidence is still meaningful, but as a tiebreak *within* a severity band —
+ * which is what it always should have been. "We are certain this is a minor
+ * cosmetic issue" is not a reason to read it before "this is a broken layout".
+ */
 function compareFindings(a: Finding, b: Finding): number {
-  const conf = { high: 0, medium: 1, low: 2 };
   const sev = { critical: 0, serious: 1, minor: 2 };
-  return conf[a.confidence] - conf[b.confidence] || sev[a.severity] - sev[b.severity] || a.rule.localeCompare(b.rule);
+  const conf = { high: 0, medium: 1, low: 2 };
+  return sev[a.severity] - sev[b.severity] || conf[a.confidence] - conf[b.confidence] || a.rule.localeCompare(b.rule);
+}
+
+/**
+ * How many affected nodes a grouped finding will list individually.
+ *
+ * The count is always exact; only the list is capped, because a 400-node file
+ * should not put 400 ids in the context window to say "400 layers are unstyled".
+ */
+const GROUP_NODE_CAP = 40;
+
+/**
+ * Collapse findings that say the same thing about different nodes.
+ *
+ * A file with sixty unstyled text layers produced sixty findings, capped to
+ * twelve, all identical apart from which layer they named — so the critic's
+ * twelve slots were spent on one repeated note and the distinct problems in the
+ * frame had nowhere to appear (issue #12, B3: "12 findings returned, all
+ * `unstyled-text` ... indicating weak prioritization/deduplication").
+ *
+ * Only *point* findings group — ones that name exactly one node. A finding that
+ * already lists several nodes (`duplicate-siblings`, `card-wall`) has grouped
+ * itself and is left alone, which also means rules that aggregate deliberately
+ * keep their existing titles and evidence.
+ *
+ * Grouping never loses a repair: `suggestedOperations` from every member is
+ * unioned and deduplicated by target, so a grouped finding still fixes all the
+ * nodes it claims to cover.
+ */
+function groupRepetitive(findings: Finding[]): Finding[] {
+  const groups = new Map<string, Finding[]>();
+  const passthrough: Finding[] = [];
+
+  for (const f of findings) {
+    if (f.nodeIds.length !== 1) {
+      passthrough.push(f);
+      continue;
+    }
+    // Confidence and severity are part of the identity: two contrast findings at
+    // different ratios are different problems, while twelve unstyled labels are
+    // the same one.
+    const key = `${f.rule}|${f.confidence}|${f.severity}`;
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(f);
+    else groups.set(key, [f]);
+  }
+
+  const out: Finding[] = [...passthrough];
+
+  for (const members of groups.values()) {
+    if (members.length === 1) {
+      out.push(members[0]!);
+      continue;
+    }
+    out.push(collapse(members));
+  }
+
+  return out;
+}
+
+/** One finding standing for `members`, with the per-node repairs preserved. */
+function collapse(members: Finding[]): Finding {
+  const rep = members[0]!;
+  const count = members.length;
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  const ops: Operation[] = [];
+  const seenOps = new Set<string>();
+  for (const m of members) {
+    for (const id of m.nodeIds) {
+      if (!seen.has(id)) {
+        seen.add(id);
+        ids.push(id);
+      }
+    }
+    for (const o of m.suggestedOperations ?? []) {
+      const key = `${(o as { type?: string }).type}:${(o as { target?: string }).target ?? ""}`;
+      if (seenOps.has(key)) continue;
+      seenOps.add(key);
+      ops.push(o);
+    }
+  }
+
+  return {
+    ...rep,
+    // The representative's title names one layer, which would understate a
+    // grouped finding, so the count leads and the example follows.
+    title: `${count} nodes: ${stripLayerName(rep.title)}`,
+    evidence: {
+      ...rep.evidence,
+      occurrences: count,
+      grouped: true,
+      example: rep.title,
+      /** What each affected node looks like, when the samples differ. */
+      samples: members
+        .slice(0, 5)
+        .map((m) => m.title)
+        .join(" | "),
+    },
+    nodeIds: ids.slice(0, GROUP_NODE_CAP),
+    ...(ops.length > 0 ? { suggestedOperations: ops } : { suggestedOperations: rep.suggestedOperations }),
+  };
+}
+
+/**
+ * Drop a leading quoted layer name from a title so it reads as a general
+ * statement once it stands for several nodes.
+ *
+ * Only strips when the title actually opens with a quoted name. `"Row 3" is not
+ * using a text style` becomes `is not using a text style`, and the representative
+ * title is kept in `evidence.example` so nothing is lost.
+ */
+function stripLayerName(title: string): string {
+  const m = /^"[^"]*"\s*(.*)$/.exec(title);
+  return m?.[1] ? m[1] : title;
 }
 
 export function summarise(findings: Finding[]) {

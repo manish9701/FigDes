@@ -204,8 +204,16 @@ test("ignores empty and whitespace-only text", () => {
   assert.equal(mk("   \n ").length, 0);
 });
 
-test("caps repeat findings per rule and reports how many were suppressed", () => {
+test("repeat findings are grouped into one finding with an exact count", () => {
   // 200 low-contrast labels would otherwise crowd out every other rule.
+  //
+  // This used to assert the *suppression* mechanism: findings were truncated at
+  // 12 per rule and the remainder reported as `additionalOccurrences`. Issue #12
+  // (B3) showed that mechanism losing information — the reviewer said "12
+  // findings, +50 more" and a designer could not tell how many nodes to fix —
+  // and occupying the critic's whole list with one repeated note. Repetition is
+  // now collapsed instead of discarded, so the count is exact and every affected
+  // node is listed.
   const nodes = [node({ id: "1:1", name: "Card", w: 2000, h: 2000, background: "#FFFFFF" })];
   for (let i = 0; i < 200; i++) {
     nodes.push(
@@ -228,10 +236,37 @@ test("caps repeat findings per rule and reports how many were suppressed", () =>
   const findings = runRules(metrics(nodes), "review");
   const contrast = find(findings, "text-contrast");
 
-  assert.ok(contrast.length <= 12, `expected a capped list, got ${contrast.length}`);
-  assert.ok(contrast.length > 0);
-  assert.ok("additionalOccurrences" in contrast[0].evidence, "suppressed count must be reported");
-  assert.ok(Number(contrast[0].evidence.additionalOccurrences) > 0);
+  assert.equal(contrast.length, 1, `200 identical findings should collapse to 1, got ${contrast.length}`);
+  assert.equal(contrast[0].evidence.occurrences, 200, "the grouped finding must carry the exact count, not an estimate");
+  assert.equal(contrast[0].evidence.grouped, true);
+  assert.match(contrast[0].title, /^200 nodes: /, "the title leads with the count");
+  // Every node is claimed or named: 40 listed individually, the count says 200.
+  assert.equal(contrast[0].nodeIds.length, 40);
+  assert.ok(
+    contrast[0].suggestedOperations.length > 0,
+    "a grouped finding must still carry the repairs, or no automated loop can act on it",
+  );
+});
+
+test("a grouped finding ranks below a more severe ungrouped one", () => {
+  // The other half of issue #12 B3: grouping is not enough on its own. Ordering
+  // has to lead with severity, or twelve cosmetic notes still outrank a broken
+  // layout. `unstyled-text`-shaped repetition is high-confidence/minor; contrast
+  // is serious. The serious one must come first.
+  const nodes = [node({ id: "1:1", name: "Screen", w: 1280, h: 900 })];
+  for (let i = 0; i < 14; i++) {
+    nodes.push(node({ id: `1:${200 + i}`, parentId: "1:1", name: `Rectangle ${i}`, depth: 1, type: "FRAME", x: i * 80, y: 100, w: 60, h: 60, fill: "#FFFFFF" }));
+  }
+  nodes.push(
+    node({
+      id: "1:900", parentId: "1:1", name: "Warning", type: "TEXT", depth: 1, x: 0, y: 400, w: 200, h: 16, background: "#F7F5EF",
+      text: { content: "MEMORY TOO LOW", length: 14, truncated: false, size: 12, family: "Inter", style: "Regular", color: "#9A9789", styled: true },
+    }),
+  );
+
+  const findings = runRules(metrics(nodes), "review");
+  assert.equal(find(findings, "default-layer-name").length, 1, "the repeated note should group");
+  assert.equal(findings[0].rule, "text-contrast", `expected the serious defect first, got '${findings[0].rule}' (${findings[0].severity})`);
 });
 
 test("a single rule cannot crowd out the others", () => {

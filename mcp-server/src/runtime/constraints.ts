@@ -169,9 +169,22 @@ export function solveConstraints(input: SolveInput): PlacedBox[] {
  * Orders constraints so every anchor is positioned before the box that
  * references it.
  *
- * Kahn's algorithm over the anchor edges. Anything left over is part of a cycle
- * and is emitted in declaration order at the end, with one violation naming the
- * whole cycle — a single actionable message beats N contradictory ones.
+ * Kahn's algorithm over the anchor edges. Anything left over is part of a cycle.
+ *
+ * ## A cycle is not ordered, it is refused
+ *
+ * This used to emit the leftovers "in declaration order" with a warning, and
+ * that is the worst of both behaviours: the positions it produced were
+ * self-contradictory — `b rightOf a` resolved to x=316 when it expected x=1048 —
+ * and the run still reported success, so the nonsense geometry went to Figma.
+ * Diagnosing a cycle and then guessing at its layout is the exact failure this
+ * module exists to prevent, stated in the warning itself.
+ *
+ * So a cyclic component is now left entirely unapplied, reported under the
+ * blocking `relation` rule, and therefore marks the whole compile
+ * inapplicable. The boxes involved keep their shell-layout positions, which is
+ * at least visibly *not* the requested arrangement, and the author is told
+ * exactly which nodes to break the loop on.
  */
 function dependencyOrder(
   constraints: ConstraintSpec[],
@@ -203,15 +216,10 @@ function dependencyOrder(
   if (remaining.size > 0) {
     const cycle = [...remaining.values()].map((i) => constraints[i]!.id).join(" -> ");
     violations.push({
-      rule: "constraint",
-      message: `Circular constraints could not be ordered (${cycle}). Applied in declaration order; verify the resulting positions.`,
+      rule: "relation",
+      message: `Circular constraints could not be resolved (${cycle}). None of them were applied, so these nodes are unpositioned relative to each other — break the cycle (a relation needs at least one anchored node) and re-run.`,
     });
-    for (const i of remaining.values()) out.push(constraints[i]!);
-  }
-
-  // A constraint on an unknown node cannot be ordered against anything.
-  for (const c of out) {
-    if (!boxes.has(c.id)) continue;
+    // Deliberately not pushed onto `out`. See the note above.
   }
 
   return out;

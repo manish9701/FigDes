@@ -22,6 +22,19 @@ jobs:
       - run: npm test
       - name: Run design-planning benchmark
         run: npm run benchmark:design
+      # Issue #12: the stress matrix is offline, so it runs here. It does not use
+      # --strict: four cases are known-failing layout bugs that are tracked in
+      # docs/issue-12-report.md, and the suite asserts each of them is still
+      # failing. Making CI red for tracked, documented failures would only teach
+      # people to ignore the step. Drop --strict on once they close.
+      - name: Run issue #12 stress matrix
+        run: npm run stress:matrix
+      - name: Upload stress matrix report
+        uses: actions/upload-artifact@v4
+        with:
+          name: figdes-stress-matrix
+          path: artifacts/stress-matrix/latest.json
+          if-no-files-found: error
       - name: Upload benchmark report
         uses: actions/upload-artifact@v4
         with:

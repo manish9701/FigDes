@@ -14,6 +14,7 @@ import type { CompileResult, ContentSpec, DesignIR, ResolvedBox, ResolvedRegion 
 import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, type PlacedBox } from "./constraints";
+import { checkIdentity } from "./identity";
 import { routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
@@ -221,6 +222,14 @@ export function compileIR(ir: DesignIR): CompileResult {
   if (!Array.isArray(ir.tokens)) ir.tokens = [];
   if (!Array.isArray(ir.relations)) ir.relations = [];
   if (!Array.isArray(ir.links)) ir.links = [];
+
+  // Identity is checked before anything reads the program, because every other
+  // stage keys off ids. A duplicate id collapses two nodes into one `boxes`
+  // entry, so by the time geometry is resolved the collision is invisible and
+  // surfaces as a position mismatch with no cause. Naming it here is the
+  // difference between "move this region" and "these two things are the same
+  // name" (issue #12, A8).
+  violations.push(...checkIdentity(ir));
 
   let regions = planLayout(ir, defaultGutter(canvas.grid) * rhythmScale);
   if (alignGrid > 0) {
@@ -595,7 +604,7 @@ export function compileIR(ir: DesignIR): CompileResult {
   // Only the structural rules gate applicability. A product-constraint warning
   // ("this looks like a card wall") is a judgement about the design, not a
   // statement that the coordinates are wrong.
-  const BLOCKING = new Set(["geometry", "relation", "operation-trace", "connector", "content-parent"]);
+  const BLOCKING = new Set(["geometry", "relation", "operation-trace", "connector", "content-parent", "identity"]);
   const inapplicableReasons = violations.filter((v) => BLOCKING.has(v.rule)).map((v) => v.message);
 
   return {
@@ -1143,15 +1152,17 @@ function emitContent(args: {
         const at = points.get(spec.id);
         if (!at) continue;
         const w = (inner.w - gap * (flowColumns - 1)) / flowColumns;
-        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale) }, spec);
-        boxes.set(spec.id, { id: spec.id, ...box });
-        if (spec.kind === "text") emitText(spec, region, box, operations, typeScale, titleScale, look);
-        else emitComponent(spec, region, box, operations, grid, typeScale, look);
+        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look) }, spec);
+        const hug = spec.kind === "component" ? hugSize(spec, grid, typeScale, look) : null;
+        const final: ResolvedBox = hug ? { ...box, ...hug } : box;
+        boxes.set(spec.id, { id: spec.id, ...final });
+        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
     } else {
       const placed = packContent({
         region: inner,
-        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale) })),
+        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale, grid, look) })),
         gap,
         columns: flowColumns,
       });
@@ -1159,7 +1170,12 @@ function emitContent(args: {
       for (const spec of flow) {
         const box = placed.get(spec.id);
         if (!box) continue;
-        const final: ResolvedBox = devicePlacementBox(box, spec);
+        // A hug component draws at its own size, so the recorded box follows it
+        // rather than the other way round. The layout reserved that height (see
+        // `estimateHeight`), so the neighbours above and below already account
+        // for it and nothing shifts.
+        const hug = spec.kind === "component" ? hugSize(spec, grid, typeScale, look) : null;
+        const final: ResolvedBox = hug ? { ...devicePlacementBox(box, spec), ...hug } : devicePlacementBox(box, spec);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
@@ -1216,9 +1232,27 @@ function emitText(
 }
 
 function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, region: ResolvedRegion, box: ResolvedBox, operations: Operation[]): void {
+  // Shapes and vectors are emitted **relative to their region**, like text and
+  // components. The plugin assigns `node.x = op.x`, and Figma's `x` is
+  // parent-relative, so an absolute coordinate here lands the node at its own
+  // canvas position *inside* the frame — displaced by the region's origin, which
+  // for a panel at (232, 96) means 232px right and 96px down of where the layout
+  // put it.
+  //
+  // This was the only emitter still passing absolute coordinates, which is why
+  // the trace check reported it as a mismatch rather than as broken output:
+  // "'trace-1' ends up at (216, 80) relative to parent 'topology', which is
+  // canvas (448, 176), but its resolved box is (216, 80)" (issue #12, A1).
+  // Nothing caught it earlier because polygons and stars compute their path from
+  // the absolute box and then normalise it, which happens to land them back on
+  // the right node-local origin — the bug only bit the plain rect/ellipse/vector
+  // paths.
+  box = { ...box, x: box.x - region.x, y: box.y - region.y };
+
   // Polygons and stars are computed, not hand-drawn: the path builders in
   // marks.ts own the vertex math, and the result flows through the same vector
-  // pipeline as a hand-written path.
+  // pipeline as a hand-written path. The path is built in parent-local space to
+  // match the box just converted above.
   if (spec.kind === "shape" && (spec.shape === "polygon" || spec.shape === "star")) {
     const cx = box.x + box.w / 2;
     const cy = box.y + box.h / 2;
@@ -1339,6 +1373,12 @@ function emitComponent(
     const v = p[k];
     return typeof v === "number" ? v : fallback;
   };
+  /**
+   * The screen-level style, kept distinct from the `button` case's local `look`.
+   * `hugSize` measures with the screen's typography, so it must not receive a
+   * single button's variant palette.
+   */
+  const styleLook = look;
 
   switch (spec.type) {
     case "metric": {
@@ -1399,8 +1439,8 @@ function emitComponent(
           name: label,
           x: box.x,
           y: box.y,
-          width: hugWidth(label, { fontSize: Math.round(11 * typeScale), paddingX: grid }),
-          height: 22,
+          width: hugSize(spec, grid, typeScale, look)?.w ?? hugWidth(label, { fontSize: Math.round(11 * typeScale), paddingX: grid }),
+          height: hugSize(spec, grid, typeScale, look)?.h ?? 22,
           fill: p.surface !== undefined ? str("surface", tone.bg) : tone.bg,
           cornerRadius: grid,
           padding: { top: 2, right: grid, bottom: 2, left: grid },
@@ -1476,8 +1516,8 @@ function emitComponent(
           name: str("label", "Nav item"),
           x: box.x,
           y: box.y,
-          width: hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
-          height: 36,
+          width: hugSize(spec, grid, typeScale, look)?.w ?? hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
+          height: hugSize(spec, grid, typeScale, look)?.h ?? 36,
           fill: active ? "#F2C94C" : surfaceFill(p.surface, []),
           radius: grid / 2,
           padding: { top: grid, right: grid * 1.5, bottom: grid, left: grid * 1.5 },
@@ -1540,8 +1580,8 @@ function emitComponent(
           name: label,
           x: box.x,
           y: box.y,
-          width: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-          height: 40,
+          width: hugSize(spec, grid, typeScale, styleLook)?.w ?? hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
+          height: hugSize(spec, grid, typeScale, styleLook)?.h ?? 40,
           fill: look.surface,
           ...(look.stroke !== undefined ? { stroke: look.stroke, strokeWeight: 1 } : {}),
           ...(look.opacity !== undefined ? { opacity: look.opacity } : {}),
@@ -2272,8 +2312,8 @@ function emitComponent(
           name: label,
           x: box.x,
           y: box.y,
-          width: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-          height: 40,
+          width: hugSize(spec, grid, typeScale, styleLook)?.w ?? hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
+          height: hugSize(spec, grid, typeScale, styleLook)?.h ?? 40,
           fill: tone.bg,
           stroke: tone.fg,
           strokeWeight: 1,
@@ -3162,10 +3202,15 @@ const FIXED_COMPONENT_HEIGHT: Record<string, number> = {
   button: 40,
 };
 
-function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1): number {
+function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK): number {
   if (spec.kind !== "text") {
     if (spec.kind === "component") {
       if (spec.type === "topologyMap") return Math.round(320 * typeScale);
+      // A hug component knows its own height exactly — it is the same number the
+      // emitter will draw. Using the generic 90px estimate here is what made the
+      // layout reserve 90px of column for a 36px nav item.
+      const hug = hugSize(spec, grid, typeScale, look);
+      if (hug) return hug.h;
       const fixed = FIXED_COMPONENT_HEIGHT[spec.type];
       return Math.round((fixed ?? 90) * typeScale);
     }
@@ -3179,6 +3224,68 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
   const charsPerLine = Math.max(8, Math.floor(usable / (size * 0.55)));
   const lines = Math.max(1, Math.ceil(spec.text.length / charsPerLine));
   return Math.round(lines * size * 1.4 + 4);
+}
+
+/**
+ * The size a hug component actually draws at, or null for components that fill
+ * their column.
+ *
+ * ## The bug this removes
+ *
+ * Nav items, status pills and buttons size themselves to their content, and they
+ * computed that size at emit time (`hugWidth(...)`, a literal `36`) while the
+ * layout reserved a generic 90px grid cell. Two independent answers to one
+ * question, which is exactly what the trace check exists to catch — and it did,
+ * loudly: a dense five-region dashboard reported thirteen mismatches of the form
+ * "'nav-0' is emitted 64 wide but its resolved box is 168 wide" (issue #12, A1
+ * and acceptance criterion 2).
+ *
+ * The compiler was *reporting* the disagreement honestly. What was wrong was
+ * that two answers existed. Now one function answers it, the layout reserves
+ * that space, and the node is emitted at it — so the resolved box, the operation
+ * and the pixels in Figma are the same number by construction rather than by
+ * coincidence.
+ *
+ * Hug still wins over the column cell: a 36px nav item drawn 90px tall because
+ * it happened to land in a three-column grid is not what `hug` means.
+ */
+function hugSize(
+  spec: Extract<ContentSpec, { kind: "component" }>,
+  grid: number,
+  typeScale = 1,
+  look: StyleLook = DEFAULT_LOOK,
+): { w: number; h: number } | null {
+  const str = (k: string, fallback = ""): string => {
+    const v = spec.props[k];
+    return typeof v === "string" ? v : fallback;
+  };
+  switch (spec.type) {
+    // Only components that genuinely size to their *content* belong here.
+    //
+    // `modelRow` was briefly added to this list and that was wrong: a table row
+    // spans its column, and hug-sizing it made every row in a table a different
+    // width. `tests/challenge-regressions.test.mjs` caught it, which is the point
+    // of that test — a "one source of truth" refactor is exactly the kind of
+    // change that can quietly redefine what a component means.
+    case "navItem": {
+      const label = look.navUpper ? str("label", "Item").toUpperCase() : str("label", "Item");
+      return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }), h: Math.round(36 * typeScale) };
+    }
+    case "statusPill": {
+      const label = str("label", "Status");
+      return { w: hugWidth(label, { fontSize: Math.round(11 * typeScale), paddingX: grid }), h: Math.round(22 * typeScale) };
+    }
+    case "button": {
+      const label = str("label", "Button");
+      return { w: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }), h: Math.round(40 * typeScale) };
+    }
+    case "fitGauge": {
+      const label = str("label", spec.props.fits !== false ? "Fits" : "Does not fit");
+      return { w: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }), h: Math.round(40 * typeScale) };
+    }
+    default:
+      return null;
+  }
 }
 
 function humanize(id: string): string {

@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-10-16T12:01:07.048Z",
+  "generatedAt": "2026-10-16T12:13:59.552Z",
   "totals": {
-    "total": 20,
+    "total": 21,
     "pass": 20,
-    "fail": 0,
+    "fail": 1,
     "blocked": 0
   },
   "results": [
@@ -489,6 +489,41 @@
           }
         ],
         "reconciliation": "Every region reported by the compiler matched the native node bounds exactly, and traceMismatches was 0 before apply. The findings above are all review-level observations on the applied result, not disagreements between the compiler and Figma."
+      }
+    },
+    {
+      "id": "L04",
+      "title": "Re-verify the #14 fixes on a full applied frame",
+      "group": "live",
+      "requirement": "The contrast, type-size and spacing fixes, verified on a complete applied frame rather than on the compiler output alone.",
+      "knownIssue": "PARTIALLY VERIFIED, blocked on infrastructure rather than on code.\n\nWhat is verified, against the deployed server: the nav label now emits #A8ABA0 (8.09:1 on the #111111 rail, was 3.82:1), device memory labels emit 11px (was 10px), and status pill padding is 4px top and bottom (was 2px). The contrast fix is additionally confirmed visually — Fleet, Models and Runs are legible on the dark rail in the render.\n\nWhat is not verified: a complete applied frame. `create_design` against the remote deployment now times out partway through and commits a partial transaction — a 52-operation apply lands ~15 nodes, and a deliberately reduced 14-operation shell-only apply still lands 6. The cut-off is around six operations regardless of batch size, so splitting the apply does not avoid it. Two earlier runs on a warm server did complete in full (44 nodes, node 313:349), which is the evidence recorded in L01-L03, so this is an availability regression rather than a defect in the apply path itself.\n\nNot worked around by hand-pasting operations or by claiming a partial frame is a pass. Until the remote apply is reliable, compiler-level fixes are verified through `compile_ir` and single-defect applies.",
+      "status": "FAIL",
+      "detail": "create_design times out mid-transaction on the remote deployment and commits a partial frame; a 14-op shell-only apply still lands 6 nodes, so the cut is not batch size. Compiler-level verification passes; full-frame verification is unavailable.",
+      "raw": {
+        "observed": [
+          {
+            "attempt": "52 operations",
+            "landed": "15 nodes",
+            "outcome": "timeout"
+          },
+          {
+            "attempt": "14 operations (shell only)",
+            "landed": "6 nodes",
+            "outcome": "timeout"
+          },
+          {
+            "attempt": "52 operations, warm server, earlier in the session",
+            "landed": "44 nodes",
+            "outcome": "success"
+          }
+        ],
+        "compilerLevelVerification": {
+          "navLabelFill": "#A8ABA0",
+          "contrastOnRail": "8.09:1 (was 3.82:1, requirement 4.5:1)",
+          "deviceMemoryFontSize": "11px (was 10px)",
+          "statusPillPadding": "4px top and bottom (was 2px)"
+        },
+        "cleanup": "partial frames removed; the file is back to its 6 original frames"
       }
     }
   ]

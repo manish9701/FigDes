@@ -24,6 +24,45 @@ import { runRules, summarise, type RuleSet } from "./review/rules";
 import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue } from "./runtime/tools";
 import { renderDesign } from "./render-tool";
 import { DesignGuardArgs, ProjectMemoryArgs, designGuardTool, projectMemoryTool } from "./memory/tools";
+import {
+  AnalyseMoodboardArgs,
+  ApproveObservationsArgs,
+  AttachMoodboardArgs,
+  EndTaskContextArgs,
+  ListMoodboardsArgs,
+  MoodboardContextArgs,
+  SaveMoodboardArgs,
+  UpdateVisualBriefArgs,
+  analyseMoodboardTool,
+  approveObservationsTool,
+  attachMoodboardTool,
+  deleteMoodboardTool,
+  detachMoodboardTool,
+  endTaskContextTool,
+  getVisualBriefTool,
+  listMoodboardsTool,
+  moodboardContextTool,
+  saveMoodboardTool,
+  updateVisualBriefTool,
+} from "./moodboard/tools";
+import {
+  ApplyChangeArgs,
+  ListFeedbackArgs,
+  PlanChangeArgs,
+  ReresolveChangeArgs,
+  RequestChangeArgs,
+  TagTargetsArgs,
+  UpdateChangeRequestArgs,
+  VerifyChangeArgs,
+  applyChangeTool,
+  listFeedbackTool,
+  planChangeTool,
+  requestChangeTool,
+  reresolveChangeTool,
+  tagTargetsTool,
+  updateChangeRequestTool,
+  verifyChangeTool,
+} from "./feedback/tools";
 import { PlanScreenArgs, planScreenTool } from "./plan/tools";
 import { DesignBriefArgs, designBriefTool } from "./plan/brief";
 import { projectKey } from "./memory/store";
@@ -443,6 +482,20 @@ export interface ToolDefinition {
   description: string;
   inputSchema: z.ZodTypeAny;
   handler: (args: unknown, registry: SessionRegistry) => Promise<unknown>;
+}
+
+/**
+ * Reads `sessionId` out of unvalidated arguments.
+ *
+ * The handler's `args` is deliberately `unknown` — validation is the tool's own
+ * schema's job, and doing it here as well would mean two places that can disagree
+ * about what is valid. But routing needs the session before validation has run,
+ * so the id is read defensively rather than assumed present.
+ */
+function sessionOf(args: unknown): string | undefined {
+  if (!args || typeof args !== "object") return undefined;
+  const id = (args as Record<string, unknown>)["sessionId"];
+  return typeof id === "string" && id.length > 0 ? id : undefined;
 }
 
 const DISCONNECTED = {
@@ -1822,6 +1875,162 @@ inputSchema: ModifyArgs,
       "The reliable edit loop in one call: discover the target subtree once, preflight the patch (Figma is never contacted on failure), commit as one ledger-tracked transaction with one id, render a low-detail thumbnail, review geometry/accessibility/token consistency, produce a machine-readable before/after delta, and run one targeted token-aware repair pass. One transaction id, one timeline, one diff. Final QA still needs your fresh render judgement.",
     inputSchema: EditScreenArgs,
     handler: async (args, registry) => editScreenTool(registry, args),
+  },
+
+  /* ------------------------------------------------------------------ */
+  /* Moodboards (issue #11 Part C)                                       */
+  /* ------------------------------------------------------------------ */
+
+  {
+    name: "save_moodboard",
+    title: "Save a frame or image as a moodboard reference",
+    description:
+      "Save the current Figma selection (or explicit images) as a moodboard in this project's reference library. Saving stores sources only: nothing is analysed, nothing becomes a rule, and nothing enters any prompt until the moodboard is analysed, approved and explicitly attached to a task. Sources are stored as node ids, so a rename does not orphan them.",
+    inputSchema: SaveMoodboardArgs,
+    handler: async (args, registry) => saveMoodboardTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "analyse_moodboard",
+    title: "Extract evidence-backed observations from a moodboard",
+    description:
+      "Measure what the saved Figma frames can prove — palette, type scale, spacing rhythm, radius, density, surface treatment — and merge in observations you extracted from images by eye. Everything measured carries provenance 'measured'; anything you supply is marked 'inferred', so an unverified claim can never enter the approved profile wearing the authority of a measurement. If a source cannot be read the brief is marked partial and says so.",
+    inputSchema: AnalyseMoodboardArgs,
+    handler: async (args, registry) => analyseMoodboardTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "get_visual_brief",
+    title: "Read a moodboard's editable visual brief",
+    description: "The observations extracted from a moodboard, each with its evidence reference and confidence, plus whether it has been approved into the project profile or attached to a task.",
+    inputSchema: z.object({ sessionId: z.string().max(200).optional(), moodboardId: z.string().min(1).max(80) }).strict(),
+    handler: async (args, registry) => getVisualBriefTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "update_visual_brief",
+    title: "Correct an observation before approving it",
+    description: "Rewrite an observation in your own words (marked user-stated) or remove one the extraction got wrong. Do this before approving: approval is what turns an observation into a standing rule.",
+    inputSchema: UpdateVisualBriefArgs,
+    handler: async (args, registry) => updateVisualBriefTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "approve_observations",
+    title: "Approve observations into the project profile",
+    description:
+      "The only path by which a moodboard becomes a standing project rule. Approved observations form the small project profile that applies by default to every screen; the moodboard itself stays inactive until attached to a specific task. Keep this list small — it is injected on every request.",
+    inputSchema: ApproveObservationsArgs,
+    handler: async (args, registry) => approveObservationsTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "attach_moodboard",
+    title: "Attach a moodboard to one task",
+    description:
+      "Opt a reference into a single task, with an influence (subtle/balanced/strong), a scope (project/screen/components/task), the aspects it speaks to, and explicit exclusions. Task-scoped attachments cannot leak into another task: the task id is the boundary. Reports what was held back and any conflict with the approved profile.",
+    inputSchema: AttachMoodboardArgs,
+    handler: async (args, registry) => attachMoodboardTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "moodboard_context",
+    title: "See exactly what moodboard context a task receives",
+    description:
+      "Assemble and show the moodboard context for one task: the injected text, the budget used, what was dropped and why, and any conflict between an attached reference and the approved profile. Call this before generating to confirm scope is what you intended.",
+    inputSchema: MoodboardContextArgs,
+    handler: async (args, registry) => moodboardContextTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "detach_moodboard",
+    title: "Remove one attachment, keeping the moodboard",
+    description: "Remove a single task attachment. The moodboard and its brief stay in the library.",
+    inputSchema: z.object({ sessionId: z.string().max(200).optional(), attachmentId: z.string().min(1).max(80) }).strict(),
+    handler: async (args, registry) => detachMoodboardTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "end_task_context",
+    title: "Drop a task's attachments when the task ends",
+    description: "Expire a task's attachments so they leave active context. The moodboards remain in the library and can be re-attached.",
+    inputSchema: EndTaskContextArgs,
+    handler: async (args, registry) => endTaskContextTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "list_moodboards",
+    title: "List the reference library",
+    description:
+      "Every saved moodboard with its source count, how many sources were readable, observation and approval counts, partial-analysis state, and which tasks it is currently attached to. Saved moodboards are inactive; only approved observations in the project profile apply without an attachment.",
+    inputSchema: ListMoodboardsArgs,
+    handler: async (args, registry) => listMoodboardsTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "delete_moodboard",
+    title: "Delete a moodboard and its brief",
+    description: "Remove a moodboard, its visual brief and any attachments. Use forget rather than delete when only the approved rules should go.",
+    inputSchema: z.object({ sessionId: z.string().max(200).optional(), moodboardId: z.string().min(1).max(80) }).strict(),
+    handler: async (args, registry) => deleteMoodboardTool(registry.resolve(sessionOf(args)), args),
+  },
+
+  /* ------------------------------------------------------------------ */
+  /* Tags, change requests, feedback history (issue #11 Part D)          */
+  /* ------------------------------------------------------------------ */
+
+  {
+    name: "request_change",
+    title: "Record a change request against specific nodes",
+    description:
+      "Capture a change request — 'make these three buttons consistent', 'change this screen but preserve this component's styling' — with the target nodes and the constraints that must survive it. Targets default to the current Figma selection and are stored as stable node ids with their names and instance relationships, so a rename or reorder does not break them. Nothing is changed by this call.",
+    inputSchema: RequestChangeArgs,
+    handler: async (args, registry) => requestChangeTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "plan_change",
+    title: "Propose the operations for a change request",
+    description:
+      "Record the operations you propose for a change request. Operations touching a node a blocking constraint protects are refused here, before any commit. The plan is reported, not applied.",
+    inputSchema: PlanChangeArgs,
+    handler: async (args, registry) => planChangeTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "apply_change",
+    title: "Commit a change request's plan",
+    description:
+      "Run the planned operations as one transaction. This returns 'committed-awaiting-verification', not 'applied': operations executing is not the same as the result being correct. Call verify_change to review and render the result.",
+    inputSchema: ApplyChangeArgs,
+    handler: async (args, registry) => applyChangeTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "verify_change",
+    title: "Verify an applied change and mark it applied",
+    description:
+      "Review the changed node, render it, and record findings after. Only a verified change — reviewed, rendered, with no high-confidence findings remaining — is marked 'applied'. This is what keeps 'created successfully' distinct from 'passed visual QA'.",
+    inputSchema: VerifyChangeArgs,
+    handler: async (args, registry) => verifyChangeTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "update_change_request",
+    title: "Approve, reject or annotate a change request",
+    description: "Move a change request to approved or rejected, with an optional note. Illegal state transitions are refused rather than applied.",
+    inputSchema: UpdateChangeRequestArgs,
+    handler: async (args, registry) => updateChangeRequestTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "reresolve_change_request",
+    title: "Point a change request at nodes the user confirmed",
+    description:
+      "When a target was renamed, replaced or deleted, map the old id to the one the user confirms. FigDes never substitutes a similar-looking node on its own — that is the failure this exists to prevent.",
+    inputSchema: ReresolveChangeArgs,
+    handler: async (args, registry) => reresolveChangeTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "tag_design_targets",
+    title: "Tag screens and components",
+    description:
+      "Attach a tag to the current selection or explicit nodes, so a set can be addressed later ('everything tagged onboarding'). Targets are stored as node ids, so the tag survives rename and reorder.",
+    inputSchema: TagTargetsArgs,
+    handler: async (args, registry) => tagTargetsTool(registry.resolve(sessionOf(args)), args),
+  },
+  {
+    name: "list_feedback",
+    title: "List tags and change-request history",
+    description:
+      "Feedback history with target ids, constraints, status, verification state and before/after finding counts. Targets are reconciled against the live file, so a deleted node surfaces as 'needs-re-resolution' rather than as a request that quietly points at the wrong thing.",
+    inputSchema: ListFeedbackArgs,
+    handler: async (args, registry) => listFeedbackTool(registry.resolve(sessionOf(args)), args),
   },
 
   {

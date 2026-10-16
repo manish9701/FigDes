@@ -540,17 +540,20 @@ export function compileIR(ir: DesignIR): CompileResult {
             // The re-pack has to reproduce the layout that would have happened
             // had the region been this size all along, and that layout had four
             // columns in it.
-            const repacked = packContent({
-              region: inner,
-              items: moved.map((m) => ({ id: m.id, height: m.box.h })),
-              gap,
-              columns: repackColumns(region ?? {}, moved.length, canvas.grid),
-            });
-            for (const m of moved) {
-              const at = repacked.get(m.id);
-              // Width follows the new inner box: a card packed into a 1168px
-              // stage must not stay 1168px wide inside a 320px inspector.
-              if (at) m.box = { ...m.box, x: at.x, y: at.y, w: at.w };
+            const columns = repackColumns(region ?? {}, moved.length);
+            if (columns !== null) {
+              const repacked = packContent({
+                region: inner,
+                items: moved.map((m) => ({ id: m.id, height: m.box.h })),
+                gap,
+                columns,
+              });
+              for (const m of moved) {
+                const at = repacked.get(m.id);
+                // Width follows the new inner box: a card packed into a 1168px
+                // stage must not stay 1168px wide inside a 320px inspector.
+                if (at) m.box = { ...m.box, x: at.x, y: at.y, w: at.w };
+              }
             }
           }
 
@@ -3224,13 +3227,29 @@ function patchEmit(
 }
 
 /**
- * How many columns a region's children should re-pack into.
+ * How many columns a region's children should re-pack into, or null when they
+ * must not be re-packed at all.
  *
  * The same decision `emitContent` makes, read back from the region rather than
  * recomputed, so a re-pack after a resize lands on the arrangement the region
  * would have had all along.
+ *
+ * **Graph layouts return null.** A `cluster`, `tree`, `radial`, `force`,
+ * `timeline` or `topology` region's children were placed by an algorithm whose
+ * whole job is their arrangement; re-packing them as a stack throws that away.
+ * It also failed *silently*: re-packing a cluster stretched three 128px device
+ * nodes to the full 820px inner width, and because the emitted operation was
+ * patched to match, the resolved box and the trace agreed — the trace check
+ * reported nothing while the topology had become a column of full-width bars.
+ * A silent design regression is the worst kind, so the exclusion is explicit.
+ *
+ * Such a region keeps its algorithm's placement when narrowed. If nodes then
+ * escape it, the containment check says so rather than the layout quietly
+ * reinterpreting itself.
  */
-function repackColumns(region: { columns?: number; layout?: string; role?: string }, childCount: number, grid: number): number {
+function repackColumns(region: { columns?: number; layout?: string; role?: string }, childCount: number): number | null {
+  const GRAPH_LAYOUTS = new Set(["cluster", "tree", "radial", "force", "timeline", "topology"]);
+  if (region.layout !== undefined && GRAPH_LAYOUTS.has(region.layout)) return null;
   if (typeof region.columns === "number" && region.columns > 0) return Math.min(region.columns, Math.max(1, childCount));
   // A grid or masonry region with no declared count: fit what is there.
   if (region.layout === "grid" || region.layout === "masonry") {

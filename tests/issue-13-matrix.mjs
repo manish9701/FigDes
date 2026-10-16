@@ -436,18 +436,20 @@ export const CASES = [
     requirement: "Shrinking a region with a relation keeps its grid, its text widths and its vector positions in step with the new box.",
     run: () => {
       const metrics = Array.from({ length: 4 }, (_, i) => component(`m${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 11}%` } }));
+      const devices = Array.from({ length: 3 }, (_, i) => component(`n${i}`, { type: "deviceNode", props: { label: `node-${i}`, health: "healthy" } }));
       const ir = {
         canvas: canvas({ name: "X13 Resize", width: 1440, height: 900 }),
         regions: [
           region({ id: "nav", role: "navigation", width: 220, height: "fill", children: [] }),
           region({ id: "header", role: "header", width: "fill", height: 72, padding: 24, children: ["h-title"] }),
           region({ id: "metrics", role: "secondary", layout: "grid", columns: 4, width: "fill", height: "hug", padding: 24, children: metrics.map((m) => m.id) }),
-          region({ id: "stage", role: "primary-visual", composition: "canvas", width: "fill", height: "fill", padding: 24, children: ["route-1"] }),
+          region({ id: "stage", role: "primary-visual", composition: "cluster", layout: "cluster", width: "fill", height: "fill", padding: 24, children: [...devices.map((d) => d.id), "route-1"] }),
           region({ id: "inspector", role: "inspector", width: 320, height: "fill", children: [] }),
         ],
         content: [
           text("h-title", { text: "Fleet overview", role: "title" }),
           ...metrics,
+          ...devices,
           { id: "route-1", kind: "vector", path: "M 0 0 L 180 0 L 180 140 L 360 140", strokeWeight: 1.5 },
         ],
         relations: [
@@ -461,7 +463,6 @@ export const CASES = [
         constraints: { maxMetricCards: 6 },
       };
       return compileCase(ir, (r) => {
-        const metricsRegion = r.regions.find((x) => x.id === "metrics");
         const header = r.regions.find((x) => x.id === "header");
         const boxes = metrics.map((m) => r.boxes.get(m.id)).filter(Boolean);
         const xs = [...new Set(boxes.map((b) => Math.round(b.x)))];
@@ -488,6 +489,17 @@ export const CASES = [
           if (Math.abs(routeOp.x - (route.x - stage.x)) > 1 || Math.abs(routeOp.y - (route.y - stage.y)) > 1) {
             unmet.push(`'route-1' is emitted at (${Math.round(routeOp.x)}, ${Math.round(routeOp.y)}) relative to its region but resolves to (${Math.round(route.x - stage.x)}, ${Math.round(route.y - stage.y)})`);
           }
+        }
+
+        // 4. A graph layout is not re-packed into a stack when the region
+        //    narrows. This failed silently: the device nodes were stretched to
+        //    the full inner width, and because the emitted operation was patched
+        //    to match, the resolved box and the trace agreed and nothing
+        //    complained while a topology became a column of full-width bars.
+        for (const d of devices) {
+          const box = r.boxes.get(d.id);
+          if (!box) { unmet.push(`${d.id} was not placed`); continue; }
+          if (Math.abs(box.w - 128) > 1) unmet.push(`${d.id} was stretched to ${Math.round(box.w)}px by the resize re-pack; a device node is 128px`);
         }
 
         if (r.stats.traceMismatches > 0) unmet.push(`${r.stats.traceMismatches} emitted-vs-resolved mismatches remain`);

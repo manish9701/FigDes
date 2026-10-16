@@ -484,19 +484,42 @@ export function packContent(opts: {
 
   const colW = (region.w - gap * (columns - 1)) / columns;
   const cursor = new Array(columns).fill(region.y);
+  let placed = 0;
 
   for (const item of items) {
-    // First column with room, so items fill left-to-right then wrap.
-    let col = cursor.findIndex((y) => y + item.height <= region.y + region.h);
-    if (col === -1) col = cursor.indexOf(Math.min(...cursor));
+    // Fill across, then wrap down.
+    //
+    // This used to take the first column with room, which is column-major: every
+    // item went into column 0 until it ran out, then column 1, and so on. With 36
+    // uniform cells and 6 declared columns that produced five used columns of
+    // eight rows each — a 6x6 grid came out as a tall stack plus one — and the
+    // declared column count was never honoured at all (issue #13, X05).
+    //
+    // Taking the expected column first and only then falling back keeps the
+    // masonry behaviour this function also serves: an item whose expected column
+    // is full moves to whichever column still has room, which is the shortest-
+    // column rule under a different name.
+    const expected = placed % columns;
+    let col = expected;
+    if (cursor[col]! + item.height > region.y + region.h) {
+      let fallback = -1;
+      for (let i = 0; i < columns; i++) {
+        if (cursor[i]! + item.height <= region.y + region.h) {
+          fallback = i;
+          break;
+        }
+      }
+      col = fallback >= 0 ? fallback : cursor.indexOf(Math.min(...cursor));
+    }
+    placed++;
 
     out.set(item.id, {
       x: round(region.x + col * (colW + gap)),
-      y: round(cursor[col]),
+      y: round(cursor[col]!),
       w: round(colW),
       h: item.height,
     });
-    cursor[col] += item.height + gap;
+    cursor[col] = cursor[col]! + item.height + gap;
   }
 
   return out;

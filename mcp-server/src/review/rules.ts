@@ -67,6 +67,7 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "font-family-count", fn: fontFamilyCount },
   { name: "button-overload", fn: buttonOverload },
   { name: "text-route-collision", fn: textRouteCollision },
+  { name: "connector-endpoint-ambiguous", fn: connectorEndpointAmbiguous },
 ];
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
@@ -1407,6 +1408,80 @@ function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
       nodeIds: [n.id],
       guidance:
         "Move the label clear of the route — above or below the line, or beside its own node — or give it a surface so it separates from the line behind it. Do not move the route: it is the one element in a topology whose position carries meaning.",
+    },
+  ];
+}
+
+/**
+ * A route that stops inside a node rather than at its edge.
+ *
+ * A topology connection has to say what it means at the node it reaches. If the
+ * line ends *on* the boundary, the reading is unambiguous — it connects. If it
+ * ends a few pixels inside, the diagram is asserting nothing: the reader cannot
+ * tell whether the line terminates at the card, passes behind it, or merely
+ * happens to overlap. Measured on `EXO_HARD_TEST_CLUSTER_ROUTING_V03`, three
+ * routes run x=520 to x=880 while the runtime card spans x=878–1122, so all three
+ * stop 2px inside it and none of them says which (issue #13).
+ *
+ * Reported on the line, because the line is what is ambiguous, and the fix is
+ * one of: extend it to the edge, end it at the centre with an explicit
+ * terminator, or move it clear of the node entirely.
+ */
+function connectorEndpointAmbiguous(n: NodeMetrics, c: Ctx): Finding[] {
+  if (!isRouteLine(n)) return [];
+  const siblings = c.childrenOf.get(n.parentId ?? "");
+  if (!siblings || siblings.length < 2) return [];
+
+  // A straight line's endpoints are the midpoints of its two short ends.
+  const horizontal = n.w >= n.h;
+  const ends: Array<{ x: number; y: number; side: string }> = horizontal
+    ? [
+        { x: n.x, y: n.y + n.h / 2, side: "left" },
+        { x: n.x + n.w, y: n.y + n.h / 2, side: "right" },
+      ]
+    : [
+        { x: n.x + n.w / 2, y: n.y, side: "top" },
+        { x: n.x + n.w / 2, y: n.y + n.h, side: "bottom" },
+      ];
+
+  // One pixel of slack, so a line that lands exactly on the boundary is fine.
+  const INSIDE = 1;
+  const hits: Array<{ node: NodeMetrics; end: { x: number; y: number; side: string }; depth: number }> = [];
+
+  for (const end of ends) {
+    for (const s of siblings) {
+      if (s.id === n.id || s.type === "TEXT") continue;
+      // Only a substantial node can be an anchor. Rules and labels are furniture.
+      if (s.w < 40 || s.h < 24) continue;
+      const insideX = end.x > s.x + INSIDE && end.x < s.x + s.w - INSIDE;
+      const insideY = end.y > s.y + INSIDE && end.y < s.y + s.h - INSIDE;
+      if (!insideX || !insideY) continue;
+      const depth = Math.min(end.x - s.x, s.x + s.w - end.x, end.y - s.y, s.y + s.h - end.y);
+      hits.push({ node: s, end, depth });
+    }
+  }
+  if (hits.length === 0) return [];
+
+  const worst = hits.sort((a, b) => a.depth - b.depth)[0]!;
+  return [
+    {
+      rule: "connector-endpoint-ambiguous",
+      confidence: "medium",
+      severity: "serious",
+      title: `Route "${n.name}" ends ${Math.round(worst.depth)}px inside "${worst.node.name}"`,
+      evidence: {
+        routeId: n.id,
+        routeBox: `${Math.round(n.w)}x${Math.round(n.h)} at (${Math.round(n.x)}, ${Math.round(n.y)})`,
+        endpoint: `${worst.end.side} at (${Math.round(worst.end.x)}, ${Math.round(worst.end.y)})`,
+        targetId: worst.node.id,
+        targetBox: `${Math.round(worst.node.w)}x${Math.round(worst.node.h)} at (${Math.round(worst.node.x)}, ${Math.round(worst.node.y)})`,
+        insideByPx: Math.round(worst.depth),
+        endpointsAffected: hits.length,
+        reasoning: "the line stops inside the node's bounds rather than at its edge, so the diagram does not say whether the route connects to it, passes behind it, or simply overlaps it",
+      },
+      nodeIds: [n.id, worst.node.id],
+      guidance:
+        "End the route on the node's edge so the connection is explicit, or terminate it at the node's centre with an arrowhead. A line that ends inside a shape reads as a mistake in whichever direction the reader happens to assume.",
     },
   ];
 }

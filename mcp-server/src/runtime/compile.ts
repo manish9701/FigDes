@@ -13,7 +13,7 @@ import { OperationSchema, parseColor, type Operation } from "../../../shared/pro
 import type { CompileResult, ContentSpec, DesignIR, ResolvedBox, ResolvedRegion } from "../../../shared/ir";
 import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
-import { solveConstraints, type PlacedBox } from "./constraints";
+import { solveConstraints, expectedRelationBox, type PlacedBox } from "./constraints";
 import { checkIdentity } from "./identity";
 import { routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
@@ -612,6 +612,7 @@ export function compileIR(ir: DesignIR): CompileResult {
   }
 
   checkConstraints(ir, composition, violations);
+  if (!deck) checkTextFit(ir, regions, boxes, typeScale, titleScale, violations);
 
   // A plan whose geometry is not what was asked for is a plan that will draw
   // the wrong thing, so it is marked inapplicable rather than merely annotated.
@@ -621,7 +622,20 @@ export function compileIR(ir: DesignIR): CompileResult {
   // Only the structural rules gate applicability. A product-constraint warning
   // ("this looks like a card wall") is a judgement about the design, not a
   // statement that the coordinates are wrong.
-  const BLOCKING = new Set(["geometry", "relation", "operation-trace", "connector", "content-parent", "identity"]);
+  const BLOCKING = new Set([
+    "geometry",
+    "relation",
+    "operation-trace",
+    "connector",
+    "content-parent",
+    "identity",
+    // Product guardrails are declared as constraints, so violating one is the
+    // program contradicting itself. Blocking here is what makes X08 agree with
+    // the documented severity.
+    "maxMetricCards",
+    "noGenericCardGrid",
+    "noChatAsPrimary",
+  ]);
   const inapplicableReasons = violations.filter((v) => BLOCKING.has(v.rule)).map((v) => v.message);
 
   return {
@@ -2609,6 +2623,8 @@ function assertResolvedGeometry(
   violations: CompileResult["violations"],
   /** Relations the solver refused, which therefore have no position to check. */
   unresolvedRelations: readonly string[] = [],
+  /** The box relations are measured against — the canvas. */
+  parent: PlacedBox = { id: "root", x: 0, y: 0, w: canvasW, h: canvasH },
 ): void {
   const span = (r: ResolvedRegion): string => `${Math.round(r.w)}x${Math.round(r.h)} at (${Math.round(r.x)}, ${Math.round(r.y)})`;
 
@@ -2690,8 +2706,36 @@ function assertResolvedGeometry(
     if (unresolvedRelations.includes(relation.id)) continue;
     const box = boxes.get(relation.id);
     if (!box) continue;
-    const problem = checkRelation(relation, box, boxes, canvasW, canvasH);
-    if (problem) violations.push({ rule: "relation", message: problem });
+    for (const problem of checkRelation(relation, box, boxes, parent, canvasW, canvasH)) {
+      violations.push({ rule: "relation", message: problem });
+    }
+  }
+
+  // A box with no area is not a design decision, it is an arithmetic accident:
+  // padding plus gap larger than the parent leaves a child measured at zero
+  // width, and it was being emitted as such. X07 saw resolved child widths
+  // reach zero with only an overflow complaint alongside.
+  //
+  // Reported separately because "this region does not fit" and "this child
+  // does not exist" call for different fixes, and a designer reading only the
+  // first would resize the region and be back here.
+  for (const region of regions) {
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (!box) continue;
+      if (box.w > 0.5 && box.h > 0.5) continue;
+      violations.push({
+        rule: "geometry",
+        message: `Content '${child}' resolved to ${Math.round(box.w)}x${Math.round(box.h)} inside '${region.id}' — padding and gap leave no room for it. Reduce the region's padding or gap, or give the region more space.`,
+      });
+    }
+  }
+  for (const region of regions) {
+    if (region.w > 0.5 && region.h > 0.5) continue;
+    violations.push({
+      rule: "geometry",
+      message: `Region '${region.id}' resolved to ${Math.round(region.w)}x${Math.round(region.h)} — it has no area and will not be drawn.`,
+    });
   }
 }
 
@@ -2832,52 +2876,184 @@ function verifyOperationTrace(
   return mismatches;
 }
 
-/** Re-measures one relation against the geometry that was actually produced. */
+/**
+ * Re-measures one relation against the geometry that was actually produced.
+ *
+ * Every clause is checked, not just the anchor. The previous version looked at
+ * `rightOf` and `below` and returned `null` for everything else, which made an
+ * edge-positioned relation unverifiable: X01 declared
+ * `{ right: 0, top: 0, width: 300 }`, the inspector landed at y=366 instead of
+ * y=0, and the compile came back `applicable: true` with zero violations. A false
+ * pass is worse than a false failure — it produces a screen that looks
+ * deliberate and is not (issue #13, "false-success risk in relation handling").
+ *
+ * The expected geometry comes from `expectedRelationBox`, which is the same
+ * function the solver uses, so the check cannot drift away from the behaviour
+ * it is checking.
+ *
+ * Returns every problem rather than the first: a relation that missed its anchor
+ * usually missed its size too, and one error at a time turns one typo into
+ * several round trips.
+ */
 function checkRelation(
   relation: DesignIR["relations"][number],
   box: PlacedBox,
   boxes: Map<string, PlacedBox>,
+  parent: PlacedBox,
   canvasW: number,
   canvasH: number,
-): string | null {
+): string[] {
   const TOLERANCE = 1;
+  const problems: string[] = [];
+  const declared = describeRelation(relation);
 
-  if (relation.rightOf !== undefined) {
-    const anchor = boxes.get(relation.rightOf);
-    if (!anchor) return `Relation on '${relation.id}' names unknown anchor '${relation.rightOf}'; no side-by-side position was applied.`;
-    const expectedX = relation.left !== undefined ? anchor.x + relation.left : anchor.x + anchor.w + (relation.gap ?? 0);
-    if (Math.abs(box.x - expectedX) > TOLERANCE) {
-      return `Relation '${relation.id}' rightOf '${relation.rightOf}' asked for x=${Math.round(expectedX)} but the region resolved to x=${Math.round(box.x)}. The relationship was not honoured.`;
-    }
-    if (box.x + box.w > canvasW + CANVAS_TOLERANCE) {
-      return `Relation '${relation.id}' rightOf '${relation.rightOf}' pushed it to x=${Math.round(box.x)} on a ${canvasW}px canvas, so ${Math.round(box.x + box.w - canvasW)}px of it is off-canvas. Reduce its width or the anchor's.`;
+  for (const anchorId of [relation.rightOf, relation.below]) {
+    if (anchorId !== undefined && !boxes.has(anchorId)) {
+      problems.push(`Relation '${relation.id}' names unknown anchor '${anchorId}'; no position was applied.`);
     }
   }
 
-  if (relation.below !== undefined) {
-    const anchor = boxes.get(relation.below);
-    if (!anchor) return `Relation on '${relation.id}' names unknown anchor '${relation.below}'; no stacked position was applied.`;
-    const expectedY = relation.top !== undefined ? anchor.y + relation.top : anchor.y + anchor.h + (relation.gap ?? 0);
-    if (Math.abs(box.y - expectedY) > TOLERANCE) {
-      return `Relation '${relation.id}' below '${relation.below}' asked for y=${Math.round(expectedY)} but the region resolved to y=${Math.round(box.y)}. The relationship was not honoured.`;
+  const expected = expectedRelationBox(relation, parent, (id) => boxes.get(id));
+  const near = (a: number, b: number): boolean => Math.abs(a - b) <= TOLERANCE;
+
+  if (expected) {
+    if (!near(box.x, expected.x)) {
+      problems.push(`Relation '${relation.id}' (${declared}) asked for x=${Math.round(expected.x)} but the box resolved to x=${Math.round(box.x)}. The relationship was not honoured.`);
     }
-    if (box.y + box.h > canvasH + CANVAS_TOLERANCE) {
-      return `Relation '${relation.id}' below '${relation.below}' pushed it to y=${Math.round(box.y)} on a ${canvasH}px canvas, so ${Math.round(box.y + box.h - canvasH)}px of it is off-canvas.`;
+    if (!near(box.y, expected.y)) {
+      problems.push(`Relation '${relation.id}' (${declared}) asked for y=${Math.round(expected.y)} but the box resolved to y=${Math.round(box.y)}. The relationship was not honoured.`);
+    }
+    if (Number.isFinite(expected.w) && !near(box.w, expected.w)) {
+      problems.push(`Relation '${relation.id}' (${declared}) asked for width ${Math.round(expected.w)} but the box resolved to ${Math.round(box.w)}. The size was not honoured.`);
+    }
+    if (Number.isFinite(expected.h) && !near(box.h, expected.h)) {
+      problems.push(`Relation '${relation.id}' (${declared}) asked for height ${Math.round(expected.h)} but the box resolved to ${Math.round(box.h)}. The size was not honoured.`);
     }
   }
 
-  return null;
+  // Canvas containment is checked whatever the clause was: a relation that *is*
+  // honoured can still land off-canvas.
+  if (box.x + box.w > canvasW + CANVAS_TOLERANCE) {
+    problems.push(`Relation '${relation.id}' (${declared}) resolved to x=${Math.round(box.x)} on a ${canvasW}px canvas, so ${Math.round(box.x + box.w - canvasW)}px of it is off-canvas.`);
+  }
+  if (box.y + box.h > canvasH + CANVAS_TOLERANCE) {
+    problems.push(`Relation '${relation.id}' (${declared}) resolved to y=${Math.round(box.y)} on a ${canvasH}px canvas, so ${Math.round(box.y + box.h - canvasH)}px of it is off-canvas.`);
+  }
+
+  return problems;
+}
+
+/** A one-line rendering of the clauses a relation declares, for diagnostics. */
+function describeRelation(r: DesignIR["relations"][number]): string {
+  const parts: string[] = [];
+  if (r.rightOf !== undefined) parts.push(`rightOf ${r.rightOf}`);
+  if (r.below !== undefined) parts.push(`below ${r.below}`);
+  if (r.alignTo !== undefined) parts.push(`alignTo ${r.alignTo}`);
+  if (r.left !== undefined) parts.push(`left ${r.left}`);
+  if (r.top !== undefined) parts.push(`top ${r.top}`);
+  if (r.right !== undefined) parts.push(`right ${r.right}`);
+  if (r.bottom !== undefined) parts.push(`bottom ${r.bottom}`);
+  if (r.gap !== undefined) parts.push(`gap ${r.gap}`);
+  if (r.inset !== undefined) parts.push(`inset ${r.inset}`);
+  if (r.width !== undefined) parts.push(`width ${r.width}`);
+  if (r.height !== undefined) parts.push(`height ${r.height}`);
+  return parts.length > 0 ? parts.join(", ") : "no clauses";
 }
 
 /* -------------------------------------------------------------------------- */
 /* Constraints                                                                 */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/* Typography fit                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Mean glyph width as a fraction of font size, matching `estimateHeight`. */
+const MEAN_GLYPH_RATIO = 0.55;
+
 /**
- * Product constraints from spec §29 / §51, checked rather than trusted.
+ * Text that cannot fit the box it was given.
  *
- * These are reported, not silently enforced: the model is told it drifted and
- * gets the chance to decide whether the constraint still applies.
+ * ## Why a clean compile is not evidence
+ *
+ * A 320px viewport holding a long title, an unbroken model identifier and a long
+ * error code compiled to `applicable: true` with zero violations (X03). Nothing
+ * was wrong with the geometry — every box was on canvas and inside its region.
+ * The problem is that the *text* does not fit inside the box, which is a
+ * property of the string and the width together, and no structural check looks
+ * at it.
+ *
+ * The specific failure is an unbreakable run: `qwen3-32b-instruct-quantized.gguf`
+ * has no space in it, so no amount of wrapping helps and it either overflows or
+ * is silently truncated. Reporting "this string is 340px of glyphs in a 288px box"
+ * is actionable; reporting nothing and letting Figma clip it is not.
+ *
+ * Non-blocking by design: a clipped model name is ugly, a false refusal to
+ * build a screen because one label is long is worse. It is a `typography`
+ * finding, not a geometry one.
+ */
+function checkTextFit(
+  ir: DesignIR,
+  regions: ResolvedRegion[],
+  boxes: Map<string, PlacedBox>,
+  typeScale: number,
+  titleScale: number,
+  violations: CompileResult["violations"],
+): void {
+  const specs = new Map(
+    ir.content
+      .filter((c): c is Extract<typeof c, { kind: "text" }> => c.kind === "text")
+      .map((c) => [c.id, c]),
+  );
+
+  for (const region of regions) {
+    for (const child of region.children) {
+      const spec = specs.get(child);
+      const box = boxes.get(child);
+      if (!spec || !box) continue;
+
+      const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
+      const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
+      const fontSize = (spec.size ?? scale.size) * typeScale * display;
+
+      // Longest run with no break opportunity: a word, a URL, a stack trace, a
+      // path. Spaces give the layout somewhere to wrap; these do not.
+      const runs = spec.text.split(/\s+/).filter((r) => r.length > 0);
+      let longest = "";
+      for (const r of runs) if (r.length > longest.length) longest = r;
+      const runWidth = Math.ceil(longest.length * fontSize * MEAN_GLYPH_RATIO);
+
+      if (runWidth <= box.w + 1) continue;
+
+      violations.push({
+        rule: "typography",
+        message:
+          `Text '${child}' holds the unbreakable run "${longest.slice(0, 48)}", which measures about ${runWidth}px at ${Math.round(fontSize)}px inside a ${Math.round(box.w)}px box. ` +
+          `It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.`,
+      });
+    }
+  }
+}
+
+/**
+ * Product constraints from spec §29 / §51.
+ *
+ * ## Severity, which is the point of this function
+ *
+ * These are **hard blockers**. Declaring `maxMetricCards: 2` is a statement about
+ * the product, not a suggestion about the screen: a program that declares the
+ * constraint and then ships four metric cards has not "drifted slightly", it has
+ * built the thing the constraint forbids. X08 reported four cards against a
+ * limit of two and the compile came back `applicable: true`, so the constraint
+ * was advisory in practice while reading as mandatory in the IR.
+ *
+ * The cost of being wrong in this direction is bounded — the author sees the
+ * violation and removes the constraint or the cards — while the cost of the
+ * other direction is a product truth quietly not enforced. Blocking is the
+ * recoverable error.
+ *
+ * They keep their own rule names rather than sharing one bucket, because the
+ * name is what tells a reader which constraint failed.
  */
 function checkConstraints(ir: DesignIR, composition: string, violations: CompileResult["violations"]): void {
   const c = ir.constraints;
@@ -3461,6 +3637,14 @@ function hugSize(
     case "button": {
       const label = str("label", "Button");
       return { w: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }), h: Math.round(40 * typeScale) };
+    }
+    case "deviceNode": {
+      // Fixed intrinsic, same as the emitter. A device node draws at
+      // grid*16 x grid*10 wherever it lands, so the layout has to reserve that
+      // and the recorded box has to be it — otherwise a device flowing in a
+      // normal region is measured at the full column width and emitted at 128
+      // (issue #13, X11: "'n1' is emitted 128 wide but its resolved box is 900").
+      return { w: Math.round(grid * 16 * typeScale), h: Math.round(grid * 10 * typeScale) };
     }
     case "fitGauge": {
       const label = str("label", spec.props.fits !== false ? "Fits" : "Does not fit");

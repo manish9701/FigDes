@@ -39,7 +39,7 @@ export function checkIdentity(ir: DesignIR): IdentityViolation[] {
   const out: IdentityViolation[] = [];
   const regions = ir.regions ?? [];
   const content = ir.content ?? [];
-  const tokens = ir.tokens ?? [];
+  const tokens = (ir.tokens ?? []).filter((t): t is Extract<typeof t, { kind: "token" }> => t.kind === "token");
   const relations = ir.relations ?? [];
   const links = ir.links ?? [];
 
@@ -127,7 +127,49 @@ export function checkIdentity(ir: DesignIR): IdentityViolation[] {
     }
   }
 
+  /* ---- value validation -------------------------------------------------- */
+
+  // A variable created from an unparseable value is worse than one that was
+  // never created: it binds, it fills with a default, and every reference to it
+  // silently resolves to the wrong colour or number. X02 declared `#ZZZZZZ` as
+  // a colour token and nothing said so — the identity check caught the duplicate
+  // id beside it and went quiet about the value.
+  for (const t of tokens) {
+    const where = `Token '${t.name}' (id '${t.id}')`;
+    if (Object.keys(t.values).length === 0) {
+      out.push({ rule: "identity", message: `${where} declares no values, so it creates a variable nothing can reference.` });
+    }
+    for (const [mode, value] of Object.entries(t.values)) {
+      if (value === undefined || value === null || value === "") {
+        out.push({ rule: "identity", message: `${where} has an empty value for mode '${mode}'. A variable with no value cannot be bound.` });
+        continue;
+      }
+      if (t.type === "color" && !isColorValue(String(value))) {
+        out.push({
+          rule: "identity",
+          message: `${where} declares ${mode}='${value}', which is not a colour. Use #RRGGBB, #RGB, #RRGGBBAA, rgb(r,g,b), rgba(r,g,b,a) or 'transparent'.`,
+        });
+      } else if (t.type === "number" && !Number.isFinite(typeof value === "number" ? value : Number(value))) {
+        out.push({ rule: "identity", message: `${where} declares ${mode}='${value}', which is not a number.` });
+      } else if (t.type === "boolean" && typeof value !== "boolean") {
+        out.push({ rule: "identity", message: `${where} declares ${mode}='${value}', which is not a boolean.` });
+      } else if (t.type === "string" && typeof value !== "string") {
+        out.push({ rule: "identity", message: `${where} declares ${mode}=${JSON.stringify(value)}, which is not a string.` });
+      }
+    }
+  }
+
   return out;
+}
+
+/** Colour forms the plugin can actually paint, or bind to a variable. */
+function isColorValue(value: string): boolean {
+  const v = value.trim().toLowerCase();
+  if (v === "transparent") return true;
+  if (/^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/.test(v)) return true;
+  if (/^rgba?\(\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?\s*(,\s*(0|1|0?\.\d+)\s*)?\)$/.test(v)) return true;
+  // A variable reference rather than a literal: resolved at bind time.
+  return /^[a-z][\w./-]*$/.test(v);
 }
 
 /**

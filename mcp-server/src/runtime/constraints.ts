@@ -246,6 +246,83 @@ function dependencyOrder(
 }
 
 /**
+ * Where a relation says a box should end up, given final anchor geometry.
+ *
+ * ## Why this exists
+ *
+ * The compiler checks that relations were honoured by re-deriving the expected
+ * position in a second place, and that second place had drifted. It verified
+ * `rightOf` and `below` and nothing else, so a relation written as
+ * `{ right: 0, top: 0, width: 300 }` was never checked at all: three-region
+ * split, `applicable: true`, zero violations, inspector silently dropped to
+ * y=366 instead of top-aligned (issue #13, X01 — the "false success" case, and
+ * worse than a plain overflow because it produces a confident wrong layout).
+ *
+ * Duplicating the solver's rules here would only have moved the drift. So the
+ * rules live in exactly one place: this function mirrors `solveConstraints`, and
+ * both the solver and the verifier call it. A change to how a relation resolves
+ * changes the check with it, because there is nothing else to change.
+ *
+ * `resolve` looks an anchor up by id; returning undefined means the anchor does
+ * not exist, which the caller reports separately.
+ */
+export function expectedRelationBox(
+  c: ConstraintSpec,
+  parent: PlacedBox,
+  resolve: (id: string) => PlacedBox | undefined,
+): { x: number; y: number; w: number; h: number } | null {
+  const anchor =
+    c.rightOf !== undefined ? resolve(c.rightOf) : c.below !== undefined ? resolve(c.below) : undefined;
+
+  // An explicit size is authoritative and is applied before positioning.
+  let w: number | undefined = typeof c.width === "number" ? c.width : undefined;
+  let h: number | undefined = typeof c.height === "number" ? c.height : undefined;
+
+  let x: number | undefined;
+  let y: number | undefined;
+
+  if (anchor && c.rightOf !== undefined) {
+    x = round(c.left !== undefined ? anchor.x + c.left : anchor.x + anchor.w + (c.gap ?? 0));
+    if (c.top !== undefined) y = round(anchor.y + c.top);
+    else if (c.alignTo === undefined) y = round(anchor.y);
+  } else if (anchor && c.below !== undefined) {
+    y = round(c.top !== undefined ? anchor.y + c.top : anchor.y + anchor.h + (c.gap ?? 0));
+    if (c.left !== undefined) x = round(anchor.x + c.left);
+    else if (c.alignTo === undefined) x = round(anchor.x);
+  } else {
+    if (c.top !== undefined) y = round(parent.y + c.top);
+    if (c.left !== undefined) x = round(parent.x + c.left);
+    // `right`/`bottom` position against the far edge, which needs the size, so
+    // they are only meaningful when the size is not flexible.
+    if (c.right !== undefined && c.width !== "fill") x = round(parent.x + parent.w - c.right - (w ?? 0));
+    if (c.bottom !== undefined && c.height !== "fill") y = round(parent.y + parent.h - c.bottom - (h ?? 0));
+  }
+
+  // Alignment and `fill` are applied after positioning, and they override the
+  // plain edge math — an explicit size still wins over an alignment hint,
+  // which is the order `solveConstraints` uses.
+  if (anchor && x !== undefined && w !== undefined) {
+    if (c.alignTo === "center") x = round(anchor.x + (anchor.w - w) / 2);
+    else if (c.alignTo === "end") x = round(anchor.x + anchor.w - w);
+    else if (c.alignTo === "stretch") w = anchor.w;
+  }
+
+  if (w === undefined && c.width === "fill") {
+    const rightEdge = c.right !== undefined ? parent.x + parent.w - c.right : parent.x + parent.w - (c.inset ?? 0);
+    x = x ?? parent.x;
+    w = Math.max(1, round(rightEdge - x));
+  }
+  if (h === undefined && c.height === "fill") {
+    const bottomEdge = c.bottom !== undefined ? parent.y + parent.h - c.bottom : parent.y + parent.h - (c.inset ?? 0);
+    y = y ?? parent.y;
+    h = Math.max(1, round(bottomEdge - y));
+  }
+
+  if (x === undefined || y === undefined) return null;
+  return { x, y, w: w ?? Number.NaN, h: h ?? Number.NaN };
+}
+
+/**
  * Applies an alignment between a box and its anchor.
  *
  * `axis` decides what `stretch` copies. A horizontal relation stretches width, a

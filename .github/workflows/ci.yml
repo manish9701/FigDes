@@ -34,6 +34,17 @@ jobs:
           name: figdes-stress-matrix
           path: artifacts/stress-matrix/latest.json
           if-no-files-found: error
+      # Issue #13's acceptance gate: one case per gate line, strict for the same
+      # reason. The live render/apply cases report BLOCKED and never PASS, so
+      # passing here cannot be mistaken for evidence nobody gathered.
+      - name: Run issue #13 acceptance matrix
+        run: npm run acceptance -- --strict
+      - name: Upload acceptance report
+        uses: actions/upload-artifact@v4
+        with:
+          name: figdes-acceptance
+          path: artifacts/acceptance/latest.json
+          if-no-files-found: error
       - name: Upload benchmark report
         uses: actions/upload-artifact@v4
         with:

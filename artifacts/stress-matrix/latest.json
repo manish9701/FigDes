@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T10:02:15.377Z",
+  "generatedAt": "2026-10-16T10:37:56.565Z",
   "totals": {
     "total": 28,
     "pass": 24,
@@ -63,20 +63,13 @@
       "status": "PASS",
       "detail": "all expectations met",
       "raw": {
-        "applicable": false,
-        "traceMismatches": 6,
+        "applicable": true,
+        "traceMismatches": 0,
         "regions": 1,
         "content": 7,
         "operations": 14,
-        "violations": 6,
-        "blockingViolations": [
-          "operation-trace: 'a' is emitted 128 wide but its resolved box is 1440 wide.",
-          "operation-trace: 'a' is emitted 80 tall but its resolved box is 90 tall.",
-          "operation-trace: 'b' is emitted 128 wide but its resolved box is 1440 wide.",
-          "operation-trace: 'b' is emitted 80 tall but its resolved box is 90 tall.",
-          "operation-trace: 'c' is emitted 128 wide but its resolved box is 1440 wide.",
-          "operation-trace: 'c' is emitted 80 tall but its resolved box is 90 tall."
-        ]
+        "violations": 0,
+        "blockingViolations": []
       }
     },
     {
@@ -321,7 +314,7 @@
         "regions": 5,
         "content": 31,
         "operations": 61,
-        "violations": 1,
+        "violations": 2,
         "blockingViolations": [
           "geometry: Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 884)."
         ]

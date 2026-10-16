@@ -1,0 +1,266 @@
+{
+  "generatedAt": "2026-10-16T10:38:59.314Z",
+  "totals": {
+    "total": 14,
+    "pass": 11,
+    "fail": 0,
+    "blocked": 3
+  },
+  "results": [
+    {
+      "id": "X01",
+      "title": "Three-region split with an explicit right-side inspector is actually positioned",
+      "group": "compiler",
+      "requirement": "`{ right: 0, top: 0, width: 300 }` is honoured against the final geometry, and the plan is inapplicable if it is not.",
+      "status": "PASS",
+      "detail": "satisfied relation honoured; unsatisfiable one refused with a named clause",
+      "raw": {
+        "satisfied": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "nav @ 0,0 240x900",
+            "main @ 272,0 1168x468",
+            "inspector @ 1140,0 300x400"
+          ]
+        },
+        "unsatisfiable": {
+          "applicable": false,
+          "problems": [
+            "Relation 'inspector' (rightOf main, top 0, gap 5000, width 300) resolved to x=6440 on a 1440px canvas, so 5300px of it is off-canvas."
+          ]
+        }
+      }
+    },
+    {
+      "id": "X02",
+      "title": "Duplicate token ids and malformed token values are both rejected before emitting operations",
+      "group": "compiler",
+      "requirement": "A duplicate id and an unparseable colour both produce a named violation, and nothing is emitted for the bad token.",
+      "status": "PASS",
+      "detail": "4 invalid token problems reported and the run is inapplicable",
+      "raw": {
+        "applicable": false,
+        "violations": [
+          "Token id 'space' is declared 2 times (entries 1, 2). Token ids must be unique.",
+          "Token 'brand' (id 'space') declares DEFAULT='#ZZZZZZ', which is not a colour. Use #RRGGBB, #RGB, #RRGGBBAA, rgb(r,g,b), rgba(r,g,b,a) or 'transparent'.",
+          "Token 'space-md' (id 'gap') declares DEFAULT='wide', which is not a number.",
+          "Token 'nothing' (id 'empty') declares no values, so it creates a variable nothing can reference.",
+          "1 content node(s) were declared without a parent region and were placed in 'card': 't'. Add a parent to place them deliberately."
+        ]
+      }
+    },
+    {
+      "id": "X03",
+      "title": "Unbreakable text in a narrow viewport produces a measurable clipping diagnostic",
+      "group": "compiler",
+      "requirement": "A string with no break opportunity, wider than the box it was given, is reported with both numbers.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "inapplicableReasons": [],
+        "violations": [
+          "typography: Text 'model' holds the unbreakable run \"qwen3-32b-instruct-quantized.gguf\", which measures about 218px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+          "typography: Text 'err' holds the unbreakable run \"ERR_MEM_PRESSURE_0X7F_DEVICE_TIMEOUT\", which measures about 238px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+        ],
+        "regions": [
+          "col @ 0,0 160x700"
+        ]
+      }
+    },
+    {
+      "id": "X04",
+      "title": "An 800x600 canvas with a 1200x900 region stays fail-closed",
+      "group": "compiler",
+      "requirement": "A region larger than its canvas is reported and the plan is inapplicable.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": false,
+        "inapplicableReasons": [
+          "Region 'big' spills past the right and bottom edge of the 800x600 canvas: 1200x900 at (0, 0)."
+        ],
+        "violations": [
+          "geometry: Region 'big' spills past the right and bottom edge of the 800x600 canvas: 1200x900 at (0, 0)."
+        ],
+        "regions": [
+          "big @ 0,0 1200x900"
+        ]
+      }
+    },
+    {
+      "id": "X05",
+      "title": "A 36-item, 6-column grid resolves every child box with real gaps",
+      "group": "compiler",
+      "requirement": "Each child resolves inside the region, in the declared column count, with no overlap and no zero area.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": true,
+        "inapplicableReasons": [],
+        "violations": [],
+        "regions": [
+          "grid @ 0,0 1200x900"
+        ]
+      }
+    },
+    {
+      "id": "X06",
+      "title": "Links to missing source and target nodes are both rejected",
+      "group": "compiler",
+      "requirement": "Each bad endpoint is named, and the plan is inapplicable.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": false,
+        "inapplicableReasons": [
+          "Link to 'ghost-target' does not resolve to a region or content item.",
+          "Link from 'ghost-source' does not resolve to a region or content item."
+        ],
+        "violations": [
+          "identity: Link to 'ghost-target' does not resolve to a region or content item.",
+          "identity: Link from 'ghost-source' does not resolve to a region or content item."
+        ],
+        "regions": [
+          "stage @ 0,0 900x600"
+        ]
+      }
+    },
+    {
+      "id": "X07",
+      "title": "Extreme padding and gap are diagnosed as degenerate geometry, not only as overflow",
+      "group": "compiler",
+      "requirement": "A child that resolves to zero width is reported in its own right, naming the child.",
+      "status": "PASS",
+      "detail": "all expectations met",
+      "raw": {
+        "applicable": false,
+        "inapplicableReasons": [
+          "Content 't' resolved to 0x82 inside 'region' — padding and gap leave no room for it. Reduce the region's padding or gap, or give the region more space.",
+          "'t' is emitted 40 wide but its resolved box is 0 wide."
+        ],
+        "violations": [
+          "geometry: Content 't' resolved to 0x82 inside 'region' — padding and gap leave no room for it. Reduce the region's padding or gap, or give the region more space.",
+          "operation-trace: 't' is emitted 40 wide but its resolved box is 0 wide.",
+          "typography: Text 't' holds the unbreakable run \"Squeezed\", which measures about 62px at 14px inside a 0px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+        ],
+        "regions": [
+          "region @ 0,0 60x400"
+        ]
+      }
+    },
+    {
+      "id": "X08",
+      "title": "A violated product guardrail makes the plan inapplicable",
+      "group": "compiler",
+      "requirement": "`maxMetricCards`, `noGenericCardGrid` and `noChatAsPrimary` are hard blockers, not advisory warnings.",
+      "status": "PASS",
+      "detail": "breach blocks, compliance passes, each with its own rule name",
+      "raw": {
+        "breached": {
+          "applicable": false,
+          "reasons": [
+            "4 metric cards requested but the limit is 2."
+          ]
+        },
+        "honoured": {
+          "applicable": true
+        },
+        "chat": {
+          "applicable": false,
+          "reasons": [
+            "Product constraint says chat must not be the primary interaction, but chat copy is present in a non-instrument layout."
+          ]
+        }
+      }
+    },
+    {
+      "id": "X09-route",
+      "title": "Review finds the known route/status collision with node ids and measured overlap",
+      "group": "guardrails",
+      "requirement": "The Mac mini's status label sitting on a route line is reported, with both node ids and the overlap area.",
+      "status": "PASS",
+      "detail": "collision found with 360px2 of measured overlap",
+      "raw": {
+        "findings": [
+          "tiny-technical-text(serious) [status]",
+          "text-route-collision(serious) [status]"
+        ]
+      }
+    },
+    {
+      "id": "X10-anchor",
+      "title": "Review flags a route that ends inside a node rather than at its edge",
+      "group": "guardrails",
+      "requirement": "A connector stopping a few pixels inside a card is reported with the depth of the intrusion.",
+      "status": "PASS",
+      "detail": "one ambiguous route reported, the edge-aligned one left alone",
+      "raw": {
+        "findings": [
+          "connector-endpoint-ambiguous(serious) [route,card]"
+        ]
+      }
+    },
+    {
+      "id": "X11-baseline",
+      "title": "Valid baselines and simple vector/connector controls still pass",
+      "group": "compiler",
+      "requirement": "The fixes for X01-X08 must not break the cases that were already correct.",
+      "status": "PASS",
+      "detail": "baseline, relation chain and vector/connector controls all clean",
+      "raw": {
+        "baseline": {
+          "applicable": true,
+          "violations": 0
+        },
+        "chain": {
+          "applicable": true,
+          "xs": [
+            0,
+            216,
+            432
+          ]
+        },
+        "vectors": {
+          "applicable": true,
+          "operations": 7
+        }
+      }
+    },
+    {
+      "id": "L01",
+      "title": "Apply to a dedicated disposable stress-test frame",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Requires a write to a named frame in the live file and approval to do it. No operations have been applied to the Exo Labs file. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "L02",
+      "title": "Render the applied frame and inspect the result visually",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Requires a screenshot of a frame an apply produced. No such frame exists yet. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    },
+    {
+      "id": "L03",
+      "title": "Re-inspect native geometry after apply and reconcile with traces",
+      "group": "live",
+      "requirement": "Live render/apply evidence, gathered only after the dry-run suite passes.",
+      "status": "BLOCKED",
+      "detail": "Requires reading back native node ids, which only exist once L01 has written them. Unblocked only by a connected plugin and an explicitly approved disposable frame.",
+      "raw": {
+        "evidence": "none — this is not a live render or apply result"
+      }
+    }
+  ]
+}

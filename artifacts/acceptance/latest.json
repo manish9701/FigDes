@@ -1,8 +1,8 @@
 {
-  "generatedAt": "2026-10-16T10:38:59.314Z",
+  "generatedAt": "2026-10-16T10:53:44.889Z",
   "totals": {
-    "total": 14,
-    "pass": 11,
+    "total": 15,
+    "pass": 12,
     "fail": 0,
     "blocked": 3
   },
@@ -172,6 +172,43 @@
           "applicable": false,
           "reasons": [
             "Product constraint says chat must not be the primary interaction, but chat copy is present in a non-instrument layout."
+          ]
+        }
+      }
+    },
+    {
+      "id": "X12-right",
+      "title": "`right` sizes a box unless a width was stated, in which case it positions it",
+      "group": "compiler",
+      "requirement": "`{ right: 320 }` on a region that has no stated width leaves 320px of room; with an explicit width it positions the box flush to that edge.",
+      "status": "PASS",
+      "detail": "right sizes without a width, positions with one, and both edges compose into a column",
+      "raw": {
+        "room": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "body @ 0,0 1440x434",
+            "aside @ 0,466 1120x434"
+          ]
+        },
+        "positioned": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "body @ 0,0 1440x434",
+            "aside @ 1140,0 300x434"
+          ]
+        },
+        "column": {
+          "applicable": true,
+          "inapplicableReasons": [],
+          "violations": [],
+          "regions": [
+            "body @ 0,0 1440x434",
+            "aside @ 100,466 1020x434"
           ]
         }
       }

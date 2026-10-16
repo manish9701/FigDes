@@ -368,6 +368,67 @@ export const CASES = [
     },
   },
 
+  {
+    id: "X12-right",
+    title: "`right` sizes a box unless a width was stated, in which case it positions it",
+    group: "compiler",
+    requirement:
+      "`{ right: 320 }` on a region that has no stated width leaves 320px of room; with an explicit width it positions the box flush to that edge.",
+    run: () => {
+      const build = (relation) => ({
+        canvas: canvas({ name: "X12 Right", width: 1440, height: 900 }),
+        regions: [
+          region({ id: "body", role: "content", width: "fill", height: "fill" }),
+          region({ id: "aside", role: "inspector", width: "hug", height: "fill", children: [] }),
+        ],
+        content: [],
+        relations: [relation],
+        tokens: [],
+        links: [],
+      });
+
+      // 1. No width stated: `right` is room, not a position.
+      const room = compileCase(build({ id: "aside", right: 320 }), (r) => {
+        const aside = r.regions.find((x) => x.id === "aside");
+        return [
+          !aside ? ["no aside region"] : null,
+          aside && Math.abs(aside.w - 1120) > 1 ? `\`right: 320\` asked for 1120px of width, resolved ${Math.round(aside.w)}px` : null,
+          aside && aside.x < -0.5 ? `the aside was pushed off the left edge to x=${Math.round(aside.x)}` : null,
+          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
+        ].filter(Boolean);
+      });
+
+      // 2. Width stated: `right` positions, which is what X01 relies on.
+      const positioned = compileCase(build({ id: "aside", right: 0, top: 0, width: 300 }), (r) => {
+        const aside = r.regions.find((x) => x.id === "aside");
+        return [
+          !aside ? ["no aside region"] : null,
+          aside && Math.abs(aside.x - 1140) > 1 ? `\`right: 0, width: 300\` asked for x=1140, resolved x=${Math.round(aside.x)}` : null,
+          aside && Math.abs(aside.w - 300) > 1 ? `asked for 300px wide, resolved ${Math.round(aside.w)}px` : null,
+        ].filter(Boolean);
+      });
+
+      // 3. Both edges at once is the thing people write to get a column.
+      const column = compileCase(build({ id: "aside", left: 100, right: 320 }), (r) => {
+        const aside = r.regions.find((x) => x.id === "aside");
+        return [
+          !aside ? ["no aside region"] : null,
+          aside && Math.abs(aside.x - 100) > 1 ? `\`left: 100\` asked for x=100, resolved x=${Math.round(aside.x)}` : null,
+          aside && Math.abs(aside.w - 1020) > 1 ? `\`left: 100, right: 320\` asked for a 1020px column, resolved ${Math.round(aside.w)}px` : null,
+        ].filter(Boolean);
+      });
+
+      return {
+        status: room.status === "PASS" && positioned.status === "PASS" && column.status === "PASS" ? "PASS" : "FAIL",
+        detail:
+          room.status === "PASS" && positioned.status === "PASS" && column.status === "PASS"
+            ? "right sizes without a width, positions with one, and both edges compose into a column"
+            : [room.detail, positioned.detail, column.detail].filter((d) => d !== "all expectations met").join(" | "),
+        raw: { room: room.raw, positioned: positioned.raw, column: column.raw },
+      };
+    },
+  },
+
   /* ---- review-engine counterparts --------------------------------------- */
   {
     id: "X09-route",

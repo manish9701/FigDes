@@ -39,7 +39,7 @@ test("the whole acceptance gate is covered", () => {
   const ids = new Set(ALL_CASES.map((c) => c.id));
   // One case per acceptance-gate line in the issue, plus the review-engine and
   // control cases the gate also names.
-  for (const id of ["X01", "X02", "X03", "X04", "X05", "X06", "X07", "X08", "X09-route", "X10-anchor", "X11-baseline"]) {
+  for (const id of ["X01", "X02", "X03", "X04", "X05", "X06", "X07", "X08", "X12-right", "X09-route", "X10-anchor", "X11-baseline"]) {
     assert.ok(ids.has(id), `the acceptance gate names ${id} and the matrix is missing it`);
   }
   assert.equal(ids.size, ALL_CASES.length, "duplicate case ids");

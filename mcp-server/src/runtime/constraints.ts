@@ -149,8 +149,39 @@ export function solveConstraints(input: SolveInput): PlacedBox[] {
       // No anchor: offsets are relative to the parent.
       if (c.top !== undefined) box.y = round(parent.y + c.top);
       if (c.left !== undefined) box.x = round(parent.x + c.left);
-      if (c.right !== undefined && c.width !== "fill") box.x = round(parent.x + parent.w - c.right - box.w);
-      if (c.bottom !== undefined && c.height !== "fill") box.y = round(parent.y + parent.h - c.bottom - box.h);
+
+      /* ---- what `right` and `bottom` mean --------------------------------- */
+
+      // An edge offset only positions a box when the box has a size the author
+      // stated. `x = parent.right - right - w` needs a known `w`; without one it
+      // subtracts whatever width the shell layout happened to give the region,
+      // which for a full-width region is the whole canvas: `{ right: 320 }` on a
+      // 1188px region produced `x = 1440 - 320 - 1188 = -68`, hanging the region
+      // off the left edge.
+      //
+      // So `right` positions only alongside an explicit `width`. Otherwise it
+      // means what an author writing it means — *leave this much room on my
+      // right* — and constrains the width instead. `{ right: 0 }` with no width
+      // then reads as full bleed, and `{ left: 100, right: 320 }` becomes the
+      // 1020px column between the two edges, which is the thing people are
+      // reaching for when they write it.
+      //
+      // X01's `{ right: 0, top: 0, width: 300 }` declares its width, so it still
+      // positions, and still lands flush to the right edge.
+      const explicitWidth = typeof c.width === "number";
+      const explicitHeight = typeof c.height === "number";
+
+      if (c.right !== undefined && explicitWidth) {
+        box.x = round(parent.x + parent.w - c.right - box.w);
+      } else if (c.right !== undefined) {
+        box.w = Math.max(1, round(parent.x + parent.w - c.right - box.x));
+      }
+      if (c.bottom !== undefined && explicitHeight) {
+        box.y = round(parent.y + parent.h - c.bottom - box.h);
+      } else if (c.bottom !== undefined) {
+        box.h = Math.max(1, round(parent.y + parent.h - c.bottom - box.y));
+      }
+
       align(box, parent, c.alignTo, c.width === "fill" || c.left !== undefined ? "x" : c.height === "fill" || c.top !== undefined ? "y" : undefined);
     }
 
@@ -292,10 +323,23 @@ export function expectedRelationBox(
   } else {
     if (c.top !== undefined) y = round(parent.y + c.top);
     if (c.left !== undefined) x = round(parent.x + c.left);
-    // `right`/`bottom` position against the far edge, which needs the size, so
-    // they are only meaningful when the size is not flexible.
-    if (c.right !== undefined && c.width !== "fill") x = round(parent.x + parent.w - c.right - (w ?? 0));
-    if (c.bottom !== undefined && c.height !== "fill") y = round(parent.y + parent.h - c.bottom - (h ?? 0));
+
+    // Mirrors the solver's edge semantics exactly. `right` positions only
+    // alongside an explicit `width`; otherwise it constrains the width, because
+    // positioning needs a size the author stated. See the long note in
+    // `solveConstraints` for why the distinction matters.
+    const explicitWidth = typeof c.width === "number";
+    const explicitHeight = typeof c.height === "number";
+    if (c.right !== undefined && explicitWidth) {
+      x = round(parent.x + parent.w - c.right - (w ?? 0));
+    } else if (c.right !== undefined && x !== undefined) {
+      w = Math.max(1, round(parent.x + parent.w - c.right - x));
+    }
+    if (c.bottom !== undefined && explicitHeight) {
+      y = round(parent.y + parent.h - c.bottom - (h ?? 0));
+    } else if (c.bottom !== undefined && y !== undefined) {
+      h = Math.max(1, round(parent.y + parent.h - c.bottom - y));
+    }
   }
 
   // Alignment and `fill` are applied after positioning, and they override the

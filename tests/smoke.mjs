@@ -820,7 +820,33 @@ await check("design_guard passes a design that contradicts nothing", async () =>
   });
 
   assert.equal(isError, false);
-  assert.equal(data.verdict, "PASS", `unexpected FAIL: ${JSON.stringify(data.findings.filter((f) => f.verdict === "FAIL"))}`);
+  // Not "PASS". A design that contradicts nothing is not the same as a design
+  // the guard fully evaluated: `developer-apis` and `model-fit-context` are
+  // genuine judgement calls the guard still cannot make, and reporting PASS over
+  // them is how five of thirteen truths came to be asserted without being
+  // checked. What must hold is that nothing failed.
+  const failed = data.findings.filter((f) => f.verdict === "FAIL");
+  assert.equal(failed.length, 0, `unexpected FAIL: ${JSON.stringify(failed)}`);
+  assert.notEqual(data.verdict, "FAIL");
+});
+
+await check("a guard verdict cannot be PASS while any of its own checks are unevaluated", async () => {
+  // The defect this pins down: a manual-only rule used to emit `verdict: "PASS"`
+  // and count itself in `stats.passed`, so a run over a real program reported
+  // top-level PASS on the strength of eight structural checks while evaluating
+  // none of the five encoding design judgement.
+  const { data } = await callTool("design_guard", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "Manual", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "text", id: "t1", parent: "main", args: { text: "Compute", role: "title" } }],
+    },
+  });
+
+  assert.ok(data.stats.manual > 0, "this program leaves judgement calls unevaluated");
+  assert.equal(data.verdict, "INDETERMINATE", `unevaluated checks must not read as approval, got ${data.verdict}`);
+  assert.notEqual(data.verdict, "PASS");
 });
 
 await check("design_guard fails a manual connect-device wizard with evidence", async () => {
@@ -871,10 +897,57 @@ await check("a rule with only unmeasurable evidence is reported, not silently pa
     },
   });
 
-  const manualRule = data.findings.find((f) => f.rule === "exo.technical-typography");
+  // `developer-apis` is still a judgement call no evidence can settle, unlike
+  // `technical-typography`, which used to be manual and is now counted.
+  const manualRule = data.findings.find((f) => f.rule === "exo.developer-apis");
   assert.ok(manualRule, "the manual rule should still appear");
   assert.match(manualRule.message, /human judgement/i);
+  assert.equal(manualRule.verdict, "INDETERMINATE", "an unevaluated rule must not report PASS");
   assert.equal(data.stats.manual > 0, true, "unevaluated checks are counted, not hidden");
+});
+
+await check("machine data set in a proportional face is caught, not asked about", async () => {
+  // `technical-typography` was one of the five rules that reported PASS without
+  // being evaluated. It is decidable: machine data is recognisable by its shape.
+  //
+  // The shapes tested are the four the rule names — addresses, latencies,
+  // hashes, identifiers. Byte quantities are deliberately NOT among them, so
+  // `value: "1.8 TB"` in a proportional face is not reported and this test uses
+  // an address instead.
+  const clean = await callTool("design_guard", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "Mono", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "metric", id: "m", parent: "main", args: { label: "Latency", value: "240ms", valueStyle: "technical" } }],
+    },
+  });
+  const dirty = await callTool("design_guard", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "Proportional", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "metric", id: "m", parent: "main", args: { label: "Latency", value: "240ms" } }],
+    },
+  });
+
+  const okRule = clean.data.findings.find((f) => f.rule === "exo.technical-typography");
+  const badRule = dirty.data.findings.find((f) => f.rule === "exo.technical-typography");
+  assert.equal(okRule.verdict, "PASS", "a technical value is correctly set in the mono face");
+  assert.notEqual(badRule.verdict, "PASS", "an address or latency in a proportional face must be reported");
+  assert.match(badRule.evidence ?? "", /machineDataInProportionalFace=1/);
+
+  // Byte quantities stay the author's call, which is what `valueStyle` is for.
+  const quantity = await callTool("design_guard", {
+    project: "smoke-test",
+    program: {
+      canvas: { name: "Quantity", width: 1440, height: 900, grid: 8 },
+      regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
+      content: [{ fn: "metric", id: "m", parent: "main", args: { label: "Memory", value: "1.8 TB" } }],
+    },
+  });
+  const qRule = quantity.data.findings.find((f) => f.rule === "exo.technical-typography");
+  assert.equal(qRule.verdict, "PASS", "the rule enforces what it states, not what I wished it stated");
 });
 
 await check("design_guard warns on unexplained topology relationships", async () => {

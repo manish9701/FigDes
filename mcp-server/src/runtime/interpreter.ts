@@ -20,6 +20,8 @@
  * is where the speed and the quality both come from — not from a bigger API.
  */
 import { z } from "zod";
+import { runGuard, snapshotFromIR } from "../memory/guard";
+import { defaultRules } from "../memory/rules-exo";
 import {
   canvasSize,
   ComponentSpecSchema,
@@ -511,6 +513,8 @@ export interface RuntimeResult {
 warnings: string[];
   /** What the visual intent changed, in plain language. Not warnings. */
   intentNotes: string[];
+  /** What the product guard concluded about this build. */
+  productGuard?: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number };
   /** Algorithms invoked per region, so the caller can see what was chosen. */
   algorithms: Record<string, string>;
   /** How many relations were applied. */
@@ -1108,13 +1112,52 @@ case "shape": {
 
   const compiled = compileIR(ir);
 
+  // The product guard runs here, on every build, rather than only when someone
+  // remembers to ask for it.
+  //
+  // It used to be reachable solely through `design_guard`, which is a separate
+  // tool. That is fine as an inspection and useless as a gate: the loop this
+  // agent actually runs is compile → apply → review → render, none of which
+  // touched it. Every defect found on the live stress frame — an invisible
+  // active nav label, a region buried under its sibling — passed a guard run
+  // that reported `PASS`.
+  //
+  // So the judgement layer is now part of the build. A FAIL is a violation under
+  // the `product` rule, which is blocking, so a design that contradicts a product
+  // truth does not silently ship. An INDETERMINATE — anything left to a human
+  // judgement — is surfaced as a warning rather than swallowed, because "nobody
+  // checked" and "nothing was wrong" are different sentences.
+  const guard = runGuard(defaultRules(), snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
+  const violations = [...compiled.violations];
+  for (const f of guard.findings) {
+    if (f.verdict === "FAIL") {
+      violations.push({ rule: "product", message: `${f.rule}: ${f.message}${f.evidence ? ` [${f.evidence}]` : ""}` });
+    } else if (f.verdict === "WARNING") {
+      warnings.push(`${f.rule}: ${f.message}${f.evidence ? ` [${f.evidence}]` : ""}`);
+    }
+  }
+  if (guard.verdict === "INDETERMINATE" && guard.stats.manual > 0) {
+    // Deliberately not a `warnings` entry.
+    //
+    // Two of the thirteen truths are standing judgement calls no evidence can
+    // settle, so this note would fire on literally every build and train the
+    // reader to skip the array — the same failure as a rule that reports PASS
+    // when it has checked nothing, just quieter. It belongs on `productGuard`,
+    // which every caller of a build already has and which says so explicitly:
+    // `verdict: "INDETERMINATE", manual: 2`. `design_guard` remains the way to
+    // interrogate which truths those are.
+  }
+
   return {
     ir,
     operations: compiled.operations,
-    violations: compiled.violations,
-    /** False when the resolved geometry is not what the program asked for. */
-    applicable: compiled.applicable,
-    inapplicableReasons: compiled.inapplicableReasons,
+    violations,
+    /** False when the resolved geometry, or the product guard, says otherwise. */
+    applicable: compiled.applicable && guard.stats.failures === 0,
+    inapplicableReasons: [
+      ...compiled.inapplicableReasons,
+      ...violations.filter((v) => v.rule === "product").map((v) => v.message),
+    ],
     boxes: compiled.boxes,
     algorithms: compiled.stats.algorithms,
     constrained: compiled.stats.constrained,
@@ -1129,7 +1172,34 @@ case "shape": {
     },
     warnings,
     intentNotes,
+    /** What the product guard concluded about this build. */
+    productGuard: {
+      verdict: guard.verdict,
+      rulesChecked: guard.stats.rulesChecked,
+      failures: guard.stats.failures,
+      warnings: guard.stats.warnings,
+      manual: guard.stats.manual,
+    },
   };
+}
+
+/**
+ * The composition the shell layout actually resolved.
+ *
+ * The guard can only judge what was built, not what was asked for: a screen can
+ * request "spatial" and land on "canvas", and several product truths read the
+ * resolved value.
+ */
+function resolvedComposition(ir: DesignIR): string {
+  const TOPOLOGY = new Set(["topology", "topologyMap", "topologyMap"]);
+  const CANVAS = new Set(["canvas", "map"]);
+  for (const region of ir.regions) {
+    if (TOPOLOGY.has(region.composition)) return "topology";
+  }
+  for (const region of ir.regions) {
+    if (CANVAS.has(region.composition)) return "canvas";
+  }
+  return ir.regions.length > 0 ? (ir.regions[0]?.composition ?? "canvas") : "canvas";
 }
 
 /**

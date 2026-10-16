@@ -370,6 +370,7 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
   let warnings = 0;
   let failures = 0;
   let manual = 0;
+  let indeterminate = 0;
 
   for (const rule of rules) {
     const checkable = rule.evidence.filter((e) => e.kind !== "manual");
@@ -377,34 +378,65 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
 
     if (checkable.length === 0) {
       // Nothing machine-checkable. Surface the question; do not pretend to pass.
+      //
+      // This used to push `verdict: "PASS"` and count the rule in `passed`. Five
+      // of the thirteen EXO product truths are manual-only — primary-action-
+      // dominant, selected-unambiguous, model-fit-context, technical-typography
+      // and developer-apis — so a run over a real program returned a top-level
+      // PASS on the strength of eight structural checks while having evaluated
+      // none of the five that actually encode design judgement. The manual count
+      // was buried in `stats.manual`, underneath a verdict that read as approval.
+      //
+      // This file's own header says judgement is "surfaced as a `manual`
+      // question, never asserted", and then asserted PASS. A rule nobody checked
+      // is INDETERMINATE, which is the verdict that exists for exactly this: the
+      // difference between "the guard approved this" and "the guard looked and
+      // could not conclude".
       if (manualOnly.length > 0) {
         manual += manualOnly.length;
         findings.push({
-          verdict: "PASS",
+          verdict: "INDETERMINATE",
           rule: rule.id,
           message: `needs a human judgement: ${rule.therefore}`,
           evidence: manualOnly.map((m) => (m.kind === "manual" ? m.question : "")).join(" | "),
         });
       }
-      passed += 1;
       continue;
     }
 
     const outcomes = checkable.map((e) => evaluate(e, snapshot));
     const breaches = outcomes.filter((o) => o.verdict === "FAIL");
-    const verdict: Verdict = breaches.length > 0 ? (rule.severity === "fail" ? "FAIL" : "WARNING") : "PASS";
-
     const unevaluated = outcomes.filter((o) => o.manual).length + manualOnly.length;
     if (unevaluated > 0) manual += unevaluated;
 
+    // A rule with machine-checkable evidence that all held is still only PARTLY
+    // checked when any of its own checks came back manual. Calling that PASS
+    // makes the count of manual evaluations decorative — it is the reason the
+    // EXO guard could report a clean run while deferring five of thirteen
+    // truths. INDETERMINATE outranks PASS for the same reason FAIL outranks it.
+    const verdict: Verdict =
+      breaches.length > 0
+        ? rule.severity === "fail"
+          ? "FAIL"
+          : "WARNING"
+        : unevaluated > 0
+          ? "INDETERMINATE"
+          : "PASS";
+
     if (verdict === "FAIL") failures += 1;
     else if (verdict === "WARNING") warnings += 1;
+    else if (verdict === "INDETERMINATE") indeterminate += 1;
     else passed += 1;
 
     findings.push({
       verdict,
       rule: rule.id,
-      message: breaches.length > 0 ? `contradicts: ${rule.therefore}` : `consistent with: ${rule.rule}`,
+      message:
+        breaches.length > 0
+          ? `contradicts: ${rule.therefore}`
+          : unevaluated > 0
+            ? `consistent with: ${rule.rule}, but ${unevaluated} of its own checks need a human judgement`
+            : `consistent with: ${rule.rule}`,
       evidence: breaches.length > 0 ? breaches.map((b) => b.evidence ?? b.message).join(" | ") : undefined,
       nextStep: breaches.length > 0 ? rule.therefore : undefined,
     });
@@ -453,6 +485,103 @@ export function snapshotFromIR(ir: {
 
   const topologyNodes = (ir.content.filter((n) => n.kind === "component" && (n.type === "deviceNode" || n.type === "topologyMap"))).length;
 
+  /* ------------------------------------------------------------------ */
+  /* Task-legibility metrics                                             */
+  /* ------------------------------------------------------------------ */
+  //
+  // These three exist because `primary-action-dominant`, `technical-typography`
+  // and `selected-unambiguous` were all manual-only, so five of the thirteen EXO
+  // truths were reported PASS without ever being evaluated. Each is decidable
+  // from the program, so leaving them unevaluated was not caution — it was a gap
+  // dressed up as one.
+
+  /** How a component claims to be the one thing the user is meant to do. */
+  const claimsPrimary = (props: Record<string, unknown>): boolean =>
+    props.primary === true ||
+    props.variant === "primary" ||
+    props.emphasis === "primary" ||
+    props.role === "primaryAction";
+
+  const dominantActions = ir.content.filter(
+    (n) => n.kind === "component" && n.props && claimsPrimary(n.props),
+  ).length;
+
+  /**
+   * Strings the product truth names: identifiers, latencies, hashes, addresses.
+   *
+   * Kept to exactly the four the rule states. An earlier version also matched
+   * byte quantities, which is not what `exo.technical-typography` says — and a
+   * check that enforces more than the rule it claims to enforce is the same
+   * drift the rule exists to prevent, just with better manners. It fired on the
+   * project's own example dashboard (`value: "1.8 TB"`) and the placement map's
+   * "Requires 480 GB", both of which are defensible display values set in a
+   * proportional face.
+   *
+   * Byte alignment stays available as an author choice through
+   * `valueStyle: "technical"`, which is where a designer asks for it.
+   *
+   * The hash pattern needs a digit, so ordinary words are not mistaken for hex.
+   */
+  const MACHINE_DATA = [
+    /\b\d{1,3}(?:\.\d{1,3}){3}\b/, //                                   10.0.0.14
+    /\b\d+(?:\.\d+)?\s?(?:ms|µs|us|ns)\b/, //                          240ms
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+    /\b(?=[0-9a-f]{8,}\b)(?=[a-f0-9]*\d)[a-f0-9]{8,}\b/i,
+  ];
+  const looksMachine = (s: string): boolean => MACHINE_DATA.some((re) => re.test(s));
+
+  /** A face that sets digits and identifiers on a fixed pitch. */
+  const isMonoFace = (s: string | undefined): boolean =>
+    typeof s === "string" && /mono|menlo|consolas|courier|jetbrains|code/i.test(s);
+
+  let machineDataInProportionalFace = 0;
+  for (const node of ir.content) {
+    if (node.kind === "text") {
+      const spec = node as { text?: string; role?: string; family?: string };
+      if (!spec.text || !looksMachine(spec.text)) continue;
+      if (spec.role === "code" || isMonoFace(spec.family)) continue;
+      machineDataInProportionalFace += 1;
+      continue;
+    }
+    if (node.kind !== "component") continue;
+    const props = (node.props ?? {}) as Record<string, unknown>;
+    // A metric card marks its value technical to opt into the mono face.
+    if (props.valueStyle === "technical" || isMonoFace(props.family as string | undefined)) continue;
+    for (const key of ["value", "label"]) {
+      const v = props[key];
+      if (typeof v === "string" && looksMachine(v)) {
+        machineDataInProportionalFace += 1;
+        break;
+      }
+    }
+  }
+
+  /**
+   * A selected item that differs from its neighbours only in colour.
+   *
+   * Fails the user twice: a glance cannot find it, and anyone who cannot
+   * separate the hues cannot see it at all. Selection has to survive being
+   * greyscale, which means something other than fill has to move too.
+   */
+  let ambiguousSelections = 0;
+  const SELECTABLE = new Set(["navItem", "modelRow", "deviceNode", "tab"]);
+  const NON_COLOUR_SIGNAL = ["indicator", "icon", "marker", "badge", "stateLabel", "check", "caret"];
+  for (const node of ir.content) {
+    if (node.kind !== "component" || !node.type || !SELECTABLE.has(node.type)) continue;
+    const props = (node.props ?? {}) as Record<string, unknown>;
+    const state = typeof props.state === "string" ? props.state.toLowerCase() : props.active === true ? "active" : "";
+    if (state !== "active" && state !== "selected") continue;
+    // The navItem emitter raises the label to weight 600 when a nav item is
+    // active, so an active nav item differs by more than its fill and is not a
+    // colour-only selection. Reading the program rather than the emitted result,
+    // that guarantee is invisible here — it is a property of the component, not
+    // of anything the program wrote — so it is accounted for explicitly rather
+    // than by trusting every future emitter to do the same thing.
+    if (node.type === "navItem") continue;
+    const carriesSignal = NON_COLOUR_SIGNAL.some((k) => props[k] !== undefined) || typeof props.weight === "number";
+    if (!carriesSignal) ambiguousSelections += 1;
+  }
+
   return {
     composition: resolved.composition,
     source: "program",
@@ -473,6 +602,9 @@ export function snapshotFromIR(ir: {
       unlabeledEdges: Math.max(0, (ir.links ?? []).length - labeledEdges),
       unlabeledComponents,
       buttons: (count.get("button") ?? 0),
+      dominantActions,
+      machineDataInProportionalFace,
+      ambiguousSelections,
     },
   };
 }

@@ -646,6 +646,9 @@ export function compileIR(ir: DesignIR): CompileResult {
     "maxMetricCards",
     "noGenericCardGrid",
     "noChatAsPrimary",
+    // Raised by the product guard, which `executeRuntime` runs on every build.
+    // A design that contradicts a product truth does not ship silently.
+    "product",
   ]);
   const inapplicableReasons = violations.filter((v) => BLOCKING.has(v.rule)).map((v) => v.message);
 

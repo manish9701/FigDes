@@ -89,7 +89,13 @@ export const EXO_RULES: ProductRule[] = [
     rule: "Machine data should read as machine data.",
     therefore: "Use a monospaced face for identifiers, latencies, hashes and addresses.",
     severity: "warn",
-    evidence: [{ kind: "manual", question: "Are identifiers, latencies and addresses set in a monospaced face?" }],
+    evidence: [
+      // Was manual-only: "Are identifiers, latencies and addresses set in a
+      // monospaced face?" A guard that asked and never answered reported PASS.
+      // Machine data is recognisable by its own shape, so the question is
+      // decidable and is now asked of every value the program declares.
+      { kind: "assert", metric: "machineDataInProportionalFace", op: "==", value: 0 },
+    ],
     passesWhen: ["Technical values are monospaced and right-aligned where compared"],
   },
   {
@@ -124,7 +130,12 @@ export const EXO_RULES: ProductRule[] = [
     rule: "The primary action must be visually dominant.",
     therefore: "One commit control leads; secondary actions retreat. Two equal primaries is not a hierarchy.",
     severity: "warn",
-    evidence: [{ kind: "manual", question: "Is there exactly one visually dominant primary action?" }],
+    evidence: [
+      // Was manual-only. Two controls claiming to be the primary action is the
+      // exact situation this rule was written for — "Two equal primaries is not a
+      // hierarchy" — and it is countable.
+      { kind: "assert", metric: "dominantActions", op: "<=", value: 1 },
+    ],
     passesWhen: ["The eye finds the commit control without reading"],
   },
   {
@@ -132,7 +143,13 @@ export const EXO_RULES: ProductRule[] = [
     rule: "Selected state must be unambiguous.",
     therefore: "The focused node, row or nav item must read as selected at a glance, not on close inspection.",
     severity: "warn",
-    evidence: [{ kind: "manual", question: "Can the selected item be identified without reading labels?" }],
+    evidence: [
+      // Was manual-only: "Can the selected item be identified without reading
+      // labels?" Countable, if you ask the question the user actually faces:
+      // does anything move besides the colour. Fill-only selection fails twice
+      // over — a glance cannot find it, and a hue-blind viewer cannot see it.
+      { kind: "assert", metric: "ambiguousSelections", op: "==", value: 0 },
+    ],
     passesWhen: ["Selection survives a squint test"],
   },
 ];

@@ -423,25 +423,31 @@ function siblingRadiusMismatch(n: NodeMetrics, c: Ctx): Finding[] {
   // that shape, and reporting it as drift is a false positive that also drags a
   // real repair (`setCornerRadius`) toward destroying the circle.
   const circular = withRadius.filter((s) => s.radius >= Math.min(s.w, s.h) / 2 - 0.5);
+  const candidates = withRadius.filter((s) => !circular.includes(s));
+  if (candidates.length < 2) return [];
 
-  const offenders = withRadius.filter((s) => s.radius !== majority && !isOnRadiusScale(s.radius) && !circular.includes(s));
-  const offScale = offenders.length > 0;
+  // Is anything in the group off-scale? Not "is anything off-scale *and* not the
+  // majority" — that was the bug. With a 5px majority and two 4px values, the 4s
+  // are on-scale, so the old check reported no drift and then proposed moving the
+  // 4s to 5, i.e. onto the scale violation it was meant to prevent. A live retest
+  // caught exactly that on the homepage.
+  const drifted = candidates.filter((s) => !isOnRadiusScale(s.radius));
+  const offScale = drifted.length > 0;
 
   // Two different questions, and they need different answers:
-  //  - off-scale values are drift; snap them to the scale step nearest their own.
+  //  - off-scale values are drift; snap each to the documented step nearest it.
   //  - on-scale values that merely disagree with their siblings are a hierarchy
   //    decision, not a defect. Matching the majority is offered, not asserted.
-  const majorityIsOnScale = isOnRadiusScale(majority);
+  //
+  // The proposal never leaves the scale. When the majority itself is off-scale,
+  // matching it would move correct values onto a value the scale does not have,
+  // so the nearest step wins instead.
+  const majorityOnScale = isOnRadiusScale(majority);
+  const propose = (radius: number): number => (majorityOnScale ? majority : nearestRadiusStep(radius));
 
-  // What to propose, and the order of preference:
-  //  1. the majority radius, when the majority is itself on-scale — it is both
-  //     consistent with the siblings and a documented step, so it satisfies both
-  //     questions at once;
-  //  2. otherwise the documented step nearest the value's own intent, which is
-  //     all that can be said when the whole set has drifted off-scale.
-  const propose = (radius: number): number => (majorityIsOnScale ? majority : nearestRadiusStep(radius));
-
-  const offendersToReport = offScale ? offenders : withRadius.filter((s) => s.radius !== majority && !circular.includes(s));
+  const offendersToReport = offScale
+    ? drifted
+    : candidates.filter((s) => s.radius !== majority);
   if (offendersToReport.length === 0) return [];
 
   const otherValues = ranked
@@ -462,7 +468,7 @@ function siblingRadiusMismatch(n: NodeMetrics, c: Ctx): Finding[] {
       evidence: {
         scale: RADIUS_SCALE.slice(0, 4).join("/") + "px",
         majorityRadius: majority,
-        majorityOnScale: majorityIsOnScale,
+        majorityOnScale: majorityOnScale,
         kind: offScale ? "off-scale" : "sibling-divergence",
         otherRadii: otherValues,
         circularExcluded: circular.map((o) => `${o.name}=${o.radius}px (circular)`).join(", ") || null,
@@ -473,9 +479,9 @@ function siblingRadiusMismatch(n: NodeMetrics, c: Ctx): Finding[] {
         offendersToReport.map((o) => ({ type: "setCornerRadius", target: o.id, radius: proposed(o.radius) })),
       ),
       guidance: offScale
-        ? `Snap these to the documented scale step nearest their current value (${offendersToReport
+        ? `Snap the off-scale values to the documented step nearest them (${offendersToReport
             .map((o) => `${o.radius}->${proposed(o.radius)}`)
-            .join(", ")}), or adopt a scale for this file if these values are deliberate.`
+            .join(", ")}).${majorityOnScale ? "" : ` The ${majority}px majority is itself off-scale, so it is not used as the target — fix it too.`}`
         : `Align these to the ${majority}px radius their siblings use, or keep them if the difference is a deliberate hierarchy.`,
     },
   ];
@@ -896,6 +902,47 @@ function cardWall(n: NodeMetrics, c: Ctx): Finding[] {
  * "Row 2", "Row 3" and leaves the rules named "Line". A rule is anything that
  * spans most of its container's width while being too thin to carry content.
  */
+/**
+ * A repeated piece of row furniture rather than a duplicated object.
+ *
+ * A device list repeats one green status dot and the word ONLINE per row. That
+ * repetition is the design: the dot means the same thing in every row, so making
+ * it different in one row would be the defect. Reporting those as duplicates
+ * pushes a designer to break the rhythm, and the live retest found exactly that —
+ * two duplicate-sibling groups on the homepage, both intentional row furniture.
+ *
+ * Identified by role and scale, not by name alone, because a designer labels rows
+ * "Row 1", "Row 2", "Row 3" and leaves the furniture named "Status Dot" or
+ * nothing. The distinguishing property is that the node communicates state
+ * rather than content: it is small relative to its parent, or it is a short
+ * repeated label.
+ */
+function isRowFurniture(s: NodeMetrics, parentWidth: number, parentHeight: number): boolean {
+  // Explicit intent, when the layer says so.
+  if (INDICATOR_NAME.test(s.name)) return true;
+
+  // A short, repeated text label next to a status is furniture: "ONLINE",
+  // "HEALTHY", "READY". Long prose is content, and three identical paragraphs are
+  // worth a second look.
+  if (s.type === "TEXT" && s.text?.content) {
+    const content = s.text.content.trim();
+    if (content.length > 0 && content.length <= 16) return true;
+  }
+
+  // Small relative to its container. An indicator is a sliver of the row it sits
+  // in — a status dot is typically under a tenth of the row's shorter side.
+  // The threshold is deliberately tight: at a quarter, three 100px rectangles in
+  // a 400px frame qualified as furniture and the rule stopped catching real
+  // duplicates, which is the worse failure of the two.
+  const smallerSide = Math.min(s.w, s.h);
+  if (smallerSide > 0 && parentWidth > 0 && parentHeight > 0) {
+    if (smallerSide <= Math.min(parentWidth, parentHeight) * 0.12) return true;
+  }
+  return false;
+}
+
+const INDICATOR_NAME = /status|pill|badge|health|state|dot|indicator|chip|led|online|offline/i;
+
 function isStructuralSeparator(s: NodeMetrics, parentWidth: number): boolean {
   const thinEnough = s.h <= 2 || s.w <= 2;
   const spansContainer = parentWidth > 0 && s.w >= parentWidth * 0.6;
@@ -931,6 +978,10 @@ function duplicateSiblings(n: NodeMetrics, c: Ctx): Finding[] {
   const out: Finding[] = [];
   for (const group of groups.values()) {
     if (group.length < 3) continue;
+    // Repeating a piece of row furniture is the design, not a copy-paste error.
+    // Every member must be furniture: one real card among three dots is a finding,
+    // three dots among three dots is a list.
+    if (group.every((s) => isRowFurniture(s, n.w, n.h))) continue;
     const first = group[0]!;
     out.push({
       rule: "duplicate-siblings",

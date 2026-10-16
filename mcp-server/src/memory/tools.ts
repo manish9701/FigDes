@@ -189,6 +189,8 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     snapshot: {
       source: snapshot.source ?? "unknown",
       resolved: snapshot.resolved ?? true,
+      /** Exactly what was checked. A verdict is only meaningful with its scope. */
+      scope: snapshot.scope ?? null,
       composition: snapshot.composition,
       components: snapshot.components,
       metrics: snapshot.metrics,
@@ -209,6 +211,9 @@ function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapsho
 
   let maxNodes: number | undefined;
   let truncated: boolean | undefined;
+  // Identity of what was selected. Recorded so the verdict can be read with its
+  // scope rather than assumed to cover the whole design.
+  let selectedIdentity: { id?: string; name?: string; type?: string } = {};
 
   const walk = (node: Record<string, unknown>, names: string[], texts: string[], instances: Array<{ type: string }>): void => {
     if (typeof node.name === "string") names.push(node.name);
@@ -234,7 +239,15 @@ function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapsho
   const instances: Array<{ type: string }> = [];
   const selection = inspected.selection;
   const selected = Array.isArray(selection) ? selection[0] : selection;
-  if (selected && typeof selected === "object") walk(selected as Record<string, unknown>, names, texts, instances);
+  if (selected && typeof selected === "object") {
+    const root = selected as Record<string, unknown>;
+    walk(root, names, texts, instances);
+    selectedIdentity = {
+      ...(typeof root.id === "string" ? { id: root.id } : {}),
+      ...(typeof root.name === "string" ? { name: root.name } : {}),
+      ...(typeof root.type === "string" ? { type: root.type } : {}),
+    };
+  }
 
   const composition = typeof inspected.composition === "string" ? inspected.composition : undefined;
 
@@ -261,6 +274,18 @@ function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapsho
     composition,
     source: "live",
     resolved,
+    // The exact scope, so a verdict about one layer cannot be read as a verdict
+    // about a screen. A TEXT selection is explicitly not screen-level.
+    scope: {
+      ...selectedIdentity,
+      nodeCount: names.length,
+      textCount: texts.length,
+      screenLevel:
+        typeof selectedIdentity.type === "string" &&
+        ["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE", "PAGE", "DOCUMENT", "SECTION", "GROUP", "SLIDE"].includes(
+          selectedIdentity.type.toUpperCase(),
+        ),
+    },
     ...(unresolvedReason ? { unresolvedReason } : {}),
     components: [...components].map(([type, count]) => ({ type, count })),
     nodeNames: names,

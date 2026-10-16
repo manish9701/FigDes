@@ -64,6 +64,28 @@ export interface GuardSnapshot {
   resolved?: boolean;
   /** Why resolution failed, when it did. Shown verbatim in the finding. */
   unresolvedReason?: string;
+  /**
+   * Exactly what was inspected, so the verdict can be read with its scope.
+   *
+   * A guard run over a single text layer is not a weaker check on a screen, it is
+   * a check on a different and much smaller thing. Reporting that alongside the
+   * verdict is the difference between "the guard approved this" and "the guard
+   * approved this one layer".
+   */
+  scope?: GuardScope;
+}
+
+/** What a guard run actually looked at. */
+export interface GuardScope {
+  /** Node id, when there was one. */
+  id?: string;
+  name?: string;
+  type?: string;
+  /** How many nodes the inspection walked. */
+  nodeCount: number;
+  textCount: number;
+  /** True when the target is a container that can stand for a screen. */
+  screenLevel: boolean;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -117,6 +139,46 @@ export function snapshotHasEvidence(snapshot: GuardSnapshot): boolean {
   // snapshot carrying `nodes: 0, textNodes: 0` is the empty case, not a screen
   // whose rules all pass.
   return Object.values(snapshot.metrics ?? {}).some((v) => Number.isFinite(v) && v > 0);
+}
+
+/**
+ * Node types that can stand for a screen.
+ *
+ * A guard run over a leaf has not checked a design; it has checked that one text
+ * layer contains no forbidden word. The live retest found this: after editing the
+ * 86-node homepage frame, `design_guard(inspect:true)` resolved the *current
+ * selection* — a single text node — and returned PASS for all 13 rules, which
+ * read as the whole homepage being validated when nothing of the sort happened.
+ */
+const SCREEN_LEVEL_TYPES = new Set(["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE", "PAGE", "DOCUMENT", "SECTION", "GROUP", "SLIDE"]);
+
+/**
+ * A snapshot too small or too narrow to certify a screen.
+ *
+ * Two ways to get here, and both produce INDETERMINATE rather than PASS:
+ *  - the target is a leaf (text, vector, rectangle), so it is not a design;
+ *  - the target is a container but holds almost nothing, so passing every rule is
+ *    an artefact of there being nothing to contradict.
+ *
+ * The threshold is deliberately low. It exists to catch the "one text node"
+ * accident, not to second-guess a legitimately sparse screen.
+ */
+const MIN_SCREEN_NODES = 3;
+
+export function scopeIsTooNarrow(snapshot: GuardSnapshot): string | null {
+  const scope = snapshot.scope;
+  if (!scope) return null;
+
+  if (scope.type !== undefined && !SCREEN_LEVEL_TYPES.has(scope.type.toUpperCase())) {
+    return `The selection is a ${scope.type}${scope.name ? ` named "${scope.name}"` : ""}, not a screen or frame. A product rule cannot be evaluated against a single layer.`;
+  }
+  if (scope.nodeCount > 0 && scope.nodeCount < MIN_SCREEN_NODES) {
+    return `The selection contains ${scope.nodeCount} node${scope.nodeCount === 1 ? "" : "s"}, which is not enough to evaluate a screen. Select the frame you want checked.`;
+  }
+  if (scope.screenLevel === false) {
+    return "The inspected target is not a screen-level container.";
+  }
+  return null;
 }
 
 /** Human-readable explanation used as the INDETERMINATE finding's evidence. */
@@ -276,6 +338,27 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
           evidence,
           nextStep:
             "Select the frame to check (or pass a program), confirm it is not inside a locked/hidden layer, and re-run design_guard. An empty result must never be read as approval.",
+        },
+      ],
+      stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+    };
+  }
+
+  // Non-empty is not the same as screen-level. One text layer contains no
+  // forbidden copy, so every rule passes — and reading that as "the design is
+  // approved" is precisely the selection-scope false pass the live retest hit.
+  const tooNarrow = scopeIsTooNarrow(snapshot);
+  if (tooNarrow !== null) {
+    return {
+      verdict: "INDETERMINATE",
+      findings: [
+        {
+          verdict: "INDETERMINATE",
+          rule: "scope",
+          message: `${tooNarrow} ${snapshot.scope?.nodeCount ?? 0} node(s) were walked, so no rule was evaluated against a design.`,
+          evidence: emptyEvidence(snapshot),
+          nextStep:
+            "Select the frame you want checked, then re-run design_guard(inspect:true). A verdict about one layer is not a verdict about the screen.",
         },
       ],
       stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },

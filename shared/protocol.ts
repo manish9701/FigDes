@@ -122,14 +122,22 @@ export function isOnRadiusScale(radius: number): boolean {
   return (RADIUS_SCALE as readonly number[]).includes(radius);
 }
 
-/** The nearest documented step, for a repair that has to pick one. */
+/**
+ * The nearest documented step, for a repair that has to pick one.
+ *
+ * Ties round **up**, to the larger step: 6 is equidistant from 4 and 8, and 8 is
+ * the rounder of the two. Making that explicit matters because a repair is only
+ * reproducible if the tie-break is, and "whichever the loop happened to hit" is
+ * not a rule.
+ */
 export function nearestRadiusStep(radius: number): number {
   if (radius <= 2) return 0;
   const steps = RADIUS_SCALE.filter((s) => s < RADIUS_FULL) as readonly number[];
   if (steps.length === 0) return 0;
   let best = steps[0]!;
+  // `<=` so that on an exact tie the later (larger) step wins.
   for (const step of steps) {
-    if (Math.abs(step - radius) < Math.abs(best - radius)) best = step;
+    if (Math.abs(step - radius) <= Math.abs(best - radius)) best = step;
   }
   return best;
 }

@@ -50,7 +50,7 @@
   "test:ui": "node --test tests/ui.test.mjs",
     "test:runtime": "node --test tests/runtime.test.mjs tests/plan.test.mjs",
   "test:issue10": "node --test tests/issue-10-regressions.test.mjs",
-  "test:issue11": "node --test tests/issue-11-regressions.test.mjs",
+  "test:issue11": "node --test tests/issue-11-regressions.test.mjs tests/issue-11-live-retest.test.mjs",
   "test:invariants": "node --test tests/invariants.test.mjs",
   "test:live-evidence": "node --test tests/live-evidence.test.mjs",
     "test:plugin": "node --test tests/plugin-runtime.test.mjs",

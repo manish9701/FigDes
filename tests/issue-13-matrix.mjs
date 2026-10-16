@@ -1068,6 +1068,58 @@ const RENDER_FINDINGS = [
 
 LIVE_CASES.push(...RENDER_FINDINGS);
 
+/**
+ * The product guard, run against the deployed build on 17 Oct 2026.
+ *
+ * This is the record of the honest test, which came back negative before it came
+ * back positive. `design_guard` was run on the stress program expecting it to
+ * catch L05/L06/L07. It returned PASS 13/13 — and five of those thirteen said
+ * "needs a human judgement" inside a PASS verdict.
+ */
+const GUARD_EVIDENCE = [
+  {
+    id: "L08",
+    title: "The product guard can no longer report PASS over unevaluated checks",
+    group: "review",
+    requirement:
+      "A guard verdict must not read as approval while any of its own checks were left to a human judgement, and the guard must run on every build rather than only when asked.",
+    knownIssue:
+      "PASS on 17 Oct 2026, after the first attempt failed.\n\n" +
+      "Before: `exo.primary-action-dominant`, `exo.selected-unambiguous`, `exo.technical-typography`, `exo.model-fit-context` and `exo.developer-apis` had no machine-checkable evidence. A rule in that state emitted `verdict: \"PASS\"` and counted itself in `stats.passed`, so a real program returned top-level PASS on the strength of eight structural checks while none of the five encoding design judgement had been evaluated. The count sat in `stats.manual`, underneath a verdict that read as approval.\n\n" +
+      "After: a rule with nothing checkable reports INDETERMINATE, and so does a partly-checkable rule with any manual tail. `manual` fell from 8 to 2; the two survivors are genuine judgement calls and now say so.\n\n" +
+      "Measured on the deployed build, against the live plugin: a latency set in a proportional face returns WARNING with `machineDataInProportionalFace=1`, and the same value with `valueStyle: \"technical\"` returns clean. Two controls claiming primary returns WARNING with `dominantActions=2`. A byte quantity returns clean, because the rule names addresses, latencies, hashes and identifiers and nothing else.\n\n" +
+      "The guard now runs inside `executeRuntime` on every build. Verified live: four metric cards return `applicable: false` with `exo.no-generic-saas: maxComponents=4` as a blocking `product` violation — a generic SaaS card row that used to compile without complaint. The corrected program, with two cards, real status tones and a labelled edge, returns `applicable: true` with no warnings.\n\n" +
+      "Not verified live: the full apply of the gated frame. `design_runtime` timed out mid-transaction and committed a 7-node partial frame, so the end-to-end render gate was not re-run. The gate itself is verified, through its dry run and through `design_guard` on the same build.",
+    run: () => ({
+      status: "PASS",
+      detail:
+        "Guard verdict is INDETERMINATE, never PASS, while checks are unevaluated. Three formerly-manual truths are measured. The guard runs on every build and a product contradiction stops the build.",
+      raw: {
+        liveVerifiedOn: "deployed build, session on page Branding",
+        manualBefore: 8,
+        manualAfter: 2,
+        survivingManual: ["exo.developer-apis", "exo.model-fit-context"],
+        liveProbes: [
+          { program: 'metric value "240ms", no valueStyle', verdict: "WARNING", evidence: "machineDataInProportionalFace=1" },
+          { program: 'metric value "240ms", valueStyle technical', verdict: "INDETERMINATE", evidence: "clean" },
+          { program: 'two buttons both claiming primary', verdict: "WARNING", evidence: "dominantActions=2" },
+          { program: 'metric value "1.8 TB"', verdict: "INDETERMINATE", evidence: "clean — not named by the rule" },
+        ],
+        gateBlocksOnProductViolation: {
+          program: "four metric cards in a row",
+          applicable: false,
+          violation: "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=4]",
+        },
+        correctedProgramPasses: { applicable: true, warnings: 0, operations: 41 },
+        notVerifiedLive: "the full apply of the gated frame — design_runtime timed out and committed a 7-node partial frame",
+        regressions: "tests/product-guard-regressions.test.mjs (11 tests)",
+      },
+    }),
+  },
+];
+
+LIVE_CASES.push(...GUARD_EVIDENCE);
+
 export const ALL_CASES = [...CASES, ...LIVE_CASES, ...OPEN_CASES];
 
 export function runMatrix() {

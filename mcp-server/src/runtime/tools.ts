@@ -346,6 +346,16 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
     ...(advisories.length > 0 ? { reuse: advisories } : {}),
     violations: result.violations,
     warnings: result.warnings,
+    /**
+     * What the product guard concluded about this build.
+     *
+     * Without it the gate is invisible on the way past: a build can come back
+     * `applicable: true` having been checked against thirteen truths and found
+     * two of them unevaluable, and the caller has no way to tell that from a
+     * build that was fully checked. `verdict` here is INDETERMINATE whenever
+     * anything was left to a human judgement, never PASS.
+     */
+    productGuard: result.productGuard,
     operations: result.operations,
   };
 

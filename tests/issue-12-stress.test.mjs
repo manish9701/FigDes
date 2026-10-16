@@ -51,7 +51,7 @@ test("every case has a stable id, a requirement and an explicit status", () => {
   const ids = ALL_CASES.map((c) => c.id);
   assert.equal(new Set(ids).size, ids.length, `duplicate case ids: ${ids.filter((id, i) => ids.indexOf(id) !== i).join(", ")}`);
   for (const c of ALL_CASES) {
-    assert.match(c.id, /^[A-C]\d+(-[a-z0-9]+)?$/, `case id '${c.id}' is not a stable matrix id`);
+    assert.match(c.id, /^[A-Z]\d+(-[a-z0-9]+)?$/, `case id '${c.id}' is not a stable matrix id`);
     assert.ok(typeof c.requirement === "string" && c.requirement.length > 10, `${c.id} has no stated requirement`);
   }
 });

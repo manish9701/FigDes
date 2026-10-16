@@ -66,6 +66,7 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "repeating-slide-layout", fn: repeatingSlideLayout },
   { name: "font-family-count", fn: fontFamilyCount },
   { name: "button-overload", fn: buttonOverload },
+  { name: "text-route-collision", fn: textRouteCollision },
 ];
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
@@ -1298,6 +1299,114 @@ function buttonOverload(n: NodeMetrics, c: Ctx): Finding[] {
       nodeIds: buttons,
       guidance:
         "More than five buttons on one screen means no clear primary action. Promote one to primary, demote the rest to quiet links, or move secondary actions behind the primary flow.",
+    },
+  ];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Route / label collisions                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** Layer names that identify a connector rather than a decorative rule. */
+const ROUTE_NAME = /\broute|connector|connection|\blink\b|\bedge\b|\btrace\b|\bspan\b|\bwire\b|\bpath\b/i;
+/** Types a drawn connection can take in Figma. */
+const ROUTE_TYPES = new Set(["VECTOR", "LINE", "ELLIPSE", "FRAME", "RECTANGLE", "VECTOR_NETWORK"]);
+
+/**
+ * A node that reads as a route line rather than as a shape.
+ *
+ * A topology connection is long, thin and mostly one axis. That is a stronger
+ * signal than the layer name: FigDes emits connectors as `createVector` nodes
+ * called "Vector", so name matching alone would miss every line it drew itself.
+ * A name that says "route" still counts even for a short one, because a designer
+ * labelling something "Route A/B" has told us what it is.
+ */
+function isRouteLine(m: NodeMetrics): boolean {
+  if (!ROUTE_TYPES.has(m.type)) return false;
+  const long = Math.max(m.w, m.h);
+  const thin = Math.min(m.w, m.h);
+  if (ROUTE_NAME.test(m.name)) return true;
+  if (long < 100) return false;
+  // Thin, or a high aspect ratio: an orthogonal route is long and flat.
+  return thin <= 3 || long / Math.max(1, thin) >= 8;
+}
+
+/** Area of the overlap between two boxes, or 0 when they do not touch. */
+function overlapArea(a: NodeMetrics, b: NodeMetrics): number {
+  const w = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+  const h = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/**
+ * A label sitting across a route line.
+ *
+ * This is the defect the live render kept showing and no rule could see: on
+ * `EXO_HARD_TEST_CLUSTER_ROUTING_V03` the Mac mini's "MEMORY TOO LOW" warning
+ * sat directly on the topology's horizontal route, so it read as route
+ * annotation rather than as a warning about the machine. The reviewer returned
+ * twelve text-style notes and nothing about it, because nothing was measuring
+ * whether a label and a line occupied the same pixels (issue #12, B3 and the
+ * render note: "warning placement and route-label collision need fixing").
+ *
+ * Reported on the label, since the label is what has to move: a line is usually
+ * the one thing in a topology that must stay put.
+ *
+ * Confidence is medium rather than high because "reads as annotation" is a
+ * judgement; the *geometry* — they overlap — is measured, and that is stated in
+ * the evidence so the finding can be argued with rather than taken on trust.
+ */
+function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
+  if (n.type !== "TEXT" || !n.text) return [];
+  if (n.text.content.trim().length === 0) return [];
+  const siblings = c.childrenOf.get(n.parentId ?? "");
+  if (!siblings || siblings.length < 2) return [];
+
+  const hits: Array<{ route: NodeMetrics; area: number }> = [];
+  for (const s of siblings) {
+    if (s.id === n.id || !isRouteLine(s)) continue;
+    // The line has to pass *through* the label, not graze its edge.
+    //
+    // Testing for depth of overlap is wrong for exactly the case that matters: a
+    // 2px route crossing a 16px label shares only 2px vertically, which is the
+    // whole reason the first version of this rule never fired. What separates a
+    // collision from a neighbour is whether the line's centre falls within the
+    // label's vertical span and then runs along it — the label is *on* the line.
+    const lineCentre = s.h <= s.w ? s.y + s.h / 2 : s.x + s.w / 2;
+    const withinSpan = s.h <= s.w ? lineCentre >= n.y && lineCentre <= n.y + n.h : lineCentre >= n.x && lineCentre <= n.x + n.w;
+    if (!withinSpan) continue;
+    const overlapAlong = s.h <= s.w
+      ? Math.min(n.x + n.w, s.x + s.w) - Math.max(n.x, s.x)
+      : Math.min(n.y + n.h, s.y + s.h) - Math.max(n.y, s.y);
+    if (overlapAlong < n.w * 0.5 && overlapAlong < n.h * 0.5) continue;
+    const area = overlapArea(n, s);
+    if (area <= 0) continue;
+    hits.push({ route: s, area });
+  }
+  if (hits.length === 0) return [];
+
+  hits.sort((a, b) => b.area - a.area);
+  const worst = hits[0]!.route;
+  return [
+    {
+      rule: "text-route-collision",
+      confidence: "medium",
+      severity: "serious",
+      title: `"${n.text.content.slice(0, 40)}" sits across the route line "${worst.name}"`,
+      evidence: {
+        labelId: n.id,
+        labelBox: `${Math.round(n.w)}x${Math.round(n.h)} at (${Math.round(n.x)}, ${Math.round(n.y)})`,
+        routeId: worst.id,
+        routeType: worst.type,
+        routeBox: `${Math.round(worst.w)}x${Math.round(worst.h)} at (${Math.round(worst.x)}, ${Math.round(worst.y)})`,
+        overlapPx2: Math.round(hits[0]!.area),
+        collidingRoutes: hits.length,
+        reasoning:
+          "the label's box and the route's box occupy the same pixels, so the label reads as annotation for the connection rather than as information about the node it belongs to",
+      },
+      nodeIds: [n.id],
+      guidance:
+        "Move the label clear of the route — above or below the line, or beside its own node — or give it a surface so it separates from the line behind it. Do not move the route: it is the one element in a topology whose position carries meaning.",
     },
   ];
 }

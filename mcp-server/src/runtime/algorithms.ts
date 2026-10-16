@@ -70,6 +70,18 @@ export interface AlgorithmOptions {
   columns?: number;
   /** Timeline minimum and maximum x position. */
   domain?: { min: number; max: number };
+  /**
+   * Real extent of one laid-out node, when the caller knows it.
+   *
+   * Without this an algorithm has to guess how much room each of its nodes
+   * occupies, and it guesses from `gap` — which is a *pitch between* nodes, not
+   * a size. Cluster took `gap * 6` as a node's height, so three 128x80 devices
+   * laid out in a single 640px column as three 960px blocks: the region grew to
+   * 1944px inside a 1200px canvas and every node landed off-screen (issue #12,
+   * A4). Passing the real size lets the algorithm choose a column count that
+   * fits, instead of stacking because it believed each node was enormous.
+   */
+  nodeSize?: { w: number; h: number };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -392,12 +404,38 @@ export function cluster(items: ClusterItem[], opts: AlgorithmOptions): ClusterRe
     const originX = bounds.x + col * (blockW + gap);
     const originY = bounds.y + row * (gap * 12);
 
+    // Members of a group share a tight block — that is what distinguishes a
+    // cluster from a grid — so `masonry` is left to its own single-column choice
+    // and the block grows downward. What changes here is how big a member is
+    // taken to be.
+    const nodeW = opts.nodeSize?.w ?? gap * 4;
+    const nodeH = opts.nodeSize?.h ?? gap * 6;
+    // `opts.gap` is a *pitch* for centre-positioned graphs — the caller passes
+    // `nodeWidth + gutter` so a fan of wide nodes does not collapse. Masonry
+    // wants an edge gap, and using the pitch there put 160px between two 128px
+    // nodes: a 640px block needed three rows for three machines and ran off the
+    // bottom of the region (issue #12, A4). Converting once, here, keeps both
+    // callers honest.
+    const edgeGap = opts.nodeSize ? Math.max(1, gap - nodeW) : gap;
+
     const placed = masonry(
-      entry.members.map((m) => ({ id: m.id, height: gap * 6, order: m.order })),
-      { bounds: { x: originX, y: originY, w: blockW, h: bounds.h }, gap, targetColumnWidth: blockW },
+      entry.members.map((m) => ({ id: m.id, height: nodeH, order: m.order })),
+      { bounds: { x: originX, y: originY, w: blockW, h: bounds.h }, gap: edgeGap, targetColumnWidth: blockW },
     );
 
-    for (const [id, at] of placed) out.set(id, at);
+    // Convert to centres before handing them on.
+    //
+    // Every algorithm in this file returns centres and the compiler relies on
+    // that: it turns each point into a box with `at - size / 2`. `masonry`
+    // returns top-left corners, so passing its results straight through shifted
+    // every clustered node up and left by half its own size — a 128x80 device
+    // came out 64px left and 40px above the region it was placed in, and was
+    // then reported as escaping it (issue #12, A4). The bug was invisible for
+    // shapes because the shift is small relative to a canvas, and obvious for
+    // devices because their region is much smaller than they are.
+    for (const [id, at] of placed) {
+      out.set(id, { x: at.x + nodeW / 2, y: at.y + nodeH / 2 });
+    }
     groups.set(entry.key, entry.members.map((m) => m.id));
   });
 

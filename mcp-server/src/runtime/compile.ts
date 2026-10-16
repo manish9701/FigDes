@@ -389,6 +389,15 @@ export function compileIR(ir: DesignIR): CompileResult {
   // well as regions.
   const boxes = new Map<string, PlacedBox>();
   const canvasBox: PlacedBox = { id: "root", x: 0, y: 0, w: canvasSize(canvas.width, 1440), h: canvasSize(canvas.height, 900) };
+  /**
+   * Ids whose relations the solver refused, so they have no resolved position.
+   *
+   * Declared here rather than inside the relations block because the geometry
+   * assertions run afterwards and must skip them. Declaring it in the relations
+   * block would make "did this relation hold?" unanswerable for exactly the
+   * relations that were never attempted.
+   */
+  const unresolvedRelations: string[] = [];
   for (const region of regions) boxes.set(region.id, { id: region.id, x: region.x, y: region.y, w: region.w, h: region.h });
 
   // A region with several children flows them; a region holding one graphic
@@ -414,7 +423,13 @@ export function compileIR(ir: DesignIR): CompileResult {
   // auto-resize in Figma but region frames do not, so without this a headline
   // taller than its header spilled into the region below and read as clipped.
   // Only growth, never shrinkage; side rails (starting above) never shift.
-  if (!deck) fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid });
+  if (!deck) {
+    fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid });
+    // …and then the other direction: `solveAxis` handed the leftover to `fill`
+    // before any `hug` sibling had been measured, so the fill region can be
+    // holding space that a region below it is about to need.
+    fitFillRegions({ regions, boxes, operations, canvasH: canvasSize(canvas.height, 900), gutter: canvas.grid * 4, grid: canvas.grid });
+  }
 
   /* --------------------------------------------------------- relations --- */
 
@@ -445,6 +460,7 @@ export function compileIR(ir: DesignIR): CompileResult {
       constraints: ir.relations.map((r) => ({ ...r })),
       parent: canvasBox,
       violations,
+      unresolved: unresolvedRelations,
     });
 
     let moved = 0;
@@ -590,6 +606,7 @@ export function compileIR(ir: DesignIR): CompileResult {
       canvasSize(canvas.width, 1440),
       canvasSize(canvas.height, 900),
       violations,
+      unresolvedRelations,
     );
     traceMismatches = verifyOperationTrace(operations, boxes, violations);
   }
@@ -972,7 +989,24 @@ function emitContent(args: {
   // stack full-width regardless of the grid grant.
   const ROW_TYPES = new Set(["modelRow", "timelineEvent"]);
   const allRows = components.length > 0 && [...textItems, ...components].every((c) => c.kind === "text" || (c.kind === "component" && ROW_TYPES.has(c.type)));
-  const columns = region.columns ?? (!grantGrid || allRows ? 1 : 3);
+  // Destinations run across, not down. A nav rail and a mobile bottom bar hold
+  // nothing but nav items, and a column of them is not navigation — four tabs
+  // stacked in a 72px footer is a list that happens to be inside a bar. On a
+  // 390x844 canvas that pushed the footer from 72px to 168px and took the last
+  // two tabs off the canvas entirely (issue #12, R2: "devices resolves at y=824
+  // and settings at y=864" in a footer at y=772).
+  //
+  // `packContent` fills row-major, so one column per item is exactly a row. A
+  // hug nav item then draws at its own width inside its own column, which keeps
+  // the rhythm even and leaves the rail left-aligned rather than stretched.
+  const flowing = [...textItems, ...components];
+  const allNav = flowing.length > 0 && flowing.every((c) => c.kind === "component" && c.type === "navItem");
+  // Prose is one column. A grid grant exists to arrange *cards and rows* side by
+  // side; handing the same three columns to a region's text made a single body
+  // paragraph resolve 114px wide on a 390px phone (issue #12, R2/A9: narrow
+  // typography stress). A region with no components has nothing to grid.
+  const allText = flowing.length > 0 && flowing.every((c) => c.kind === "text");
+  const columns = region.columns ?? (allNav ? Math.max(1, flowing.length) : !grantGrid || allRows || allText ? 1 : 3);
   const requested = region.layout;
 
   /* --- graphics routed through a §17 algorithm ---------------------------- */
@@ -1024,6 +1058,7 @@ function emitContent(args: {
             gap: nodeGap,
             levelGap: nodeLevelGap,
             columns,
+            ...(hasDevices ? { nodeSize: deviceSize } : {}),
           }).points;
 
     const size = graphicSize(grid);
@@ -1153,8 +1188,7 @@ function emitContent(args: {
         if (!at) continue;
         const w = (inner.w - gap * (flowColumns - 1)) / flowColumns;
         const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look) }, spec);
-        const hug = spec.kind === "component" ? hugSize(spec, grid, typeScale, look) : null;
-        const final: ResolvedBox = hug ? { ...box, ...hug } : box;
+        const final = resolvedSize(spec, box, grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
@@ -1170,12 +1204,7 @@ function emitContent(args: {
       for (const spec of flow) {
         const box = placed.get(spec.id);
         if (!box) continue;
-        // A hug component draws at its own size, so the recorded box follows it
-        // rather than the other way round. The layout reserved that height (see
-        // `estimateHeight`), so the neighbours above and below already account
-        // for it and nothing shifts.
-        const hug = spec.kind === "component" ? hugSize(spec, grid, typeScale, look) : null;
-        const final: ResolvedBox = hug ? { ...devicePlacementBox(box, spec), ...hug } : devicePlacementBox(box, spec);
+        const final = resolvedSize(spec, devicePlacementBox(box, spec), grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
@@ -2578,6 +2607,8 @@ function assertResolvedGeometry(
   canvasW: number,
   canvasH: number,
   violations: CompileResult["violations"],
+  /** Relations the solver refused, which therefore have no position to check. */
+  unresolvedRelations: readonly string[] = [],
 ): void {
   const span = (r: ResolvedRegion): string => `${Math.round(r.w)}x${Math.round(r.h)} at (${Math.round(r.x)}, ${Math.round(r.y)})`;
 
@@ -2648,7 +2679,15 @@ function assertResolvedGeometry(
 
   // Every declared relation must survive into the final geometry. Measured, not
   // assumed: the solver can apply a relation and a later fit pass can undo it.
+  //
+  // Relations the solver *refused* are excluded. A cycle has no solution, so
+  // there is nothing to measure against; re-measuring it reported the shell
+  // layout's fallback position as if it were a failed attempt, which contradicted
+  // the cycle diagnostic that had already said nothing was applied (issue #12,
+  // R3: "reported fallback coordinates still show a/b/c at x=0 and subsequent
+  // relation violations").
   for (const relation of ir.relations) {
+    if (unresolvedRelations.includes(relation.id)) continue;
     const box = boxes.get(relation.id);
     if (!box) continue;
     const problem = checkRelation(relation, box, boxes, canvasW, canvasH);
@@ -3038,6 +3077,115 @@ function fitRegionsToContent(args: {
 }
 
 /**
+ * Shrinks `fill` regions to the slot actually available to them.
+ *
+ * `solveAxis` treats a `hug` region as zero when it hands out the leftover
+ * space, because its real height is only known after its content is measured.
+ * That is the right call in isolation and wrong in a stack: the leftover
+ * includes space the hug region is about to need, so `fill` claims it, the hug
+ * region then grows into it, and everything below is pushed off the canvas.
+ *
+ * Measured on a 390x844 phone layout — header 64, content `fill`, a 22px status
+ * rail, footer 72. The rail is `hug`, so `fill` was given 612px; the rail grew
+ * to 22 and the footer landed at y=794, ending 22px past an 844px canvas. The
+ * overflow was exactly the rail's height, which is the signature of this bug.
+ *
+ * So this is the mirror of `fitRegionsToContent`: that pass grows a region when
+ * its content needs more, this one shrinks it when its siblings need the space.
+ * Both are one-directional on purpose — a `fill` region is a claim on the
+ * remainder, and the remainder is by definition what is left after everything
+ * else has been given what it asked for.
+ *
+ * Content that genuinely does not fit is not hidden: the containment check
+ * reports it, which is the honest outcome for a screen whose regions and
+ * contents disagree about how much room there is.
+ */
+function fitFillRegions(args: {
+  regions: ResolvedRegion[];
+  boxes: Map<string, PlacedBox>;
+  operations: Operation[];
+  canvasH: number;
+  gutter: number;
+  grid: number;
+}): void {
+  const { regions, boxes, operations, canvasH, gutter } = args;
+
+  const shiftBox = (id: string, dy: number): void => {
+    const box = boxes.get(id);
+    if (box) boxes.set(id, { ...box, y: box.y + dy });
+  };
+
+  // Columns, not one list. A side-rail shell puts a full-height nav rail at x=0
+  // and stacks the content beside it at x=contentX; summing both into one stack
+  // made the rail's 900px compete with the content column for the same 900px of
+  // canvas and collapsed regions to nothing.
+  const columns = new Map<number, ResolvedRegion[]>();
+  for (const r of regions) {
+    const list = columns.get(r.x);
+    if (list) list.push(r);
+    else columns.set(r.x, [r]);
+  }
+
+  for (const stack of columns.values()) {
+    const ordered = [...stack].sort((a, b) => a.y - b.y);
+
+    // One overflow number for the whole stack, not one per region: the fixed
+    // regions were measured correctly, the `fill` region was simply given the
+    // leftover and the leftover did not account for the `hug` sibling that had
+    // not been measured yet. Only the fill region can give the space back.
+    const total = ordered.reduce((sum, r) => sum + r.h, 0) + gutter * Math.max(0, ordered.length - 1);
+    let overflow = total - canvasH;
+    if (overflow <= 0) continue;
+
+    /**
+     * How much room this region's own content needs.
+     *
+     * This is the floor. An earlier version floored at 1px, and the result was a
+     * 1px-tall topology panel with all four of its metric cards reported as
+     * outside it — trading one visible overflow for a pile of meaningless ones.
+     * A fill region cannot give back space its content is standing in; the space
+     * simply does not exist, and the geometry check above says so.
+     */
+    const contentFloor = (region: ResolvedRegion): number => {
+      const pad = normalizePadding(region.padding, args.grid);
+      let bottom = Number.NEGATIVE_INFINITY;
+      for (const child of region.children) {
+        const box = boxes.get(child);
+        if (box) bottom = Math.max(bottom, box.y + box.h);
+      }
+      if (bottom === Number.NEGATIVE_INFINITY) return 1;
+      return Math.max(1, Math.ceil(bottom - region.y + pad.bottom));
+    };
+
+    for (const region of ordered) {
+      if (overflow <= 0) break;
+      if (region.height !== "fill") continue;
+      const take = Math.min(overflow, region.h - contentFloor(region));
+      if (take <= 0) continue;
+      region.h = Math.round(region.h - take);
+      overflow -= take;
+      const frame = boxes.get(region.id);
+      if (frame) boxes.set(region.id, { ...frame, h: region.h });
+      patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+    }
+
+    // Re-stack from the top so the space comes off the right place. Regions below
+    // the shrunken one move up, carrying their content, exactly as growth shifts
+    // them down in `fitRegionsToContent`.
+    let y = 0;
+    for (const region of ordered) {
+      const dy = Math.round(y) - region.y;
+      if (dy !== 0) {
+        region.y = Math.round(y);
+        for (const id of [region.id, ...region.children]) shiftBox(id, dy);
+        patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      }
+      y += region.h + gutter;
+    }
+  }
+}
+
+/**
  * Carries a region's text along when a relation moves or resizes that region.
  *
  * Flow placed each text node against the region's pre-relation box, so the node
@@ -3224,6 +3372,41 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
   const charsPerLine = Math.max(8, Math.floor(usable / (size * 0.55)));
   const lines = Math.max(1, Math.ceil(spec.text.length / charsPerLine));
   return Math.round(lines * size * 1.4 + 4);
+}
+
+/**
+ * The width the layout resolved to, after the item's own width contract.
+ *
+ * Two things override the column cell, and in both cases the *resolved box* has
+ * to move rather than the emitter, or the two disagree and the trace check
+ * reports it:
+ *
+ *  - a `maxWidth` on a text spec. `maxWidth` is a promise about where the text
+ *    wraps; a 260px budget against a 358px column produced "emitted 260 wide but
+ *    its resolved box is 358 wide" on every narrow-typography stress run (issue
+ *    #12, additional issue 4: "maxWidth / fixed requested text width is not
+ *    reflected consistently in resolved geometry").
+ *
+ *  - a hug component's intrinsic size. The layout already reserved that height
+ *    (see `estimateHeight`), so nothing above or below shifts.
+ */
+function resolvedSize(
+  spec: ContentSpec,
+  box: ResolvedBox,
+  grid: number,
+  typeScale: number,
+  look: StyleLook,
+): ResolvedBox {
+  if (spec.kind === "component") {
+    const hug = hugSize(spec, grid, typeScale, look);
+    return hug ? { ...box, ...hug } : box;
+  }
+  if (spec.kind === "text" && spec.maxWidth !== undefined && spec.maxWidth > 0) {
+    // Never wider than the column it was packed into: a maxWidth larger than the
+    // available space is not a request to overflow.
+    return { ...box, w: Math.min(box.w, Math.round(spec.maxWidth)) };
+  }
+  return box;
 }
 
 /**

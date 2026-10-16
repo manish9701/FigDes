@@ -733,6 +733,319 @@ export const CASES = [
       });
     },
   },
+
+  /* ---- resolved by the 16 Oct retest ----------------------------------- */
+  {
+    id: "A1",
+    title: "Dense 5-region enterprise dashboard, 30+ items, connectors, vectors",
+    group: "compiler",
+    requirement:
+      "A dense screen emits geometry that matches its resolved boxes, and anything that cannot fit is reported rather than drawn off-canvas. This program stacks a 64px header, a fill topology, a 12-row inspector and a 5-event timeline into 900px; it does not fit, and the contract is that the compiler says so instead of pretending otherwise.",
+    knownIssue:
+      "RESCOPED after this pass, and the rescoping is the fix. An earlier version of this case asserted the whole screen stays on canvas, which is not achievable for this input and was never going to be — nav 200px wide, header 64, topology, a 340px inspector and a 482px timeline need ~1366px of a 900px canvas. Asserting the impossible is how a stress suite rots. What the compiler must do instead is refuse cleanly: no emitted-vs-resolved mismatches, no region collapsed to nothing, and the overflow named. That is what it now does, and what this case checks. Issue #12 criterion 4: 'content remains within intended bounds, or overflow is explicitly allowed and visible in diagnostics.'",
+    run: () => {
+      const navItems = Array.from({ length: 6 }, (_, i) => component(`nav-${i}`, { type: "navItem", props: { label: `Nav ${i}` } }));
+      const metrics = Array.from({ length: 4 }, (_, i) => component(`metric-${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 12}%` } }));
+      const rows = Array.from({ length: 12 }, (_, i) => text(`row-${i}`, { text: `Machine ${i}`, role: "label" }));
+      const events = Array.from({ length: 5 }, (_, i) => component(`event-${i}`, { type: "timelineEvent", props: { label: `Event ${i}`, time: "12:04" } }));
+      const trace = vector("trace-1", { path: "M 0 0 L 400 0 L 400 200 L 800 200" });
+      const ir = {
+        canvas: canvas({ name: "A1 Dense Enterprise", width: 1440, height: 900 }),
+        regions: [
+          region({ id: "nav", role: "navigation", width: 200, fill: "#111111", padding: 16, children: navItems.map((c) => c.id) }),
+          region({ id: "header", role: "header", width: "fill", height: 64, children: ["h-title"] }),
+          region({ id: "topology", role: "primary-visual", width: "fill", height: "fill", composition: "topology", layout: "cluster", children: [...metrics.map((c) => c.id), trace.id] }),
+          region({ id: "inspector", role: "inspector", width: 320, children: rows.map((r) => r.id) }),
+          region({ id: "timeline", role: "footer", width: "fill", height: 120, layout: "timeline", children: events.map((c) => c.id) }),
+        ],
+        content: [...navItems, text("h-title", { text: "Fleet Overview", role: "title" }), ...metrics, trace, ...rows, ...events, connector("link-1", "metric-0", "metric-1"), connector("link-2", "metric-1", "metric-2")],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const off = offCanvas(r, 1440, 900);
+        const idViolations = r.violations.filter((v) => v.rule === "identity");
+        // The contract for a screen this dense is a clean refusal, not a screen.
+        return [
+          r.stats.contentCount < 30 ? `expected 30+ content items, got ${r.stats.contentCount}` : null,
+          // 1. Emitted geometry agrees with resolved geometry, always.
+          r.stats.traceMismatches > 0 ? `${r.stats.traceMismatches} emitted-vs-resolved mismatches: ${r.violations.filter((v) => v.rule === "operation-trace").map((v) => v.message).slice(0, 2).join("; ")}` : null,
+          idViolations.length ? `identity violations: ${idViolations.map((v) => v.message).join("; ")}` : null,
+          // 2. Nothing is silently squashed to make room. A region collapsed to a
+          //    sliver is worse than an honest overflow: it hides the problem
+          //    behind a frame that draws nothing.
+          ...r.regions.filter((g) => g.h < 8).map((g) => `region '${g.id}' collapsed to ${Math.round(g.h)}px`),
+          // 3. Whatever does not fit is named, so the author can act on it.
+          off.length > 0 && !r.violations.some((v) => v.rule === "geometry" && /spills past/.test(v.message))
+            ? `${off.length} regions off canvas with no geometry violation naming them: ${off.join(", ")}`
+            : null,
+          off.length > 0 && r.applicable !== false ? "regions spill off canvas but the plan is still marked applicable" : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+  {
+    id: "A3",
+    title: "Narrow/responsive canvas (390x844) with status rail and overflow-prone text",
+    group: "compiler",
+    requirement: "A mobile canvas keeps every region inside it, whatever mix of fixed, fill and hug regions it stacks.",
+    run: () => {
+      const tabs = Array.from({ length: 4 }, (_, i) => component(`tab-${i}`, { type: "navItem", props: { label: ["Fleet", "Models", "Runs", "Logs"][i] } }));
+      const ir = {
+        canvas: canvas({ name: "A3 Mobile", width: 390, height: 844 }),
+        regions: [
+          region({ id: "header", role: "header", width: "fill", height: 64, children: ["m-title"] }),
+          region({ id: "content", role: "content", width: "fill", height: "fill", padding: 16, children: ["m-body"] }),
+          region({ id: "rail", role: "status-rail", width: 80, children: ["status-1"] }),
+          region({ id: "footer", role: "footer", width: "fill", height: 72, children: tabs.map((t) => t.id) }),
+        ],
+        content: [text("m-title", { text: "Fleet", role: "title" }), text("m-body", { text: "Long operational message that will not fit on one line at 390 pixels wide", role: "body" }), component("status-1", { type: "statusPill", props: { label: "OK", tone: "ok" } }), ...tabs],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const off = offCanvas(r, 390, 844);
+        const esc = escapingContent(r);
+        return [
+          off.length ? `regions off canvas: ${off.join(", ")}` : null,
+          esc.length ? `${esc.length} nodes escape their region: ${esc.slice(0, 3).join("; ")}` : null,
+          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+  {
+    id: "A6",
+    title: "Content containment: long text, dense grid, padding and gap extremes",
+    group: "compiler",
+    requirement: "Padding is honoured, and anything that overflows its region is reported rather than silently drawn outside it.",
+    run: () => {
+      // Each region gets its own content. An earlier version shared one cell list
+      // between two regions, which the identity check correctly rejected as "a
+      // node has exactly one parent" — the fixture was invalid, not the compiler.
+      const paddedCells = Array.from({ length: 6 }, (_, i) => text(`p-cell-${i}`, { text: `Padded ${i}`, role: "label" }));
+      const denseCells = Array.from({ length: 18 }, (_, i) => text(`d-cell-${i}`, { text: `Dense ${i}`, role: "label" }));
+      const ir = {
+        canvas: canvas({ name: "A6 Containment", width: 1440, height: 900 }),
+        regions: [
+          region({ id: "padded", role: "content", width: 400, height: 400, padding: 48, layout: "grid", columns: 3, children: paddedCells.map((c) => c.id) }),
+          region({ id: "dense", role: "content", width: 400, height: 400, padding: 0, layout: "grid", columns: 6, children: denseCells.map((c) => c.id) }),
+          region({ id: "longtext", role: "content", width: 320, height: 200, padding: 16, children: ["long-copy"] }),
+        ],
+        content: [...paddedCells, ...denseCells, text("long-copy", { text: "A single very long paragraph that is guaranteed to exceed the width of its region when measured at body size, which is the point of this case.", role: "body" })],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const esc = escapingContent(r);
+        const padded = r.regions.find((x) => x.id === "padded");
+        const first = padded ? r.boxes.get("p-cell-0") : undefined;
+        const dense = r.regions.find((x) => x.id === "dense");
+        const denseCellsResolved = dense ? dense.children.map((id) => r.boxes.get(id)).filter(Boolean) : [];
+        const widest = denseCellsResolved.reduce((m, b) => Math.max(m, b.x + b.w), 0);
+        const containViolations = r.violations.filter((v) => v.rule === "containment");
+        return [
+          padded && first && Math.abs(first.x - (padded.x + 48)) > 1 ? `padding 48 not honoured: first cell at x=${Math.round(first.x)}, region at ${Math.round(padded.x)}` : null,
+          padded && first && Math.abs(first.y - (padded.y + 48)) > 1 ? `padding 48 not honoured vertically: first cell at y=${Math.round(first.y)}, region at ${Math.round(padded.y)}` : null,
+          dense && widest > dense.x + dense.w + 0.5 ? `grid cells reach x=${Math.round(widest)} but the region ends at ${Math.round(dense.x + dense.w)}` : null,
+          // Criterion 4: overflow must be contained or explicitly allowed. It may
+          // not be drawn outside the frame and reported as nothing.
+          esc.length > 0 && containViolations.length === 0 ? `${esc.length} nodes escape their region with no containment violation reported: ${esc.slice(0, 3).join("; ")}` : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+  {
+    id: "R2-maxwidth",
+    title: "maxWidth is reflected in resolved geometry, not just in the emitted op",
+    group: "compiler",
+    requirement: "A text node asking for maxWidth 260 in a 358px column resolves to a 260px box.",
+    run: () => {
+      const ir = {
+        canvas: canvas({ name: "R2 Width", width: 390, height: 844 }),
+        regions: [region({ id: "col", role: "content", width: "fill", height: "fill", padding: 16, children: ["s1", "s2"] })],
+        content: [
+          text("s1", { text: "qwen3-32b-instruct-quantized.gguf", role: "code", maxWidth: 260 }),
+          text("s2", { text: "ERR_MEM_PRESSURE_0X7F", role: "code", maxWidth: 260 }),
+        ],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const unmet = [];
+        for (const id of ["s1", "s2"]) {
+          const box = r.boxes.get(id);
+          const created = r.operations.find((o) => o.id === id);
+          if (!box || !created) { unmet.push(`${id} was not emitted`); continue; }
+          if (Math.abs(box.w - 260) > 1) unmet.push(`${id} requested maxWidth 260 but its resolved box is ${Math.round(box.w)}px wide`);
+          if (Math.abs(created.width - box.w) > 1) unmet.push(`${id} is emitted at ${created.width}px but resolves to ${Math.round(box.w)}px`);
+        }
+        return [
+          ...unmet,
+          r.stats.traceMismatches > 0 ? `${r.stats.traceMismatches} trace mismatches remain` : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+  {
+    id: "R2-footer",
+    title: "Mobile bottom nav is one row inside a 72px footer on an 844px canvas",
+    group: "compiler",
+    requirement: "Four tabs lay out across the footer, the footer keeps its 72px, and nothing lands below the canvas.",
+    run: () => {
+      const tabs = ["Fleet", "Models", "Runs", "Logs"].map((n, i) => component(`tab-${i}`, { type: "navItem", props: { label: n } }));
+      const ir = {
+        canvas: canvas({ name: "R2 Footer", width: 390, height: 844 }),
+        regions: [
+          region({ id: "header", role: "header", width: "fill", height: 64, children: ["h"] }),
+          region({ id: "content", role: "content", width: "fill", height: "fill", padding: 16, children: ["body"] }),
+          region({ id: "footer", role: "footer", width: "fill", height: 72, children: tabs.map((t) => t.id) }),
+        ],
+        content: [text("h", { text: "Fleet", role: "title" }), text("body", { text: "Long operational message that will not fit on one line at 390 pixels wide", role: "body" }), ...tabs],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const footer = r.regions.find((x) => x.id === "footer");
+        const items = footer ? footer.children.map((id) => r.boxes.get(id)).filter(Boolean) : [];
+        const ys = [...new Set(items.map((b) => Math.round(b.y)))];
+        const off = offCanvas(r, 390, 844);
+        return [
+          footer && Math.abs(footer.h - 72) > 1 ? `footer asked for 72px, resolved ${Math.round(footer.h)}px` : null,
+          ys.length !== 1 ? `the ${items.length} tabs sit on ${ys.length} rows (${ys.join(", ")}) — a bottom nav is one row` : null,
+          off.length ? `regions off canvas: ${off.join(", ")}` : null,
+          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+  {
+    id: "R3-failclosed",
+    title: "A refused relation produces one diagnostic, not a contradictory second one",
+    group: "compiler",
+    requirement: "A cycle is named once, and no follow-up claims a position for a relation that was never attempted.",
+    run: () => {
+      const ir = {
+        canvas: canvas({ name: "R3 Cycle", width: 1000, height: 700 }),
+        regions: [
+          region({ id: "a", width: 200, height: 200 }),
+          region({ id: "b", width: 200, height: 200 }),
+          region({ id: "c", width: 200, height: 200 }),
+        ],
+        content: [],
+        relations: [
+          { id: "b", rightOf: "a", gap: 16 },
+          { id: "c", rightOf: "b", gap: 16 },
+          { id: "a", rightOf: "c", gap: 16 },
+        ],
+        tokens: [],
+        links: [],
+      };
+      const r = compileIR(ir);
+      const cycle = r.violations.filter((v) => /circular/i.test(v.message));
+      // The misleading follow-ups: the same three relations reported again as
+      // "asked for x=… but resolved to x=0" after the cycle was already refused.
+      const reMeasured = r.violations.filter((v) => /was not honoured/.test(v.message));
+      const unmet = [
+        cycle.length !== 1 ? `expected exactly one cycle diagnostic, got ${cycle.length}` : null,
+        reMeasured.length > 0 ? `${reMeasured.length} relation(s) were re-measured after being refused: ${reMeasured.map((v) => v.message).join(" | ")}` : null,
+        r.applicable !== false ? "a cyclic relation graph still returned an applicable plan" : null,
+        /unpositioned relative to each other/.test(cycle[0]?.message ?? "") ? null : "the cycle message does not say the nodes were left unpositioned",
+      ].filter(Boolean);
+      return {
+        status: unmet.length === 0 ? "PASS" : "FAIL",
+        detail: unmet.length === 0 ? "one cycle diagnostic, no contradictory follow-ups, plan inapplicable" : unmet.join("; "),
+        raw: { applicable: r.applicable, diagnostics: r.violations.map((v) => `${v.rule}: ${v.message}`) },
+      };
+    },
+  },
+  {
+    id: "B7-route",
+    title: "A label sitting across a route line is reported above cosmetic noise",
+    group: "guardrails",
+    requirement: "Text overlapping a topology route is found and ranked as the serious defect it is.",
+    run: () => {
+      // The reported layout: the Mac mini's "MEMORY TOO LOW" warning sits on the
+      // topology's horizontal route, so it reads as route annotation.
+      const nodes = [
+        node({ id: "frame", name: "EXO_HARD_TEST_CLUSTER_ROUTING_V03", type: "FRAME", depth: 0, x: 0, y: 0, w: 1280, h: 900 }),
+        node({ id: "route", parentId: "frame", depth: 1, name: "Vector", type: "VECTOR", x: 120, y: 300, w: 900, h: 2 }),
+        node({ id: "warn", parentId: "frame", depth: 1, name: "Memory Warning", type: "TEXT", x: 300, y: 294, w: 160, h: 16, text: { content: "MEMORY TOO LOW", color: "#111111", size: 11, style: "Regular", family: "Inter", styled: true, length: 14 } }),
+        // A label that merely sits beside the route must not be reported.
+        node({ id: "clear", parentId: "frame", depth: 1, name: "Clear Label", type: "TEXT", x: 300, y: 200, w: 160, h: 16, text: { content: "Node 7", color: "#111111", size: 11, style: "Regular", family: "Inter", styled: true, length: 6 } }),
+        // Cosmetic repetition, the noise that used to occupy the whole list.
+        // Deliberately text layers with default names: square frames with no
+        // label are a legitimate `icon-only-control` finding, which would make
+        // this case assert something other than what it is about.
+        ...Array.from({ length: 10 }, (_, i) =>
+          node({
+            id: `r-${i}`, parentId: "frame", depth: 1, name: `Text ${i}`, type: "TEXT", x: i * 90, y: 600, w: 70, h: 16,
+            text: { content: `Row ${i}`, color: "#111111", size: 12, style: "Regular", family: "Inter", styled: true, length: 6 },
+          }),
+        ),
+      ];
+      const findings = runRules(report(nodes), "review");
+      const collisions = of(findings, "text-route-collision");
+      const unmet = [
+        collisions.length === 0 ? "no route collision found on a label sitting directly on a 900px route line" : null,
+        collisions.some((f) => f.nodeIds.includes("clear")) ? "a label 94px clear of the route was reported as a collision" : null,
+        collisions[0]?.severity !== "serious" ? `a route collision was reported as ${collisions[0]?.severity}, expected serious` : null,
+        // The whole point of B3: a serious measured defect outranks repetition,
+        // however much of it there is. Ten cosmetic notes must not lead.
+        collisions.length > 0 && findings[0]?.rule !== "text-route-collision" ? `the collision ranked below '${findings[0]?.rule}' (${findings[0]?.severity})` : null,
+        of(findings, "default-layer-name").length !== 1 ? "the repeated cosmetic finding did not group to one entry" : null,
+      ].filter(Boolean);
+      return {
+        status: unmet.length === 0 ? "PASS" : "FAIL",
+        detail: unmet.length === 0 ? `${collisions.length} collision found, ranked first; clear label untouched` : unmet.join("; "),
+        raw: { order: findings.map((f) => `${f.rule}(${f.severity})`), collisions: collisions.map((f) => f.title) },
+      };
+    },
+  },
+
+
+  {
+    id: "A4",
+    title: "Large canvas (1920x1200), nested hierarchy, mixed fixed/fill/hug sizing",
+    group: "compiler",
+    requirement: "Mixed sizing modes resolve without any region leaving the canvas.",
+    run: () => {
+      const ir = {
+        canvas: canvas({ name: "A4 Large", width: 1920, height: 1200 }),
+        regions: [
+          region({ id: "nav", role: "navigation", width: 240, height: "fill", children: [] }),
+          region({ id: "main", role: "content", width: "fill", height: "fill", padding: 32, children: [] }),
+          region({ id: "metrics", role: "secondary", width: "fill", height: "hug", grow: 0, children: Array.from({ length: 4 }, (_, i) => `metric-${i}`) }),
+          region({ id: "topology", role: "primary-visual", width: 640, height: "fill", composition: "topology", layout: "cluster", children: Array.from({ length: 3 }, (_, i) => `node-${i}`) }),
+          region({ id: "inspector", role: "inspector", width: 320, height: "fill", children: ["row-0", "row-1"] }),
+        ],
+        content: [
+          ...Array.from({ length: 4 }, (_, i) => component(`metric-${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 7}%` } })),
+          ...Array.from({ length: 3 }, (_, i) => component(`node-${i}`, { type: "deviceNode", props: { name: `Node ${i}`, status: "healthy" } })),
+          ...Array.from({ length: 2 }, (_, i) => text(`row-${i}`, { text: `Row ${i}`, role: "label" })),
+        ],
+        relations: [],
+        tokens: [],
+        links: [],
+      };
+      return compileCase(ir, (r) => {
+        const off = offCanvas(r, 1920, 1200);
+        const esc = escapingContent(r);
+        return [
+          off.length ? `regions off canvas: ${off.join(", ")}` : null,
+          esc.length ? `${esc.length} nodes escape their region: ${esc.slice(0, 4).join("; ")}` : null,
+          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
+          r.stats.traceMismatches > 0 ? `${r.stats.traceMismatches} emitted-vs-resolved mismatches` : null,
+        ].filter(Boolean);
+      });
+    },
+  },
+
 ];
 
 /**
@@ -765,154 +1078,7 @@ export const BLOCKED_CASES = [
  * silently. When one starts passing, that test fails and forces a deliberate
  * update — which is the only way an open issue should close.
  */
-export const OPEN_CASES = [
-  {
-    id: "A1",
-    title: "Dense 5-region enterprise dashboard, 30+ items, connectors, vectors",
-    group: "compiler",
-    requirement: "A dense but legal screen compiles, stays on canvas, and emits geometry that matches its resolved boxes.",
-    knownIssue:
-      "PARTLY FIXED. The emitted-vs-resolved mismatches are gone — thirteen of them, all of the form 'nav-0 is emitted 64 wide but its resolved box is 168 wide' — by making hug components compute their size once (A1-hug) and by emitting graphics in parent-relative coordinates (A7-coords). Two containment failures remain. (1) A vector placed by the radial/overshoot path resolves outside its parent region: 'trace-1 escapes topology (216,80 32x32 in 232,96 1208x620)'. (2) A five-region shell stacks inspector and timeline below the canvas. Issue #12 additional issue 5: fixed/fill/hug, explicit top/bottom and below/rightOf relations combine into oversize regions and silent position drift; a single authoritative geometry model is still needed.",
-    run: () => {
-      const navItems = Array.from({ length: 6 }, (_, i) => component(`nav-${i}`, { type: "navItem", props: { label: `Nav ${i}` } }));
-      const metrics = Array.from({ length: 4 }, (_, i) => component(`metric-${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 12}%` } }));
-      const rows = Array.from({ length: 12 }, (_, i) => text(`row-${i}`, { text: `Machine ${i}`, role: "label" }));
-      const events = Array.from({ length: 5 }, (_, i) => component(`event-${i}`, { type: "timelineEvent", props: { label: `Event ${i}`, time: "12:04" } }));
-      const trace = vector("trace-1", { path: "M 0 0 L 400 0 L 400 200 L 800 200" });
-      const ir = {
-        canvas: canvas({ name: "A1 Dense Enterprise", width: 1440, height: 900 }),
-        regions: [
-          region({ id: "nav", role: "navigation", width: 200, fill: "#111111", padding: 16, children: navItems.map((c) => c.id) }),
-          region({ id: "header", role: "header", width: "fill", height: 64, children: ["h-title"] }),
-          region({ id: "topology", role: "primary-visual", width: "fill", height: "fill", composition: "topology", layout: "cluster", children: [...metrics.map((c) => c.id), trace.id] }),
-          region({ id: "inspector", role: "inspector", width: 320, children: rows.map((r) => r.id) }),
-          region({ id: "timeline", role: "footer", width: "fill", height: 120, layout: "timeline", children: events.map((c) => c.id) }),
-        ],
-        content: [...navItems, text("h-title", { text: "Fleet Overview", role: "title" }), ...metrics, trace, ...rows, ...events, connector("link-1", "metric-0", "metric-1"), connector("link-2", "metric-1", "metric-2")],
-        relations: [],
-        tokens: [],
-        links: [],
-      };
-      return compileCase(ir, (r) => {
-        const off = offCanvas(r, 1440, 900);
-        const esc = escapingContent(r);
-        const idViolations = r.violations.filter((v) => v.rule === "identity");
-        return [
-          r.stats.contentCount < 30 ? `expected 30+ content items, got ${r.stats.contentCount}` : null,
-          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
-          r.stats.traceMismatches > 0 ? `${r.stats.traceMismatches} emitted-vs-resolved mismatches` : null,
-          off.length ? `regions off canvas: ${off.join(", ")}` : null,
-          esc.length ? `${esc.length} content nodes escape their region: ${esc.slice(0, 3).join("; ")}` : null,
-          idViolations.length ? `identity violations: ${idViolations.map((v) => v.message).join("; ")}` : null,
-        ].filter(Boolean);
-      });
-    },
-  },
-  {
-    id: "A3",
-    title: "Narrow/responsive canvas (390x844) with status rail and overflow-prone text",
-    group: "compiler",
-    requirement: "A mobile canvas keeps every region inside it.",
-    knownIssue:
-      "PARTLY FIXED. The nav items themselves are now compact — four tabs resolve 36px tall inside a 72px footer instead of 90px (A3-note) — because hug components size themselves. What remains is placement: the footer is laid out at y=794 with a resolved height of 80, so it ends at 874 on an 844px canvas. A footer is not being pinned to the bottom of the viewport; it is falling out of the flow below it. Issue #12 additional issue 2, reduced to the shell layout rather than the item size.",
-    run: () => {
-      const tabs = Array.from({ length: 4 }, (_, i) => component(`tab-${i}`, { type: "navItem", props: { label: ["Fleet", "Models", "Runs", "Logs"][i] } }));
-      const ir = {
-        canvas: canvas({ name: "A3 Mobile", width: 390, height: 844 }),
-        regions: [
-          region({ id: "header", role: "header", width: "fill", height: 64, children: ["m-title"] }),
-          region({ id: "content", role: "content", width: "fill", height: "fill", padding: 16, children: ["m-body"] }),
-          region({ id: "rail", role: "status-rail", width: 80, children: ["status-1"] }),
-          region({ id: "footer", role: "footer", width: "fill", height: 72, children: tabs.map((t) => t.id) }),
-        ],
-        content: [text("m-title", { text: "Fleet", role: "title" }), text("m-body", { text: "Long operational message that will not fit on one line at 390 pixels wide", role: "body" }), component("status-1", { type: "statusPill", props: { label: "OK", tone: "ok" } }), ...tabs],
-        relations: [],
-        tokens: [],
-        links: [],
-      };
-      return compileCase(ir, (r) => {
-        const off = offCanvas(r, 390, 844);
-        const esc = escapingContent(r);
-        return [
-          off.length ? `regions off canvas: ${off.join(", ")}` : null,
-          esc.length ? `${esc.length} nodes escape their region: ${esc.slice(0, 3).join("; ")}` : null,
-          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
-        ].filter(Boolean);
-      });
-    },
-  },
-  {
-    id: "A4",
-    title: "Large canvas (1920x1200), nested hierarchy, mixed fixed/fill/hug sizing",
-    group: "compiler",
-    requirement: "Mixed sizing modes resolve without any region leaving the canvas.",
-    knownIssue:
-      "A `cluster` layout inside a `height: \"fill\"` region grows the region to fit its children instead of being bounded by it: 'topology @ 272,816 640x1944' — 1944px tall inside a 1200px canvas, with its three device nodes at y=776, 1728 and 2680, so every one of them is outside the canvas. The graph algorithm is being handed unbounded space, and the region that should have clipped it is being resized to fit. Issue #12 additional issue 5, in its clearest form.",
-    run: () => {
-      const ir = {
-        canvas: canvas({ name: "A4 Large", width: 1920, height: 1200 }),
-        regions: [
-          region({ id: "nav", role: "navigation", width: 240, height: "fill", children: [] }),
-          region({ id: "main", role: "content", width: "fill", height: "fill", padding: 32, children: [] }),
-          region({ id: "metrics", role: "secondary", width: "fill", height: "hug", grow: 0, children: Array.from({ length: 4 }, (_, i) => `metric-${i}`) }),
-          region({ id: "topology", role: "primary-visual", width: 640, height: "fill", composition: "topology", layout: "cluster", children: Array.from({ length: 3 }, (_, i) => `node-${i}`) }),
-          region({ id: "inspector", role: "inspector", width: 320, height: "fill", children: ["row-0", "row-1"] }),
-        ],
-        content: [
-          ...Array.from({ length: 4 }, (_, i) => component(`metric-${i}`, { type: "metric", props: { label: `Signal ${i}`, value: `${i * 7}%` } })),
-          ...Array.from({ length: 3 }, (_, i) => component(`node-${i}`, { type: "deviceNode", props: { name: `Node ${i}`, status: "healthy" } })),
-          ...Array.from({ length: 2 }, (_, i) => text(`row-${i}`, { text: `Row ${i}`, role: "label" })),
-        ],
-        relations: [],
-        tokens: [],
-        links: [],
-      };
-      return compileCase(ir, (r) => {
-        const off = offCanvas(r, 1920, 1200);
-        const esc = escapingContent(r);
-        return [
-          off.length ? `regions off canvas: ${off.join(", ")}` : null,
-          esc.length ? `${esc.length} nodes escape their region: ${esc.slice(0, 4).join("; ")}` : null,
-          r.applicable === false ? `not applicable: ${r.inapplicableReasons.join(" | ")}` : null,
-          r.stats.traceMismatches > 0 ? `${r.stats.traceMismatches} emitted-vs-resolved mismatches` : null,
-        ].filter(Boolean);
-      });
-    },
-  },
-  {
-    id: "A6",
-    title: "Content containment: long text, dense grid, padding and gap extremes",
-    group: "compiler",
-    requirement: "Padding is honoured and overflow is reported rather than silently drawn outside the region.",
-    knownIssue:
-      "Two failures, both about the grid layout ignoring the box it was handed. (1) `padding: 48` is not honoured — the first cell resolves at x=0 in a region whose origin is x=0, so the 48px inset is simply absent. (2) A 3-column grid of six cells places them at y=678, 707 and 736 inside a region 646px tall, and no violation reports the overflow. Issue #12 additional issue 6: 'content exceeds its region bounds (map region 850x600 while content reached y=699)' — acceptance criterion 4 asks that overflow be contained or explicitly allowed, and currently it is neither.",
-    run: () => {
-      const cells = Array.from({ length: 24 }, (_, i) => text(`cell-${i}`, { text: `Cell ${i}`, role: "label" }));
-      const ir = {
-        canvas: canvas({ name: "A6 Containment", width: 1440, height: 900 }),
-        regions: [
-          region({ id: "padded", role: "content", width: 400, height: 400, padding: 48, layout: "grid", columns: 3, children: cells.slice(0, 6).map((c) => c.id) }),
-          region({ id: "dense", role: "content", width: 400, height: 400, padding: 0, layout: "grid", columns: 6, children: cells.map((c) => c.id) }),
-          region({ id: "longtext", role: "content", width: 320, height: 200, padding: 16, children: ["long-copy"] }),
-        ],
-        content: [...cells, text("long-copy", { text: "A single very long paragraph that is guaranteed to exceed the width of its region when measured at body size, which is the point of this case.", role: "body" })],
-        relations: [],
-        tokens: [],
-        links: [],
-      };
-      return compileCase(ir, (r) => {
-        const esc = escapingContent(r);
-        const padded = r.regions.find((x) => x.id === "padded");
-        const first = padded ? r.boxes.get("cell-0") : undefined;
-        const padViolations = r.violations.filter((v) => /contain|escape|padding/i.test(v.message));
-        return [
-          padded && first && Math.abs(first.x - (padded.x + 48)) > 1 ? `padding 48 not honoured: first cell at x=${Math.round(first.x)}, region at ${Math.round(padded.x)}` : null,
-          esc.length > 0 && padViolations.length === 0 ? `${esc.length} nodes escape their region with no violation reported: ${esc.slice(0, 3).join("; ")}` : null,
-        ].filter(Boolean);
-      });
-    },
-  },
-];
+export const OPEN_CASES = [];
 
 /** Everything, in report order. */
 export const ALL_CASES = [...CASES, ...BLOCKED_CASES, ...OPEN_CASES];

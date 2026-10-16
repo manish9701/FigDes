@@ -68,6 +68,17 @@ export interface SolveInput {
   /** Parent extent, needed to resolve `fill` and edge insets. */
   parent: PlacedBox;
   violations: Array<{ rule: string; message: string }>;
+  /**
+   * Output: the ids of boxes whose relations were refused and therefore have no
+   * resolved position.
+   *
+   * The caller needs this to stop asking whether those relations were honoured.
+   * Re-measuring a refused relation against the shell layout produced a second,
+   * contradictory report for the same three nodes — "asked for x=216 but the
+   * region resolved to x=0" — immediately after the cycle diagnostic had already
+   * said they were never applied. Two answers to one relation, one of them false.
+   */
+  unresolved?: string[];
 }
 
 /**
@@ -85,18 +96,22 @@ export function solveConstraints(input: SolveInput): PlacedBox[] {
 
   // Validate references up front so a typo is one clear message rather than a
   // cascade of "unknown anchor" failures.
+  const unresolved: string[] = input.unresolved ?? [];
   for (const c of constraints) {
     if (!boxes.has(c.id)) {
       violations.push({ rule: "constraint", message: `Constraint targets unknown node '${c.id}'.` });
+      // No box exists to move, so this relation has no resolved position either.
+      if (!unresolved.includes(c.id)) unresolved.push(c.id);
     }
     for (const anchor of [c.rightOf, c.below]) {
       if (anchor !== undefined && !boxes.has(anchor)) {
         violations.push({ rule: "constraint", message: `Constraint on '${c.id}' references unknown anchor '${anchor}'.` });
+        if (!unresolved.includes(c.id)) unresolved.push(c.id);
       }
     }
   }
 
-  const ordered = dependencyOrder(constraints, boxes, violations);
+  const ordered = dependencyOrder(constraints, boxes, violations, unresolved);
 
   for (const c of ordered) {
     const box = boxes.get(c.id);
@@ -190,6 +205,7 @@ function dependencyOrder(
   constraints: ConstraintSpec[],
   boxes: Map<string, PlacedBox>,
   violations: Array<{ rule: string; message: string }>,
+  unresolved: string[],
 ): ConstraintSpec[] {
   const index = new Map(constraints.map((c, i) => [c.id, i]));
   const remaining = new Map(index);
@@ -215,9 +231,13 @@ function dependencyOrder(
 
   if (remaining.size > 0) {
     const cycle = [...remaining.values()].map((i) => constraints[i]!.id).join(" -> ");
+    for (const i of remaining.values()) {
+      const id = constraints[i]!.id;
+      if (!unresolved.includes(id)) unresolved.push(id);
+    }
     violations.push({
       rule: "relation",
-      message: `Circular constraints could not be resolved (${cycle}). None of them were applied, so these nodes are unpositioned relative to each other — break the cycle (a relation needs at least one anchored node) and re-run.`,
+      message: `Circular constraints could not be resolved (${cycle}). None of them were applied: these nodes keep wherever the shell layout left them and are unpositioned relative to each other — break the cycle (a relation needs at least one anchored node) and re-run.`,
     });
     // Deliberately not pushed onto `out`. See the note above.
   }

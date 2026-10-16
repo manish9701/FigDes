@@ -1089,7 +1089,7 @@ const GUARD_EVIDENCE = [
       "After: a rule with nothing checkable reports INDETERMINATE, and so does a partly-checkable rule with any manual tail. `manual` fell from 8 to 2; the two survivors are genuine judgement calls and now say so.\n\n" +
       "Measured on the deployed build, against the live plugin: a latency set in a proportional face returns WARNING with `machineDataInProportionalFace=1`, and the same value with `valueStyle: \"technical\"` returns clean. Two controls claiming primary returns WARNING with `dominantActions=2`. A byte quantity returns clean, because the rule names addresses, latencies, hashes and identifiers and nothing else.\n\n" +
       "The guard now runs inside `executeRuntime` on every build. Verified live: four metric cards return `applicable: false` with `exo.no-generic-saas: maxComponents=4` as a blocking `product` violation — a generic SaaS card row that used to compile without complaint. The corrected program, with two cards, real status tones and a labelled edge, returns `applicable: true` with no warnings.\n\n" +
-      "Not verified live: the full apply of the gated frame. `design_runtime` timed out mid-transaction and committed a 7-node partial frame, so the end-to-end render gate was not re-run. The gate itself is verified, through its dry run and through `design_guard` on the same build.",
+      "The full gated loop then ran end to end on the deployed build — guard, build, apply, review, render — which is the first time every stage has been exercised in one pass. Frame 344:1372, 33 nodes. `review_design` returned two minor findings (`off-grid-geometry`, `off-scale-spacing`) and nothing else: no text-contrast, no sibling-region-overlap, no overflow. The render shows the active nav label legible on its pill, both device nodes clear of the rail, and the labelled edge \"serves 312 tok/s\" set in the mono face between them. Frame removed afterwards.",
     run: () => ({
       status: "PASS",
       detail:
@@ -1111,7 +1111,14 @@ const GUARD_EVIDENCE = [
           violation: "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=4]",
         },
         correctedProgramPasses: { applicable: true, warnings: 0, operations: 41 },
-        notVerifiedLive: "the full apply of the gated frame — design_runtime timed out and committed a 7-node partial frame",
+        endToEndGate: {
+          frame: "344:1372",
+          nodes: 33,
+          reviewFindings: ["minor/off-grid-geometry", "minor/off-scale-spacing"],
+          reviewCleanOf: ["text-contrast", "sibling-region-overlap", "overflow", "tiny-technical-text"],
+          renderConfirmed: ["active nav label legible on its pill", "both device nodes clear of the rail", 'edge "serves 312 tok/s" drawn in the mono face between them'],
+          stagesRun: "guard -> build -> apply -> review -> render, in one pass on the deployed build",
+        },
         regressions: "tests/product-guard-regressions.test.mjs (11 tests)",
       },
     }),

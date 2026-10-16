@@ -1329,28 +1329,6 @@ export const TOOL_NAMES = [
   "get_job_status",
   "resume_job",
   "edit_screen",
-  // Moodboards (issue #11 Part C): saved references are inactive until analysed,
-  // approved and explicitly attached to a task.
-  "save_moodboard",
-  "analyse_moodboard",
-  "get_visual_brief",
-  "update_visual_brief",
-  "approve_observations",
-  "attach_moodboard",
-  "moodboard_context",
-  "detach_moodboard",
-  "end_task_context",
-  "list_moodboards",
-  "delete_moodboard",
-  // Tags, change requests and feedback history (issue #11 Part D).
-  "request_change",
-  "plan_change",
-  "apply_change",
-  "verify_change",
-  "update_change_request",
-  "reresolve_change_request",
-  "tag_design_targets",
-  "list_feedback",
 ] as const;
 
 export type ToolName = (typeof TOOL_NAMES)[number];

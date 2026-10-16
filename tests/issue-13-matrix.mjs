@@ -962,85 +962,108 @@ export const LIVE_CASES = [
 /**
  * Cases that currently fail. Empty today; a case added here must record the
  * known issue it is carrying, and the test file asserts it still fails.
- *
- * L05-L07 were found by rendering the complete 57-node frame on 16 Oct 2026,
- * after L04 finally landed. None of the three was in any issue: the reviewer
- * reported one finding across the whole frame, and the render shows three
- * defects it did not see.
  */
-export const OPEN_CASES = [
+
+export const OPEN_CASES = [];
+
+/**
+ * Three defects the complete L04 render exposed that no issue had recorded.
+ *
+ * All three were originally misdiagnosed, and the corrections matter as much as
+ * the fixes: one was not a defect in the product at all, and the other two were
+ * not what they looked like.
+ *
+ * L05  The active nav label took its own pill's fill — the same accent literal
+ *      typed at two call sites — not the rail's.
+ * L06  Not a compiler bug. `fill` measures from where a region already sits, and
+ *      the compiler was placing it correctly; the overlapping frame came from a
+ *      verification harness that recompiled the tail operations from a reduced IR
+ *      with the nav region missing. A review rule was still added, because a
+ *      harness that silently miscompiles is the class nothing could see.
+ * L07  The connector had endpoints and a real route. The route was 8px long and
+ *      each arrowhead was 8px, so the heads covered the line completely.
+ *
+ * Regressions for all three live in tests/issue-14-regressions.test.mjs.
+ */
+const RENDER_FINDINGS = [
   {
     id: "L05",
-    title: "The active nav item's label takes the same fill as its own background",
+    title: "The active nav item's label takes the same fill as its own pill",
     group: "review",
     requirement:
       "A navItem with state 'active' paints its pill in the accent fill and must paint its label in a colour that reads against that fill.",
     knownIssue:
-      "Label and pill are the same colour, so the active item's label is invisible.\n\n" +
-      "Measured on the applied frame: node 317:420 (the active pill) and 317:421 (its label) render as the same yellow. Rendering each node in isolation shows the glyphs in the accent fill on a white canvas, and the pill as solid accent. Contrast 1.0:1 against a 4.5:1 requirement.\n\n" +
-      "The #14 fix made nav labels follow their surface via onDarkSurface(), which is right for the three inactive items on the dark rail and wrong for the active one: the active item's surface is the accent pill, not the rail. The rule keys on the rail, not on the node the label actually sits in.\n\n" +
-      "review_design reported no text-contrast finding on the 57-node frame that contains this. Either the rule resolves the wrong ancestor for a nav label, or it skips labels whose parent is a component instance. Either way a 1.0:1 pair is being reported as clean, which is the more serious of the two halves.",
+      "PASS on 16 Oct 2026.\n\n" +
+      "The `navItem` emitter carried `#F2C94C` twice: once for the active pill and once for the active label. Rendering nodes 317:420 and 317:421 in isolation confirmed both resolve to the accent yellow, so the active item's label was invisible at 1.0:1.\n\n" +
+      "First recorded as 'the label takes the rail's colour', which pointed at the #14 `onDarkSurface()` fix. That was wrong: the label never consulted the rail for an active item. The two colours were the same literal typed at two call sites, which is why they could drift — the same reason `hugSize` became a single source of truth. Both now read from `NAV_ACTIVE_FILL` / `NAV_ACTIVE_LABEL`.\n\n" +
+      "`#111111` on `#F2C94C` measures 11.9:1. It is deliberately not derived from the rail, because the pill's fill is the same on every rail.\n\n" +
+      "The review half of this mattered more. `text-contrast` returned zero findings on a 57-node frame containing a 1.0:1 pair: `effectiveSurface` only looked at the text's siblings, and a label sitting on its own painted parent has none, so it fell through to compositing the ancestors — measuring against the rail behind the pill. It now checks the parent's own fill, and no longer returns early when the client cannot supply a composited background.",
     run: () => ({
-      status: "FAIL",
+      status: "PASS",
       detail:
-        "Active nav label fill equals the active pill fill (contrast 1.0:1); review_design reports 0 text-contrast findings on the frame that contains it.",
+        "Active nav label is #111111 on the #F2C94C pill at 11.9:1 (was #F2C94C on #F2C94C at 1.0:1). review_design reports the same colour pair as a critical text-contrast finding.",
       raw: {
-        labelNode: "317:421",
-        pillNode: "317:420",
-        measuredContrast: "1.0:1 (requirement 4.5:1)",
-        evidence: "isolated renders of both nodes are the same accent yellow",
-        reviewerOnFullFrame: { reviewedNodes: 57, textContrastFindings: 0 },
+        measured: { labelNode: "317:421", pillNode: "317:420", contrast: "11.9:1 (was 1.0:1, requirement 4.5:1)" },
+        inactiveUnchanged: "idle label still #A8ABA0 on the #111111 rail = 8.09:1",
+        reviewerNowReports: "critical text-contrast on a same-fill parent",
+        regressions: "tests/issue-14-regressions.test.mjs — L05 (4 tests)",
       },
     }),
   },
   {
     id: "L06",
-    title: "A region with width 'fill' ignores the sibling occupying the left edge",
-    group: "layout",
+    title: "A region covering a sibling goes unreported",
+    group: "review",
     requirement:
-      "A region declared { width: 'fill', right: <inspector width> } must be laid out in the space left after the other regions, not from x=0.",
+      "Two sibling regions that share pixels must be reported, unless one is a backdrop painted before the other.",
     knownIssue:
-      "Topology is placed at x=0 with width 1120, while the 220px nav rail occupies x=0..220. The region is therefore underneath the rail, and its contents are occluded.\n\n" +
-      "The compiler's own trace agrees with itself here — this is not the verifier inventing a position. compile_ir emits setPosition x=0 and setSize width=1120 for node 317:418, and the applied frame matches the emitted geometry exactly. The fill width is canvasWidth - right, with no accounting for a region already placed at the left edge.\n\n" +
-      "The render shows all three device nodes (mac-mini-01, mac-pro-02, rack-07) drawn inside the dark rail at x=24. They are children of Topology and their coordinates are correct relative to it; the region itself is simply underneath Nav.\n\n" +
-      "review_design reported no occlusion or overlap finding. overflow only checks a region against its parent's bounds, and a region that is fully inside the frame cannot overflow it — so this class of error is invisible to the current rules.",
+      "PASS on 16 Oct 2026.\n\n" +
+      "The rendered frame showed all three device nodes inside the dark nav rail, and the applied geometry put Topology at x=0 with width 1120 under a 220px rail at x=0.\n\n" +
+      "Recorded first as a compiler bug in how `fill` measures from the left edge. That was wrong, and the correction is the substance of the case: compiling the full program offline puts Topology at x=252 with width 868 and the inspector at x=1120, which is correct. The overlapping geometry was produced by the L04 verification harness, which recompiled the tail operations from a reduced IR with the `nav` region missing — so `fill` had no left sibling to clear and resolved to x=0. The defect was in the evidence, not in the product.\n\n" +
+      "The review rule was still added, because a harness that silently miscompiles is exactly the class nothing could see. `overflow` structurally cannot help: it asks whether a node leaves its parent, and a region inside its parent by definition does not.\n\n" +
+      "`sibling-region-overlap` reports siblings sharing pixels, and decides the one legitimate case — a full-bleed backdrop painted first — by paint order rather than by geometry. The first version made that call from only one side of the pair, so the same backdrop passed or failed depending on which node the rule visited first.",
     run: () => ({
-      status: "FAIL",
+      status: "PASS",
       detail:
-        "Topology (317:418) is placed at x=0 width=1120 and is fully occluded by the 220px nav rail for its first 220px; three device nodes are buried under it. No review rule covers region-vs-region occlusion.",
+        "The compiler lays the stress program out with no overlapping regions (Topology x=252 w=868, Inspector x=1120). review_design reports the overlapping frame that was actually applied, and stays silent on backdrops, nested cards and edge-sharing panels.",
       raw: {
-        topology: { node: "317:418", x: 0, width: 1120, emittedBy: "compile_ir" },
-        nav: { node: "317:415", x: 0, width: 220 },
-        overlapPx: 220,
-        occludedChildren: ["mac-mini-01", "mac-pro-02", "rack-07"],
-        geometryAgreesWithCompiler: true,
+        compilerGeometryIsCorrect: { topology: { x: 252, width: 868 }, inspector: { x: 1120, width: 320 } },
+        realCause: "L04 harness recompiled tail ops from a reduced IR with no `nav` region",
+        rule: "sibling-region-overlap",
+        firesOn: "the frame as applied: Nav 67% covered by Topology",
+        silentOn: ["backdrop painted first", "backdrop painted last -> 1 finding", "card nested in a panel", "panels sharing an edge"],
+        regressions: "tests/issue-14-regressions.test.mjs — L06 (5 tests)",
       },
     }),
   },
   {
     id: "L07",
-    title: "A connector compiles to a 10x10 arrowhead with no reference to its endpoints",
+    title: "A connector between adjacent nodes is swallowed by its own arrowheads",
     group: "topology",
     requirement:
-      "A connector declared { from, to } must carry its endpoints so the route lands on the two nodes it names, and must be sized to span them.",
+      "A connector whose route is shorter than its arrowheads must not draw them, or the line disappears inside the heads.",
     knownIssue:
-      "link-0 compiles to a createVector 10x10 at (83, 401) whose path is a bare arrowhead outline — 'M 5 2 L 5 6 L 5 6 L 5 10 L 5 2 M 5 10 L 0 0 L 10 0 L 5 10 Z' — with no from, no to, and no span between the two devices.\n\n" +
-      "On the applied frame this shows as a small grey arrowhead floating in empty canvas, unattached to mac-mini-01 or mac-pro-02. Two are visible rather than one, because the timed-out first transaction committed its own copy of the op before the client gave up; that duplication is a consequence of the partial-commit behaviour recorded in L04, not a separate defect.\n\n" +
-      "Issue #10 added connector adoption and issue #12 added the endpoint rules, and connector-endpoint-ambiguous correctly stayed quiet — there is no route, so there are no endpoints to be ambiguous about. The silence is the rules being right about a connector that should not exist in this form.",
+      "PASS on 16 Oct 2026.\n\n" +
+      "link-0 emitted a createVector 10x10 whose path was a bare arrowhead outline, and it rendered as a small grey triangle in empty canvas belonging to nothing.\n\n" +
+      "Recorded first as 'the connector has no endpoints and no span'. That was wrong on both counts. It had endpoints, and it had a route — a real one, between the two nodes the author named. What went wrong is that a cluster stacks its nodes 8px apart, so the chord between the two box edges is 8px, and each arrowhead is 8px. The heads covered the line completely and the vector normalised to the bounding box of the heads.\n\n" +
+      "`routeConnector` now measures the chord and only draws heads when there is line for them to sit on. Below that it emits a plain line and says so in the layer name, so 'why is this a bare line?' is answerable from the file rather than from whoever happened to be looking at it.\n\n" +
+      "`connector-endpoint-ambiguous` correctly stayed quiet throughout — there was a route, so there were endpoints, and they were on the nodes. The silence was the rule being right about a route that should not have been drawn that way.",
     run: () => ({
-      status: "FAIL",
+      status: "PASS",
       detail:
-        "link-0 emits a 10x10 vector arrowhead with no from/to and no span; renders as an unattached arrowhead in empty canvas rather than a route between mac-mini-01 and mac-pro-02.",
+        "A connector between adjacent nodes emits a single-subpath line spanning the gap, with no arrowhead, and names the reason in the layer name. A connector with room keeps its arrowheads.",
       raw: {
-        op: { id: "link-0", type: "createVector", x: 83, y: 401, width: 10, height: 10 },
-        path: "M 5 2 L 5 6 L 5 6 L 5 10 L 5 2 M 5 10 L 0 0 L 10 0 L 5 10 Z",
-        hasEndpoints: false,
-        shouldSpan: ["mac-mini-01 (317:443)", "mac-pro-02"],
-        duplicateVisible: "2 — the timed-out transaction committed its own copy; not a separate defect",
+        chordPx: 8,
+        arrowheadPx: 8,
+        before: "createVector 10x10, path was an arrowhead outline only",
+        after: "createVector 1x8, single subpath, layer name states the nodes are 8px apart",
+        regressions: "tests/issue-14-regressions.test.mjs — L07 (3 tests)",
       },
     }),
   },
 ];
+
+LIVE_CASES.push(...RENDER_FINDINGS);
 
 export const ALL_CASES = [...CASES, ...LIVE_CASES, ...OPEN_CASES];
 

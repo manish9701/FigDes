@@ -68,6 +68,7 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "button-overload", fn: buttonOverload },
   { name: "text-route-collision", fn: textRouteCollision },
   { name: "connector-endpoint-ambiguous", fn: connectorEndpointAmbiguous },
+  { name: "sibling-region-overlap", fn: siblingRegionOverlap },
 ];
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
@@ -388,19 +389,50 @@ function effectiveSurface(n: NodeMetrics, c: Ctx, fallback: string): { hex: stri
   }
 
   if (best) return { hex: best.node.fill!, via: `sibling surface '${best.node.name}'`, concrete: true };
+
+  // No painted sibling behind it. The parent itself is the next surface worth
+  // measuring against, and for a component that paints itself — an active nav
+  // pill, a chip, a badge — it is the *only* one there is.
+  //
+  // This was the gap behind issue L05: an active nav label sits directly on its
+  // own accent pill, so the sibling scan found nothing and the rule fell
+  // through to the composited ancestor walk. That walk composites through the
+  // rail behind the pill, which is the wrong backdrop, and the result measured
+  // as passing. A label drawn in the pill's own fill is invisible, and the
+  // reviewer reported a 1.0:1 pair as clean.
+  //
+  // Marked `concrete` so the `ratio <= 1.001` guard above treats a same-colour
+  // parent as real invisible text rather than as a measurement artefact.
+  if (n.parentId) {
+    const parent = c.byId.get(n.parentId);
+    if (parent && typeof parent.fill === "string" && parent.fill.length > 0) {
+      const opaqueEnough = !(typeof parent.fillAlpha === "number" && parent.fillAlpha < 0.9);
+      const encloses =
+        parent.x <= n.x + EPS && parent.y <= n.y + EPS && parent.x + parent.w >= n.x + n.w - EPS && parent.y + parent.h >= n.y + n.h - EPS;
+      if (opaqueEnough && encloses) {
+        return { hex: parent.fill, via: `parent surface '${parent.name}'`, concrete: true };
+      }
+    }
+  }
+
   return { hex: fallback, via: "composited ancestor fills", concrete: false };
 }
 
 /** WCAG AA contrast. Arithmetic over colours already composited on the client. */
 function textContrast(n: NodeMetrics, c: Ctx): Finding[] {
-  if (n.type !== "TEXT" || !n.text?.color || !n.background) return [];
+  // A missing `background` is not grounds for silence. It used to be: the rule
+  // returned early, which meant a client that could not composite the ancestor
+  // fills got no contrast checking at all. But `effectiveSurface` can resolve a
+  // real backdrop from the parent's own fill without compositing anything, so
+  // the early return threw away the one measurement that was still available.
+  if (n.type !== "TEXT" || !n.text?.color) return [];
   if (n.text.family === "mixed" || !n.text.size) return [];
   // Invisible or empty text is not a contrast problem.
   if (n.text.content.trim().length === 0) return [];
 
   // Measured against what is actually behind the glyphs, not merely what is
   // behind the text node's parent.
-  const surface = effectiveSurface(n, c, n.background);
+  const surface = effectiveSurface(n, c, n.background ?? "");
   const ratio = contrastRatio(n.text.color, surface.hex);
   if (ratio === null) return [];
 
@@ -1408,6 +1440,115 @@ function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
       nodeIds: [n.id],
       guidance:
         "Move the label clear of the route — above or below the line, or beside its own node — or give it a surface so it separates from the line behind it. Do not move the route: it is the one element in a topology whose position carries meaning.",
+    },
+  ];
+}
+
+/**
+ * Two sibling regions covering each other.
+ *
+ * A region declared `{ width: "fill", right: N }` measures from wherever it was
+ * positioned, and nothing in the program says it has to start after a sibling
+ * that already occupies the left edge. So a 220px nav rail and a `fill` region
+ * both resolve to x=0 and sit on top of each other. The compiler is right —
+ * it did exactly what it was told — and the result is a screen whose primary
+ * visual is buried under its own navigation (issue L06: on the applied frame
+ * all three device nodes rendered inside the dark rail).
+ *
+ * `overflow` cannot see this, and the reason is structural rather than a gap in
+ * its logic: it asks whether a node leaves its parent, and a region inside its
+ * parent by definition cannot. The failure is a sibling relationship, and only a
+ * sibling rule can express it.
+ *
+ * Backdrops are the one legitimate overlap, and they are told apart by paint
+ * order rather than by geometry: a full-bleed surface drawn first is what the
+ * rest of the screen sits on. Anything painted after and covering it is not a
+ * backdrop, it is an accident.
+ *
+ * Severity follows how much is hidden. An overlap smaller than a hairline is
+ * rounding; one that swallows a meaningful fraction of the covered region is
+ * serious, because content is genuinely unreachable behind it.
+ */
+function siblingRegionOverlap(n: NodeMetrics, c: Ctx): Finding[] {
+  if (n.type !== "FRAME" && n.type !== "COMPONENT" && n.type !== "INSTANCE") return [];
+  const siblings = c.childrenOf.get(n.parentId ?? "");
+  if (!siblings || siblings.length < 2) return [];
+
+  const nArea = n.w * n.h;
+  if (nArea <= 0) return [];
+
+  const hits: Array<{ occluded: NodeMetrics; occluding: NodeMetrics; area: number; covers: number }> = [];
+  const order = new Map(siblings.map((s, i) => [s.id, i]));
+  for (const s of siblings) {
+    if (s.id === n.id) continue;
+    if (s.type !== "FRAME" && s.type !== "COMPONENT" && s.type !== "INSTANCE") continue;
+    const area = overlapArea(n, s);
+    if (area <= 0) continue;
+    const overlapW = Math.min(n.x + n.w, s.x + s.w) - Math.max(n.x, s.x);
+    const overlapH = Math.min(n.y + n.h, s.y + s.h) - Math.max(n.y, s.y);
+    // An edge shared to within a pixel is how adjacent regions are built.
+    if (overlapW <= 1 || overlapH <= 1) continue;
+
+    // Containment in *geometry* is not nesting in the *tree*. A card in a panel
+    // is a child, and a child is never a sibling — so if one of these boxes
+    // swallows the other, something is still being covered.
+    const nHoldsS = n.x <= s.x && n.y <= s.y && n.x + n.w >= s.x + s.w && n.y + n.h >= s.y + s.h;
+    const sHoldsN = s.x <= n.x && s.y <= n.y && s.x + s.w >= n.x + n.w && s.y + s.h >= n.y + n.h;
+
+    // Paint order decides who lost. Figma draws later siblings on top, so of any
+    // two overlapping siblings the one drawn first is the one that lost pixels.
+    // A full-bleed surface painted first and used as the backdrop for what
+    // follows is the one legitimate version of this — and it reads as
+    // containment with the container drawn first, which is exactly the case to
+    // let through.
+    //
+    // The test is symmetric on purpose. Deciding from only one side made the
+    // same pair pass or fail depending on which node the rule happened to visit
+    // first, so a backdrop was reported half the time.
+    let occluded: NodeMetrics;
+    let occluding: NodeMetrics;
+    if (nHoldsS) {
+      occluded = s;
+      occluding = n;
+      if ((order.get(n.id) ?? 0) < (order.get(s.id) ?? 0)) continue; // container is the backdrop
+    } else if (sHoldsN) {
+      occluded = n;
+      occluding = s;
+      if ((order.get(s.id) ?? 0) < (order.get(n.id) ?? 0)) continue;
+    } else {
+      occluded = (order.get(n.id) ?? 0) <= (order.get(s.id) ?? 0) ? n : s;
+      occluding = occluded === n ? s : n;
+    }
+
+    hits.push({ occluded, occluding, area, covers: area / (occluded.w * occluded.h) });
+  }
+  if (hits.length === 0) return [];
+
+  hits.sort((a, b) => b.area - a.area);
+  const worst = hits[0]!;
+  const occluded = worst.occluded;
+  const occluding = worst.occluding;
+  const swallowed = Math.round(worst.covers * 100);
+  return [
+    {
+      rule: "sibling-region-overlap",
+      confidence: "high",
+      severity: worst.covers > 0.15 ? "serious" : "minor",
+      title: `"${occluded.name}" is ${swallowed}% covered by its sibling "${occluding.name}"`,
+      evidence: {
+        occludedId: occluded.id,
+        occludedBox: `${Math.round(occluded.w)}x${Math.round(occluded.h)} at (${Math.round(occluded.x)}, ${Math.round(occluded.y)})`,
+        occludingId: occluding.id,
+        occludingBox: `${Math.round(occluding.w)}x${Math.round(occluding.h)} at (${Math.round(occluding.x)}, ${Math.round(occluding.y)})`,
+        overlapPx2: Math.round(worst.area),
+        percentCovered: swallowed,
+        overlappingSiblings: hits.length,
+        reasoning:
+          "two sibling regions share pixels and the covered one is drawn first, so whatever it paints is hidden behind the one drawn later. Neither region leaves its parent, so an overflow check cannot see it.",
+      },
+      nodeIds: [occluded.id, occluding.id],
+      guidance:
+        "Give the covered region an explicit left edge — `leftOf`, or `rightOf` the sibling it has to clear — instead of letting it fill from x=0. A `fill` width measures from where the region already sits and does not know a sibling is in the way.",
     },
   ];
 }

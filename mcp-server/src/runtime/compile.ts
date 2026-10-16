@@ -1583,7 +1583,7 @@ function emitComponent(
           y: box.y,
           width: hugSize(spec, grid, typeScale, look)?.w ?? hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
           height: hugSize(spec, grid, typeScale, look)?.h ?? 36,
-          fill: active ? "#F2C94C" : surfaceFill(p.surface, []),
+          fill: active ? NAV_ACTIVE_FILL : surfaceFill(p.surface, []),
           radius: grid / 2,
           padding: { top: grid, right: grid * 1.5, bottom: grid, left: grid * 1.5 },
           layoutMode: "HORIZONTAL",
@@ -1606,8 +1606,15 @@ function emitComponent(
           //
           // So the default follows the surface it is being drawn on. An explicit
           // `props.color` still wins: the author knows what they are doing.
+          //
+          // The active item is a third case, and the one that broke. Its
+          // backdrop is the accent pill it is painted on, not the rail behind
+          // the pill — so following the rail paints the label accent-yellow on
+          // an accent-yellow pill. Measured on the live frame: 1.0:1, and the
+          // word simply was not there (issue L05). The rail test only applies
+          // to an inactive item, which really is sitting on the rail.
           fill: active
-            ? "#F2C94C"
+            ? NAV_ACTIVE_LABEL
             : str("color", onDarkSurface(region) ? "#A8ABA0" : "#6F716A"),
         }),
       );
@@ -3691,6 +3698,24 @@ function onDarkSurface(region: ResolvedRegion): boolean {
   const b = toLinear(parseInt(hex.slice(4, 6), 16) / 255);
   return 0.2126 * r + 0.7152 * g + 0.0722 * b <= 0.2;
 }
+
+/**
+ * The active nav marker and the label painted on it.
+ *
+ * These live together on purpose. They were two literals in the `navItem`
+ * emitter and both were `#F2C94C`, so the active item drew accent-yellow text
+ * on an accent-yellow pill: 1.0:1, and the label was invisible on the live
+ * frame (issue L05). A pair like that cannot be checked by eye at the two
+ * separate call sites, which is why it drifted in the first place — the same
+ * reason `hugSize` became a single source of truth.
+ *
+ * `#111111` on `#F2C94C` measures 11.9:1, well clear of the 4.5:1 requirement.
+ * It is deliberately not derived from the rail: the pill's fill is the same
+ * whichever rail it sits on, so a rail-relative label colour would be right
+ * only half the time.
+ */
+const NAV_ACTIVE_FILL = "#F2C94C";
+const NAV_ACTIVE_LABEL = "#111111";
 
 /**
  * The size a hug component actually draws at, or null for components that fill

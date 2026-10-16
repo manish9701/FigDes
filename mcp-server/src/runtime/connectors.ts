@@ -171,16 +171,35 @@ export function routeConnector(spec: ConnectorSpec, from: ResolvedBox | undefine
   }
 
   // Arrowheads ride along as closed subpaths so the whole connector is one node.
+  //
+  // They are sized against the stroke weight, which assumes there is a run of
+  // line for them to sit at the end of. When two nodes are adjacent — a stacked
+  // cluster puts them 8px apart — the chord is shorter than the heads, so the
+  // heads cover it completely and what reaches Figma is a floating triangle with
+  // a stub inside it. That is what the live frame showed (issue L07): a small
+  // grey arrowhead in empty canvas that belonged to nothing.
+  //
+  // So the heads are only drawn when the line is long enough to show one. Below
+  // that the connector stays a plain line, which is truthful: two adjacent nodes
+  // 8px apart do not need a direction cue, they need to be further apart.
   const weight = spec.strokeWeight ?? 1;
   const size = Math.max(6, ARROW * Math.min(2.5, Math.max(0.75, weight)));
-  const headDir = { x: p2.x - p1.x, y: p2.y - p1.y };
+  const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const headsFit = chord >= size * 2;
 
-  if (spec.arrowEnd !== false) parts.push(arrowHead(p2, headDir, size));
-  if (spec.arrowStart) parts.push(arrowHead(p1, { x: -headDir.x, y: -headDir.y }, size));
+  if (spec.arrowEnd !== false && headsFit) parts.push(arrowHead(p2, { x: p2.x - p1.x, y: p2.y - p1.y }, size));
+  if (spec.arrowStart && headsFit) parts.push(arrowHead(p1, { x: p1.x - p2.x, y: p1.y - p2.y }, size));
 
   const summary = `${routing} connector ${spec.from} -> ${spec.to}`;
 
-  return { path: parts.join(" "), ...(labelAt ? { labelAt } : {}), summary };
+  // A degenerate route is still a real route, so it is reported rather than
+  // dropped — but the summary says why it looks the way it does, because
+  // "why is this a bare line?" is otherwise unanswerable from the file.
+  const note = headsFit
+    ? ""
+    : ` (nodes ${Math.round(chord)}px apart, closer than the ${Math.round(size * 2)}px the arrowheads need, so it is drawn without one)`;
+
+  return { path: parts.join(" "), ...(labelAt ? { labelAt } : {}), summary: summary + note };
 }
 
 /**

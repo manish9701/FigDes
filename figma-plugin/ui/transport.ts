@@ -25,7 +25,7 @@
  *   main response  -> settle the pending promise
  *   heartbeat      -> poll main for state, send `state` upstream
  */
-import type { ClientMessage, MainToUi, ServerMessage, StatusResult, UiToMain } from "../../shared/protocol";
+import type { ClientMessage, MainToUi, PluginToolName, ResultMessage, ServerMessage, StatusResult, UiToMain } from "../../shared/protocol";
 
 /** The slice of the WebSocket API this module uses. */
 export interface SocketLike {
@@ -78,6 +78,9 @@ export const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 export const LONG_BUILD_TIMEOUT_MS = 300000;
 export const DEFAULT_HEARTBEAT_MS = 5000;
 
+/** Hard ceiling for a payload-declared build budget. */
+export const MAX_BUILD_TIMEOUT_MS = 900000;
+
 /** Per-tool budget: builds get 5 minutes so the server never times out first
  * and commits late (the "blank, then everything pops at once" race). */
 export function timeoutForTool(tool: string): number {
@@ -93,6 +96,53 @@ export function timeoutForTool(tool: string): number {
     default:
       return DEFAULT_REQUEST_TIMEOUT_MS;
   }
+}
+
+/**
+ * The wait budget for one build, in the *transport*'s own terms.
+ *
+ * A native script carries its own `timeoutMs` because the server waits
+ * `timeoutMs + 5s` for the plugin to settle before it rolls back. This iframe
+ * used to ignore that and cap every build at 5 minutes, so a script asking for
+ * the maximum 300s was guaranteed to be abandoned by the transport at 300s
+ * while the server was still legitimately waiting at 305s — a deterministic
+ * timeout race, not a slow build. The payload's budget now wins, clamped to a
+ * ceiling so a bad number cannot park a request forever.
+ */
+export function budgetForBuild(tool: string, payload: unknown, floorMs: number): number {
+  const declared =
+    payload && typeof payload === "object"
+      ? (payload as { timeoutMs?: unknown }).timeoutMs
+      : undefined;
+  const requested =
+    typeof declared === "number" && Number.isFinite(declared) && declared > 0
+      ? Math.round(declared)
+      : 0;
+  if (requested === 0) return Math.max(floorMs, timeoutForTool(tool));
+  // Leave room for the main thread to settle and answer before we give up on it.
+  return Math.min(MAX_BUILD_TIMEOUT_MS + 5000, Math.max(floorMs, requested + 5000));
+}
+
+/**
+ * The frame sent when *this* transport gave up waiting on the main thread.
+ *
+ * Exported because the exact shape is a contract: the server recognises
+ * `transportTimeout` to keep its reconciliation binding, and an unrecognised
+ * frame means a definitive late commit is silently dropped. The prose is kept
+ * too, so a server that predates the marker still reads the outcome as unknown.
+ */
+export function transportTimeoutResult(
+  requestId: string,
+  tool: PluginToolName,
+  budgetMs: number,
+): ResultMessage {
+  return {
+    type: "result",
+    requestId,
+    ok: false,
+    error: `Plugin timed out after ${budgetMs}ms executing ${tool}. Outcome unknown: the main thread may still commit late; the definitive result will follow as a late result.`,
+    transportTimeout: { budgetMs, tool },
+  };
 }
 
 interface Pending {
@@ -242,7 +292,8 @@ export function createTransport(options: TransportOptions): Transport {
         // Per-tool budget: a global 20s/60s timeout fires mid-build while the
         // main thread is still applying ops, producing a failure on ChatGPT's
         // side followed by a late commit ("blank, then everything pops").
-        const budget = Math.max(requestTimeoutMs, timeoutForTool(msg.tool));
+        const floor = Math.max(requestTimeoutMs, timeoutForTool(msg.tool));
+        const budget = budgetForBuild(msg.tool, msg.payload, floor);
         pending.set(requestId, {
           resolve: (data) => {
             send({ type: "result", requestId, ok: true, data });
@@ -255,14 +306,14 @@ export function createTransport(options: TransportOptions): Transport {
           // The pending entry is dropped but the late main-thread answer is still
           // forwarded by settle() for ledger reconciliation — and the main
           // thread is asked to abort so the late outcome rolls back.
+          //
+          // `transportTimeout` marks the frame as OUR timeout rather than a plugin
+          // error. The server has to keep the request binding in that case: without
+          // it the plugin's definitive answer is discarded as an unknown request
+          // and the job is stranded at `timed-out` with every retry refused.
           timer: setTimeout(() => {
             pending.delete(requestId);
-            send({
-              type: "result",
-              requestId,
-              ok: false,
-              error: `Plugin timed out after ${budget}ms executing ${msg.tool}. Outcome unknown: the main thread may still commit late; the definitive result will follow as a late result.`,
-            });
+            send(transportTimeoutResult(requestId, msg.tool, budget));
             try {
               const payload = msg.payload as { transactionId?: unknown };
               postToMain({
@@ -323,9 +374,13 @@ export function createTransport(options: TransportOptions): Transport {
     }
     if (msg.kind === "progress") {
       // Upstream build heartbeat: lets the server extend its timeout and log
-      // the build instead of failing on silence mid-transaction.
+      // the build instead of failing on silence mid-transaction. The requestId
+      // is what makes that possible — the server re-arms the request timer by
+      // request id, so progress that arrives without one proves nothing about
+      // which request is still in flight.
       send({
         type: "progress",
+        ...(msg.requestId ? { requestId: msg.requestId } : {}),
         transactionId: msg.transactionId,
         done: msg.done,
         total: msg.total,

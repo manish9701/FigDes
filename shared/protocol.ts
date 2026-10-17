@@ -1224,6 +1224,17 @@ export interface ResultMessage {
   ok: boolean;
   data?: unknown;
   error?: string;
+  /**
+   * Present only when the *iframe transport* gave up waiting on the main thread.
+   *
+   * This is not a plugin error: the main thread is still applying operations and
+   * the real outcome has not been decided. The server used to learn this only by
+   * matching prose in `error` ("Outcome unknown…"), and on that path it dropped
+   * the request binding — so when the plugin's definitive answer finally arrived
+   * it was discarded and the ledger sat at `timed-out` forever, refusing every
+   * same-id retry. The marker makes the case structural and keeps the binding.
+   */
+  transportTimeout?: { budgetMs: number; tool: PluginToolName };
 }
 
 export interface DisconnectMessage {
@@ -1640,6 +1651,17 @@ export type MainToUi =
   | { kind: "log"; level: "info" | "warn" | "error"; message: string }
   | {
       kind: "progress";
+      /**
+       * The request this progress belongs to.
+       *
+       * Without it the server cannot extend the request timeout, because
+       * `touchProgress` has no key to re-arm: the documented sliding window
+       * silently did nothing and a progressing 128-op build was still killed at
+       * the absolute budget. Reported as optional so an older main thread that
+       * omits it still forwards (the server then falls back to the absolute
+       * budget rather than guessing).
+       */
+      requestId?: string;
       transactionId?: string;
       done: number;
       total: number;

@@ -47,13 +47,35 @@ const APPLIED_TRACE_CAP = 300;
  * cancelled batch reports rolled-back/partial instead of committing late.
  */
 const TRANSACTION_CACHE_CAP = 50;
+const SETTLED_CAP = 100;
 const transactionResults = new Map<string, TransactionResult>();
 const cancelledTransactions = new Set<string>();
+/**
+ * Ids that already reached a terminal state (committed or rolled back).
+ *
+ * Without this a cancel arriving *after* a transaction finished used to arm a
+ * flag nothing would ever consume, and the very same-id retry the server tells
+ * the model to perform would abort at operation 0 saying "cancelled". A timeout
+ * that lands late therefore locked out the only safe recovery path.
+ */
+const settledTransactions = new Set<string>();
+
+function rememberSettled(transactionId: string): void {
+  if (!transactionId) return;
+  settledTransactions.add(transactionId);
+  if (settledTransactions.size > SETTLED_CAP) {
+    const first = settledTransactions.values().next().value;
+    if (first) settledTransactions.delete(first);
+  }
+}
 
 /** Mark a transaction as cancelled. The run loop aborts between operations and rolls back. */
 export function cancelTransaction(transactionId: string): boolean {
   if (!transactionId) return false;
   if (transactionResults.has(transactionId)) return false;
+  // A cancel for a transaction that already finished is a late timeout, not an
+  // instruction: refuse it so it cannot poison the next same-id retry.
+  if (settledTransactions.has(transactionId)) return false;
   cancelledTransactions.add(transactionId);
   return true;
 }
@@ -747,13 +769,15 @@ export async function runTransaction(input: {
     // recorded — after a timeout or interleaving work, that is somebody else's
     // commit. Consume any cancel flag so a same-id retry starts clean.
     takeCancellation(input.transactionId);
-    return failure(
+    const result = await failure(
       input.transactionId,
       err,
       true,
       ctx.created.map((c) => c.figmaNodeId),
       ctx,
     );
+    rememberSettled(input.transactionId);
+    return result;
   }
   const applyMs = Date.now() - applyT0;
 
@@ -858,6 +882,7 @@ export async function runTransaction(input: {
   };
   takeCancellation(input.transactionId);
   cacheTransactionResult(input.transactionId, success);
+  rememberSettled(input.transactionId);
   return success;
 }
 
@@ -2021,7 +2046,19 @@ async function removeCreated(
       }
       if ("remove" in node && typeof (node as { remove?: unknown }).remove === "function") {
         (node as unknown as { remove: () => void }).remove();
-        removedIds.push(id);
+        // Verified, not assumed: `rollbackStatus: "full"` tells the model the
+        // document holds none of this transaction's work, so the removal has to
+        // be read back. Figma's `remove()` is not documented to throw on every
+        // failure path (a node detached by an interleaved edit, a locked
+        // instance), and an unverified removal counted as clean is exactly the
+        // "reported a clean rollback without evidence" failure. If the node
+        // still resolves, it is an orphan and the rollback is only partial.
+        const stillThere = await figma
+          .getNodeByIdAsync(id)
+          .then((n) => (n ? (n as { removed?: boolean }).removed !== true : false))
+          .catch(() => false);
+        if (stillThere) orphanIds.push(id);
+        else removedIds.push(id);
       } else {
         orphanIds.push(id);
       }

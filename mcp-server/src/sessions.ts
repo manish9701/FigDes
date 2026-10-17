@@ -97,6 +97,16 @@ function timeoutForTool(tool: PluginToolName): number {
   }
 }
 
+/**
+ * How many consecutive budget windows a build may span while still progressing.
+ *
+ * The per-request timeout is a *silence* window, not a total cap, so a legitimately
+ * slow 128-op build must not be killed just because it takes longer than one
+ * window. Four windows is the compromise: generous for real builds, and still a
+ * bounded wait rather than a request that never returns.
+ */
+const MAX_SLIDING_FACTOR = 4;
+
 interface Pending {
   resolve: (data: unknown) => void;
   reject: (err: Error) => void;
@@ -105,6 +115,10 @@ interface Pending {
   timeoutMs: number;
   requestId: string;
   transactionId: string | undefined;
+  /** When the request was dispatched; bounds the total sliding wait. */
+  startedAt: number;
+  /** Highest `done` reported so far. A lower value is not evidence of life. */
+  lastProgress: number;
 }
 
 interface TimedOut {
@@ -112,6 +126,35 @@ interface TimedOut {
   transactionId: string | undefined;
   timeoutMs: number;
   at: number;
+}
+
+/**
+ * The sentence the iframe transport writes when *its own* timer fires.
+ *
+ * A panel bundle older than the structured `transportTimeout` marker still sends
+ * exactly this text, and a deployed session runs whatever bundle it was launched
+ * with. Recognising the sentinel keeps the reconciliation binding alive across
+ * that version skew instead of stranding the job.
+ */
+const TRANSPORT_TIMEOUT_SENTINEL = /Outcome unknown: the main thread may still commit late/i;
+
+/**
+ * Whether this frame is the *transport* giving up, rather than the plugin
+ * refusing the work.
+ *
+ * The structured marker is authoritative; the sentinel is the fallback for an
+ * older panel. Without this distinction the outcome-unknown timeout is reported
+ * as an ordinary failure, which is the state that silently discarded every
+ * late commit and rollback.
+ */
+function transportTimeoutOf(msg: ResultMessage, entry: Pending): { budgetMs: number } | null {
+  if (msg.transportTimeout) return { budgetMs: msg.transportTimeout.budgetMs };
+  if (typeof msg.error === "string" && TRANSPORT_TIMEOUT_SENTINEL.test(msg.error)) {
+    const declared = /timed out after (\d+)ms/i.exec(msg.error);
+    const budgetMs = declared?.[1] ? Number(declared[1]) : entry.timeoutMs;
+    return { budgetMs: Number.isFinite(budgetMs) && budgetMs > 0 ? budgetMs : entry.timeoutMs };
+  }
+  return null;
 }
 
 export interface LateResult {
@@ -242,11 +285,7 @@ export class Session {
         // Keep the binding for the late-result path: the Figma main thread
         // keeps running after we stop waiting. Dropping it here is what turned
         // a stall into "failure, then everything pops at once anyway".
-        this.timedOut.set(requestId, { tool, transactionId, timeoutMs: budget, at: Date.now() });
-        if (this.timedOut.size > 50) {
-          const first = this.timedOut.keys().next().value;
-          if (first) this.timedOut.delete(first);
-        }
+        this.rememberTimedOut(requestId, { tool, transactionId, timeoutMs: budget, at: Date.now() });
         // Best-effort cancel: ask the plugin to abort between ops and roll
         // back, so the late outcome is rolled-back/partial instead of a silent
         // commit. Older panels ignore the frame; that is fine.
@@ -262,7 +301,7 @@ export class Session {
         );
       }, budget);
 
-      this.pending.set(requestId, { resolve, reject, timer, tool, timeoutMs: budget, requestId, transactionId });
+      this.pending.set(requestId, { resolve, reject, timer, tool, timeoutMs: budget, requestId, transactionId, startedAt: Date.now(), lastProgress: 0 });
       this.send({ type: "request", requestId, tool, payload });
     });
   }
@@ -299,16 +338,53 @@ export class Session {
    * Every progress frame proves the plugin is still applying ops, so the
    * request timer restarts instead of firing mid-build. Without this sliding
    * window a 90s build always fails at 60s and commits late.
+   *
+   * Two limits keep that window from becoming a hang:
+   *
+   *  1. Only a frame that reports *more* progress re-arms the timer. A plugin
+   *     stuck on one op while still narrating the same count is stalled, and an
+   *     unbounded window would wait on it forever.
+   *  2. The total wait is capped at `MAX_SLIDING_FACTOR` × the original budget.
+   *     A genuinely enormous build then fails with a clear ceiling rather than
+   *     holding the request indefinitely.
+   *
+   * The ceiling is recorded in the timeout message so the failure is
+   * actionable rather than a bare "did not respond".
    */
   touchProgress(requestId: string | undefined, done: number, total: number, label: string): void {
     this.lastSeen = Date.now();
     if (!requestId) return;
     const entry = this.pending.get(requestId);
     if (!entry) return;
+    // Strictly monotonic: only a frame that reports *more* progress is evidence
+    // of life. A plugin wedged on one operation keeps narrating the same count,
+    // and treating that as progress would hold the request open for good.
+    if (done <= entry.lastProgress) return;
+    entry.lastProgress = done;
+
+    const elapsed = Date.now() - entry.startedAt;
+    const ceiling = entry.timeoutMs * MAX_SLIDING_FACTOR;
+    if (elapsed >= ceiling) {
+      clearTimeout(entry.timer);
+      this.pending.delete(requestId);
+      this.rememberTimedOut(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+      this.cancel(requestId, entry.transactionId, `server gave up after ${Math.round(elapsed)}ms of progress on ${done}/${total} ${label}`);
+      entry.reject(
+        new TransactionTimeoutError(
+          `The Figma plugin is still applying ${entry.tool} but exceeded the total wait ceiling: ${Math.round(elapsed)}ms of progress (last ${done}/${total} ${label}), against a ${entry.timeoutMs}ms budget per window. ${timeoutHint(entry.tool, entry.transactionId, entry.timeoutMs)}`,
+          requestId,
+          entry.tool,
+          entry.transactionId,
+          entry.timeoutMs,
+        ),
+      );
+      return;
+    }
+
     clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
       this.pending.delete(requestId);
-      this.timedOut.set(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+      this.rememberTimedOut(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
       this.cancel(requestId, entry.transactionId, `server timeout after ${entry.timeoutMs}ms without progress`);
       entry.reject(
         new TransactionTimeoutError(
@@ -336,12 +412,37 @@ export class Session {
    * promise is gone, but the ledger still needs the true outcome. Callers
    * (the socket router) must reconcile the job record from it instead of
    * dropping the frame.
+   *
+   * The case that used to strand a job is the *iframe* giving up before we did.
+   * Its frame carries `ok:false` and a scary error string, which reads exactly
+   * like a plugin that refused the work — so it was rejected as an ordinary
+   * failure and the request binding was dropped. The plugin's definitive answer
+   * (the commit, or the verified rollback) then arrived and was discarded as an
+   * unknown request, leaving the ledger at `timed-out` forever and refusing every
+   * same-id retry. A transport timeout is now recognised structurally: the
+   * binding is kept and the rejection is the same `TransactionTimeoutError` the
+   * server's own timer raises, so both routes reconcile identically.
    */
   settleResult(msg: ResultMessage): LateResult | null {
     const entry = this.pending.get(msg.requestId);
     if (entry) {
       clearTimeout(entry.timer);
       this.pending.delete(msg.requestId);
+      const transport = transportTimeoutOf(msg, entry);
+      if (transport) {
+        this.rememberTimedOut(msg.requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+        const budget = transport.budgetMs;
+        entry.reject(
+          new TransactionTimeoutError(
+            `The plugin panel gave up waiting for ${entry.tool} after ${budget}ms. ${timeoutHint(entry.tool, entry.transactionId, budget)}`,
+            msg.requestId,
+            entry.tool,
+            entry.transactionId,
+            budget,
+          ),
+        );
+        return null;
+      }
       if (msg.ok) entry.resolve(msg.data);
       else entry.reject(new Error(msg.error ?? "The Figma plugin reported an unknown error."));
       return null;
@@ -360,13 +461,28 @@ export class Session {
     };
   }
 
+  /**
+   * Keeps a bounded reconciliation binding for a request whose waiter is gone.
+   *
+   * Every path that stops waiting must go through here. Forgetting to is what
+   * makes a real commit look like an unknown request and leaves the job
+   * permanently unreconcilable.
+   */
+  private rememberTimedOut(requestId: string, binding: TimedOut): void {
+    this.timedOut.set(requestId, binding);
+    if (this.timedOut.size > 50) {
+      const first = this.timedOut.keys().next().value;
+      if (first) this.timedOut.delete(first);
+    }
+  }
+
   failAllPending(reason: string): void {
     for (const [requestId, entry] of this.pending) {
       clearTimeout(entry.timer);
       // A disconnect mid-apply has the same unknown outcome as a timeout: the
       // main thread may still commit. Keep the binding for reconciliation and
       // reject with a disconnect-shaped error the dispatcher marks timed-out.
-      this.timedOut.set(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
+      this.rememberTimedOut(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
       entry.reject(
         new SessionDisconnectedError(
           `${reason} Outcome unknown${entry.transactionId ? ` for transaction ${entry.transactionId}` : ""} — the Figma main thread may still commit late. ${timeoutHint(entry.tool, entry.transactionId, entry.timeoutMs)}`,
@@ -619,3 +735,5 @@ export class SessionRegistry {
     this.sessions.clear();
   }
 }
+
+

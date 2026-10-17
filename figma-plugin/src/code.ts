@@ -143,7 +143,7 @@ function emit(msg: MainToUi): void {
 /* Tool handlers â€” the plugin side of the MCP surface                           */
 /* -------------------------------------------------------------------------- */
 
-async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> {
+async function handle(tool: PluginToolName, payload: unknown, requestId?: string): Promise<unknown> {
   switch (tool) {
     case "figma_status":
       return status();
@@ -219,6 +219,7 @@ async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> 
         description: p.description ?? `Update component ${p.componentId}`,
         operations: Array.isArray(p.operations) ? p.operations : [],
         dryRun: p.dryRun ?? false,
+        onProgress: progressReporter(transactionId, requestId, `Update component ${p.componentId}`, p.dryRun === true),
       });
     }
 
@@ -226,10 +227,10 @@ async function handle(tool: PluginToolName, payload: unknown): Promise<unknown> 
       return listVariables();
 
     case "create_design":
-      return createDesign(payload);
+      return createDesign(payload, requestId);
 
     case "modify_design":
-      return modifyDesign(payload);
+      return modifyDesign(payload, requestId);
 
     case "native_design":
       return executeNativeCall(payload);
@@ -374,28 +375,53 @@ function newTransactionId(): string {
   return `tx_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function createDesign(payload: unknown): Promise<TransactionResult> {
+/**
+ * One place that builds every build's progress frames.
+ *
+ * `requestId` is carried on each frame because the server's sliding timeout
+ * window is keyed by request id: progress that names only the transaction
+ * cannot re-arm the timer, so a build that is demonstrably advancing still gets
+ * killed at the absolute budget mid-apply. A dry run posts nothing, because
+ * nothing is being applied.
+ */
+function progressReporter(
+  transactionId: string,
+  requestId: string | undefined,
+  label: string,
+  dryRun: boolean,
+): ((done: number, total: number, opLabel: string) => void) | undefined {
+  if (dryRun) return undefined;
+  return (done, total, opLabel) =>
+    post({
+      kind: "progress",
+      ...(requestId ? { requestId } : {}),
+      transactionId,
+      done,
+      total,
+      label: opLabel || label,
+      phase: done >= total ? "done" : "applying",
+    });
+}
+
+async function createDesign(payload: unknown, requestId?: string): Promise<TransactionResult> {
   const p = (payload ?? {}) as TransactionPayload;
   const transactionId = p.transactionId ?? newTransactionId();
-  post({ kind: "progress", transactionId, done: 0, total: Array.isArray(p.operations) ? p.operations.length : 0, label: p.description ?? "Building", phase: "started" });
+  const label = p.description ?? "Building";
+  post({ kind: "progress", ...(requestId ? { requestId } : {}), transactionId, done: 0, total: Array.isArray(p.operations) ? p.operations.length : 0, label, phase: "started" });
   const result = await runTransaction({
     transactionId,
     description: p.description,
     operations: Array.isArray(p.operations) ? p.operations : [],
     dryRun: p.dryRun ?? false,
-    onProgress:
-      p.dryRun === true
-        ? undefined
-        : (done, total, label) =>
-            post({ kind: "progress", transactionId, done, total, label, phase: done >= total ? "done" : "applying" }),
+    onProgress: progressReporter(transactionId, requestId, label, p.dryRun === true),
   });
   if (result.status !== "success") {
-    post({ kind: "progress", transactionId, done: 0, total: 0, label: result.error?.message ?? "failed", phase: "failed" });
+    post({ kind: "progress", ...(requestId ? { requestId } : {}), transactionId, done: 0, total: 0, label: result.error?.message ?? "failed", phase: "failed" });
   }
   return result;
 }
 
-async function modifyDesign(payload: unknown): Promise<TransactionResult> {
+async function modifyDesign(payload: unknown, requestId?: string): Promise<TransactionResult> {
   const p = (payload ?? {}) as TransactionPayload & { targets?: string[] };
 
   // Force any auto-generated targets to resolve against the live selection
@@ -416,20 +442,17 @@ async function modifyDesign(payload: unknown): Promise<TransactionResult> {
   }
 
   const transactionId = p.transactionId ?? newTransactionId();
-  post({ kind: "progress", transactionId, done: 0, total: p.operations.length, label: p.description ?? `Modify ${p.targets?.join(", ") ?? "selection"}`, phase: "started" });
+  const label = p.description ?? `Modify ${p.targets?.join(", ") ?? "selection"}`;
+  post({ kind: "progress", ...(requestId ? { requestId } : {}), transactionId, done: 0, total: p.operations.length, label, phase: "started" });
   const result = await runTransaction({
     transactionId,
-    description: p.description ?? `Modify ${p.targets?.join(", ") ?? "selection"}`,
+    description: label,
     operations: p.operations,
     dryRun: p.dryRun ?? false,
-    onProgress:
-      p.dryRun === true
-        ? undefined
-        : (done, total, label) =>
-            post({ kind: "progress", transactionId, done, total, label, phase: done >= total ? "done" : "applying" }),
+    onProgress: progressReporter(transactionId, requestId, label, p.dryRun === true),
   });
   if (result.status !== "success") {
-    post({ kind: "progress", transactionId, done: 0, total: 0, label: result.error?.message ?? "failed", phase: "failed" });
+    post({ kind: "progress", ...(requestId ? { requestId } : {}), transactionId, done: 0, total: 0, label: result.error?.message ?? "failed", phase: "failed" });
   }
   return result;
 }
@@ -551,7 +574,7 @@ figma.ui.onmessage = async (msg: UiToMain) => {
             : undefined;
         activeRequests.set(msg.requestId, txnOf(msg.payload));
         try {
-          const data = await handle(msg.tool, msg.payload);
+          const data = await handle(msg.tool, msg.payload, msg.requestId);
           post({ kind: "response", requestId: msg.requestId, ok: true, data });
         } catch (err) {
           post({

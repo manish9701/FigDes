@@ -63,7 +63,7 @@
     "test:issue12": "node --test tests/issue-12-stress.test.mjs",
     "acceptance": "node scripts/run-acceptance.mjs",
     "test:issue13": "node --test tests/issue-13-acceptance.test.mjs",
-    "test:issue14": "node --test tests/issue-14-regressions.test.mjs",
+    "test:issue14": "node --test tests/issue-14-regressions.test.mjs tests/issue-14-transaction-reliability.test.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs"
   },
   "devDependencies": {

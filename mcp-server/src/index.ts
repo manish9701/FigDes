@@ -197,25 +197,30 @@ wss.on("connection", (ws: WebSocket) => {
           if (transactionId) {
             const existing = registry.jobs.get(transactionId);
             if (existing) {
+              // Bind to the attempt this frame's request belonged to, so a
+              // result that lost the race against a re-dispatch is recorded
+              // rather than applied over the newer outcome.
+              const boundRequest = registry.jobs.byRequestId(late.requestId);
+              const attempt = boundRequest?.attempt ?? (boundRequest && boundRequest.transactionId === transactionId ? boundRequest.attempt : undefined);
+              const settle = (
+                state: Parameters<typeof registry.jobs.completeLate>[0]["state"],
+                extra: Record<string, unknown>,
+              ): void => {
+                const out = registry.jobs.completeLate({ transactionId, attempt, state, extra, result: late.data });
+                if (!out.applied) console.warn(`[ws] ${session.id} ignored late result for ${transactionId}: ${out.reason}`);
+              };
               if (late.ok && data?.status === "success") {
-                registry.jobs.complete(
-                  transactionId,
-                  "committed",
-                  {
-                    done: existing.operationCount,
-                    label: `${commitNote} reconciled after timeout`,
-                    createdIds: data?.createdNodes?.map((n) => n.figmaNodeId),
-                    error: undefined,
-                  },
-                  late.data,
-                );
+                settle("committed", {
+                  done: existing.operationCount,
+                  label: `${commitNote} reconciled after timeout`,
+                  createdIds: data?.createdNodes?.map((n) => n.figmaNodeId),
+                  error: undefined,
+                });
               } else if (!late.ok || data?.status === "failed") {
                 const rb = data?.rollbackStatus ?? (data && (data as { rolledBack?: boolean }).rolledBack ? "full" : undefined);
-                registry.jobs.complete(
-                  transactionId,
+                settle(
                   rb === "full" ? "rolled-back" : rb === "partial" ? "partial-rollback" : "failed",
                   { error: (data as { error?: { message?: string } } | undefined)?.error?.message ?? late.error ?? "late failure", label: `${commitNote} reconciled after timeout` },
-                  late.data,
                 );
               } else {
                 registry.jobs.update(transactionId, { label: `${commitNote} (unrecognised shape)` });

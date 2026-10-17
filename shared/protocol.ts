@@ -817,6 +817,17 @@ export interface TransactionTimings extends TransactionStageTimings {
   cache?: { hits: number; misses: number };
   nodeCount?: number;
   operationCount?: number;
+  /**
+   * How much of `apply` was spent handing control back so the canvas could
+   * repaint, rather than applying operations.
+   *
+   * Reported separately because the two have opposite fixes. A build that is
+   * slow because its operations are slow needs a cheaper apply path; a build
+   * that is slow because it yields too often needs a different cadence. Adding
+   * up the per-operation times and finding they do not explain `apply` is the
+   * signal that it is the yields.
+   */
+  yields?: { count: number; ms: number; intervalMs: number };
 }
 
 export type RollbackStatus = "full" | "partial" | "none";
@@ -900,6 +911,14 @@ export interface JobRecord {
    * Without it a reported failure can hide a late commit.
    */
   requestId?: string;
+  /**
+   * Which dispatch of this transactionId this record describes.
+   *
+   * Monotonic per transactionId. A late result from attempt 1 arriving after
+   * attempt 2 has settled is stale and must not overwrite it — otherwise a
+   * committed retry can be relabelled with the previous attempt's outcome.
+   */
+  attempt?: number;
 }
 
 export interface PreflightIssue {

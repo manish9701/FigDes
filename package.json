@@ -35,7 +35,7 @@
     "start:server": "node mcp-server/dist/index.js",
     "start:local": "node scripts/launch.mjs --no-tunnel",
     "pretest": "npm run build && npm run build:test",
-    "test": "npm run test:review && npm run test:design && npm run test:blueprint && npm run test:context && npm run test:regressions && npm run test:placement && npm run test:geometry && npm run test:builder && npm run test:pipeline && npm run test:clients && npm run test:code && npm run test:ui && npm run test:runtime && npm run test:issue10 && npm run test:issue11 && npm run test:invariants && npm run test:live-evidence && npm run test:issue12 && npm run test:issue13 && npm run test:issue14 && npm run test:productguard && npm run test:plugin && npm run test:reliability && npm run test:native && npm run test:smoke && npm run test:e2e",
+    "test": "npm run test:review && npm run test:design && npm run test:blueprint && npm run test:context && npm run test:regressions && npm run test:placement && npm run test:geometry && npm run test:builder && npm run test:pipeline && npm run test:clients && npm run test:code && npm run test:ui && npm run test:runtime && npm run test:issue10 && npm run test:issue11 && npm run test:invariants && npm run test:live-evidence && npm run test:issue12 && npm run test:issue13 && npm run test:issue14 && npm run test:issue15 && npm run test:productguard && npm run test:plugin && npm run test:reliability && npm run test:native && npm run test:smoke && npm run test:e2e",
     "test:design": "node --test tests/design-intelligence.test.mjs",
     "test:blueprint": "node --test tests/blueprint-quality.test.mjs",
     "test:placement": "node --test tests/placement.test.mjs",
@@ -60,10 +60,12 @@
     "pin:tools": "npm run build:tools && node scripts/pin-tool-list.mjs",
     "test:e2e": "node --test tests/plugin-e2e.test.mjs",
     "stress:matrix": "node scripts/run-stress-matrix.mjs",
+    "bench:apply": "node scripts/run-perf-benchmark.mjs",
     "test:issue12": "node --test tests/issue-12-stress.test.mjs",
     "acceptance": "node scripts/run-acceptance.mjs",
     "test:issue13": "node --test tests/issue-13-acceptance.test.mjs",
     "test:issue14": "node --test tests/issue-14-regressions.test.mjs tests/issue-14-transaction-reliability.test.mjs",
+    "test:issue15": "node --test tests/issue-15-performance.test.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs"
   },
   "devDependencies": {

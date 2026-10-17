@@ -532,7 +532,12 @@ async function dispatchTransaction(
   const t0 = Date.now();
   let result: TransactionResult;
   try {
-    result = (await session.request(tool, { ...payload, transactionId })) as TransactionResult;
+    // The wire request id is bound synchronously by `request`, so the ledger can
+    // record it here. Without that binding a late plugin result has no key to
+    // rebind to and the `byRequestId` fallback can never match anything.
+    const inFlight = session.request(tool, { ...payload, transactionId });
+    registry.jobs.update(transactionId, { requestId: session.requestIdFor(transactionId) ?? undefined });
+    result = (await inFlight) as TransactionResult;
   } catch (err) {
     const unknownOutcome =
       err instanceof TransactionTimeoutError ||

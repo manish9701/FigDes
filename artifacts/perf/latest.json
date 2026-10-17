@@ -1,0 +1,717 @@
+{
+  "generatedAt": "2026-10-17T06:27:32.339Z",
+  "repeat": 3,
+  "harness": "mock-figma (plugin cost only; API counts are real round-trip counts, timings are not Figma timings)",
+  "matrix": [
+    {
+      "label": "small",
+      "ops": 15
+    },
+    {
+      "label": "medium",
+      "ops": 40
+    },
+    {
+      "label": "baseline",
+      "ops": 62
+    },
+    {
+      "label": "large",
+      "ops": 100
+    },
+    {
+      "label": "stress",
+      "ops": 175
+    }
+  ],
+  "results": [
+    {
+      "summary": {
+        "label": "small",
+        "ops": 15,
+        "wallMedianMs": 23,
+        "wallWorstMs": 25,
+        "applyMedianMs": 19,
+        "applyWorstMs": 19,
+        "unexplainedApplyMedianMs": 13,
+        "yieldCountMedian": 1,
+        "yieldMsMedian": 13,
+        "apiPerOp": 1.8,
+        "lookups": 9,
+        "cacheHitRate": 1,
+        "nodesCreated": 15,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 15,
+          "wallMs": 25,
+          "stages": {
+            "parse": 3,
+            "apply": 19,
+            "verify": 1,
+            "reveal": 0,
+            "total": 23
+          },
+          "yields": {
+            "count": 1,
+            "ms": 13,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 15,
+            "sumMs": 6
+          },
+          "unexplainedApplyMs": 13,
+          "cache": {
+            "hits": 14,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 27,
+          "apiPerOp": 1.8,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 15,
+          "wallMs": 23,
+          "stages": {
+            "parse": 3,
+            "apply": 19,
+            "verify": 0,
+            "reveal": 0,
+            "total": 22
+          },
+          "yields": {
+            "count": 1,
+            "ms": 13,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 15,
+            "sumMs": 5
+          },
+          "unexplainedApplyMs": 14,
+          "cache": {
+            "hits": 14,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 27,
+          "apiPerOp": 1.8,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 15,
+          "wallMs": 3,
+          "stages": {
+            "parse": 1,
+            "apply": 2,
+            "verify": 0,
+            "reveal": 0,
+            "total": 3
+          },
+          "yields": {
+            "count": 1,
+            "ms": 1,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 15,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 1,
+          "cache": {
+            "hits": 14,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 27,
+          "apiPerOp": 1.8,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "medium",
+        "ops": 43,
+        "wallMedianMs": 6,
+        "wallWorstMs": 8,
+        "applyMedianMs": 3,
+        "applyWorstMs": 5,
+        "unexplainedApplyMedianMs": 2,
+        "yieldCountMedian": 1,
+        "yieldMsMedian": 2,
+        "apiPerOp": 1.28,
+        "lookups": 9,
+        "cacheHitRate": 1,
+        "nodesCreated": 43,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 43,
+          "wallMs": 5,
+          "stages": {
+            "parse": 2,
+            "apply": 3,
+            "verify": 0,
+            "reveal": 0,
+            "total": 5
+          },
+          "yields": {
+            "count": 1,
+            "ms": 2,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 43,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 2,
+          "cache": {
+            "hits": 42,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 6,
+            "createText": 20
+          },
+          "apiTotal": 55,
+          "apiPerOp": 1.28,
+          "nodesCreated": 43,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 43,
+          "wallMs": 6,
+          "stages": {
+            "parse": 3,
+            "apply": 3,
+            "verify": 0,
+            "reveal": 0,
+            "total": 6
+          },
+          "yields": {
+            "count": 1,
+            "ms": 1,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 43,
+            "sumMs": 2
+          },
+          "unexplainedApplyMs": 1,
+          "cache": {
+            "hits": 42,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 6,
+            "createText": 20
+          },
+          "apiTotal": 55,
+          "apiPerOp": 1.28,
+          "nodesCreated": 43,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 43,
+          "wallMs": 8,
+          "stages": {
+            "parse": 3,
+            "apply": 5,
+            "verify": 0,
+            "reveal": 0,
+            "total": 8
+          },
+          "yields": {
+            "count": 1,
+            "ms": 4,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 43,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 4,
+          "cache": {
+            "hits": 42,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 6,
+            "createText": 20
+          },
+          "apiTotal": 55,
+          "apiPerOp": 1.28,
+          "nodesCreated": 43,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "baseline",
+        "ops": 62,
+        "wallMedianMs": 5,
+        "wallWorstMs": 7,
+        "applyMedianMs": 3,
+        "applyWorstMs": 4,
+        "unexplainedApplyMedianMs": 3,
+        "yieldCountMedian": 1,
+        "yieldMsMedian": 2,
+        "apiPerOp": 1.19,
+        "lookups": 9,
+        "cacheHitRate": 1,
+        "nodesCreated": 62,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 62,
+          "wallMs": 5,
+          "stages": {
+            "parse": 2,
+            "apply": 3,
+            "verify": 0,
+            "reveal": 0,
+            "total": 5
+          },
+          "yields": {
+            "count": 1,
+            "ms": 2,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 62,
+            "sumMs": 0
+          },
+          "unexplainedApplyMs": 3,
+          "cache": {
+            "hits": 61,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 74,
+          "apiPerOp": 1.19,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 62,
+          "wallMs": 5,
+          "stages": {
+            "parse": 2,
+            "apply": 3,
+            "verify": 0,
+            "reveal": 0,
+            "total": 5
+          },
+          "yields": {
+            "count": 1,
+            "ms": 1,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 62,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 2,
+          "cache": {
+            "hits": 61,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 74,
+          "apiPerOp": 1.19,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 62,
+          "wallMs": 7,
+          "stages": {
+            "parse": 3,
+            "apply": 4,
+            "verify": 0,
+            "reveal": 0,
+            "total": 7
+          },
+          "yields": {
+            "count": 1,
+            "ms": 3,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 62,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 3,
+          "cache": {
+            "hits": 61,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 74,
+          "apiPerOp": 1.19,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "large",
+        "ops": 100,
+        "wallMedianMs": 22,
+        "wallWorstMs": 25,
+        "applyMedianMs": 17,
+        "applyWorstMs": 21,
+        "unexplainedApplyMedianMs": 15,
+        "yieldCountMedian": 1,
+        "yieldMsMedian": 14,
+        "apiPerOp": 1.12,
+        "lookups": 9,
+        "cacheHitRate": 1,
+        "nodesCreated": 100,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 100,
+          "wallMs": 22,
+          "stages": {
+            "parse": 4,
+            "apply": 17,
+            "verify": 0,
+            "reveal": 0,
+            "total": 21
+          },
+          "yields": {
+            "count": 1,
+            "ms": 14,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 100,
+            "sumMs": 2
+          },
+          "unexplainedApplyMs": 15,
+          "cache": {
+            "hits": 99,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 112,
+          "apiPerOp": 1.12,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 100,
+          "wallMs": 10,
+          "stages": {
+            "parse": 4,
+            "apply": 6,
+            "verify": 0,
+            "reveal": 0,
+            "total": 10
+          },
+          "yields": {
+            "count": 1,
+            "ms": 0,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 100,
+            "sumMs": 6
+          },
+          "unexplainedApplyMs": 0,
+          "cache": {
+            "hits": 99,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 112,
+          "apiPerOp": 1.12,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 100,
+          "wallMs": 25,
+          "stages": {
+            "parse": 3,
+            "apply": 21,
+            "verify": 0,
+            "reveal": 0,
+            "total": 24
+          },
+          "yields": {
+            "count": 1,
+            "ms": 20,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 100,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 20,
+          "cache": {
+            "hits": 99,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 112,
+          "apiPerOp": 1.12,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "stress",
+        "ops": 175,
+        "wallMedianMs": 23,
+        "wallWorstMs": 23,
+        "applyMedianMs": 18,
+        "applyWorstMs": 18,
+        "unexplainedApplyMedianMs": 11,
+        "yieldCountMedian": 1,
+        "yieldMsMedian": 10,
+        "apiPerOp": 1.07,
+        "lookups": 9,
+        "cacheHitRate": 1,
+        "nodesCreated": 175,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 175,
+          "wallMs": 23,
+          "stages": {
+            "parse": 5,
+            "apply": 18,
+            "verify": 0,
+            "reveal": 0,
+            "total": 23
+          },
+          "yields": {
+            "count": 1,
+            "ms": 10,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 175,
+            "sumMs": 7
+          },
+          "unexplainedApplyMs": 11,
+          "cache": {
+            "hits": 174,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 187,
+          "apiPerOp": 1.07,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 175,
+          "wallMs": 23,
+          "stages": {
+            "parse": 4,
+            "apply": 18,
+            "verify": 0,
+            "reveal": 1,
+            "total": 23
+          },
+          "yields": {
+            "count": 1,
+            "ms": 15,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 175,
+            "sumMs": 3
+          },
+          "unexplainedApplyMs": 15,
+          "cache": {
+            "hits": 174,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 187,
+          "apiPerOp": 1.07,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        },
+        {
+          "ops": 175,
+          "wallMs": 12,
+          "stages": {
+            "parse": 8,
+            "apply": 3,
+            "verify": 0,
+            "reveal": 0,
+            "total": 11
+          },
+          "yields": {
+            "count": 1,
+            "ms": 0,
+            "intervalMs": 16
+          },
+          "perOp": {
+            "count": 175,
+            "sumMs": 3
+          },
+          "unexplainedApplyMs": 0,
+          "cache": {
+            "hits": 174,
+            "misses": 0
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 9,
+            "loadFontAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 187,
+          "apiPerOp": 1.07,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 1
+        }
+      ]
+    }
+  ]
+}

@@ -189,6 +189,8 @@ export class Session {
    * ledger instead of being dropped as "unknown request".
    */
   private readonly timedOut = new Map<string, TimedOut>();
+  /** transactionId -> the wire request currently dispatching it. */
+  private readonly requestIdByTransaction = new Map<string, string>();
   private closed = false;
 
   constructor(readonly socket: WebSocket) {
@@ -279,6 +281,11 @@ export class Session {
     const budget = timeoutMs ?? timeoutForTool(tool);
     const requestId = `r_${randomUUID()}`;
     const transactionId = transactionIdOf(payload);
+    // Bound synchronously, before the caller's first await. A late plugin result
+    // is only rebindable if something recorded which wire request belonged to
+    // this transaction, and the ledger is written to immediately after
+    // `request()` returns — so this has to be readable by then.
+    if (transactionId) this.requestIdByTransaction.set(transactionId, requestId);
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
@@ -325,6 +332,18 @@ export class Session {
   /** True while a request is still awaiting its plugin answer. */
   hasPending(requestId: string): boolean {
     return this.pending.has(requestId);
+  }
+
+  /**
+   * The wire request id bound to a transaction, if one is in flight.
+   *
+   * The job ledger records this so a late plugin result can rebind to its
+   * transaction instead of being dropped as an unknown request. Without it the
+   * ledger's `byRequestId` lookup can never match anything, because nothing
+   * ever wrote the field.
+   */
+  requestIdFor(transactionId: string): string | undefined {
+    return this.requestIdByTransaction.get(transactionId);
   }
 
   /** Binding kept for a timed-out request, if any (late-result reconciliation). */
@@ -537,9 +556,16 @@ export class JobLedger {
   private readonly jobs = new Map<string, JobRecord>();
   /** Completed transaction results for idempotent retry (bounded). */
   private readonly results = new Map<string, unknown>();
+  /** Monotonic attempt counter per transactionId; guards stale late results. */
+  private readonly attempts = new Map<string, number>();
   private order: string[] = [];
 
   begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string }): JobRecord {
+    // A re-dispatch of the same id is a new attempt. Late results belonging to
+    // the previous one must not be able to overwrite this attempt's state, so
+    // the counter is monotonic across attempts rather than reset per record.
+    const attempt = (this.attempts.get(input.transactionId) ?? 0) + 1;
+    this.attempts.set(input.transactionId, attempt);
     const rec: JobRecord = {
       transactionId: input.transactionId,
       state: "queued",
@@ -549,6 +575,7 @@ export class JobLedger {
       fileName: input.session.fileName,
       operationCount: input.operationCount,
       done: 0,
+      attempt,
       updatedAt: Date.now(),
       ...(input.requestId ? { requestId: input.requestId } : {}),
     };
@@ -593,6 +620,37 @@ export class JobLedger {
 
   priorResult(transactionId: string): unknown | undefined {
     return this.results.get(transactionId);
+  }
+
+  /**
+   * Apply a late plugin result, unless it belongs to a superseded attempt.
+   *
+   * A timeout, a reconcile and a re-dispatch can all be in flight for the same
+   * transactionId. When the re-dispatch's answer has already landed, letting
+   * the older frame overwrite it would resurrect a stale outcome — reporting a
+   * transaction as `rolled-back` when this attempt in fact committed, which is
+   * the one mistake that loses work.
+   *
+   * So the caller states which attempt the frame arrived under, and a mismatch
+   * is recorded rather than applied.
+   */
+  completeLate(input: {
+    transactionId: string;
+    attempt?: number;
+    state: JobState;
+    extra?: Partial<JobRecord>;
+    result?: unknown;
+  }): { applied: boolean; record?: JobRecord; reason?: string } {
+    const rec = this.jobs.get(input.transactionId);
+    if (!rec) return { applied: false, reason: "no ledger record for this transaction" };
+    if (input.attempt !== undefined && rec.attempt !== undefined && input.attempt < rec.attempt) {
+      const stale = { ...rec, state: rec.state, label: `${rec.label ?? ""} (ignored stale result from attempt ${input.attempt}; current is ${rec.attempt})`.trim() };
+      rec.label = stale.label;
+      rec.updatedAt = Date.now();
+      return { applied: false, record: rec, reason: `stale: frame is from attempt ${input.attempt}, record is on attempt ${rec.attempt}` };
+    }
+    this.complete(input.transactionId, input.state, input.extra, input.result);
+    return { applied: true, record: this.jobs.get(input.transactionId) };
   }
 
   /**

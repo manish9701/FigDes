@@ -1,0 +1,672 @@
+{
+  "generatedAt": "2026-10-17T06:31:24.685Z",
+  "repeat": 3,
+  "harness": "mock-figma (plugin cost only; API counts are real round-trip counts, timings are not Figma timings)",
+  "matrix": [
+    {
+      "label": "small",
+      "ops": 15
+    },
+    {
+      "label": "medium",
+      "ops": 40
+    },
+    {
+      "label": "baseline",
+      "ops": 62
+    },
+    {
+      "label": "large",
+      "ops": 100
+    },
+    {
+      "label": "stress",
+      "ops": 175
+    }
+  ],
+  "results": [
+    {
+      "summary": {
+        "label": "small",
+        "ops": 15,
+        "wallMedianMs": 224,
+        "wallWorstMs": 257,
+        "applyMedianMs": 223,
+        "applyWorstMs": 251,
+        "unexplainedApplyMedianMs": 223,
+        "yieldCountMedian": 0,
+        "yieldMsMedian": 0,
+        "apiPerOp": 2.93,
+        "lookups": 24,
+        "cacheHitRate": 0.429,
+        "nodesCreated": 15,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 15,
+          "wallMs": 199,
+          "stages": {
+            "parse": 5,
+            "apply": 191,
+            "verify": 0,
+            "reveal": 0,
+            "total": 197
+          },
+          "yields": null,
+          "perOp": {
+            "count": 15,
+            "sumMs": 6
+          },
+          "unexplainedApplyMs": 185,
+          "cache": {
+            "hits": 6,
+            "misses": 8
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 24,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 44,
+          "apiPerOp": 2.93,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.429
+        },
+        {
+          "ops": 15,
+          "wallMs": 257,
+          "stages": {
+            "parse": 5,
+            "apply": 251,
+            "verify": 0,
+            "reveal": 1,
+            "total": 257
+          },
+          "yields": null,
+          "perOp": {
+            "count": 15,
+            "sumMs": 6
+          },
+          "unexplainedApplyMs": 245,
+          "cache": {
+            "hits": 6,
+            "misses": 8
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 24,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 44,
+          "apiPerOp": 2.93,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.429
+        },
+        {
+          "ops": 15,
+          "wallMs": 224,
+          "stages": {
+            "parse": 1,
+            "apply": 223,
+            "verify": 0,
+            "reveal": 0,
+            "total": 224
+          },
+          "yields": null,
+          "perOp": {
+            "count": 15,
+            "sumMs": 0
+          },
+          "unexplainedApplyMs": 223,
+          "cache": {
+            "hits": 6,
+            "misses": 8
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 24,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 9,
+            "createText": 6
+          },
+          "apiTotal": 44,
+          "apiPerOp": 2.93,
+          "nodesCreated": 15,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.429
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "medium",
+        "ops": 40,
+        "wallMedianMs": 583,
+        "wallWorstMs": 599,
+        "applyMedianMs": 580,
+        "applyWorstMs": 596,
+        "unexplainedApplyMedianMs": 576,
+        "yieldCountMedian": 0,
+        "yieldMsMedian": 0,
+        "apiPerOp": 2.35,
+        "lookups": 49,
+        "cacheHitRate": 0.59,
+        "nodesCreated": 40,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 40,
+          "wallMs": 599,
+          "stages": {
+            "parse": 2,
+            "apply": 596,
+            "verify": 0,
+            "reveal": 0,
+            "total": 598
+          },
+          "yields": null,
+          "perOp": {
+            "count": 40,
+            "sumMs": 5
+          },
+          "unexplainedApplyMs": 591,
+          "cache": {
+            "hits": 23,
+            "misses": 16
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 49,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 5,
+            "createText": 18
+          },
+          "apiTotal": 94,
+          "apiPerOp": 2.35,
+          "nodesCreated": 40,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.59
+        },
+        {
+          "ops": 40,
+          "wallMs": 583,
+          "stages": {
+            "parse": 2,
+            "apply": 580,
+            "verify": 0,
+            "reveal": 0,
+            "total": 582
+          },
+          "yields": null,
+          "perOp": {
+            "count": 40,
+            "sumMs": 4
+          },
+          "unexplainedApplyMs": 576,
+          "cache": {
+            "hits": 23,
+            "misses": 16
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 49,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 5,
+            "createText": 18
+          },
+          "apiTotal": 94,
+          "apiPerOp": 2.35,
+          "nodesCreated": 40,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.59
+        },
+        {
+          "ops": 40,
+          "wallMs": 551,
+          "stages": {
+            "parse": 2,
+            "apply": 549,
+            "verify": 0,
+            "reveal": 0,
+            "total": 551
+          },
+          "yields": null,
+          "perOp": {
+            "count": 40,
+            "sumMs": 1
+          },
+          "unexplainedApplyMs": 548,
+          "cache": {
+            "hits": 23,
+            "misses": 16
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 49,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 17,
+            "createRectangle": 5,
+            "createText": 18
+          },
+          "apiTotal": 94,
+          "apiPerOp": 2.35,
+          "nodesCreated": 40,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.59
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "baseline",
+        "ops": 62,
+        "wallMedianMs": 239,
+        "wallWorstMs": 240,
+        "applyMedianMs": 236,
+        "applyWorstMs": 236,
+        "unexplainedApplyMedianMs": 229,
+        "yieldCountMedian": 0,
+        "yieldMsMedian": 0,
+        "apiPerOp": 2.23,
+        "lookups": 71,
+        "cacheHitRate": 0.705,
+        "nodesCreated": 62,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 62,
+          "wallMs": 239,
+          "stages": {
+            "parse": 2,
+            "apply": 236,
+            "verify": 1,
+            "reveal": 0,
+            "total": 239
+          },
+          "yields": null,
+          "perOp": {
+            "count": 62,
+            "sumMs": 2
+          },
+          "unexplainedApplyMs": 234,
+          "cache": {
+            "hits": 43,
+            "misses": 18
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 71,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 138,
+          "apiPerOp": 2.23,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.705
+        },
+        {
+          "ops": 62,
+          "wallMs": 240,
+          "stages": {
+            "parse": 3,
+            "apply": 236,
+            "verify": 0,
+            "reveal": 1,
+            "total": 240
+          },
+          "yields": null,
+          "perOp": {
+            "count": 62,
+            "sumMs": 7
+          },
+          "unexplainedApplyMs": 229,
+          "cache": {
+            "hits": 43,
+            "misses": 18
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 71,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 138,
+          "apiPerOp": 2.23,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.705
+        },
+        {
+          "ops": 62,
+          "wallMs": 220,
+          "stages": {
+            "parse": 2,
+            "apply": 218,
+            "verify": 0,
+            "reveal": 0,
+            "total": 220
+          },
+          "yields": null,
+          "perOp": {
+            "count": 62,
+            "sumMs": 3
+          },
+          "unexplainedApplyMs": 215,
+          "cache": {
+            "hits": 43,
+            "misses": 18
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 71,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 18,
+            "createRectangle": 23,
+            "createText": 21
+          },
+          "apiTotal": 138,
+          "apiPerOp": 2.23,
+          "nodesCreated": 62,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.705
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "large",
+        "ops": 100,
+        "wallMedianMs": 376,
+        "wallWorstMs": 394,
+        "applyMedianMs": 372,
+        "applyWorstMs": 386,
+        "unexplainedApplyMedianMs": 368,
+        "yieldCountMedian": 0,
+        "yieldMsMedian": 0,
+        "apiPerOp": 2.14,
+        "lookups": 109,
+        "cacheHitRate": 0.778,
+        "nodesCreated": 100,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 100,
+          "wallMs": 366,
+          "stages": {
+            "parse": 4,
+            "apply": 361,
+            "verify": 1,
+            "reveal": 0,
+            "total": 366
+          },
+          "yields": null,
+          "perOp": {
+            "count": 100,
+            "sumMs": 5
+          },
+          "unexplainedApplyMs": 356,
+          "cache": {
+            "hits": 77,
+            "misses": 22
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 109,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 214,
+          "apiPerOp": 2.14,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.778
+        },
+        {
+          "ops": 100,
+          "wallMs": 394,
+          "stages": {
+            "parse": 8,
+            "apply": 386,
+            "verify": 0,
+            "reveal": 0,
+            "total": 394
+          },
+          "yields": null,
+          "perOp": {
+            "count": 100,
+            "sumMs": 3
+          },
+          "unexplainedApplyMs": 383,
+          "cache": {
+            "hits": 77,
+            "misses": 22
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 109,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 214,
+          "apiPerOp": 2.14,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.778
+        },
+        {
+          "ops": 100,
+          "wallMs": 376,
+          "stages": {
+            "parse": 3,
+            "apply": 372,
+            "verify": 1,
+            "reveal": 0,
+            "total": 376
+          },
+          "yields": null,
+          "perOp": {
+            "count": 100,
+            "sumMs": 4
+          },
+          "unexplainedApplyMs": 368,
+          "cache": {
+            "hits": 77,
+            "misses": 22
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 109,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 23,
+            "createRectangle": 50,
+            "createEllipse": 1,
+            "createText": 26
+          },
+          "apiTotal": 214,
+          "apiPerOp": 2.14,
+          "nodesCreated": 100,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.778
+        }
+      ]
+    },
+    {
+      "summary": {
+        "label": "stress",
+        "ops": 175,
+        "wallMedianMs": 677,
+        "wallWorstMs": 677,
+        "applyMedianMs": 664,
+        "applyWorstMs": 672,
+        "unexplainedApplyMedianMs": 655,
+        "yieldCountMedian": 0,
+        "yieldMsMedian": 0,
+        "apiPerOp": 2.08,
+        "lookups": 184,
+        "cacheHitRate": 0.73,
+        "nodesCreated": 175,
+        "unconfirmed": 0
+      },
+      "runs": [
+        {
+          "ops": 175,
+          "wallMs": 677,
+          "stages": {
+            "parse": 12,
+            "apply": 664,
+            "verify": 1,
+            "reveal": 0,
+            "total": 677
+          },
+          "yields": null,
+          "perOp": {
+            "count": 175,
+            "sumMs": 9
+          },
+          "unexplainedApplyMs": 655,
+          "cache": {
+            "hits": 127,
+            "misses": 47
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 184,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 364,
+          "apiPerOp": 2.08,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.73
+        },
+        {
+          "ops": 175,
+          "wallMs": 660,
+          "stages": {
+            "parse": 4,
+            "apply": 655,
+            "verify": 1,
+            "reveal": 0,
+            "total": 660
+          },
+          "yields": null,
+          "perOp": {
+            "count": 175,
+            "sumMs": 9
+          },
+          "unexplainedApplyMs": 646,
+          "cache": {
+            "hits": 127,
+            "misses": 47
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 184,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 364,
+          "apiPerOp": 2.08,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.73
+        },
+        {
+          "ops": 175,
+          "wallMs": 677,
+          "stages": {
+            "parse": 3,
+            "apply": 672,
+            "verify": 2,
+            "reveal": 0,
+            "total": 677
+          },
+          "yields": null,
+          "perOp": {
+            "count": 175,
+            "sumMs": 8
+          },
+          "unexplainedApplyMs": 664,
+          "cache": {
+            "hits": 127,
+            "misses": 47
+          },
+          "apiCalls": {
+            "getNodeByIdAsync": 184,
+            "loadFontAsync": 2,
+            "listAvailableFontsAsync": 1,
+            "commitUndo": 2,
+            "createFrame": 48,
+            "createRectangle": 75,
+            "createEllipse": 1,
+            "createText": 51
+          },
+          "apiTotal": 364,
+          "apiPerOp": 2.08,
+          "nodesCreated": 175,
+          "nodeDelta": 1,
+          "unconfirmed": 0,
+          "cacheHitRate": 0.73
+        }
+      ]
+    }
+  ]
+}

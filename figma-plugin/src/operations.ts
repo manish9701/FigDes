@@ -30,6 +30,15 @@ const MAX_CREATED_NODES = 500;
 const APPLIED_TRACE_CAP = 300;
 
 /**
+ * How often the apply loop hands control back so the canvas can repaint.
+ *
+ * ~60Hz. Repaints are perceptible at this rate, so a slower cadence would make
+ * the build look like it stutters rather than fill in smoothly — and a faster
+ * one only buys task switches nobody can see.
+ */
+const PAINT_INTERVAL_MS = 16;
+
+/**
  * Idempotency + cancellation for the semantic transaction path.
  *
  * The server dedupes by transactionId, but a server-side timeout used to mean
@@ -504,7 +513,15 @@ async function resolve(ctx: Ctx, ref: string, index: number, opType: string): Pr
   }
   ctx.cacheMisses += 1;
   ctx.nodeCache.set(id, node);
-  if (!node) throw new OperationError(`Node not found: ${ref}`, index, opType);
+  // A removed node is a missing node. The cached path above already treats it as
+  // one; without this the live path returned it, so whether a reference to a
+  // node that disappeared earlier in the same transaction resolved depended on
+  // whether the cache happened to hold it. That is failure-injection case 8
+  // ("parent disappears during execution") silently passing.
+  if (!node || (node as { removed?: boolean }).removed) {
+    ctx.nodeCache.delete(id);
+    throw new OperationError(`Node not found: ${ref}`, index, opType);
+  }
   return node;
 }
 
@@ -705,6 +722,11 @@ export async function runTransaction(input: {
   }
 
   const applyT0 = Date.now();
+  // Paint cadence accounting, declared out here so the reported timings can
+  // separate "time spent applying" from "time spent waiting to be allowed to
+  // paint" — the distinction that made this stage's real cost invisible.
+  let yieldCount = 0;
+  let yieldMs = 0;
   try {
     const ordered = [...pass1, ...pass2];
     const total = ordered.length;
@@ -712,6 +734,7 @@ export async function runTransaction(input: {
     // while it is still empty, so the user watches regions fill in rather
     // than staring at a blank area until the final reveal.
     let pinned = false;
+    let lastYieldAt = Date.now();
 
     for (let n = 0; n < ordered.length; n++) {
       // Cooperative cancellation: the server's timeout fires outside this
@@ -755,12 +778,30 @@ export async function runTransaction(input: {
       // Yield so the canvas repaints and the panel stays alive. Without this
       // the whole transaction runs synchronously and the user sees nothing
       // until the final commit — the "blank page, then everything pops at
-      // once" symptom. Yield every op for small builds; every 4th op for
-      // large ones (same repaint cadence, ~4x fewer task switches).
+      // once" symptom.
+      //
+      // The cadence is gated on ELAPSED TIME, not on the operation count, and
+      // that distinction is the whole point. A repaint is perceptible at ~60Hz;
+      // what the user sees is regions landing on a timer, not once per
+      // operation. Gating on op count made the cost scale with batch size
+      // instead of with elapsed time, and a task switch is not free: measured
+      // against the mock document, `setTimeout(0)` costs ~15ms per yield, so a
+      // 51-op build spent 772ms yielding and 15ms actually applying — 98% of
+      // the apply stage was waiting to be allowed to paint.
+      //
+      // Time-gating keeps the visible cadence identical (still ~60Hz) and
+      // collapses the task switches to one per paint interval, so the cost now
+      // tracks wall-clock rather than batch size. `yieldCount`/`yieldMs` are
+      // reported so a live run can verify this instead of taking it on trust.
+      //
       // Completed nodes stay on the canvas as they land: nothing here removes
       // or hides earlier work, so progress is cumulative, not flashing.
-      if (total <= 60 || n % 4 === 3 || done === total) {
+      if (done === total || Date.now() - lastYieldAt >= PAINT_INTERVAL_MS) {
+        const y0 = Date.now();
         await new Promise((resolve) => setTimeout(resolve, 0));
+        yieldCount += 1;
+        yieldMs += Date.now() - y0;
+        lastYieldAt = Date.now();
       }
     }
   } catch (err) {
@@ -844,6 +885,10 @@ export async function runTransaction(input: {
     cache: { hits: ctx.cacheHits, misses: ctx.cacheMisses },
     nodeCount: ctx.created.length + ctx.modified.size,
     operationCount: parsed.length,
+    // Paint cadence, separated out. A live run that reports a large apply time
+    // can now tell "the operations are slow" from "we are yielding too often",
+    // which are opposite fixes.
+    yields: { count: yieldCount, ms: yieldMs, intervalMs: PAINT_INTERVAL_MS },
   };
 
   // Operation budget from measured latency + node count. Warn (never split
@@ -1974,6 +2019,16 @@ function register(ctx: Ctx, tempId: string | undefined, node: SceneNode, index: 
     }
     ctx.ids.set(tempId, node.id);
   }
+  // Seed the handle cache with the node we just built. Every create path holds
+  // the live node in hand and then throws the reference away, so the verify
+  // pass afterwards re-fetched every created node by id — one round trip each,
+  // for a node already in memory. Measured on a 51-op screen: 60 lookups, of
+  // which 44 existed only to re-observe nodes we had just created.
+  //
+  // Seeding is safe for the same reason `invalidateCache` exists: a cached
+  // handle is dropped as soon as an operation mutates the node, so a stale
+  // entry cannot survive a write.
+  ctx.nodeCache.set(node.id, node);
   ctx.created.push({
     temporaryId: tempId,
     figmaNodeId: node.id,

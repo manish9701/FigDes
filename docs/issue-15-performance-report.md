@@ -1,6 +1,7 @@
 # Issue #15 — apply-path performance and transaction-state hardening
 
-Code under test: **`see git log for this commit`** (the commit that adds this file)
+Code under test: **`f8f9bfb`** (`Issue #15: the apply loop was spending 98% of its
+time waiting to paint`)
 Baseline it was compared against: **`ab35933`**
 
 ## Scope of this pass

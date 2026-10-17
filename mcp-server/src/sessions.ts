@@ -180,6 +180,8 @@ export class Session {
   pageName = "";
   selection: Array<{ id: string; type: string; name: string }> = [];
   pluginVersion = "unknown";
+  /** Commit the loaded plugin bundle was built from. Lets a live run prove which code it measured. */
+  build = "unknown";
   editorType = "figma";
 
   private readonly pending = new Map<string, Pending>();
@@ -261,6 +263,10 @@ export class Session {
     this.pageName = msg.pageName;
     this.selection = msg.selection ?? [];
     this.pluginVersion = msg.pluginVersion;
+    // The panel reports which commit it was built from. Recorded so a live
+    // measurement can be tied to code that exists, rather than to whatever
+    // bundle happened to be open.
+    if (typeof msg.build === "string" && msg.build.length > 0) this.build = msg.build;
     this.lastSeen = Date.now();
   }
 
@@ -269,6 +275,7 @@ export class Session {
     this.pageName = msg.pageName;
     this.selection = msg.selection ?? [];
     this.editorType = msg.editorType;
+    if (typeof msg.build === "string" && msg.build.length > 0) this.build = msg.build;
     this.lastSeen = msg.at ?? Date.now();
   }
 
@@ -529,6 +536,7 @@ export class Session {
       pageName: this.pageName,
       selectionCount: this.selection.length,
       pluginVersion: this.pluginVersion,
+      build: this.build,
       lastSeen: this.lastSeen,
       ...(this.stale ? { stale: true as const } : {}),
     };

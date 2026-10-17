@@ -259,6 +259,7 @@ export function createTransport(options: TransportOptions): Transport {
             // The plugin cannot tell a Figma editor from Figma Dev Mode, so the
             // editor type is a constant here rather than something invented.
             editorType: "figma",
+            ...(status.build ? { build: status.build } : {}),
             at: Date.now(),
           });
         })
@@ -417,8 +418,10 @@ export function createTransport(options: TransportOptions): Transport {
       pageName: status.pageName ?? "",
       selection: status.selection ?? [],
       pluginVersion: status.pluginVersion ?? "0.0.0",
-      // The register frame re-presents the secret as an independent check that
-      // whoever opened this socket also holds it.
+      // Which build this panel is running. Figma loads the bundle once, when the
+      // panel opens, so a rebuild does not reach an open session; without this
+      // the server cannot tell which code a live measurement actually exercised.
+      ...(status.build ? { build: status.build } : {}),
       ...(secret !== undefined ? { secret } : {}),
     });
   };

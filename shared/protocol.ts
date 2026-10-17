@@ -10,7 +10,20 @@
  */
 import { z } from "zod";
 
+/**
+ * The plugin's semantic version. Hand-maintained, so it says nothing about
+ * which build is loaded — see `StatusResult.build` for that.
+ */
 export const PLUGIN_VERSION = "0.1.0";
+
+/**
+ * The commit the bundle was built from, baked in by esbuild.
+ *
+ * Falls back to "dev" for a bundle built without the define (tests, ad-hoc
+ * esbuild calls), so the field is always present rather than sometimes absent.
+ */
+declare const __FIGDES_BUILD__: string | undefined;
+export const PLUGIN_BUILD: string = typeof __FIGDES_BUILD__ === "string" ? __FIGDES_BUILD__ : "dev";
 
 /* -------------------------------------------------------------------------- */
 /* Colors                                                                      */
@@ -1211,6 +1224,12 @@ export interface RegisterMessage {
   pageName: string;
   selection: Array<{ id: string; type: string; name: string }>;
   pluginVersion: string;
+  /**
+   * Commit the panel's bundle was built from, plus "-dirty" when the tree was
+   * uncommitted. Optional so a panel on an older bundle still registers — the
+   * server records "unknown" rather than refusing the session.
+   */
+  build?: string;
   /** Secret presented by the plugin UI. Never a Figma access token. */
   secret?: string;
 }
@@ -1227,6 +1246,8 @@ export interface StateMessage {
   pageName: string;
   selection: Array<{ id: string; type: string; name: string }>;
   editorType: string;
+  /** Mirrors `RegisterMessage.build`; the heartbeat confirms it is still current. */
+  build?: string;
   at: number;
 }
 
@@ -1426,6 +1447,17 @@ export interface StatusResult {
   selection?: Array<{ id: string; type: string; name: string }>;
   selectionCount?: number;
   pluginVersion?: string;
+  /**
+   * The commit the running plugin bundle was built from, plus "-dirty" when the
+   * tree was uncommitted at build time.
+   *
+   * Figma loads the bundle once, when the panel opens, so rebuilding does not
+   * update an open session. Without this there is no way to tell a fix that did
+   * not work from a fix that was never loaded, and any live timing quietly
+   * describes a build that is no longer in the repo. Check this before
+   * believing a live measurement.
+   */
+  build?: string;
   lastSeen?: number;
   /**
    * True when the socket is open but no app message arrived recently (busy

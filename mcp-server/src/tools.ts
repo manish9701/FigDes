@@ -692,6 +692,14 @@ export const TOOLS: ToolDefinition[] = [
           ...status,
           connected: true,
           sessionName: `${status.fileName} — ${status.pageName || "?"}`,
+          // Spelled out where it cannot be missed. Figma loads the plugin bundle
+          // once, when the panel opens, so a rebuild does not reach an open
+          // session: live measurements taken against an old panel describe code
+          // that is no longer in the repo. Check this before trusting a timing.
+          pluginBuildNote:
+            status.build && status.build !== "unknown"
+              ? `Plugin bundle build ${status.build}. If this does not match the repository HEAD, reload the plugin (close and reopen it) before measuring — Figma does not hot-reload the bundle.`
+              : "This panel did not report a build (older bundle, or built without the build stamp). Rebuild and reopen the plugin to get one; until then live timings cannot be tied to a commit.",
           clients: connections,
           activity: recent,
           metrics,

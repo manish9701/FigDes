@@ -1,5 +1,6 @@
 import * as esbuild from "esbuild";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,6 +20,37 @@ const outDir = resolve(here, "dist");
  */
 const publicUrl = (process.env.DESIGN_AGENT_PUBLIC_URL ?? "").trim().replace(/\/+$/, "");
 const bakedUrl = publicUrl || "http://localhost:8787";
+
+/**
+ * Which build is this, so a live session can prove it.
+ *
+ * `PLUGIN_VERSION` is a hand-maintained constant and has never changed, so it
+ * cannot tell you anything about the code that is actually running. That matters
+ * because Figma loads `dist/code.js` once, when the plugin panel opens: rebuild
+ * the bundle and the open panel keeps executing the old one, silently. Every
+ * live measurement then describes a build that no longer exists in the repo, and
+ * a fix that "did not work" is indistinguishable from a fix that was never
+ * loaded. Both issues ask for the tested commit SHA in the evidence, and the
+ * plugin had no way to supply it.
+ *
+ * So the SHA (plus a dirtiness marker) is baked in at build time and reported
+ * through `figma_status`. "uncommitted" matters too: a dirty tree means the
+ * bundle and the repo disagree about what was measured.
+ */
+function buildStamp() {
+  try {
+    const sha = execSync("git rev-parse --short=12 HEAD", { cwd: here, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    const dirty = execSync("git status --porcelain", { cwd: here, stdio: ["ignore", "pipe", "ignore"] })
+      .toString()
+      .trim();
+    return dirty ? `${sha}-dirty` : sha;
+  } catch {
+    return "unknown";
+  }
+}
+const bakedBuild = process.env.FIGDES_BUILD ?? buildStamp();
 
 mkdirSync(outDir, { recursive: true });
 
@@ -70,10 +102,11 @@ async function build() {
     define: {
       __html__: JSON.stringify(html),
       __DESIGN_AGENT_URL__: JSON.stringify(bakedUrl),
+      __FIGDES_BUILD__: JSON.stringify(bakedBuild),
     },
   });
 
-  console.log(publicUrl ? `built -> ${outDir} (endpoint: ${bakedUrl})` : `built -> ${outDir}`);
+  console.log(`${publicUrl ? `built -> ${outDir} (endpoint: ${bakedUrl})` : `built -> ${outDir}`} [build ${bakedBuild}]`);
 }
 
 if (process.argv.includes("--watch")) {
@@ -82,7 +115,11 @@ if (process.argv.includes("--watch")) {
       ...common,
       entryPoints: [resolve(here, "src/code.ts")],
       outfile: resolve(outDir, "code.js"),
-      define: { __html__: JSON.stringify(readFileSync(resolve(here, "ui/index.html"), "utf8")), __DESIGN_AGENT_URL__: JSON.stringify(bakedUrl) },
+      define: {
+        __html__: JSON.stringify(readFileSync(resolve(here, "ui/index.html"), "utf8")),
+        __DESIGN_AGENT_URL__: JSON.stringify(bakedUrl),
+        __FIGDES_BUILD__: JSON.stringify(bakedBuild),
+      },
     })
     .then((c) => c.watch());
   await esbuild.context({ ...common, entryPoints: [resolve(here, "ui/ui.ts")], outfile: resolve(outDir, "ui.js") }).then((c) => c.watch());

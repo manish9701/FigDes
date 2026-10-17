@@ -9,6 +9,7 @@
  */
 import {
   PLUGIN_VERSION,
+  PLUGIN_BUILD,
   PLUGIN_TOOL_NAMES,
   CreateComponentSetRequest,
   type DesignSystemReport,
@@ -256,6 +257,10 @@ async function status(): Promise<StatusResult> {
     selection: figma.currentPage.selection.map((n) => ({ id: n.id, type: n.type, name: n.name })),
     selectionCount: figma.currentPage.selection.length,
     pluginVersion: PLUGIN_VERSION,
+    // Which build is actually executing. An open panel keeps running the bundle
+    // it loaded, so this is the only way to know a live measurement describes
+    // the code that is in the repo.
+    build: PLUGIN_BUILD,
   };
 }
 

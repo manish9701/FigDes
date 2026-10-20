@@ -2,7 +2,7 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `fa9f9ee1-2026-10-20T09-13-57-615Z` on commit `fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4` (main), 2026-10-20T09:13:57.615Z → 2026-10-20T09:14:59.565Z, 62.0s.
+Run `d3494813-2026-10-20T09-15-35-383Z` on commit `d3494813823d832628b0ea9e6d0fcc1d94ec954d` (main), 2026-10-20T09:15:35.383Z → 2026-10-20T09:16:36.306Z, 60.9s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
@@ -11,10 +11,10 @@ Node v22.17.0 on win32-x64.
 | --- | --- | --- | --- | --- |
 | **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 22/22 case(s) passed, run twice with identical verdicts |
 | **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 50.0s | 898/898 test(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 49.3s | 898/898 test(s) passed |
 | **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.3s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.8s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.4s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
 ## Gauntlet cases (22/22 passed)
 
@@ -36,7 +36,7 @@ Node v22.17.0 on win32-x64.
 | **E02** | The reviewer tells a search field from a topology connector | #14 | **PASS** | the placeholder inside the search field and the two rules are untouched; the label on the connector is still serious and the icon button is still reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 6ms, worst 12ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 18ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |

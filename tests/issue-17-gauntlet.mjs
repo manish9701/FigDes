@@ -32,7 +32,7 @@ import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 import { normalizeBrief } from "../mcp-server/dist-test/pipeline/brief.js";
 import { buildCompositionPlan } from "../mcp-server/dist-test/pipeline/plan.js";
 import { buildProgram, applyMeasuredWidths } from "../mcp-server/dist-test/pipeline/program.js";
-import { verifyPlan } from "../mcp-server/dist-test/pipeline/verify.js";
+import { verifyPlan, verifyLive } from "../mcp-server/dist-test/pipeline/verify.js";
 import { planRepairs } from "../mcp-server/dist-test/pipeline/repair.js";
 import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { contrastRatio, requiredRatio } from "../mcp-server/dist-test/shared/contrast.js";
@@ -1162,6 +1162,86 @@ const H01 = {
   },
 };
 
+const G03 = {
+  id: "G03",
+  title: "Concurrent mutations against the same session do not lose or duplicate a node",
+  group: "runtime",
+  requirement:
+    "Two transactions dispatched at the same time both land, neither removes the other's nodes, and the document holds exactly the nodes the two transactions created.",
+  issue: "#15",
+  run: async () => {
+    const { figma, doc } = loadPlugin(makeDocument());
+    const before = doc.page.children.length;
+    const opsFor = (id) => [
+      { type: "createFrame", id: `${id}-a`, name: `${id} A`, x: 0, y: 0, width: 100, height: 40 },
+      { type: "createFrame", id: `${id}-b`, parent: `${id}-a`, name: `${id} B`, x: 0, y: 0, width: 80, height: 30 },
+    ];
+    // Both requests are in flight at once: the first is not awaited before the
+    // second is sent, which is what concurrency means here.
+    const first = ask(figma, "create_design", { operations: opsFor("one"), transactionId: "txn_conc_1" }, { timeoutMs: 10000 });
+    const second = ask(figma, "create_design", { operations: opsFor("two"), transactionId: "txn_conc_2" }, { timeoutMs: 10000 });
+    const [a, b] = await Promise.all([first, second]);
+
+    const unmet = [];
+    const measured = [];
+    for (const [name, reply] of [["one", a], ["two", b]]) {
+      const data = reply.data ?? {};
+      measured.push({ transaction: name, status: data.status, created: (data.createdNodes ?? []).length });
+      if (data.status !== "success") unmet.push(`the '${name}' transaction failed: ${data.error?.message ?? "unknown"}`);
+    }
+    // The document must hold both transactions' nodes and nothing else: one
+    // top-level frame per transaction, each with its child.
+    const frames = doc.page.children.filter((n) => n.name === "one A" || n.name === "two A");
+    if (frames.length !== 2) unmet.push(`the document holds ${frames.length} of the 2 concurrent frames`);
+    for (const frame_ of frames) {
+      if ((frame_.children ?? []).length !== 1) unmet.push(`'${frame_.name}' holds ${(frame_.children ?? []).length} child(ren), expected 1`);
+    }
+    if (doc.page.children.length !== before + 2) unmet.push(`the document holds ${doc.page.children.length - before} top-level node(s), expected 2`);
+
+    return unmet.length === 0
+      ? ok(`two concurrent transactions both landed; the document holds ${frames.length} frames and no duplicates`)
+      : fail(unmet.join("; "), { measured });
+  },
+};
+
+const H02 = {
+  id: "H02",
+  title: "A render that fails after a successful commit is blocked, not verified",
+  group: "false-pass",
+  requirement:
+    "A commit that succeeded with no render behind it is reported as an unverified visual check. The structural result and the visual result are separate, and neither borrows the other's verdict.",
+  issue: "#14",
+  run: () => {
+    const { brief } = normalizeBrief(REFERENCE_BRIEF);
+    const plan = buildCompositionPlan(brief);
+    const built = buildProgram(brief, plan);
+    const first = compile(built.program);
+    const refined = applyMeasuredWidths(built.program, first.boxes);
+    const compiled = compile(refined.program);
+
+    // The build succeeded: the program is applicable and the compiler found
+    // nothing wrong with it.
+    if (!compiled.applicable) return fail(`the reference screen does not resolve, so the scenario cannot be staged: ${compiled.inapplicableReasons.join(" | ")}`);
+
+    // The live verification, with no render behind it.
+    const live = verifyLive(plan, {
+      createdNodes: [{ temporaryId: "root", figmaNodeId: "1:1" }],
+      metrics: null,
+      render: null,
+      currentRevision: null,
+    });
+    const unmet = [];
+    if (live.status === "pass") unmet.push("a build with no render was reported as a pass");
+    if (!live.findings.some((f) => f.id === "render-missing")) unmet.push("the missing render was not reported");
+    const renderCheck = live.checks.find((c) => c.id === "render-freshness");
+    if (renderCheck && renderCheck.status === "pass") unmet.push("the render check passed without a render");
+
+    return unmet.length === 0
+      ? ok(`a successful commit with no render is '${live.status}', not a pass`)
+      : fail(unmet.join("; "), { checks: live.checks, findings: live.findings.map((f) => f.id) });
+  },
+};
+
 /* -------------------------------------------------------------------------- */
 /* I — reproducibility                                                          */
 /* -------------------------------------------------------------------------- */
@@ -1203,7 +1283,7 @@ const I01 = {
 /* The gauntlet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const CASES = [A01, A02, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, F01, F02, G01, G02, H01, I01];
+export const CASES = [A01, A02, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, F01, F02, G01, G02, G03, H01, H02, I01];
 
 /**
  * Runs the gauntlet.
@@ -1242,15 +1322,46 @@ export function summariseGauntlet(results) {
 export const COVERAGE = [
   { criterion: "#14 geometry, constraint, ID/token and empty-scope regressions stay green", tests: ["B01", "B02", "B03", "B04", "B05", "B06", "H01", "suite:issue14"] },
   { criterion: "#16 generation fixtures G01-G14 are included or mapped", tests: ["A01", "A02", "I01", "suite:issue16"] },
-  { criterion: "#15 transaction safety and failure injection are included or mapped", tests: ["G01", "G02", "suite:issue15"] },
+  { criterion: "#15 transaction safety and failure injection are included or mapped", tests: ["G01", "G02", "G03", "suite:issue15"] },
   { criterion: "Topology edges attach to correct semantic nodes after reflow", tests: ["B03", "C01"] },
   { criterion: "No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text", tests: ["B04", "D01", "D02", "E01"] },
   { criterion: "Contrast is measured against the true rendered surface; thresholds unchanged", tests: ["D01", "D02"] },
   { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01"] },
-  { criterion: "Every repair is verified by a second structural check and render/review", tests: ["F01", "F02"] },
-  { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "B06"] },
+  { criterion: "Every repair is verified by a second structural check and render/review", tests: ["F01", "F02", "H02"] },
+  { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "H02", "B06"] },
   { criterion: "Performance is measured without bypassing correctness checks", tests: ["G01", "suite:issue15"] },
-  { criterion: "Retrying or rolling back leaves no duplicate or orphan nodes", tests: ["G02", "suite:issue15"] },
+  { criterion: "Retrying or rolling back leaves no duplicate or orphan nodes", tests: ["G02", "G03", "suite:issue15"] },
   { criterion: "The evidence bundle is complete and tied to an exact commit SHA", tests: ["gate:summary"] },
   { criterion: "The test is repeatable on two consecutive runs", tests: ["I01", "gate:repeat"] },
+];
+
+/**
+ * The failure-injection scenarios, one row each.
+ *
+ * The issue lists ten scenarios by name and asks for each to be "included or
+ * explicitly mapped to an equivalent test". A row here is that mapping, and
+ * the test suite asserts that no row is empty: a scenario nobody claims is a
+ * scenario nobody is running.
+ */
+export const SCENARIO_MAP = [
+  { scenario: "A validation failure before any mutation", tests: ["G02", "suite:issue15#FI01"] },
+  { scenario: "A mid-batch creation failure", tests: ["G02", "suite:issue15#FI02"] },
+  { scenario: "A timeout while the apply is still running, with a late completion", tests: ["suite:issue14#T01", "suite:issue14#T02", "suite:issue15#cancel"] },
+  { scenario: "A retry while the original status is unknown", tests: ["suite:issue14#T02", "suite:issue15#FI04"] },
+  { scenario: "A partial rollback failure", tests: ["suite:issue15#FI06", "suite:issue14#P06"] },
+  { scenario: "A parent that disappears during execution", tests: ["suite:issue15#FI03"] },
+  { scenario: "A delayed or failed font load", tests: ["suite:issue15#FI05"] },
+  { scenario: "A render or review failure after a successful commit", tests: ["H02", "suite:issue14#review-failures"] },
+  { scenario: "A duplicate transaction submission", tests: ["G02", "suite:issue15#FI04"] },
+  { scenario: "Concurrent mutations against the same target", tests: ["G03"] },
+  { scenario: "An empty target snapshot despite a non-empty requested frame", tests: ["H01", "B06"] },
+  { scenario: "A stale or unresolved node id", tests: ["B06", "suite:issue13#L02"] },
+  { scenario: "A disconnected inspection or runtime", tests: ["suite:issue14#T01"] },
+  { scenario: "A missing render output", tests: ["H02"] },
+  { scenario: "A review failure", tests: ["H01", "suite:issue14#review-failures"] },
+  { scenario: "A mismatch between the reported and the native geometry", tests: ["B02", "B03", "suite:issue14#L06"] },
+  { scenario: "Missing expected components", tests: ["B06", "suite:issue13#L02"] },
+  { scenario: "Operation success with a visually broken result", tests: ["H02", "A01"] },
+  { scenario: "An unresolved mandatory constraint", tests: ["B06"] },
+  { scenario: "A skipped test or an absent artifact", tests: ["gate:summary"] },
 ];

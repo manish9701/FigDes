@@ -1,0 +1,10 @@
+{
+  "id": "G03",
+  "title": "Concurrent mutations against the same session do not lose or duplicate a node",
+  "group": "runtime",
+  "requirement": "Two transactions dispatched at the same time both land, neither removes the other's nodes, and the document holds exactly the nodes the two transactions created.",
+  "issue": "#15",
+  "status": "PASS",
+  "detail": "two concurrent transactions both landed; the document holds 2 frames and no duplicates",
+  "raw": {}
+}

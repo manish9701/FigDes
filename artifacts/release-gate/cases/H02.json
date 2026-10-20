@@ -1,0 +1,10 @@
+{
+  "id": "H02",
+  "title": "A render that fails after a successful commit is blocked, not verified",
+  "group": "false-pass",
+  "requirement": "A commit that succeeded with no render behind it is reported as an unverified visual check. The structural result and the visual result are separate, and neither borrows the other's verdict.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "a successful commit with no render is 'indeterminate', not a pass",
+  "raw": {}
+}

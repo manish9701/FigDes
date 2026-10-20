@@ -19,7 +19,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { runGauntlet, summariseGauntlet, CASES, COVERAGE } from "./issue-17-gauntlet.mjs";
+import { runGauntlet, summariseGauntlet, CASES, COVERAGE, SCENARIO_MAP } from "./issue-17-gauntlet.mjs";
 
 /* -------------------------------------------------------------------------- */
 /* The gauntlet                                                                 */
@@ -126,4 +126,46 @@ test("every gauntlet case is claimed by at least one criterion", () => {
   const claimed = new Set(COVERAGE.flatMap((row) => row.tests));
   const unclaimed = CASES.map((c) => c.id).filter((id) => !claimed.has(id));
   assert.deepEqual(unclaimed, [], "these cases are not claimed by any acceptance criterion");
+});
+
+/* -------------------------------------------------------------------------- */
+/* The scenario map                                                             */
+/* -------------------------------------------------------------------------- */
+
+test("every failure-injection scenario is claimed by a test", () => {
+  const known = new Set(CASES.map((c) => c.id));
+  for (const row of SCENARIO_MAP) {
+    assert.ok(row.scenario.length > 10, `a scenario row has no readable name: ${row.scenario}`);
+    assert.ok(row.tests.length > 0, `the scenario '${row.scenario}' names no test`);
+    for (const t of row.tests) {
+      // `suite:*` names a regression suite and its case, `gate:*` names the
+      // runner's own output. Everything else has to be a real gauntlet case.
+      if (t.startsWith("suite:") || t.startsWith("gate:")) continue;
+      assert.ok(known.has(t), `the scenario '${row.scenario}' claims the test '${t}', which does not exist`);
+    }
+  }
+});
+
+test("the scenario map covers the issue's ten failure injections", () => {
+  // The issue names them; each has to appear in the map, so a scenario that
+  // is quietly dropped shows up as a missing row rather than as silence.
+  const required = [
+    "validation failure before any mutation",
+    "mid-batch creation failure",
+    "timeout while the apply is still running",
+    "retry while the original status is unknown",
+    "partial rollback failure",
+    "parent that disappears during execution",
+    "delayed or failed font load",
+    "render or review failure after a successful commit",
+    "duplicate transaction submission",
+    "Concurrent mutations against the same target",
+  ];
+  const scenarios = SCENARIO_MAP.map((r) => r.scenario.toLowerCase());
+  for (const want of required) {
+    assert.ok(
+      scenarios.some((s) => s.includes(want.toLowerCase())),
+      `the scenario map does not cover '${want}'`,
+    );
+  }
 });

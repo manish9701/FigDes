@@ -44,7 +44,7 @@ import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { runGauntlet, summariseGauntlet, COVERAGE } from "../tests/issue-17-gauntlet.mjs";
+import { runGauntlet, summariseGauntlet, COVERAGE, SCENARIO_MAP } from "../tests/issue-17-gauntlet.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = resolve(root, "artifacts/release-gate");
@@ -318,6 +318,7 @@ const summary = {
   },
   groups: allGroups,
   coverage: COVERAGE,
+  scenarios: SCENARIO_MAP,
   missingArtifacts,
   failures: [
     ...first.filter((c) => c.status !== "PASS").map((c) => ({ id: c.id, title: c.title, issue: c.issue, status: c.status, detail: c.detail })),
@@ -362,6 +363,14 @@ function markdown(s) {
     "| Acceptance criterion | Exercised by |",
     "| --- | --- |",
     ...s.coverage.map((c) => `| ${cell(c.criterion)} | ${c.tests.map((t) => `\`${t}\``).join(", ")} |`),
+    "",
+    "## Failure-injection scenarios",
+    "",
+    "Each scenario the issue names, and the test that covers it. A scenario nobody claims is a scenario nobody is running.",
+    "",
+    "| Scenario | Exercised by |",
+    "| --- | --- |",
+    ...s.scenarios.map((c) => `| ${cell(c.scenario)} | ${c.tests.map((t) => `\`${t}\``).join(", ")} |`),
     "",
   ];
   if (s.failures.length > 0) {

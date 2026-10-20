@@ -2,21 +2,21 @@
 
 **Verdict: INDETERMINATE** — 1 group(s) could not run: live
 
-Run `6a4ee738-2026-10-20T04-31-24-224Z` on commit `6a4ee738bf76695ed829296589583d98759c8d0a` (main), 2026-10-20T04:31:24.224Z → 2026-10-20T04:33:27.437Z, 123.2s.
+Run `4b480995-2026-10-20T04-39-34-731Z` on commit `4b4809951a80c24130b81665e997635fc39e18ad` (main), 2026-10-20T04:39:34.731Z → 2026-10-20T04:40:45.674Z, 70.9s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 18/18 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 1.3s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 1.2s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 75.1s | 879/879 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 41.4s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 3.3s | the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test) |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 20/20 case(s) passed, run twice with identical verdicts |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.6s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 55.7s | 881/881 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 12.5s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 0.7s | the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test) |
 
-## Gauntlet cases (18/18 passed)
+## Gauntlet cases (20/20 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
@@ -34,9 +34,11 @@ Node v22.17.0 on win32-x64.
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 15ms, worst 17ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 20ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
+| **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
+| **H02** | A render that fails after a successful commit is blocked, not verified | #14 | **PASS** | a successful commit with no render is 'indeterminate', not a pass |
 | **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 38 operation(s) and 4 region(s) identical across two runs |
 
 ## Coverage map
@@ -47,17 +49,44 @@ The gate is only as good as this map: a criterion with no test is a criterion no
 | --- | --- |
 | #14 geometry, constraint, ID/token and empty-scope regressions stay green | `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `H01`, `suite:issue14` |
 | #16 generation fixtures G01-G14 are included or mapped | `A01`, `A02`, `I01`, `suite:issue16` |
-| #15 transaction safety and failure injection are included or mapped | `G01`, `G02`, `suite:issue15` |
+| #15 transaction safety and failure injection are included or mapped | `G01`, `G02`, `G03`, `suite:issue15` |
 | Topology edges attach to correct semantic nodes after reflow | `B03`, `C01` |
 | No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text | `B04`, `D01`, `D02`, `E01` |
 | Contrast is measured against the true rendered surface; thresholds unchanged | `D01`, `D02` |
 | Semantic false-positive and false-negative counts are reported against seeded expectations | `D02`, `E01` |
-| Every repair is verified by a second structural check and render/review | `F01`, `F02` |
-| No empty, stale, skipped or failed inspection can return PASS | `H01`, `B06` |
+| Every repair is verified by a second structural check and render/review | `F01`, `F02`, `H02` |
+| No empty, stale, skipped or failed inspection can return PASS | `H01`, `H02`, `B06` |
 | Performance is measured without bypassing correctness checks | `G01`, `suite:issue15` |
-| Retrying or rolling back leaves no duplicate or orphan nodes | `G02`, `suite:issue15` |
+| Retrying or rolling back leaves no duplicate or orphan nodes | `G02`, `G03`, `suite:issue15` |
 | The evidence bundle is complete and tied to an exact commit SHA | `gate:summary` |
 | The test is repeatable on two consecutive runs | `I01`, `gate:repeat` |
+
+## Failure-injection scenarios
+
+Each scenario the issue names, and the test that covers it. A scenario nobody claims is a scenario nobody is running.
+
+| Scenario | Exercised by |
+| --- | --- |
+| A validation failure before any mutation | `G02`, `suite:issue15#FI01` |
+| A mid-batch creation failure | `G02`, `suite:issue15#FI02` |
+| A timeout while the apply is still running, with a late completion | `suite:issue14#T01`, `suite:issue14#T02`, `suite:issue15#cancel` |
+| A retry while the original status is unknown | `suite:issue14#T02`, `suite:issue15#FI04` |
+| A partial rollback failure | `suite:issue15#FI06`, `suite:issue14#P06` |
+| A parent that disappears during execution | `suite:issue15#FI03` |
+| A delayed or failed font load | `suite:issue15#FI05` |
+| A render or review failure after a successful commit | `H02`, `suite:issue14#review-failures` |
+| A duplicate transaction submission | `G02`, `suite:issue15#FI04` |
+| Concurrent mutations against the same target | `G03` |
+| An empty target snapshot despite a non-empty requested frame | `H01`, `B06` |
+| A stale or unresolved node id | `B06`, `suite:issue13#L02` |
+| A disconnected inspection or runtime | `suite:issue14#T01` |
+| A missing render output | `H02` |
+| A review failure | `H01`, `suite:issue14#review-failures` |
+| A mismatch between the reported and the native geometry | `B02`, `B03`, `suite:issue14#L06` |
+| Missing expected components | `B06`, `suite:issue13#L02` |
+| Operation success with a visually broken result | `H02`, `A01` |
+| An unresolved mandatory constraint | `B06` |
+| A skipped test or an absent artifact | `gate:summary` |
 
 ## How to reproduce
 

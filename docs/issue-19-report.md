@@ -68,8 +68,7 @@ migrating them to instances with per-model text overrides is open work
 Acceptance mapping: normal-text contrast ✓ (measured, §4); status without
 colour ✓ (glyph + word); `≥44 px` target ✓ (`172×44`); reusable row
 structure ✓ (component + instance + consistent groups); semantic text
-styles — **partial** (mapping + operation ready, binding pending
-redeploy, §5–§6).
+styles ✓ (all 23 bound, audit PASS — §6).
 
 ## 4. Contrast evidence (measured, not claimed)
 
@@ -120,23 +119,28 @@ asserts `0.2.0`). Rebuild (`npm run build`, `npm run build:test`) and
 a version bump** — the version is the only thing that distinguishes two
 bundles built from the same commit.
 
-1. **Bind the 23 nodes — BLOCKED on the deployed server build.** `EXO/Brand`
-   (Inter 700/25, for the wordmark) was created live (`txn_9ca510f1`), but
-   the first `setTextStyle` batch was refused at MCP validation: the
-   running server reports build **`b051f18bdd30` (clean)** while the
-   re-uploaded plugin reports **`b051f18bdd30-dirty` + 0.2.0**. The server
-   was therefore redeployed from clean HEAD, which predates `setTextStyle`
-   (`OperationItem.type` is `z.enum(OPERATION_TYPES)`, derived from the
-   schema — old server, old allowlist). The plugin already carries the new
-   handler. Fix: redeploy the server from this working tree (it must report
-   a `-dirty` build containing the change, or commit first so both sides
-   build from the same SHA), keep the re-uploaded plugin, then run the
-   batch below and re-run audit + a high-detail render (several bindings
-   change size by 1–6 px). Recommended semantic mapping against the
-   existing `EXO/*` styles (all Inter unless noted):
+1. **Bind the 23 nodes — DONE live.** `EXO/Brand` (Inter 700/25, for the
+   wordmark) was created (`txn_9ca510f1`); all 23 bindings applied in
+   `txn_b58e91e2` per the mapping below (instance children follow the
+   master `358:1568–1570`, so only master + grouped texts were targeted).
+   One follow-up: binding `1554` to Mono `EXO/Eyebrow` tripped
+   `tiny-technical-text` (uppercase kicker read as operational, floor 11 px),
+   so it was rebound to `EXO/Caption` (Mono 11) in `txn_f1b925c3`.
+   Final re-run on the same frame: **`review_design` PASS (0 findings),
+   `audit_design` PASS (0 findings)**, `design_guard` 0 failures, and a
+   fresh low-detail render confirms the layout holds after the size changes.
+   Two process notes: (a) the interactive session's cached tool catalog
+   predates `setTextStyle`, so the batch went through a direct MCP call —
+   restart the agent session to refresh the catalog; (b) both sides now run
+   the fix: server `69fb17a8005c`, plugin `0.2.0`.
+   Recommended semantic mapping against the existing `EXO/*` styles (all Inter unless noted):
    - `1553` wordmark (25 Bold) → **new `EXO/Brand`** (25 Bold) — a logotype
      must not be squeezed into `EXO/Title`; creating the style first keeps
-     the audit honest.
+     the audit honest. Applied, no visual change.
+   - `1554` Workspace → `EXO/Caption` (Mono 11 Regular). First bound to
+     `EXO/Eyebrow` (Mono 10) per the kicker convention, but the
+     all-uppercase content classifies as operational (floor 11 px), so it
+     moved to Caption — same Mono voice, one px larger.
    - `1554` Workspace → `EXO/Eyebrow` (Mono 10); `1555` breadcrumb →
      `EXO/Caption` (Mono 11); `1561` section label → `EXO/Caption`
      (sidebar kickers/breadcrumbs are Mono across the EXO screens).
@@ -155,5 +159,5 @@ bundles built from the same commit.
    `EXO/Wordmark` (Inter Regular 12 and Inter Semi Bold 15) — name
    binding is ambiguous until one is renamed.
 3. **Rows 2–4 → instances** once instance text overrides are supported.
-4. This report, not a dry run, is the completion evidence for the
-   repaired criteria; the audit criterion stays open until (1) lands.
+4. This report, not a dry run, is the completion evidence for every
+   criterion; all six acceptance items verify live on frame `358:1551`.

@@ -62,6 +62,10 @@ const stressCase = (overrides = {}) => ({
   canvasWidth: 1600,
   canvasHeight: 1100,
   nativeFrameId: "279:1088",
+  // Which builds measured the case. The server is deployed and Figma loads the
+  // plugin bundle once, so a live measurement has to be able to name both.
+  serverBuild: "abc123def456",
+  pluginBuild: "abc123def456",
   mutations: [
     { revision: "rev-before", summary: "initial build" },
     { revision: "rev-after", summary: "issue #10 fixes" },
@@ -106,8 +110,21 @@ test("live validator: a full evidence set, including a fresh stress render, pass
   assert.equal(report.liveBenchmarkComplete, true, JSON.stringify(report.missingCases));
 });
 
-test("live validator: a render from before the final mutation does not pass", async () => {
-  // The screenshot exists and every key is populated — it is simply from the
+test("live validator: a stress case that cannot name its builds does not pass", async () => {
+  // The server is deployed and Figma loads the plugin bundle once, so either
+  // can be older than the repository. A case that cannot say which builds
+  // measured it describes code that may no longer exist.
+  const anonymous = stressCase({ serverBuild: undefined, pluginBuild: undefined });
+  const { report } = await validate({ ...allComplete(), "case-hard-stress-test.json": anonymous });
+  const entry = caseEntry(report, "hard-stress-test");
+  assert.equal(entry.status, "INCOMPLETE");
+  assert.ok(
+    entry.missing.includes("serverBuild") || entry.missing.includes("pluginBuild"),
+    `expected the missing builds to be reported, got ${JSON.stringify(entry.missing)}`,
+  );
+});
+
+test("live validator: a render from before the final mutation does not pass", async () => {  // The screenshot exists and every key is populated — it is simply from the
   // wrong revision. A presence-only check would wave this through.
   const stale = stressCase({
     postMutationRender: { revision: "rev-before", screenshotReference: "shots/stress.png" },

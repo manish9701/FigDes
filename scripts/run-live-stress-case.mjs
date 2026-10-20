@@ -175,6 +175,16 @@ const rec = {
   fixtures: [{ key: "all-text", value: "[fixture]", fixture: true }],
   canvasWidth: CANVAS.width,
   canvasHeight: CANVAS.height,
+  /**
+   * Which builds actually produced this evidence.
+   *
+   * The server is deployed and Figma loads the plugin bundle once, so either
+   * can be older than the repository. A live measurement that cannot name them
+   * describes code that may no longer exist — so they are recorded, and a
+   * missing one is recorded as missing.
+   */
+  serverBuild: status.serverBuild ?? "unknown",
+  pluginBuild: status.build ?? "unknown",
 };
 
 /* --- 1. build, verify, repair, verify ------------------------------------ */

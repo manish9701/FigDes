@@ -25,6 +25,22 @@ export const PLUGIN_VERSION = "0.1.0";
 declare const __FIGDES_BUILD__: string | undefined;
 export const PLUGIN_BUILD: string = typeof __FIGDES_BUILD__ === "string" ? __FIGDES_BUILD__ : "dev";
 
+/**
+ * The commit the *server* bundle was built from, baked in by esbuild.
+ *
+ * The plugin's stamp says which plugin code is loaded. This says which server
+ * code is answering, and the two are different: a live measurement runs
+ * against a server and a plugin, and either can be older than the repository.
+ * A live evidence bundle that cannot name the build it measured describes
+ * code that may no longer exist, and a fix that "did not work" becomes
+ * indistinguishable from a fix that was never deployed.
+ *
+ * Falls back to "dev" for a bundle built without the define.
+ */
+declare const __FIGDES_SERVER_BUILD__: string | undefined;
+
+export const SERVER_BUILD: string = typeof __FIGDES_SERVER_BUILD__ === "string" ? __FIGDES_SERVER_BUILD__ : "dev";
+
 /* -------------------------------------------------------------------------- */
 /* Colors                                                                      */
 /* -------------------------------------------------------------------------- */

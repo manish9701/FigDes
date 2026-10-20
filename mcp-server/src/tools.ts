@@ -13,6 +13,7 @@
 import { z } from "zod";
 import {
   OPERATION_TYPES,
+  SERVER_BUILD,
   type MetricsReport,
   type ReviewReport,
   type ToolName,
@@ -572,7 +573,24 @@ export const TOOLS: ToolDefinition[] = [
         return {
           ...status,
           connected: true,
-          sessionName: `${status.fileName} — ${status.pageName || "?"}`,
+          sessionName: `${status.fileName} - ${status.pageName || "?"}`,
+          /**
+           * Which build is answering, and which build the plugin is running.
+           *
+           * A live measurement runs against two builds, and either can be
+           * older than the repository: the server is deployed, and Figma loads
+           * the plugin bundle once. A measurement that cannot name them
+           * describes code that may no longer exist.
+           */
+          serverBuild: SERVER_BUILD,
+          builds: {
+            server: SERVER_BUILD,
+            plugin: status.build ?? "unknown",
+            note:
+              status.build && status.build !== "unknown"
+                ? `Server build ${SERVER_BUILD}, plugin bundle build ${status.build}. If either does not match the repository HEAD, redeploy the server and reload the plugin (close and reopen it) before measuring.`
+                : `Server build ${SERVER_BUILD}. This panel did not report a build, so the plugin side cannot be tied to a commit: rebuild the plugin and reopen it.`,
+          },
           // Spelled out where it cannot be missed. Figma loads the plugin bundle
           // once, when the panel opens, so a rebuild does not reach an open
           // session: live measurements taken against an old panel describe code

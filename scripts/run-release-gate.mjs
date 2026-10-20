@@ -221,21 +221,30 @@ if (!skipLive) {
           .filter((s) => s.length > 0);
         const found = Number(output.match(/"foundCases":\s*(\d+)/)?.[1] ?? 0);
         const expected = Number(output.match(/"expectedCases":\s*(\d+)/)?.[1] ?? 0);
+        const stale = [...output.matchAll(/"staleCases":\s*\[([^\]]*)\]/g)]
+          .flatMap((m) => m[1].split(","))
+          .map((s) => s.replace(/["\s]/g, ""))
+          .filter((s) => s.length > 0);
+        const drift = stale.length > 0 ? `; ${stale.length} case(s) were measured against an older commit` : "";
         if (code !== 0 && !complete) {
           return {
             status: "BLOCKED",
             detail: `the live benchmark did not complete (${found}/${expected} case(s) produced${missing.length > 0 ? `, missing ${missing.join(", ")}` : ""}): no plugin is connected, so the live render and review could not be produced`,
-            extra: { found, expected, missing },
+            extra: { found, expected, missing, stale },
           };
         }
         if (!complete) {
           return {
             status: "BLOCKED",
             detail: `the live benchmark did not complete (${found}/${expected} case(s) produced${missing.length > 0 ? `, missing ${missing.join(", ")}` : ""})`,
-            extra: { found, expected, missing },
+            extra: { found, expected, missing, stale },
           };
         }
-        return { status: "PASS", detail: `the live benchmark completed (${found}/${expected} case(s))`, extra: { found, expected, missing } };
+        return {
+          status: "PASS",
+          detail: `the live benchmark completed (${found}/${expected} case(s) with real renders and reviews)${drift}`,
+          extra: { found, expected, missing, stale },
+        };
       },
     }),
   );

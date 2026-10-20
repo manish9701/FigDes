@@ -1,27 +1,28 @@
 # Issue #17 — release gate
 
-**Verdict: INDETERMINATE** — 1 group(s) could not run: live
+**Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `6e05424f-2026-10-20T04-41-38-075Z` on commit `6e05424ffa9fc36cabf7c2a0f9c4fdf23994efe2` (main), 2026-10-20T04:41:38.075Z → 2026-10-20T04:42:50.617Z, 72.5s.
+Run `d5996222-2026-10-20T06-17-16-295Z` on commit `d59962227204dbd8bb2764b5a2b3bb61aec465f7` (main), 2026-10-20T06:17:16.295Z → 2026-10-20T06:18:29.798Z, 73.5s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 20/20 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 58.8s | 881/881 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 11.0s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 0.6s | the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test) |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 21/21 case(s) passed, run twice with identical verdicts |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 60.1s | 882/882 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 10.5s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 0.6s | the live benchmark completed (10/10 case(s) with real renders and reviews); 9 case(s) were measured against an older commit |
 
-## Gauntlet cases (20/20 passed)
+## Gauntlet cases (21/21 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
-| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 42% of the canvas; 4 regions, 16 content calls, 2 metric card(s) |
-| **A02** | The visual direction is applied across the frame, not only to the dark visualisation | #16 | **PASS** | style 'technical-instrument' on 4/4 region(s); 1 dark surface(s) of 12; no invented values |
+| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 33% of the canvas; 5 regions, 16 content calls, 2 metric card(s) |
+| **A02** | The visual direction is applied across the frame, not only to the dark visualisation | #16 | **PASS** | style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 11; no invented values |
+| **A03** | A new screen lands in free canvas instead of on top of the last one | #16 | **PASS** | the screen was placed at (3280, 0), clear of 2 existing frame(s) |
 | **B01** | An asymmetric split view keeps the inspector fixed and the canvas fluid | #14 | **PASS** | canvas 816 wide at x=272, inspector 320 wide at x=1120, both at y=0 |
 | **B02** | A five-region dashboard with thirty items keeps every child inside its parent | #14 | **PASS** | 5 regions, 32 items, every child contained |
 | **B03** | A diagram's edges resolve their semantic endpoints and survive a resize | #14 | **PASS** | 2 connector(s) resolved against their nodes; a second compile of the same diagram agreed |
@@ -34,12 +35,12 @@ Node v22.17.0 on win32-x64.
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 10ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 15ms, worst 21ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
 | **H02** | A render that fails after a successful commit is blocked, not verified | #14 | **PASS** | a successful commit with no render is 'indeterminate', not a pass |
-| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 38 operation(s) and 4 region(s) identical across two runs |
+| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 38 operation(s) and 5 region(s) identical across two runs |
 
 ## Coverage map
 
@@ -48,7 +49,7 @@ The gate is only as good as this map: a criterion with no test is a criterion no
 | Acceptance criterion | Exercised by |
 | --- | --- |
 | #14 geometry, constraint, ID/token and empty-scope regressions stay green | `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `H01`, `suite:issue14` |
-| #16 generation fixtures G01-G14 are included or mapped | `A01`, `A02`, `I01`, `suite:issue16` |
+| #16 generation fixtures G01-G14 are included or mapped | `A01`, `A02`, `A03`, `I01`, `suite:issue16` |
 | #15 transaction safety and failure injection are included or mapped | `G01`, `G02`, `G03`, `suite:issue15` |
 | Topology edges attach to correct semantic nodes after reflow | `B03`, `C01` |
 | No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text | `B04`, `D01`, `D02`, `E01` |

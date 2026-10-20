@@ -11,7 +11,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { WebSocketServer, type WebSocket } from "ws";
 import { URL } from "node:url";
-import type { ClientMessage } from "../../shared/protocol";
+import { SERVER_BUILD, type ClientMessage } from "../../shared/protocol";
 import { createMcpHandler } from "./mcp";
 import { SessionRegistry } from "./sessions";
 import { clients } from "./clients/registry";
@@ -80,6 +80,10 @@ const server = createServer((req: IncomingMessage, res: ServerResponse) => {
       JSON.stringify(
         {
           ok: true,
+          // Which build is answering. A live measurement has to be able to
+          // name it, because the deployment is not the repository until it is
+          // redeployed.
+          build: SERVER_BUILD,
           sessions: registry.connected().map((s) => s.status()),
           mcpClients: connections.map((c) => ({
             display: c.display,

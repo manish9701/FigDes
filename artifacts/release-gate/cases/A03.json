@@ -1,0 +1,10 @@
+{
+  "id": "A03",
+  "title": "A new screen lands in free canvas instead of on top of the last one",
+  "group": "generation",
+  "requirement": "The root frame is placed in free canvas, clear of every frame already in the file, and the regions move with it.",
+  "issue": "#16",
+  "status": "PASS",
+  "detail": "the screen was placed at (3280, 0), clear of 2 existing frame(s)",
+  "raw": {}
+}

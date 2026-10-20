@@ -18,6 +18,7 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(process.env.FIGDES_LIVE_DIR ?? resolve(root, "artifacts/design-benchmark/live"));
@@ -59,6 +60,12 @@ const STRESS_REQUIRED_EVIDENCE = [
   "postMutationRender",
   "postMutationReview",
   "unresolved",
+  // Which builds produced the evidence. The server is deployed and Figma
+  // loads the plugin bundle once, so either can be older than the repository,
+  // and a measurement that cannot name them describes code that may no longer
+  // exist.
+  "serverBuild",
+  "pluginBuild",
 ];
 const STRESS_CANVAS = { width: 1600, height: 1100 };
 
@@ -175,6 +182,17 @@ for (const file of files) {
     caseId,
     status: missing.length === 0 && fixtureOk && stressProblems.length === 0 && unresolvedStress.length === 0 ? "COMPLETE" : "INCOMPLETE",
     missing,
+    // Which builds measured this case, so a reader can tell a fresh
+    // measurement from one taken against a deployment that has since moved on.
+    build: {
+      commit: parsed.commit ?? null,
+      serverBuild: parsed.serverBuild ?? null,
+      pluginBuild: parsed.pluginBuild ?? null,
+      note:
+        parsed.serverBuild === undefined && parsed.pluginBuild === undefined
+          ? "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+          : null,
+    },
     ...(stressProblems.length > 0 ? { stressProblems } : {}),
     ...(unresolvedStress.length > 0
       ? { unresolvedDefects: unresolvedStress, note: "a defect from issue #10 is listed as still unresolved" }
@@ -187,6 +205,35 @@ const covered = new Set(cases.map((c) => c.caseId).filter(Boolean));
 const missingCases = EXPECTED.filter((id) => !covered.has(id));
 const complete = cases.filter((c) => c.status === "COMPLETE");
 const liveBenchmarkComplete = missingCases.length === 0 && cases.length === EXPECTED.length && complete.length === EXPECTED.length;
+
+/**
+ * Which commit each case was measured against, and whether that is the
+ * repository now.
+ *
+ * A live measurement is only evidence about the code it ran. The cases were
+ * taken over several sessions, so some of them describe an older commit — and
+ * the deployment the plugin talks to is not the repository until it is
+ * redeployed. Saying so is the difference between evidence and a claim.
+ */
+let repoHead = null;
+try {
+  repoHead = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
+} catch {
+  repoHead = null;
+}
+const buildDrift = cases.map((c) => {
+  const measured = c.build?.commit ?? null;
+  return {
+    caseId: c.caseId,
+    measuredAtCommit: measured,
+    repoHead,
+    stale: measured !== null && repoHead !== null && !measured.startsWith(repoHead.slice(0, 12)),
+    serverBuild: c.build?.serverBuild ?? null,
+    pluginBuild: c.build?.pluginBuild ?? null,
+    note: c.build?.note ?? null,
+  };
+});
+const staleCases = buildDrift.filter((d) => d.stale);
 
 const report = {
   schemaVersion: 2,
@@ -201,8 +248,9 @@ const report = {
   liveBenchmarkReason: liveBenchmarkComplete
     ? `All ${EXPECTED.length} live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes, and the ${STRESS_CANVAS.width}x${STRESS_CANVAS.height} stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved.`
     : "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
-  stressFrame: {
-    caseId: STRESS_CASE_ID,
+  buildDrift,
+  staleCases: staleCases.map((d) => d.caseId),
+  stressFrame: {    caseId: STRESS_CASE_ID,
     canvas: STRESS_CANVAS,
     mustResolve: STRESS_MUST_RESOLVE,
     evidenceShape: {
@@ -232,6 +280,8 @@ console.log(JSON.stringify({
   completeCases: report.completeCases,
   missingCases: report.missingCases,
   liveBenchmarkComplete: report.liveBenchmarkComplete,
+  repoHead: repoHead ? repoHead.slice(0, 12) : null,
+  staleCases: report.staleCases,
 }, null, 2));
 
 if (strict && !liveBenchmarkComplete) process.exitCode = 1;

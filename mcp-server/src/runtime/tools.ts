@@ -470,7 +470,14 @@ export async function placeRootInFreeCanvas(
   const rootOp = operations.find(
     (op) => typeof op === "object" && op !== null && op.type === "createFrame" && op.id === "root",
   ) as Record<string, unknown> | undefined;
-  if (rootOp === undefined || rootOp.x !== 0 || rootOp.y !== 0) return null;
+  if (rootOp === undefined) return null;
+  // The compiler emits the root frame with no coordinates at all, so "at the
+  // origin" is the *absence* of x/y rather than a zero. Checking for a literal
+  // zero here meant the placement never ran: every screen landed at (0,0) and
+  // piled on top of the previous one. The live evidence is what found it.
+  const rootX = typeof rootOp.x === "number" ? rootOp.x : 0;
+  const rootY = typeof rootOp.y === "number" ? rootOp.y : 0;
+  if (rootX !== 0 || rootY !== 0) return null;
 
   let placed: { x: number; y: number; reason: string };
   try {

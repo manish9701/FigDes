@@ -1,16 +1,117 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-20T04:42:49.794Z",
+  "generatedAt": "2026-10-20T06:18:29.003Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
-  "foundCases": 9,
-  "completeCases": 9,
-  "missingCases": [
-    "hard-stress-test"
+  "foundCases": 10,
+  "completeCases": 10,
+  "missingCases": [],
+  "liveBenchmarkComplete": true,
+  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes, and the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved.",
+  "buildDrift": [
+    {
+      "caseId": "data-heavy-workspace",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "editorial-product-page",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "exo-compute-topology",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "exo-configuration",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "exo-enterprise-workspace",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "exo-model-detail",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "exo-runtime-monitoring",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "generic-saas-dashboard",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    },
+    {
+      "caseId": "hard-stress-test",
+      "measuredAtCommit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": false,
+      "serverBuild": "unknown",
+      "pluginBuild": "unknown",
+      "note": null
+    },
+    {
+      "caseId": "spatial-relationship",
+      "measuredAtCommit": "1b15f1f",
+      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "stale": true,
+      "serverBuild": null,
+      "pluginBuild": null,
+      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+    }
   ],
-  "liveBenchmarkComplete": false,
-  "liveBenchmarkReason": "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
+  "staleCases": [
+    "data-heavy-workspace",
+    "editorial-product-page",
+    "exo-compute-topology",
+    "exo-configuration",
+    "exo-enterprise-workspace",
+    "exo-model-detail",
+    "exo-runtime-monitoring",
+    "generic-saas-dashboard",
+    "spatial-relationship"
+  ],
   "stressFrame": {
     "caseId": "hard-stress-test",
     "canvas": {
@@ -65,55 +166,121 @@
       "file": "case-data-heavy-workspace.json",
       "caseId": "data-heavy-workspace",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-editorial-product-page.json",
       "caseId": "editorial-product-page",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-exo-compute-topology.json",
       "caseId": "exo-compute-topology",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-exo-configuration.json",
       "caseId": "exo-configuration",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-exo-enterprise-workspace.json",
       "caseId": "exo-enterprise-workspace",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-exo-model-detail.json",
       "caseId": "exo-model-detail",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-exo-runtime-monitoring.json",
       "caseId": "exo-runtime-monitoring",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     },
     {
       "file": "case-generic-saas-dashboard.json",
       "caseId": "generic-saas-dashboard",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
+    },
+    {
+      "file": "case-hard-stress-test.json",
+      "caseId": "hard-stress-test",
+      "status": "COMPLETE",
+      "missing": [],
+      "build": {
+        "commit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+        "serverBuild": "unknown",
+        "pluginBuild": "unknown",
+        "note": null
+      }
     },
     {
       "file": "case-spatial-relationship.json",
       "caseId": "spatial-relationship",
       "status": "COMPLETE",
-      "missing": []
+      "missing": [],
+      "build": {
+        "commit": "1b15f1f",
+        "serverBuild": null,
+        "pluginBuild": null,
+        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      }
     }
   ]
 }

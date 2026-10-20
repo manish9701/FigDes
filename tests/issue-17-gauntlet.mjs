@@ -37,6 +37,7 @@ import { planRepairs } from "../mcp-server/dist-test/pipeline/repair.js";
 import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { contrastRatio, requiredRatio } from "../mcp-server/dist-test/shared/contrast.js";
 import { loadPlugin, ask, makeDocument } from "./plugin-harness.mjs";
+import { placeRootInFreeCanvas } from "../mcp-server/dist-test/runtime/tools.js";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
@@ -264,6 +265,51 @@ function luminance(hex) {
   const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(h.slice(i, i + 2), 16) / 255));
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
+
+const A03 = {
+  id: "A03",
+  title: "A new screen lands in free canvas instead of on top of the last one",
+  group: "generation",
+  requirement:
+    "The root frame is placed in free canvas, clear of every frame already in the file, and the regions move with it.",
+  issue: "#16",
+  run: async () => {
+    const existing = [
+      { x: 0, y: 0, width: 1440, height: 900 },
+      { x: 1600, y: 0, width: 1440, height: 900 },
+    ];
+    const session = {
+      request: async (tool) =>
+        tool === "inspect_file"
+          ? { topLevelFrames: existing.map((f) => ({ x: f.x, y: f.y, width: f.width, height: f.height })) }
+          : null,
+    };
+    const operations = [
+      // The compiler emits the root frame with no coordinates at all, so the
+      // placement has to read "at the origin" as the absence of x/y.
+      { type: "createFrame", id: "root", name: "New screen", width: 1440, height: 900 },
+      { type: "createFrame", id: "nav", parent: "root", x: 0, y: 0, width: 240, height: 900 },
+      { type: "createFrame", id: "body", parent: "root", x: 272, y: 0, width: 1168, height: 900 },
+    ];
+    const placed = await placeRootInFreeCanvas(session, operations, { width: 1440, height: 900 });
+    const unmet = [];
+    if (placed === null) {
+      unmet.push("the screen was not placed: it would land on top of the frames already in the file");
+    } else {
+      for (const frame of existing) {
+        const overlaps = placed.x < frame.x + frame.width && frame.x < placed.x + 1440 && placed.y < frame.y + frame.height && frame.y < placed.y + 900;
+        if (overlaps) unmet.push(`the screen was placed at (${placed.x}, ${placed.y}), on top of a frame at (${frame.x}, ${frame.y})`);
+      }
+      // The regions are emitted in root-relative coordinates, so they have to
+      // move with the root or the whole screen lands somewhere else.
+      const nav = operations.find((o) => o.id === "nav");
+      if (nav.x !== 0 - placed.x) unmet.push(`the 'nav' region was left at x=${nav.x} while the root moved to x=${placed.x}`);
+    }
+    return unmet.length === 0
+      ? ok(`the screen was placed at (${placed?.x}, ${placed?.y}), clear of ${existing.length} existing frame(s)`)
+      : fail(unmet.join("; "), { placed });
+  },
+};
 
 /* -------------------------------------------------------------------------- */
 /* B — adversarial geometry and relationships                                   */
@@ -1283,7 +1329,7 @@ const I01 = {
 /* The gauntlet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const CASES = [A01, A02, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, F01, F02, G01, G02, G03, H01, H02, I01];
+export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, F01, F02, G01, G02, G03, H01, H02, I01];
 
 /**
  * Runs the gauntlet.
@@ -1321,7 +1367,7 @@ export function summariseGauntlet(results) {
  */
 export const COVERAGE = [
   { criterion: "#14 geometry, constraint, ID/token and empty-scope regressions stay green", tests: ["B01", "B02", "B03", "B04", "B05", "B06", "H01", "suite:issue14"] },
-  { criterion: "#16 generation fixtures G01-G14 are included or mapped", tests: ["A01", "A02", "I01", "suite:issue16"] },
+  { criterion: "#16 generation fixtures G01-G14 are included or mapped", tests: ["A01", "A02", "A03", "I01", "suite:issue16"] },
   { criterion: "#15 transaction safety and failure injection are included or mapped", tests: ["G01", "G02", "G03", "suite:issue15"] },
   { criterion: "Topology edges attach to correct semantic nodes after reflow", tests: ["B03", "C01"] },
   { criterion: "No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text", tests: ["B04", "D01", "D02", "E01"] },

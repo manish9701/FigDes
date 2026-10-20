@@ -48,6 +48,7 @@ const MUTATE_TARGET_TYPES = new Set([
   "setGap",
   "setTypography",
   "setTextContent",
+  "setTextStyle",
   "setVisible",
   "setPage",
   "setConstraints",

@@ -29,7 +29,7 @@ test("responds to the ready handshake with server config", async () => {
   const config = figma.__posted.find((m) => m.kind === "server-config");
   assert.ok(config, "server-config posted after ready");
   assert.match(config.url, /^https?:\/\//);
-  assert.equal(config.pluginVersion, "0.1.0");
+  assert.equal(config.pluginVersion, "0.2.0");
 });
 
 /* -------------------------- the reported failure ------------------------- */

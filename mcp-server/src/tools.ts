@@ -86,6 +86,7 @@ const OPERATION_GUIDE = [
   "  setGap           target gap",
   "  setTypography    target family? style? fontSize? lineHeight? letterSpacing? textAlignHorizontal? textAlignVertical?",
   "  setTextContent   target content",
+  "  setTextStyle     target style          style = an existing local text style, by name (\"EXO/Nav\") or id; create it first",
   "  setVisible       target visible",
   "  setPage          target page?          page = page id or name; defaults to the current page",
   "",

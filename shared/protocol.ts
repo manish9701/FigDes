@@ -14,7 +14,7 @@ import { z } from "zod";
  * The plugin's semantic version. Hand-maintained, so it says nothing about
  * which build is loaded — see `StatusResult.build` for that.
  */
-export const PLUGIN_VERSION = "0.1.0";
+export const PLUGIN_VERSION = "0.2.0";
 
 /**
  * The commit the bundle was built from, baked in by esbuild.
@@ -715,6 +715,19 @@ export const SetTextContentOp = z.object({
   content: z.string().max(20000),
 });
 
+export const SetTextStyleOp = z.object({
+  type: z.literal("setTextStyle"),
+  target: RefSchema,
+  /**
+   * An existing local text style, by name ("EXO/Nav") or id.
+   *
+   * Binding the file's own styles is what keeps a screen inside the design
+   * system instead of drawing its own type beside it. The style must exist:
+   * create it first with `createTextStyle` (or `seed_exo_system`), then bind.
+   */
+  style: z.string().min(1).max(200),
+});
+
 export const SetVisibleOp = z.object({
   type: z.literal("setVisible"),
   target: RefSchema,
@@ -780,6 +793,7 @@ export const OperationSchema = z.discriminatedUnion("type", [
   SetGapOp,
   SetTypographyOp,
   SetTextContentOp,
+  SetTextStyleOp,
   SetVisibleOp,
   SetPageOp,
   SetConstraintsOp,

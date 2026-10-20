@@ -339,7 +339,7 @@ function readJsonBody(req: IncomingMessage): Promise<{ parsed: unknown; hasBody:
 
 function buildServer(registry: SessionRegistry, requestClient?: RequestClient): McpServer {
   const server = new McpServer(
-    { name: "figma-design-agent", version: "0.1.0" },
+    { name: "figma-design-agent", version: "0.2.0" },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 

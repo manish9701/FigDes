@@ -1062,6 +1062,8 @@ function describe(op: Parsed): string {
       return `${op.field}=${op.variable}`;
     case "createTextStyle":
       return `${op.name} ${op.fontSize}px`;
+    case "setTextStyle":
+      return `${op.style}`;
     case "createPaintStyle":
       return `${op.name} ${op.color}`;
     case "prototypeLink":
@@ -1971,6 +1973,34 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       return `"${op.content.slice(0, 32)}"`;
     }
 
+    case "setTextStyle": {
+      const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
+      if (node.type !== "TEXT") {
+        throw new OperationError(`setTextStyle requires a TEXT node, got ${node.type}`, index, op.type);
+      }
+      const styles = await figma.getLocalTextStylesAsync();
+      const style = styles.find((s) => s.name === op.style || s.id === op.style);
+      if (!style) {
+        throw new OperationError(
+          `Text style not found: "${op.style}". Create it first with createTextStyle (or seed_exo_system), then bind by name.`,
+          index,
+          op.type,
+        );
+      }
+      journalProps(ctx, node, index, op.type, "setTextStyle", ["textStyleId"]);
+      const text = node as TextNode;
+      // The *Async setter is mandatory under "documentAccess": "dynamic-page";
+      // the sync assignment throws there at runtime. Fall back to it only for
+      // API surfaces that predate the async setter (and test mocks).
+      if ("setTextStyleIdAsync" in text && typeof (text as unknown as { setTextStyleIdAsync?: unknown }).setTextStyleIdAsync === "function") {
+        await (text as unknown as { setTextStyleIdAsync: (id: string) => Promise<void> }).setTextStyleIdAsync(style.id);
+      } else {
+        text.textStyleId = style.id;
+      }
+      invalidateCache(ctx, node.id);
+      return `-> ${style.name}`;
+    }
+
     case "setVisible": {
       const node = requireScene(await resolve(ctx, op.target, index, op.type), index, op.type);
       journalProps(ctx, node, index, op.type, "setVisible", ["visible"]);
@@ -2276,6 +2306,21 @@ async function restoreJournal(ctx: Ctx): Promise<{ restoredIds: string[]; unrest
             }
             inst.setProperties(props);
           } else {
+            ok = false;
+          }
+        } catch {
+          ok = false;
+        }
+      } else if (entry.kind === "setTextStyle") {
+        // Style bindings restore through the async setter under
+        // "documentAccess": "dynamic-page", where sync assignment throws and
+        // would otherwise downgrade a fully-restored transaction to partial.
+        try {
+          const prior = entry.before["textStyleId"];
+          const t = node as unknown as { setTextStyleIdAsync?: (id: string) => Promise<void> };
+          if (typeof prior === "string" && prior.length > 0 && typeof t.setTextStyleIdAsync === "function") {
+            await t.setTextStyleIdAsync(prior);
+          } else if (!trySet(target, "textStyleId", prior)) {
             ok = false;
           }
         } catch {

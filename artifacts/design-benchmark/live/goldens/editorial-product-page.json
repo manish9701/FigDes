@@ -1,0 +1,17 @@
+{
+  "caseId": "editorial-product-page",
+  "commit": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
+  "createdAt": "2026-10-20T07:34:19.462Z",
+  "screenshotReference": "artifacts/design-benchmark/live/goldens/editorial-product-page.png",
+  "policy": {
+    "maxMeanDifference": 3,
+    "maxChangedPixelShare": 0.02,
+    "channelThreshold": 24
+  },
+  "signature": {
+    "reviewedNodes": 8,
+    "findingCount": 4,
+    "regionNames": []
+  },
+  "note": "A regression reference, not an approval. The review rules judge the screen; this records what it looked like."
+}

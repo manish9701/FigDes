@@ -57,6 +57,23 @@ const baseCase = (caseId) => ({
   fixtures: [{ fixture: true, note: "no real-looking data" }],
 });
 
+/**
+ * The native path's evidence.
+ *
+ * The semantic runtime and the plugin's create_design transaction are one
+ * path; figdes_use_figma is another, with its own rules, and it is checked
+ * rather than assumed.
+ */
+const nativeCheck = (overrides = {}) => ({
+  caseId: "native-path-check",
+  status: "COMPLETE",
+  rootId: "279:1090",
+  createdNodeIds: ["279:1090", "279:1091", "279:1092"],
+  measured: { canvas: { width: 480, height: 220 }, nodeCount: 5, textLayers: 2, renderStatus: "ok" },
+  cleanup: { status: "success", remainingMatches: 0 },
+  ...overrides,
+});
+
 const stressCase = (overrides = {}) => ({
   ...baseCase("hard-stress-test"),
   canvasWidth: 1600,
@@ -99,9 +116,30 @@ async function validate(files) {
   }
 }
 
-const allComplete = () => Object.fromEntries(ALL_CASES.map((id) => [`case-${id}.json`, baseCase(id)]));
+const allComplete = () => ({
+  ...Object.fromEntries(ALL_CASES.map((id) => [`case-${id}.json`, baseCase(id)])),
+  "native-check.json": nativeCheck(),
+});
 
 const caseEntry = (report, caseId) => report.cases.find((c) => c.caseId === caseId);
+
+test("live validator: a missing native-path check does not pass", async () => {
+  // The native path is a separate path with separate rules, and a check that
+  // cannot fail is not a check. Without its evidence the live coverage is
+  // incomplete, whatever the ten semantic cases say.
+  const files = allComplete();
+  delete files["native-check.json"];
+  const { report } = await validate(files);
+  assert.equal(report.liveBenchmarkComplete, false);
+  assert.equal(report.nativePath.status, "MISSING");
+});
+
+test("live validator: a native-path check that left debris does not pass", async () => {
+  const files = allComplete();
+  files["native-check.json"] = nativeCheck({ cleanup: { status: "success", remainingMatches: 1 } });
+  const { report } = await validate(files);
+  assert.equal(report.liveBenchmarkComplete, false);
+});
 
 test("live validator: a full evidence set, including a fresh stress render, passes", async () => {
   const { report } = await validate({ ...allComplete(), "case-hard-stress-test.json": stressCase() });

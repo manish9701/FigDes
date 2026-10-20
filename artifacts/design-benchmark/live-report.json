@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-20T06:33:55.061Z",
+  "generatedAt": "2026-10-20T07:46:14.286Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -8,12 +8,12 @@
   "completeCases": 10,
   "missingCases": [],
   "liveBenchmarkComplete": true,
-  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes, and the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved.",
+  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes; the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved; and the native path was exercised against the real Plugin API and cleaned up afterwards.",
   "buildDrift": [
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -23,7 +23,7 @@
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -33,7 +33,7 @@
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -43,7 +43,7 @@
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -53,7 +53,7 @@
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -63,7 +63,7 @@
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -73,7 +73,7 @@
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -83,7 +83,7 @@
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -93,7 +93,7 @@
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": "unknown",
       "pluginBuild": "unknown",
@@ -103,7 +103,7 @@
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "repoHead": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -135,6 +135,182 @@
     "hard-stress-test",
     "spatial-relationship"
   ],
+  "nativePath": {
+    "status": "COMPLETE",
+    "reportedStatus": "COMPLETE",
+    "cleanupVerified": true,
+    "rootId": "438:447",
+    "createdNodes": 5,
+    "measured": {
+      "canvas": {
+        "width": 480,
+        "height": 220
+      },
+      "nodeCount": 5,
+      "textLayers": 2,
+      "renderStatus": "ok",
+      "focalCandidates": 4
+    },
+    "cleanup": {
+      "status": "success",
+      "remainingMatches": 0
+    },
+    "serverBuild": "unknown",
+    "pluginBuild": "unknown",
+    "note": "The native path ran against the real Plugin API and the frame it created was removed again. A check that leaves debris behind is not a check."
+  },
+  "visualRegression": {
+    "policy": {
+      "maxMeanDifference": 3,
+      "maxChangedPixelShare": 0.005,
+      "channelThreshold": 24
+    },
+    "cases": [
+      {
+        "caseId": "data-heavy-workspace",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "editorial-product-page",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "exo-compute-topology",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "exo-configuration",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "exo-enterprise-workspace",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "exo-model-detail",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "exo-runtime-monitoring",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "generic-saas-dashboard",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "hard-stress-test",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1440,
+          "height": 990,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      },
+      {
+        "caseId": "spatial-relationship",
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
+        "measured": {
+          "width": 1024,
+          "height": 640,
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
+        },
+        "reason": null
+      }
+    ],
+    "differing": [],
+    "uncovered": [],
+    "note": "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it."
+  },
   "stressFrame": {
     "caseId": "hard-stress-test",
     "canvas": {

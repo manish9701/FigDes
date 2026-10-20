@@ -229,9 +229,21 @@ if (!skipLive) {
           .flatMap((m) => m[1].split(","))
           .map((s) => s.replace(/["\s]/g, ""))
           .filter((s) => s.length > 0);
+        const differing = [...output.matchAll(/"differing":\s*\[([^\]]*)\]/g)]
+          .flatMap((m) => m[1].split(","))
+          .map((s) => s.replace(/["\s]/g, ""))
+          .filter((s) => s.length > 0);
+        const uncovered = [...output.matchAll(/"uncovered":\s*\[([^\]]*)\]/g)]
+          .flatMap((m) => m[1].split(","))
+          .map((s) => s.replace(/["\s]/g, ""))
+          .filter((s) => s.length > 0);
+        const nativeStatus = output.match(/"nativePath":\s*\{\s*"status":\s*"([^"]+)"/)?.[1] ?? null;
         const drift = [
           stale.length > 0 ? `${stale.length} case(s) were measured against an older commit` : null,
           unnamed.length > 0 ? `${unnamed.length} case(s) cannot name the build that produced them` : null,
+          differing.length > 0 ? `${differing.length} case(s) differ from their reviewed golden` : null,
+          uncovered.length > 0 ? `${uncovered.length} case(s) have no golden to compare against` : null,
+          nativeStatus && nativeStatus !== "COMPLETE" ? `the native path is ${nativeStatus}` : null,
         ]
           .filter(Boolean)
           .join("; ");
@@ -252,7 +264,7 @@ if (!skipLive) {
         return {
           status: "PASS",
           detail: `the live benchmark completed (${found}/${expected} case(s) with real renders and reviews)${drift ? `; ${drift}` : ""}`,
-          extra: { found, expected, missing, stale, unnamed },
+          extra: { found, expected, missing, stale, unnamed, differing, uncovered, nativeStatus },
         };
       },
     }),
@@ -302,19 +314,19 @@ const GAPS = [
       "The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.",
   },
   {
-    gap: "The native path (figdes_use_figma) is not exercised",
+    gap: "A golden is a regression reference, not an approval",
     detail:
-      "The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate.",
-  },
-  {
-    gap: "Visual regression against reviewed goldens is not compared pixel-wise",
-    detail:
-      "The live benchmark records the renders and their structure, but there is no golden-image comparison with a documented stable policy yet. Structural and semantic checks stand in for it, and the issue's own rule is that pixel differences alone are not sufficient.",
+      "The goldens record what each screen looked like when a human looked at it, so a later run can be told that it changed. They do not say the screen was good: the review rules judge the screen, and a golden can only be stored through an explicit review (npm run goldens:update -- --approve).",
   },
   {
     gap: "Text height is estimated, not measured",
     detail:
       "The server has no font metrics, so a text node's height is a character-count estimate. The pipeline measures the width a text lands at, and a region holding text cannot be handed to Figma's own auto layout for that reason.",
+  },
+  {
+    gap: "The native path is covered structurally, not visually",
+    detail:
+      "The native check proves the native path executes against the real Plugin API, builds a real auto-layout frame, renders it, and cleans up after itself. It does not compare that render against a golden: the native path is model-authored, so what it builds is not a fixed reference.",
   },
 ];
 

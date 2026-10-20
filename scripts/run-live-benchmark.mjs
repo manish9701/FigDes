@@ -16,9 +16,11 @@
  * Output: artifacts/design-benchmark/live-report.json
  */
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { compareImages, IMAGE_POLICY } from "./lib/image-diff.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(process.env.FIGDES_LIVE_DIR ?? resolve(root, "artifacts/design-benchmark/live"));
@@ -201,10 +203,47 @@ for (const file of files) {
   });
 }
 
+/**
+ * The native path's own evidence.
+ *
+ * The semantic runtime and the plugin's `create_design` transaction are one
+ * path; `figdes_use_figma` — model-authored JavaScript against the real Plugin
+ * API — is another, with its own rules. It is checked here rather than in the
+ * semantic cases, because a check that cannot fail is not a check.
+ */
+const nativePathPath = resolve(liveDir, "native-check.json");
+let nativePath = { status: "MISSING", reason: "no native-path check has been run" };
+if (existsSync(nativePathPath)) {
+  try {
+    const body = JSON.parse(await readFile(nativePathPath, "utf8"));
+    // The native path is only proven if the frame it created was removed
+    // again: a check that leaves debris behind is not a check, it is a change.
+    const cleanupVerified = body.cleanup?.remainingMatches === 0;
+    nativePath = {
+      status: body.status === "COMPLETE" && cleanupVerified ? "COMPLETE" : "INCOMPLETE",
+      reportedStatus: body.status ?? "UNKNOWN",
+      cleanupVerified,
+      rootId: body.rootId ?? null,
+      createdNodes: Array.isArray(body.createdNodeIds) ? body.createdNodeIds.length : 0,
+      measured: body.measured ?? null,
+      cleanup: body.cleanup ?? null,
+      serverBuild: body.serverBuild ?? null,
+      pluginBuild: body.pluginBuild ?? null,
+      note: body.note ?? null,
+    };
+  } catch (err) {
+    nativePath = { status: "UNREADABLE", reason: String(err?.message ?? err) };
+  }
+}
+
 const covered = new Set(cases.map((c) => c.caseId).filter(Boolean));
 const missingCases = EXPECTED.filter((id) => !covered.has(id));
 const complete = cases.filter((c) => c.status === "COMPLETE");
-const liveBenchmarkComplete = missingCases.length === 0 && cases.length === EXPECTED.length && complete.length === EXPECTED.length;
+const liveBenchmarkComplete =
+  missingCases.length === 0 &&
+  cases.length === EXPECTED.length &&
+  complete.length === EXPECTED.length &&
+  nativePath.status === "COMPLETE";
 
 /**
  * Which commit each case was measured against, and whether that is the
@@ -240,6 +279,53 @@ const buildDrift = cases.map((c) => {
 const staleCases = buildDrift.filter((d) => d.stale);
 const casesWithoutBuild = buildDrift.filter((d) => !d.buildNamed);
 
+/**
+ * The visual regression: every case against its reviewed golden.
+ *
+ * Two axes, and both have to agree — the structure (what the screen is) and the
+ * pixels (how it looks). A difference in either is reported; neither decides
+ * alone, and a case with no golden says so rather than passing quietly.
+ */
+const goldensDir = resolve(liveDir, "goldens");
+const visualRegression = [];
+for (const c of cases) {
+  if (!c.caseId) continue;
+  const casePath = resolve(liveDir, `case-${c.caseId}.json`);
+  const goldenPath = resolve(goldensDir, `${c.caseId}.png`);
+  const goldenMetaPath = resolve(goldensDir, `${c.caseId}.json`);
+  if (!existsSync(casePath) || !existsSync(goldenPath)) {
+    visualRegression.push({ caseId: c.caseId, verdict: "no-golden", reason: "no reviewed golden for this case" });
+    continue;
+  }
+  const body = JSON.parse(await readFile(casePath, "utf8"));
+  const currentPath = resolve(root, body.screenshotReference ?? "");
+  if (!existsSync(currentPath)) {
+    visualRegression.push({ caseId: c.caseId, verdict: "no-render", reason: "the case has no screenshot to compare" });
+    continue;
+  }
+  const pixels = compareImages(await readFile(currentPath), await readFile(goldenPath));
+  const signature = {
+    reviewedNodes: body.reviewedNodes ?? null,
+    findingCount: Array.isArray(body.structuralFindings) ? body.structuralFindings.length : null,
+    regionNames: Array.isArray(body.plan?.regions) ? body.plan.regions.map((r) => r.id) : [],
+  };
+  const goldenSignature = existsSync(goldenMetaPath)
+    ? (JSON.parse(await readFile(goldenMetaPath, "utf8")).signature ?? null)
+    : null;
+  const structureChanged =
+    goldenSignature !== null && JSON.stringify(goldenSignature) !== JSON.stringify(signature);
+  visualRegression.push({
+    caseId: c.caseId,
+    verdict: pixels.verdict === "match" && !structureChanged ? "match" : "differs",
+    pixels: pixels.verdict,
+    structureChanged,
+    measured: pixels.measured,
+    reason: pixels.reason ?? (structureChanged ? "the structure changed since the golden was reviewed" : null),
+  });
+}
+const regressionDiffs = visualRegression.filter((v) => v.verdict === "differs");
+const regressionUncovered = visualRegression.filter((v) => v.verdict === "no-golden" || v.verdict === "no-render");
+
 const report = {
   schemaVersion: 2,
   generatedAt: new Date().toISOString(),
@@ -251,11 +337,20 @@ const report = {
   missingCases,
   liveBenchmarkComplete,
   liveBenchmarkReason: liveBenchmarkComplete
-    ? `All ${EXPECTED.length} live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes, and the ${STRESS_CANVAS.width}x${STRESS_CANVAS.height} stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved.`
-    : "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
+    ? `All ${EXPECTED.length} live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes; the ${STRESS_CANVAS.width}x${STRESS_CANVAS.height} stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved; and the native path was exercised against the real Plugin API and cleaned up afterwards.`
+    : "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and the native-path check, then re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
   buildDrift,
   staleCases: staleCases.map((d) => d.caseId),
   casesWithoutBuild: casesWithoutBuild.map((d) => d.caseId),
+  nativePath,
+  visualRegression: {
+    policy: IMAGE_POLICY,
+    cases: visualRegression,
+    differing: regressionDiffs.map((v) => v.caseId),
+    uncovered: regressionUncovered.map((v) => v.caseId),
+    note:
+      "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it.",
+  },
   stressFrame: {    caseId: STRESS_CASE_ID,
     canvas: STRESS_CANVAS,
     mustResolve: STRESS_MUST_RESOLVE,
@@ -289,6 +384,11 @@ console.log(JSON.stringify({
   repoHead: repoHead ? repoHead.slice(0, 12) : null,
   staleCases: report.staleCases,
   casesWithoutBuild: report.casesWithoutBuild,
+  visualRegression: {
+    differing: report.visualRegression.differing,
+    uncovered: report.visualRegression.uncovered,
+  },
+  nativePath: { status: report.nativePath.status, createdNodes: report.nativePath.createdNodes },
 }, null, 2));
 
 if (strict && !liveBenchmarkComplete) process.exitCode = 1;

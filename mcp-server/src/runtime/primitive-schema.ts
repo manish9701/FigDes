@@ -164,6 +164,13 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
         "Cut the text with an ellipsis instead of wrapping it. For a string with no break opportunities — a model identifier, a path, a hash — wrapping does nothing, and truncating keeps the layout where it was.",
       example: "true",
     },
+    {
+      name: "textStyleId",
+      type: "string",
+      description:
+        "Bind an existing text style by id, from the styles inspect_design_system reports. Binding the file's own style is how a new screen stays inside the design system.",
+      example: '"S:abc123"',
+    },
   ],
   shape: [
     enumArg("shape", "Shape kind.", SHAPE_VALUES, '"polygon"'),

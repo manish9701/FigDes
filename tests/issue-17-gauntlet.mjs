@@ -38,6 +38,8 @@ import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { contrastRatio, requiredRatio } from "../mcp-server/dist-test/shared/contrast.js";
 import { loadPlugin, ask, makeDocument } from "./plugin-harness.mjs";
 import { placeRootInFreeCanvas } from "../mcp-server/dist-test/runtime/tools.js";
+import { reviewVerdict } from "../mcp-server/dist-test/review/verdict.js";
+import { decideGuardTarget } from "../mcp-server/dist-test/memory/guard.js";
 
 /* -------------------------------------------------------------------------- */
 /* Helpers                                                                     */
@@ -646,6 +648,54 @@ const B06 = {
     return unmet.length === 0
       ? ok(`${cases.length} invalid input(s) all failed closed`)
       : fail(unmet.join("; "), { measured });
+  },
+};
+
+const B08 = {
+  id: "B08",
+  title: "The compiler keeps one coordinate space and reconciles the other",
+  group: "geometry",
+  requirement:
+    "Resolved geometry is page-absolute, emitted operations are parent-local, and the two are reconciled by a blocking check rather than assumed to agree.",
+  issue: "#18",
+  run: () => {
+    const ir = {
+      canvas: { name: "Spaces", width: 1200, height: 800, grid: 8, newPage: false, deck: false },
+      regions: [
+        { id: "nav", role: "navigation", composition: "auto", layout: "flow", width: 240, height: "fill", grow: 0, children: [], elevation: 0 },
+        { id: "main", role: "content", composition: "auto", layout: "flow", width: "fill", height: "fill", grow: 0, children: ["t"], elevation: 0, padding: 24 },
+      ],
+      content: [{ id: "t", kind: "text", text: "Inside the main region", role: "body" }],
+      relations: [],
+      tokens: [],
+      links: [],
+    };
+    const result = compileIR(ir);
+    const unmet = [];
+    const box = result.boxes.get("t");
+    const mainBox = result.boxes.get("main");
+    if (!box || !mainBox) {
+      unmet.push("a region or its content had no resolved box");
+    } else {
+      // Page-absolute: the text's box is measured from the canvas origin.
+      if (box.x < mainBox.x) unmet.push(`the resolved box (${box.x}) is not page-absolute: it sits left of its region (${mainBox.x})`);
+      if (Math.abs(box.x - (mainBox.x + 24)) > 1) unmet.push(`the resolved box is at x=${box.x}, not the region's origin plus its 24px padding`);
+      // Parent-local: the operation carries the difference.
+      const op = result.operations.find((o) => o.id === "t");
+      if (!op) {
+        unmet.push("the text was never emitted");
+      } else {
+        if (op.parent !== "main") unmet.push(`the operation's parent is '${op.parent}', not 'main'`);
+        if (Math.abs(op.x - 24) > 1) unmet.push(`the operation's x is ${op.x}, not the 24px it is from its parent's origin`);
+        if (Math.abs(op.y - 24) > 1) unmet.push(`the operation's y is ${op.y}, not the 24px it is from its parent's origin`);
+      }
+    }
+    // And the two spaces are reconciled by a blocking check, not assumed.
+    const trace = result.violations.filter((v) => v.rule === "operation-trace");
+    if (trace.length > 0) unmet.push(`the emitted operations and the resolved geometry disagree: ${trace.map((v) => v.message).join("; ")}`);
+    return unmet.length === 0
+      ? ok("the resolved box is page-absolute, the operation is parent-local, and the trace check agrees")
+      : fail(unmet.join("; "), { violations: result.violations });
   },
 };
 
@@ -1424,6 +1474,71 @@ const H02 = {
   },
 };
 
+const H03 = {
+  id: "H03",
+  title: "A review that could not examine the screen is INDETERMINATE, never a pass",
+  group: "false-pass",
+  requirement:
+    "A review reports the nodes examined, the rules evaluated and whether the scan was complete, and a result that could not judge anything is never a pass.",
+  issue: "#14",
+  run: () => {
+    const unmet = [];
+    // Nothing examined: no rule could judge anything.
+    const empty = reviewVerdict({ nodesExamined: 0, rulesEvaluated: 19, truncated: false, findings: [] });
+    if (empty.verdict !== "INDETERMINATE") unmet.push(`a review of nothing came back ${empty.verdict}`);
+    // Truncated: the screen was not fully examined.
+    const cut = reviewVerdict({ nodesExamined: 400, rulesEvaluated: 19, truncated: true, findings: [] });
+    if (cut.verdict !== "INDETERMINATE") unmet.push(`a truncated review came back ${cut.verdict}`);
+    // A serious finding is a failure, whatever the count of the rest.
+    const failed = reviewVerdict({ nodesExamined: 35, rulesEvaluated: 19, truncated: false, findings: [{ severity: "serious" }] });
+    if (failed.verdict !== "FAIL") unmet.push(`a review with a serious finding came back ${failed.verdict}`);
+    // Only advice left: a human's eye, not a failure.
+    const review = reviewVerdict({ nodesExamined: 35, rulesEvaluated: 19, truncated: false, findings: [{ severity: "minor" }] });
+    if (review.verdict !== "REVIEW") unmet.push(`a review with only minor findings came back ${review.verdict}`);
+    // A complete, clean review is a pass.
+    const clean = reviewVerdict({ nodesExamined: 51, rulesEvaluated: 19, truncated: false, findings: [] });
+    if (clean.verdict !== "PASS") unmet.push(`a complete clean review came back ${clean.verdict}`);
+    // And the reason says what it was based on.
+    if (!clean.reason.includes("19") || !clean.reason.includes("51")) {
+      unmet.push(`the reason does not say what the verdict was based on: ${clean.reason}`);
+    }
+    return unmet.length === 0
+      ? ok("an empty, a truncated, a failing, an advisory and a clean review each get their own verdict")
+      : fail(unmet.join("; "));
+  },
+};
+
+const H04 = {
+  id: "H04",
+  title: "A screen that cannot be resolved is an ambiguity, not a random selection",
+  group: "false-pass",
+  requirement:
+    "A guard target that matches several frames is a question. A node id is used directly, and a name that matches nothing is a miss.",
+  issue: "#18",
+  run: () => {
+    const unmet = [];
+    const byId = decideGuardTarget("415:1487", []);
+    if (byId.kind !== "use-id" || byId.id !== "415:1487") unmet.push("a node id was not used directly");
+
+    const unique = decideGuardTarget("Cluster Routing", [{ id: "1:1", name: "Cluster Routing" }]);
+    if (unique.kind !== "use-id" || unique.id !== "1:1") unmet.push("a unique name did not resolve to its frame");
+
+    const many = decideGuardTarget("Overview", [
+      { id: "1:1", name: "Overview" },
+      { id: "1:2", name: "Overview copy" },
+    ]);
+    if (many.kind !== "ambiguous") unmet.push(`two matches resolved to ${many.kind} instead of an ambiguity`);
+    if (many.kind === "ambiguous" && many.candidates.length !== 2) unmet.push("the ambiguity did not list the candidates");
+
+    const missing = decideGuardTarget("Nothing here", []);
+    if (missing.kind !== "not-found") unmet.push(`a name that matches nothing resolved to ${missing.kind}`);
+
+    return unmet.length === 0
+      ? ok("a node id is used directly, a unique name resolves, and an ambiguous or missing name asks")
+      : fail(unmet.join("; "));
+  },
+};
+
 /* -------------------------------------------------------------------------- */
 /* I — reproducibility                                                          */
 /* -------------------------------------------------------------------------- */
@@ -1465,7 +1580,7 @@ const I01 = {
 /* The gauntlet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, E02, F01, F02, G01, G02, G03, H01, H02, I01];
+export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, B08, C01, D01, D02, E01, E02, F01, F02, G01, G02, G03, H01, H02, H03, H04, I01];
 
 /**
  * Runs the gauntlet.
@@ -1502,7 +1617,8 @@ export function summariseGauntlet(results) {
  * criterion nobody is checking, and the map is how that shows up.
  */
 export const COVERAGE = [
-  { criterion: "#14 geometry, constraint, ID/token and empty-scope regressions stay green", tests: ["B01", "B02", "B03", "B04", "B05", "B06", "H01", "suite:issue14"] },
+  { criterion: "#14 geometry, constraint, ID/token and empty-scope regressions stay green", tests: ["B01", "B02", "B03", "B04", "B05", "B06", "B08", "H01", "suite:issue14"] },
+  { criterion: "The compiler keeps one coordinate space and reconciles the other", tests: ["B08"] },
   { criterion: "#16 generation fixtures G01-G14 are included or mapped", tests: ["A01", "A02", "A03", "I01", "suite:issue16"] },
   { criterion: "#15 transaction safety and failure injection are included or mapped", tests: ["G01", "G02", "G03", "suite:issue15"] },
   { criterion: "Topology edges attach to correct semantic nodes after reflow", tests: ["B03", "C01"] },
@@ -1511,7 +1627,8 @@ export const COVERAGE = [
   { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01", "E02"] },
   { criterion: "The review engine tells a search field from a topology connector", tests: ["E02"] },
   { criterion: "Every repair is verified by a second structural check and render/review", tests: ["F01", "F02", "H02"] },
-  { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "H02", "B06"] },
+  { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "H02", "H03", "B06"] },
+  { criterion: "Scope is resolved to the intended screen, and an ambiguous scope asks", tests: ["H04"] },
   { criterion: "Performance is measured without bypassing correctness checks", tests: ["G01", "suite:issue15"] },
   { criterion: "Retrying or rolling back leaves no duplicate or orphan nodes", tests: ["G02", "G03", "suite:issue15"] },
   { criterion: "The evidence bundle is complete and tied to an exact commit SHA", tests: ["gate:summary"] },

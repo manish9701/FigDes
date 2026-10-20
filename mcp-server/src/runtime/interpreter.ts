@@ -162,6 +162,7 @@ const CONTENT_ARGS = new Set([
   "fill",
   "maxWidth",
   "truncate",
+  "textStyleId",
   "stroke",
   "strokeWeight",
   "radius",
@@ -972,6 +973,7 @@ const args = call.args as Record<string, unknown>;
           ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
           ...(args.maxWidth !== undefined ? { maxWidth: coerceNumber(args.maxWidth, 0, 1, 20000) } : {}),
           ...(args.truncate === true ? { truncate: true } : {}),
+          ...(typeof args.textStyleId === "string" && args.textStyleId.length > 0 ? { textStyleId: args.textStyleId } : {}),
         });
         if (parsed.success) {
           content.push(parsed.data);

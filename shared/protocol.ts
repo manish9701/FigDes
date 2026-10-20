@@ -277,6 +277,15 @@ export const CreateTextOp = z.object({
   letterSpacing: z.number().min(-100).max(1000).optional(),
   textAlignHorizontal: z.enum(["LEFT", "CENTER", "RIGHT", "JUSTIFIED"]).optional(),
   textAlignVertical: z.enum(["TOP", "CENTER", "BOTTOM"]).optional(),
+  /**
+   * An existing text style to bind.
+   *
+   * The file's own styles are the design system: a screen that draws its own
+   * type instead of using `EXO/Title` is a screen that drifts from the system
+   * the moment the system changes. The id comes from `inspect_design_system`,
+   * which reports the styles the file already has.
+   */
+  textStyleId: z.string().max(200).optional(),
   width: z.number().positive().max(100000).optional(),
   /**
    * How the text behaves when it does not fit.
@@ -1236,7 +1245,39 @@ export interface ReviewReport {
   autoFixable: number;
   findings: Finding[];
   scan: { pageLoads: number; pagesCached: boolean };
+  /**
+   * The verdict, kept distinct from the finding count.
+   *
+   * "No findings" is not "nothing was wrong": a scan that read no nodes, or a
+   * scope too narrow to judge, produces no findings either. The four verdicts
+   * mean four different things, and a caller keying on the count alone would
+   * read a clean bill of health for a screen nobody looked at.
+   */
+  verdict: ReviewVerdict;
+  /** What the verdict was based on. */
+  evidence: {
+    nodesExamined: number;
+    rulesEvaluated: number;
+    rulesSkipped: number;
+    truncated: boolean;
+    /** Whether the scope was a whole screen rather than a layer or two. */
+    scopeIsScreen: boolean;
+    /** One line saying what the verdict means. */
+    reason: string;
+  };
+  /** Present when the verdict is INDETERMINATE. */
+  howToProceed?: string;
 }
+
+/**
+ * The four verdicts, and what each one means.
+ *
+ * - `PASS` — the rules ran over a screen and found nothing serious.
+ * - `FAIL` — a serious or critical finding needs attention.
+ * - `REVIEW` — findings worth a human's eye, none of them serious.
+ * - `INDETERMINATE` — the screen could not be examined. Never a pass.
+ */
+export type ReviewVerdict = "PASS" | "FAIL" | "REVIEW" | "INDETERMINATE";
 
 /* -------------------------------------------------------------------------- */
 /* Plugin <-> server socket messages                                           */

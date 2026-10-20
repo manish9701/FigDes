@@ -2,21 +2,21 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `d3494813-2026-10-20T09-15-35-383Z` on commit `d3494813823d832628b0ea9e6d0fcc1d94ec954d` (main), 2026-10-20T09:15:35.383Z → 2026-10-20T09:16:36.306Z, 60.9s.
+Run `50916707-2026-10-20T11-38-16-585Z` on commit `50916707bc74ebf4f6816cace6c2814c50449540` (main), 2026-10-20T11:38:16.585Z → 2026-10-20T11:39:19.221Z, 62.6s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 22/22 case(s) passed, run twice with identical verdicts |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 25/25 case(s) passed, run twice with identical verdicts |
 | **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 49.3s | 898/898 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.3s | 9/9 benchmark case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 50.8s | 898/898 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.5s | 9/9 benchmark case(s) passed |
 | **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.4s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
-## Gauntlet cases (22/22 passed)
+## Gauntlet cases (25/25 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
@@ -29,6 +29,7 @@ Node v22.17.0 on win32-x64.
 | **B04** | Long identifiers and error strings stay inside their region at 390px and 1440px | #14 | **PASS** | 8 text node(s) bounded at both viewports |
 | **B05** | Extreme padding, gaps and nested sizing resolve to sane geometry | #14 | **PASS** | 4 extreme layout(s) resolved with positive extents |
 | **B06** | Invalid input fails closed instead of producing a successful screen | #14 | **PASS** | 4 invalid input(s) all failed closed |
+| **B08** | The compiler keeps one coordinate space and reconciles the other | #18 | **PASS** | the resolved box is page-absolute, the operation is parent-local, and the trace check agrees |
 | **C01** | Every edge contacts the node it names, and a connector inside its parent is not a defect | #14 | **PASS** | the edge resolved to both device nodes, and the reviewer did not report its parent as the endpoint |
 | **D01** | Seeded legibility defects are detected with targets and measurements | #14 | **PASS** | 2 review finding(s); contrast {"textColor":"#C9C6BC","background":"#FFFFFF","surfaceSource":"parent surface 'Nav'","ratio":1.71,"required":4.5,"fontSize":14,"bold":false,"layerName":"Cluster","proposedFill":"#7C7664","proposedRatio":4.53,"repairVerified":true}; the identifier is truncated and reported |
 | **D02** | Legitimate patterns are not reported, and the thresholds are not lowered | #14 | **PASS** | no finding against the 1 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline) |
@@ -36,11 +37,13 @@ Node v22.17.0 on win32-x64.
 | **E02** | The reviewer tells a search field from a topology connector | #14 | **PASS** | the placeholder inside the search field and the two rules are untouched; the label on the connector is still serious and the icon button is still reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 18ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 5ms, worst 17ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
 | **H02** | A render that fails after a successful commit is blocked, not verified | #14 | **PASS** | a successful commit with no render is 'indeterminate', not a pass |
+| **H03** | A review that could not examine the screen is INDETERMINATE, never a pass | #14 | **PASS** | an empty, a truncated, a failing, an advisory and a clean review each get their own verdict |
+| **H04** | A screen that cannot be resolved is an ambiguity, not a random selection | #18 | **PASS** | a node id is used directly, a unique name resolves, and an ambiguous or missing name asks |
 | **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 38 operation(s) and 5 region(s) identical across two runs |
 
 ## Coverage map
@@ -49,7 +52,8 @@ The gate is only as good as this map: a criterion with no test is a criterion no
 
 | Acceptance criterion | Exercised by |
 | --- | --- |
-| #14 geometry, constraint, ID/token and empty-scope regressions stay green | `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `H01`, `suite:issue14` |
+| #14 geometry, constraint, ID/token and empty-scope regressions stay green | `B01`, `B02`, `B03`, `B04`, `B05`, `B06`, `B08`, `H01`, `suite:issue14` |
+| The compiler keeps one coordinate space and reconciles the other | `B08` |
 | #16 generation fixtures G01-G14 are included or mapped | `A01`, `A02`, `A03`, `I01`, `suite:issue16` |
 | #15 transaction safety and failure injection are included or mapped | `G01`, `G02`, `G03`, `suite:issue15` |
 | Topology edges attach to correct semantic nodes after reflow | `B03`, `C01` |
@@ -58,7 +62,8 @@ The gate is only as good as this map: a criterion with no test is a criterion no
 | Semantic false-positive and false-negative counts are reported against seeded expectations | `D02`, `E01`, `E02` |
 | The review engine tells a search field from a topology connector | `E02` |
 | Every repair is verified by a second structural check and render/review | `F01`, `F02`, `H02` |
-| No empty, stale, skipped or failed inspection can return PASS | `H01`, `H02`, `B06` |
+| No empty, stale, skipped or failed inspection can return PASS | `H01`, `H02`, `H03`, `B06` |
+| Scope is resolved to the intended screen, and an ambiguous scope asks | `H04` |
 | Performance is measured without bypassing correctness checks | `G01`, `suite:issue15` |
 | Retrying or rolling back leaves no duplicate or orphan nodes | `G02`, `G03`, `suite:issue15` |
 | The evidence bundle is complete and tied to an exact commit SHA | `gate:summary` |

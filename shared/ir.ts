@@ -147,6 +147,14 @@ export const TextSpecSchema = z
      */
     truncate: z.boolean().optional(),
     /**
+     * An existing text style to bind, by id.
+     *
+     * The file's own styles are the design system. A screen that draws its own
+     * type instead of binding `EXO/Title` drifts from the system the moment
+     * the system changes.
+     */
+    textStyleId: z.string().max(200).optional(),
+    /**
      * Letter-spacing in pixels. Positive values space a wordmark out; the
      * tracked-out capitals of a wordmark are what separate it from a label.
      */

@@ -1,0 +1,10 @@
+{
+  "id": "H04",
+  "title": "A screen that cannot be resolved is an ambiguity, not a random selection",
+  "group": "false-pass",
+  "requirement": "A guard target that matches several frames is a question. A node id is used directly, and a name that matches nothing is a miss.",
+  "issue": "#18",
+  "status": "PASS",
+  "detail": "a node id is used directly, a unique name resolves, and an ambiguous or missing name asks",
+  "raw": {}
+}

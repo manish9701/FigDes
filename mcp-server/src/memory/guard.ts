@@ -319,6 +319,38 @@ function evaluate(evidence: RuleEvidence, snapshot: GuardSnapshot): CheckOutcome
  * deliberate: a rule with three checks should not report PASS while two of them
  * were unmeasurable.
  */
+/**
+ * What a guard run should do about the target it was given.
+ *
+ * Pure, so the decision can be tested without a Figma file: a node id is used
+ * directly, a name that matches nothing is a miss, and a name that matches
+ * several frames is an *ambiguity* — a question, not a coin toss. A verdict
+ * about the wrong screen is worse than no verdict.
+ */
+export type GuardTargetDecision =
+  | { kind: "use-id"; id: string }
+  | { kind: "ambiguous"; message: string; candidates: string[] }
+  | { kind: "not-found"; message: string };
+
+export function decideGuardTarget(
+  target: string,
+  matches: Array<{ id?: string; name?: string; type?: string }>,
+): GuardTargetDecision {
+  if (/^\d+:\d+$/.test(target)) return { kind: "use-id", id: target };
+  if (matches.length === 0) {
+    return { kind: "not-found", message: `No frame in the file matches '${target}'.` };
+  }
+  if (matches.length > 1) {
+    return {
+      kind: "ambiguous",
+      message: `'${target}' matches ${matches.length} nodes, so the screen to check is ambiguous.`,
+      candidates: matches.map((m) => `${m.id ?? "?"} "${m.name ?? ""}"`),
+    };
+  }
+  const only = matches[0]!;
+  return { kind: "use-id", id: only.id ?? "" };
+}
+
 export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardResult {
   // An empty snapshot short-circuits before any rule runs. Every rule here
   // passes on absence, so a guard with nothing to measure reports PASS for all

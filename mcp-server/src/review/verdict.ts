@@ -1,4 +1,57 @@
 /**
+ * The verdict of a *review*: what the rules found, and whether they could
+ * judge anything at all.
+ *
+ * "No findings" is not the same as "nothing was wrong". A scan that read no
+ * nodes, or a scope too narrow to judge, produces no findings either — and
+ * reading that as a clean bill of health is how a screen nobody looked at
+ * gets approved.
+ */
+export type ReviewVerdict = "PASS" | "FAIL" | "REVIEW" | "INDETERMINATE";
+
+export interface ReviewVerdictInput {
+  /** How many nodes the scan read. */
+  nodesExamined: number;
+  /** How many rules could have produced a finding. */
+  rulesEvaluated: number;
+  /** Whether the scan was cut short. */
+  truncated: boolean;
+  /** The findings that were produced. */
+  findings: Array<{ severity: string }>;
+}
+
+export interface ReviewVerdictResult {
+  verdict: ReviewVerdict;
+  reason: string;
+}
+
+export function reviewVerdict(input: ReviewVerdictInput): ReviewVerdictResult {
+  const serious = input.findings.filter((f) => f.severity === "critical" || f.severity === "serious");
+  if (input.nodesExamined === 0) {
+    return {
+      verdict: "INDETERMINATE",
+      reason: `The scan examined no node(s) and ${input.rulesEvaluated} rule(s) could judge nothing, so this is not a pass.`,
+    };
+  }
+  if (input.truncated) {
+    return {
+      verdict: "INDETERMINATE",
+      reason: `The scan was truncated after ${input.nodesExamined} node(s), so the screen was not fully examined.`,
+    };
+  }
+  if (serious.length > 0) {
+    return { verdict: "FAIL", reason: `${serious.length} finding(s) need attention.` };
+  }
+  if (input.findings.length > 0) {
+    return { verdict: "REVIEW", reason: `${input.findings.length} finding(s) are worth a human's eye.` };
+  }
+  return {
+    verdict: "PASS",
+    reason: `${input.rulesEvaluated} rule(s) ran over ${input.nodesExamined} node(s) and found nothing.`,
+  };
+}
+
+/**
  * The verdict of a repair loop.
  *
  * ## Why a loop needs a verdict of its own

@@ -1,11 +1,11 @@
 {
   "schemaVersion": "release-gate-v1",
-  "runId": "d3494813-2026-10-20T09-15-35-383Z",
-  "commit": "d3494813823d832628b0ea9e6d0fcc1d94ec954d",
+  "runId": "50916707-2026-10-20T11-38-16-585Z",
+  "commit": "50916707bc74ebf4f6816cace6c2814c50449540",
   "branch": "main",
-  "startedAt": "2026-10-20T09:15:35.383Z",
-  "finishedAt": "2026-10-20T09:16:36.306Z",
-  "durationMs": 60923,
+  "startedAt": "2026-10-20T11:38:16.585Z",
+  "finishedAt": "2026-10-20T11:39:19.221Z",
+  "durationMs": 62636,
   "node": "v22.17.0",
   "platform": "win32-x64",
   "config": {
@@ -26,8 +26,8 @@
     "passed": 6,
     "failed": 0,
     "blocked": 0,
-    "cases": 22,
-    "casesPassed": 22,
+    "cases": 25,
+    "casesPassed": 25,
     "casesFailed": 0
   },
   "groups": [
@@ -37,11 +37,11 @@
       "command": "node tests/issue-17-gauntlet.mjs",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 561,
-      "detail": "22/22 case(s) passed, run twice with identical verdicts",
+      "durationMs": 607,
+      "detail": "25/25 case(s) passed, run twice with identical verdicts",
       "extra": {
-        "total": 22,
-        "pass": 22,
+        "total": 25,
+        "pass": 25,
         "fail": 0,
         "blocked": 0,
         "indeterminate": 0,
@@ -129,6 +129,15 @@
             "detail": "4 invalid input(s) all failed closed"
           },
           {
+            "id": "B08",
+            "title": "The compiler keeps one coordinate space and reconciles the other",
+            "group": "geometry",
+            "issue": "#18",
+            "requirement": "Resolved geometry is page-absolute, emitted operations are parent-local, and the two are reconciled by a blocking check rather than assumed to agree.",
+            "status": "PASS",
+            "detail": "the resolved box is page-absolute, the operation is parent-local, and the trace check agrees"
+          },
+          {
             "id": "C01",
             "title": "Every edge contacts the node it names, and a connector inside its parent is not a defect",
             "group": "topology",
@@ -198,7 +207,7 @@
             "issue": "#15",
             "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
             "status": "PASS",
-            "detail": "5 workload(s) applied atomically; median apply 7ms, worst 18ms"
+            "detail": "5 workload(s) applied atomically; median apply 5ms, worst 17ms"
           },
           {
             "id": "G02",
@@ -237,6 +246,24 @@
             "detail": "a successful commit with no render is 'indeterminate', not a pass"
           },
           {
+            "id": "H03",
+            "title": "A review that could not examine the screen is INDETERMINATE, never a pass",
+            "group": "false-pass",
+            "issue": "#14",
+            "requirement": "A review reports the nodes examined, the rules evaluated and whether the scan was complete, and a result that could not judge anything is never a pass.",
+            "status": "PASS",
+            "detail": "an empty, a truncated, a failing, an advisory and a clean review each get their own verdict"
+          },
+          {
+            "id": "H04",
+            "title": "A screen that cannot be resolved is an ambiguity, not a random selection",
+            "group": "false-pass",
+            "issue": "#18",
+            "requirement": "A guard target that matches several frames is a question. A node id is used directly, and a name that matches nothing is a miss.",
+            "status": "PASS",
+            "detail": "a node id is used directly, a unique name resolves, and an ambiguous or missing name asks"
+          },
+          {
             "id": "I01",
             "title": "Two consecutive builds of the same brief produce the same structure",
             "group": "reproducibility",
@@ -254,7 +281,7 @@
       "command": "npm run stress:matrix -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 712,
+      "durationMs": 653,
       "detail": "every case(s) passed",
       "output": "\n> figma-design-agent@0.1.0 stress:matrix\n> node scripts/run-stress-matrix.mjs --strict\n\nstress matrix: 24 PASS, 0 FAIL, 4 BLOCKED (28 total)\n  cases   24 passing, 0 open, 4 blocked\n  json    D:\\Desktop\\Figdes\\artifacts\\stress-matrix\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-12-report.md\n"
     },
@@ -264,7 +291,7 @@
       "command": "npm run acceptance -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 663,
+      "durationMs": 602,
       "detail": "every acceptance case passed",
       "output": "\n> figma-design-agent@0.1.0 acceptance\n> node scripts/run-acceptance.mjs --strict\n\nacceptance: 25 PASS, 0 FAIL, 0 BLOCKED (25 total)\n  cases   17 offline, 8 live, 0 open\n  json    D:\\Desktop\\Figdes\\artifacts\\acceptance\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-13-report.md\n"
     },
@@ -274,14 +301,14 @@
       "command": "npm test",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 49296,
+      "durationMs": 50849,
       "detail": "898/898 test(s) passed",
       "tests": 898,
       "pass": 898,
       "fail": 0,
       "skipped": 0,
       "failures": [],
-      "output": "creen accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.1.0 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 740.5452\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 9.8795\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 23.1062\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 46.9331\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 22.3982\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 10.3502\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 41.4122\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 9.2725\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 15.3852\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 7.4239\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 8.8173\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 23.028\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 0.8045\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 3.878\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 19.9091\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1305.1802\n"
+      "output": "en accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.1.0 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 729.8714\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 10.4797\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 22.4385\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 46.9622\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 30.736\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 10.0746\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 41.5134\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 8.7418\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 16.0631\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 6.6016\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 10.1885\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 13.7212\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 1.2931\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 4.8108\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 34.2188\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1325.9615\n"
     },
     {
       "id": "design-benchmark",
@@ -289,7 +316,7 @@
       "command": "npm run benchmark:design",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 8295,
+      "durationMs": 8538,
       "detail": "9/9 benchmark case(s) passed",
       "passed": 9,
       "total": 9,
@@ -302,7 +329,7 @@
       "command": "npm run benchmark:live",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 1373,
+      "durationMs": 1367,
       "detail": "the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them",
       "found": 10,
       "expected": 10,
@@ -334,7 +361,7 @@
       "differing": [],
       "uncovered": [],
       "nativeStatus": "COMPLETE",
-      "output": "\n> figma-design-agent@0.1.0 benchmark:live\n> node scripts/run-live-benchmark.mjs\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\live-report.json\",\n  \"expectedCases\": 10,\n  \"foundCases\": 10,\n  \"completeCases\": 10,\n  \"missingCases\": [],\n  \"liveBenchmarkComplete\": true,\n  \"repoHead\": \"d3494813823d\",\n  \"staleCases\": [\n    \"data-heavy-workspace\",\n    \"editorial-product-page\",\n    \"exo-compute-topology\",\n    \"exo-configuration\",\n    \"exo-enterprise-workspace\",\n    \"exo-model-detail\",\n    \"exo-runtime-monitoring\",\n    \"generic-saas-dashboard\",\n    \"hard-stress-test\",\n    \"spatial-relationship\"\n  ],\n  \"casesWithoutBuild\": [\n    \"data-heavy-workspace\",\n    \"editorial-product-page\",\n    \"exo-compute-topology\",\n    \"exo-configuration\",\n    \"exo-enterprise-workspace\",\n    \"exo-model-detail\",\n    \"exo-runtime-monitoring\",\n    \"generic-saas-dashboard\",\n    \"hard-stress-test\",\n    \"spatial-relationship\"\n  ],\n  \"visualRegression\": {\n    \"differing\": [],\n    \"uncovered\": []\n  },\n  \"nativePath\": {\n    \"status\": \"COMPLETE\",\n    \"createdNodes\": 5\n  }\n}\n"
+      "output": "\n> figma-design-agent@0.1.0 benchmark:live\n> node scripts/run-live-benchmark.mjs\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\live-report.json\",\n  \"expectedCases\": 10,\n  \"foundCases\": 10,\n  \"completeCases\": 10,\n  \"missingCases\": [],\n  \"liveBenchmarkComplete\": true,\n  \"repoHead\": \"50916707bc74\",\n  \"staleCases\": [\n    \"data-heavy-workspace\",\n    \"editorial-product-page\",\n    \"exo-compute-topology\",\n    \"exo-configuration\",\n    \"exo-enterprise-workspace\",\n    \"exo-model-detail\",\n    \"exo-runtime-monitoring\",\n    \"generic-saas-dashboard\",\n    \"hard-stress-test\",\n    \"spatial-relationship\"\n  ],\n  \"casesWithoutBuild\": [\n    \"data-heavy-workspace\",\n    \"editorial-product-page\",\n    \"exo-compute-topology\",\n    \"exo-configuration\",\n    \"exo-enterprise-workspace\",\n    \"exo-model-detail\",\n    \"exo-runtime-monitoring\",\n    \"generic-saas-dashboard\",\n    \"hard-stress-test\",\n    \"spatial-relationship\"\n  ],\n  \"visualRegression\": {\n    \"differing\": [],\n    \"uncovered\": []\n  },\n  \"nativePath\": {\n    \"status\": \"COMPLETE\",\n    \"createdNodes\": 5\n  }\n}\n"
     }
   ],
   "coverage": [
@@ -347,8 +374,15 @@
         "B04",
         "B05",
         "B06",
+        "B08",
         "H01",
         "suite:issue14"
+      ]
+    },
+    {
+      "criterion": "The compiler keeps one coordinate space and reconciles the other",
+      "tests": [
+        "B08"
       ]
     },
     {
@@ -420,7 +454,14 @@
       "tests": [
         "H01",
         "H02",
+        "H03",
         "B06"
+      ]
+    },
+    {
+      "criterion": "Scope is resolved to the intended screen, and an ambiguous scope asks",
+      "tests": [
+        "H04"
       ]
     },
     {

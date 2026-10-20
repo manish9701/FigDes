@@ -1,0 +1,10 @@
+{
+  "id": "H03",
+  "title": "A review that could not examine the screen is INDETERMINATE, never a pass",
+  "group": "false-pass",
+  "requirement": "A review reports the nodes examined, the rules evaluated and whether the scan was complete, and a result that could not judge anything is never a pass.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "an empty, a truncated, a failing, an advisory and a clean review each get their own verdict",
+  "raw": {}
+}

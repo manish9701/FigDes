@@ -179,6 +179,33 @@ function devicePlacementBox(box: ResolvedBox, spec: ContentSpec): ResolvedBox {
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * Compiles a design IR into Figma operations.
+ *
+ * ## The coordinate-space contract
+ *
+ * Two spaces, and mixing them is how a screen ends up with a region in one
+ * place and its contents in another:
+ *
+ * - **Resolved boxes are page-absolute.** Everything the layout engine
+ *   computes — a region's frame, a child's position — is measured from the
+ *   canvas origin. One space, one origin, no ambiguity.
+ * - **Emitted operations are parent-local.** Figma's `x`/`y` on a child is
+ *   relative to its parent, so the operations carry the difference between the
+ *   child's absolute box and its parent's origin.
+ *
+ * The two are reconciled by `verifyOperationTrace`, which replays the emitted
+ * operations and compares them with the resolved boxes. That check is
+ * blocking: a program whose operations and geometry disagree is not a screen,
+ * it is a plan for one.
+ *
+ * ## Text heights
+ *
+ * A text node's height is measured when the caller can measure it (the plugin
+ * owns the font and the metrics) and estimated otherwise. The estimate is a
+ * character-count heuristic: close enough to place a screen, nowhere near
+ * close enough to be the truth, which is why the measured path exists.
+ */
 export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: number; height: number }>): CompileResult {
   const started = Date.now();
   const violations: CompileResult["violations"] = [];
@@ -1339,6 +1366,9 @@ function emitText(
       fontSize: Math.round((spec.size ?? scale.size) * typeScale * display),
       ...(spec.letterSpacing !== undefined ? { letterSpacing: spec.letterSpacing } : {}),
       ...(spec.fill !== undefined ? { fill: resolveToken(spec.fill) } : {}),
+      // The file's own text style, when the program named one: the design
+      // system, bound rather than redrawn.
+      ...(spec.textStyleId !== undefined ? { textStyleId: spec.textStyleId } : {}),
       width: Math.max(40, Math.round(spec.maxWidth ?? box.w)),
       // A deliberately truncated text: the box stays the size the layout
       // reserved and the text is cut with an ellipsis, which is the honest

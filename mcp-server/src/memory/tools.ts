@@ -11,8 +11,9 @@
  */
 import { z } from "zod";
 import { VerdictSchema } from "../../../shared/memory";
+import type { MetricsReport } from "../../../shared/protocol";
 import { inferComposition } from "../runtime/layout";
-import { runGuard, snapshotFromIR, type GuardSnapshot } from "./guard";
+import { runGuard, snapshotFromIR, decideGuardTarget, type GuardSnapshot } from "./guard";
 import { addNote, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
 import type { Session } from "../sessions";
 
@@ -50,6 +51,16 @@ export const DesignGuardArgs = z
   .object({
     /** Run against the connected file's real node tree. Requires the plugin. */
     inspect: z.boolean().optional(),
+    /**
+     * The screen to check: a node id ("123:456") or a frame's name.
+     *
+     * The current selection is a poor default for a screen-level rule: a
+     * designer with three layers selected would get a verdict about three
+     * layers, and the rules would either pass by default or fail on nothing.
+     * A named or identified target is resolved explicitly, and the resolved
+     * target is reported so the verdict can be read with its scope.
+     */
+    target: z.string().max(200).optional(),
     sessionId: z.string().max(200).optional(),
     /** Or run against a program that has not been built yet. */
     program: z.unknown().optional(),
@@ -159,10 +170,31 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
 
   let snapshot: GuardSnapshot;
 
-  if (args.inspect) {
+  if (args.inspect || args.target !== undefined) {
     if (!session) throw new Error("design_guard(inspect:true) needs a connected Figma plugin.");
-    const inspected = (await session.request("inspect_selection", { maxNodes: 2000 })) as Record<string, unknown>;
-    snapshot = snapshotFromInspected(inspected);
+    const resolved = await resolveGuardTarget(session, args.target);
+    if ("ambiguity" in resolved) {
+      // The screen could not be resolved uniquely. Say so, rather than
+      // checking a random selection and reporting a verdict about it.
+      return {
+        status: "indeterminate",
+        project: key,
+        verdict: "INDETERMINATE",
+        findings: [
+          {
+            verdict: "INDETERMINATE",
+            rule: "scope",
+            message: resolved.ambiguity,
+            evidence: { candidates: resolved.candidates },
+            nextStep: "Pass the target as a node id, or a name that matches exactly one frame.",
+          },
+        ],
+        stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+        snapshot: { source: "resolved-target", resolved: false, scope: null },
+        howToProceed: "Resolve the target and re-run. Nothing was checked, so nothing was approved.",
+      };
+    }
+    snapshot = resolved.snapshot;
   } else if (args.program !== undefined) {
     const { executeRuntime } = await import("../runtime/interpreter");
     const result = executeRuntime(args.program);
@@ -205,8 +237,86 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
   };
 }
 
-/** Builds a guard snapshot from an `inspect_selection` payload. */
-function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapshot {
+/**
+ * Builds a guard snapshot from a live measurement of a named target.
+ *
+ * The metrics carry the names, the text and the instance types, which is what
+ * the guard's rules read. The composition is unknown for a built screen — the
+ * layout engine's answer is not recoverable from the file — so it is left
+ * undefined rather than guessed.
+ */
+function snapshotFromMetrics(metrics: MetricsReport, targetId?: string): GuardSnapshot {
+  const nodes = metrics.nodes ?? [];
+  const names: string[] = [];
+  const texts: string[] = [];
+  const instanceTypes: string[] = [];
+  for (const node of nodes) {
+    if (node.name) names.push(node.name);
+    if (node.text?.content) texts.push(node.text.content);
+    if (node.type === "INSTANCE" || node.type === "COMPONENT" || node.type === "COMPONENT_SET") {
+      instanceTypes.push(node.name || node.type);
+    }
+  }
+  const counts = new Map<string, number>();
+  for (const type of instanceTypes) counts.set(type, (counts.get(type) ?? 0) + 1);
+  const components = [...counts.entries()].map(([type, count]) => ({ type, count }));
+
+  const truncated = metrics.truncated === true;
+  const root = nodes[0];
+  const screenLevel = nodes.length > 0 && (root?.type === "FRAME" || root?.type === "COMPONENT" || root?.type === "INSTANCE");
+
+  return {
+    source: "live",
+    resolved: nodes.length > 0,
+    nodeNames: names,
+    texts,
+    components,
+    scope: {
+      ...(targetId !== undefined ? { id: targetId } : {}),
+      ...(root?.name !== undefined ? { name: root.name } : {}),
+      ...(root?.type !== undefined ? { type: root.type } : {}),
+      nodeCount: nodes.length,
+      textCount: texts.length,
+      screenLevel,
+    },
+    ...(nodes.length === 0
+      ? { unresolvedReason: "The target resolved to nothing, so no rule could be evaluated." }
+      : truncated
+        ? { unresolvedReason: `The scan was truncated after ${nodes.length} node(s), so the screen was not fully examined.` }
+        : {}),
+  };
+}
+
+/**
+ * Resolves the screen a guard run is about.
+ *
+ * A node id is used directly. A name is searched for, and a name that matches
+ * more than one frame is an *ambiguity*, not a coin toss: the caller is asked
+ * which one, because a verdict about the wrong screen is worse than no
+ * verdict.
+ */
+async function resolveGuardTarget(
+  session: Session,
+  target: string | undefined,
+): Promise<{ snapshot: GuardSnapshot } | { ambiguity: string; candidates: string[] }> {
+  if (target === undefined) {
+    const inspected = (await session.request("inspect_selection", { maxNodes: 2000 })) as Record<string, unknown>;
+    return { snapshot: snapshotFromInspected(inspected) };
+  }
+
+  // A node id is unambiguous; a name has to be looked up.
+  const matches = /^\d+:\d+$/.test(target)
+    ? []
+    : (((await session.request("find_node", { name: target, limit: 10 })) as { matches?: Array<{ id?: string; name?: string; type?: string }> }).matches ?? []);
+  const decision = decideGuardTarget(target, matches);
+  if (decision.kind === "not-found") return { ambiguity: decision.message, candidates: [] };
+  if (decision.kind === "ambiguous") return { ambiguity: decision.message, candidates: decision.candidates };
+
+  const metrics = (await session.request("collect_metrics", { target: decision.id, maxNodes: 2000 })) as MetricsReport;
+  return { snapshot: snapshotFromMetrics(metrics, decision.id) };
+}
+
+/** Builds a guard snapshot from an `inspect_selection` payload. */function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapshot {
   const textNode = (node: Record<string, unknown>): string => (typeof node.characters === "string" ? node.characters : "");
 
   let maxNodes: number | undefined;

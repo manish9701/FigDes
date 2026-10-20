@@ -1273,6 +1273,17 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.letterSpacing !== undefined) text.letterSpacing = { value: op.letterSpacing, unit: "PIXELS" };
       if (op.textAlignHorizontal) text.textAlignHorizontal = op.textAlignHorizontal;
       if (op.textAlignVertical) text.textAlignVertical = op.textAlignVertical;
+      // The file's own text style, when the author named one. Binding the
+      // existing style is what keeps a new screen inside the design system
+      // instead of drawing its own type beside it.
+      if (op.textStyleId !== undefined) {
+        try {
+          text.textStyleId = op.textStyleId;
+        } catch {
+          // A missing style is not a reason to fail the whole transaction: the
+          // text is still drawn, with the properties the op carried.
+        }
+      }
       text.fills = toPaints(op.fill ?? [{ color: "#111111", opacity: 1 }]);
       if (op.opacity !== undefined) text.opacity = op.opacity;
       if (op.visible !== undefined) text.visible = op.visible;

@@ -1,0 +1,10 @@
+{
+  "id": "B08",
+  "title": "The compiler keeps one coordinate space and reconciles the other",
+  "group": "geometry",
+  "requirement": "Resolved geometry is page-absolute, emitted operations are parent-local, and the two are reconciled by a blocking check rather than assumed to agree.",
+  "issue": "#18",
+  "status": "PASS",
+  "detail": "the resolved box is page-absolute, the operation is parent-local, and the trace check agrees",
+  "raw": {}
+}

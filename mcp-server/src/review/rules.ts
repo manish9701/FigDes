@@ -76,6 +76,21 @@ const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding
   { name: "unnamed-frame-children", fn: unnamedFrameChildren },
 ];
 
+/**
+ * How many rules a ruleset evaluates.
+ *
+ * Reported with every verdict, because "no findings" only means something next
+ * to the number of rules that could have produced one.
+ */
+export function evaluatedRuleCount(ruleset: RuleSet): number {
+  return ruleset === "audit" ? AUDIT_RULES.length : REVIEW_RULES.length;
+}
+
+/** The names of the rules a ruleset evaluates, for a report that has to be auditable. */
+export function evaluatedRuleNames(ruleset: RuleSet): string[] {
+  return (ruleset === "audit" ? AUDIT_RULES : REVIEW_RULES).map((r) => r.name);
+}
+
 export function runRules(metrics: MetricsReport, ruleset: RuleSet): Finding[] {
   const nodes = metrics.nodes.filter((n) => n.visible);
   if (nodes.length === 0) return [];

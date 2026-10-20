@@ -19,9 +19,11 @@ import {
   type ToolName,
   type PluginToolName,
   type TransactionResult,
+  type ReviewVerdict,
 } from "../../shared/protocol";
 import { SessionRegistry, type Session, TransactionTimeoutError, SessionDisconnectedError } from "./sessions";
-import { runRules, summarise, type RuleSet } from "./review/rules";
+import { runRules, summarise, evaluatedRuleCount, type RuleSet } from "./review/rules";
+import { reviewVerdict } from "./review/verdict";
 import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue } from "./runtime/tools";
 import { renderDesign } from "./render-tool";
 import { DesignGuardArgs, ProjectMemoryArgs, designGuardTool, projectMemoryTool } from "./memory/tools";
@@ -514,6 +516,26 @@ async function reviewSession(
 
   const summary = summarise(findings);
 
+  /**
+   * The verdict, and what it was based on.
+   *
+   * "No findings" is not the same as "nothing was wrong": a scan that read no
+   * nodes, or a scope too narrow to judge, produces no findings either. So the
+   * report says how many rules were evaluated, how many nodes were examined,
+   * and whether the scan was complete — and a result that could not judge
+   * anything is INDETERMINATE rather than a pass.
+   */
+  const rulesEvaluated = evaluatedRuleCount(ruleset);
+  const nodesExamined = raw.nodeCount;
+  const scopeIsScreen = raw.nodeCount > 0;
+  const judged = reviewVerdict({
+    nodesExamined,
+    rulesEvaluated,
+    truncated: raw.truncated === true,
+    findings: findings.map((f) => ({ severity: f.severity })),
+  });
+  const verdict = judged.verdict as ReviewVerdict;
+
   return {
     scope: raw.scope,
     reviewedNodes: raw.nodeCount,
@@ -522,6 +544,25 @@ async function reviewSession(
     autoFixable: findings.filter((f) => f.confidence === "high" && f.suggestedOperations?.length).length,
     findings,
     scan: raw.scan,
+    verdict,
+    /**
+     * What the verdict was based on, so a reader can tell "checked and clean"
+     * from "nothing to check".
+     */
+    evidence: {
+      nodesExamined,
+      rulesEvaluated,
+      rulesSkipped: 0,
+      truncated: raw.truncated === true,
+      scopeIsScreen,
+      reason: judged.reason,
+    },
+    ...(verdict === "INDETERMINATE"
+      ? {
+          howToProceed:
+            "This is not a pass: the scan could not examine the screen. Resolve the target and re-run, and treat the result as unknown until it does.",
+        }
+      : {}),
   };
 }
 

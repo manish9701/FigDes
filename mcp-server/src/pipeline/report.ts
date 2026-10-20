@@ -39,6 +39,21 @@ export interface ReportInput {
   visual: { status: "pass" | "fail" | "review" | "indeterminate" | "not-run"; detail: string; renderRevision: string | null };
   /** The repairs that were applied. */
   repairs: Array<{ findingId: string; operations: number; result: "applied" | "skipped" | "failed"; detail: string }>;
+  /**
+   * The repair pass's own verdict.
+   *
+   * "The transaction committed" is not "the defect is gone". The pass
+   * re-measures and compares, and this says what it found: no unresolved
+   * high-confidence finding, no regression, or a screen that could not be
+   * re-measured at all.
+   */
+  repairVerification?: {
+    verdict: "PASS" | "FAIL" | "INDETERMINATE";
+    reason: string;
+    fixed: string[];
+    unresolved: Array<{ key: string; rule: string; targets: string[]; reason: string }>;
+    regressions: Array<{ key: string; rule: string; targets: string[]; title: string }>;
+  };
   /** Everything still open. */
   findings: PipelineFinding[];
   /** The checks that could not run. */
@@ -93,8 +108,21 @@ export function buildReport(input: ReportInput): PipelineReport {
       detail:
         input.repairs.length === 0
           ? "No repair was attempted."
-          : `${input.repairs.filter((r) => r.result === "applied").length} of ${input.repairs.length} repair(s) applied; ${input.repairs.filter((r) => r.result === "skipped").length} skipped, ${input.repairs.filter((r) => r.result === "failed").length} failed.`,
+          : `${input.repairs.filter((r) => r.result === "applied").length} of ${input.repairs.length} repair(s) applied; ${input.repairs.filter((r) => r.result === "skipped").length} skipped, ${input.repairs.filter((r) => r.result === "failed").length} failed.` +
+            (input.repairVerification
+              ? ` The pass then re-measured the screen: ${input.repairVerification.verdict} — ${input.repairVerification.reason}`
+              : ""),
     },
+    ...(input.repairVerification
+      ? {
+          repairVerification: {
+            verdict: input.repairVerification.verdict,
+            reason: input.repairVerification.reason,
+            fixed: input.repairVerification.fixed.length,            unresolved: input.repairVerification.unresolved,
+            regressions: input.repairVerification.regressions,
+          },
+        }
+      : {}),
     remainingFindings: input.findings,
     blocked: input.blocked,
     trace: input.trace,

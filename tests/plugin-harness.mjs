@@ -42,6 +42,17 @@ function mixin(node) {
   node.resize = (w, h) => {
     node.width = w;
     node.height = h;
+    // A text node that wraps grows downwards. The mock computes the wrapped
+    // height from the characters and the width, with a deliberately different
+    // ratio from the server's own estimate: a test that measures through the
+    // mock can then prove the compiler used the *measurement* rather than its
+    // own guess, because the two numbers differ.
+    if (node.type === "TEXT" && node.textAutoResize === "HEIGHT") {
+      const size = typeof node.fontSize === "number" ? node.fontSize : 14;
+      const perLine = Math.max(1, Math.floor(w / (size * 0.5)));
+      const lines = Math.max(1, Math.ceil(String(node.characters ?? "").length / perLine));
+      node.height = Math.round(lines * size * 1.25);
+    }
     return { width: w, height: h };
   };
 

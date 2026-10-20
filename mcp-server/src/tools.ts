@@ -454,6 +454,22 @@ const DISCONNECTED = {
 };
 
 /**
+ * Whether the server and the plugin can be assumed to be the same code.
+ *
+ * "The same commit" is the only state that lets a live measurement be read as
+ * a measurement of the repository. Anything else is stated rather than
+ * assumed, because a build that cannot be named is a measurement about
+ * something nobody can point at.
+ */
+export function buildCompatibility(serverBuild: string, pluginBuild: string | undefined): "same-commit" | "different-commit" | "unverifiable" {
+  if (!pluginBuild || pluginBuild === "unknown") return "unverifiable";
+  if (pluginBuild === serverBuild) return "same-commit";
+  // The stamp is a short SHA, optionally with a dirtiness marker.
+  const sha = (b: string) => b.split("-")[0] ?? b;
+  return sha(serverBuild) === sha(pluginBuild) ? "same-commit" : "different-commit";
+}
+
+/**
  * A failed transaction is thrown as an MCP tool error rather than returned as a
  * successful payload. Returning `{status:"failed"}` as a *success* invites the
  * model to gloss over it and report the design as done.
@@ -586,6 +602,13 @@ export const TOOLS: ToolDefinition[] = [
           builds: {
             server: SERVER_BUILD,
             plugin: status.build ?? "unknown",
+            /**
+             * Whether the two can be assumed to be the same code.
+             *
+             * `same-commit` is the only state that lets a live measurement be
+             * read as a measurement of the repository.
+             */
+            compatibility: buildCompatibility(SERVER_BUILD, status.build),
             note:
               status.build && status.build !== "unknown"
                 ? `Server build ${SERVER_BUILD}, plugin bundle build ${status.build}. If either does not match the repository HEAD, redeploy the server and reload the plugin (close and reopen it) before measuring.`

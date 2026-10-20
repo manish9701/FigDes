@@ -20,6 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { runGauntlet, summariseGauntlet, CASES, COVERAGE, SCENARIO_MAP } from "./issue-17-gauntlet.mjs";
+import { buildCompatibility } from "../mcp-server/dist-test/tools/tools.js";
 
 /* -------------------------------------------------------------------------- */
 /* The gauntlet                                                                 */
@@ -126,6 +127,21 @@ test("every gauntlet case is claimed by at least one criterion", () => {
   const claimed = new Set(COVERAGE.flatMap((row) => row.tests));
   const unclaimed = CASES.map((c) => c.id).filter((id) => !claimed.has(id));
   assert.deepEqual(unclaimed, [], "these cases are not claimed by any acceptance criterion");
+});
+
+/* -------------------------------------------------------------------------- */
+/* The build stamps                                                            */
+/* -------------------------------------------------------------------------- */
+
+test("the server and the plugin can be compared, and an unknown build is not a match", () => {
+  // A live measurement runs against two builds, and either can be older than
+  // the repository. The only state that lets a measurement be read as a
+  // measurement of the repository is "same-commit".
+  assert.equal(buildCompatibility("abc123def456", "abc123def456"), "same-commit");
+  assert.equal(buildCompatibility("abc123def456", "abc123def456-dirty"), "same-commit");
+  assert.equal(buildCompatibility("abc123def456", "999999999999"), "different-commit");
+  assert.equal(buildCompatibility("abc123def456", undefined), "unverifiable");
+  assert.equal(buildCompatibility("abc123def456", "unknown"), "unverifiable");
 });
 
 /* -------------------------------------------------------------------------- */

@@ -18,6 +18,7 @@ import { executeRuntime } from "../runtime/interpreter";
 import { inferComposition } from "../runtime/layout";
 import { canvasSize } from "../../../shared/ir";
 import { runRules } from "./rules";
+import { verifyRepairs } from "./verdict";
 import { scoreDesign } from "./score";
 import { critiqueVisual } from "./critique";
 import { evaluateQualityGate } from "./quality";
@@ -674,16 +675,24 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
 
   let converged = false;
   const dispositions = new Map<string, FindingDisposition>();
+  // The last iteration's findings, kept so the verdict can be computed from
+  // the measurements rather than from the loop's own bookkeeping.
+  type LoopFinding = ReturnType<typeof runRules>[number];
+  let lastFindings: LoopFinding[] = [];
+  let lastActionable: LoopFinding[] = [];
+  let lastAfter = new Map<string, LoopFinding>();
 
   for (let i = 1; i <= args.maxIterations; i++) {
     const raw = (await session.request("collect_metrics", target)) as MetricsReport;
     const allFindings = runRules(raw, "review");
     const findings = allFindings.filter((f) => f.confidence === "high");
+    lastFindings = findings;
 
     // Preserve list applies to node ids and to rule names: either skips a fix.
     const actionable = findings.filter(
       (f) => !preserve.has(f.rule) && f.suggestedOperations && f.suggestedOperations.length > 0 && !f.nodeIds.some((id) => preserve.has(id)),
     );
+    lastActionable = actionable;
     const skipped: RefineSkip[] = findings.filter((f) => !actionable.includes(f)).map((f) => ({ rule: f.rule, reason: skipReason(f, preserve) }));
 
     // Every high-confidence finding gets a disposition, including the ones a
@@ -796,8 +805,44 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     // not "the finding is gone": a setFill on the wrong node, or a node the
     // client cannot read back, both execute cleanly and fix nothing. Only a
     // re-measurement can tell them apart, so it is not optional.
-    const recheck = (await session.request("collect_metrics", target)) as MetricsReport;
+    let recheck: MetricsReport | null = null;
+    let recheckError: string | null = null;
+    try {
+      recheck = (await session.request("collect_metrics", target)) as MetricsReport;
+    } catch (err) {
+      recheckError = err instanceof Error ? err.message : String(err);
+    }
+    if (recheck === null) {
+      // The loop cannot see the result. Say so, rather than reporting the
+      // fixes as applied and the screen as improved.
+      for (const f of actionable) {
+        const d = dispositions.get(findingKey(f));
+        if (!d) continue;
+        d.disposition = "blocked";
+        d.reason = `the re-check could not run, so the repair cannot be verified: ${recheckError ?? "no reason recorded"}`;
+      }
+      iterations.push({
+        iteration: i,
+        highConfidenceFindings: findings.length,
+        appliedFixes: operations.length,
+        appliedRules: actionable.map((f) => f.rule),
+        skipped,
+        remainingHigh: -1,
+        verified: 0,
+        observed: `the re-check could not run: ${recheckError ?? "no reason recorded"}`,
+      });
+      return {
+        status: "fix-failed",
+        iterations,
+        dispositions: [...dispositions.values()],
+        error: `the re-check could not run: ${recheckError ?? "no reason recorded"}`,
+        verdict: "INDETERMINATE",
+        verdictReason: "The repairs were applied but the screen could not be re-measured, so nothing about it has been verified.",
+        howToProceed: "Re-read the target and re-run the loop; the repairs are in the file.",
+      };
+    }
     const after = new Map(runRules(recheck, "review").map((f) => [findingKey(f), f]));
+    lastAfter = after;
     let verified = 0;
 
     for (const f of actionable) {
@@ -810,7 +855,10 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         d.reason = "the operation was applied but the finding is still reported on re-measurement";
       } else {
         d.disposition = "fixed";
-        d.after = null;
+        // The before/after pair, even when the "after" is an absence. A
+        // repair that cannot be shown to have changed anything is not a
+        // verified repair.
+        d.after = { gone: true, remeasured: true };
         d.reason = "applied and no longer reported on re-measurement";
         verified += 1;
       }
@@ -842,8 +890,51 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   const counts: Record<string, number> = {};
   for (const d of all) counts[d.disposition] = (counts[d.disposition] ?? 0) + 1;
 
+  /**
+   * The loop's own verdict.
+   *
+   * `converged` says the loop stopped; this says whether the screen is
+   * actually better, and it is computed from the measurements rather than
+   * from the loop's own bookkeeping. A repair that introduced a new finding,
+   * or a repaired finding that is still reported, is a FAIL — and a loop that
+   * could not re-measure is INDETERMINATE, never a pass.
+   */
+  const verification = verifyRepairs({
+    before: lastFindings.map((f) => ({
+      key: findingKey(f),
+      rule: f.rule,
+      severity: f.severity,
+      confidence: f.confidence,
+      title: f.title,
+      nodeIds: [...f.nodeIds],
+      evidence: { ...(f.evidence as Record<string, unknown>) },
+    })),
+    after: [...lastAfter.values()].map((f) => ({
+      key: findingKey(f),
+      rule: f.rule,
+      severity: f.severity,
+      confidence: f.confidence,
+      title: f.title,
+      nodeIds: [...f.nodeIds],
+      evidence: { ...(f.evidence as Record<string, unknown>) },
+    })),
+    applied: lastActionable.map((f) => ({ key: findingKey(f), rule: f.rule, targets: [...f.nodeIds] })),
+    recheck: "ran",
+    notAutoFixable: counts["not-auto-fixable"] ?? 0,
+    blocked: counts["blocked"] ?? 0,
+  });
+
   return {
     status: converged ? "converged" : "budget-exhausted",
+    verdict: verification.verdict,
+    verdictReason: verification.reason,
+    verification: {
+      fixed: verification.fixed.length,
+      unresolved: verification.unresolved,
+      regressions: verification.regressions,
+      evidence: verification.evidence,
+      measured: verification.measured,
+    },
     iterations,
     visualGoals: goals,
     /**

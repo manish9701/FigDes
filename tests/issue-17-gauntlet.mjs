@@ -932,6 +932,142 @@ const E01 = {
   },
 };
 
+const E02 = {
+  id: "E02",
+  title: "The reviewer tells a search field from a topology connector",
+  group: "review",
+  requirement:
+    "A placeholder inside a search field is the field's content, not a collision with a route. A label sitting on a real connector is still a serious finding.",
+  issue: "#14",
+  run: () => {
+    // A search field: a 320x32 bordered rectangle with the placeholder text
+    // inside it, both children of the toolbar. Ten to one, long and flat — the
+    // aspect ratio that used to make the reviewer call it a route.
+    const report = metrics([
+      node({ id: "toolbar", name: "Toolbar", parentId: null, x: 0, y: 0, w: 1440, h: 64, depth: 0, type: "FRAME", fill: "#FFFFFF" }),
+      node({
+        id: "field",
+        name: "Search field",
+        parentId: "toolbar",
+        x: 960,
+        y: 16,
+        w: 320,
+        h: 32,
+        depth: 1,
+        type: "RECTANGLE",
+        fill: "#FFFFFF",
+        stroke: { hex: "#D9D8D0", weight: 1 },
+        radius: 6,
+      }),
+      node({
+        id: "placeholder",
+        name: "Search",
+        parentId: "toolbar",
+        x: 972,
+        y: 26,
+        w: 120,
+        h: 14,
+        depth: 1,
+        type: "TEXT",
+        fill: "#9A9789",
+        background: "#FFFFFF",
+        text: { content: "Search clusters", length: 14, truncated: false, size: 12, family: "Inter", style: "Regular", color: "#9A9789", styled: false },
+      }),
+      // A real topology connector with a label sitting on it: the genuine
+      // defect the rule exists for.
+      node({ id: "map", name: "Map", parentId: null, x: 0, y: 64, w: 1440, h: 836, depth: 0, type: "FRAME", fill: "#FFFFFF" }),
+      node({ id: "route", name: "Vector", parentId: "map", x: 300, y: 500, w: 900, h: 2, depth: 1, type: "VECTOR" }),
+      node({
+        id: "warning",
+        name: "MEMORY TOO LOW",
+        parentId: "map",
+        x: 600,
+        y: 494,
+        w: 180,
+        h: 8,
+        depth: 1,
+        type: "TEXT",
+        fill: "#111111",
+        background: "#FFFFFF",
+        text: { content: "MEMORY TOO LOW", length: 14, truncated: false, size: 7, family: "Geist Mono", style: "Regular", color: "#111111", styled: true },
+      }),
+      // A divider and a link: flat, thin, and named with a word the
+      // interactive pattern matches. Neither can be pressed.
+      node({ id: "divider", name: "Quick action divider 1", parentId: "toolbar", x: 960, y: 60, w: 330, h: 1, depth: 1, type: "RECTANGLE", fill: "#E8E6DF" }),
+      node({ id: "link", name: "Node link left", parentId: "map", x: 300, y: 420, w: 220, h: 3, depth: 1, type: "RECTANGLE", fill: "#0B6BCB" }),
+      // A real icon button with no label: the genuine case the rule exists for.
+      node({ id: "iconbutton", name: "Filter button", parentId: "toolbar", x: 1300, y: 16, w: 32, h: 32, depth: 1, type: "RECTANGLE", fill: "#FFFFFF", radius: 6 }),
+      // The live geometry of the real screen, measured: the search field's
+      // background is 930x44 and the placeholder sits inside it, and the
+      // topology's grid lines are long flat rules with a device label on one.
+      node({ id: "searchbg", name: "Topbar search background", parentId: "toolbar", x: 248, y: 22, w: 930, h: 44, depth: 1, type: "RECTANGLE", fill: "#FFFFFF", radius: 10 }),
+      node({
+        id: "searchtext",
+        name: "Search",
+        parentId: "toolbar",
+        x: 272,
+        y: 36,
+        w: 800,
+        h: 17,
+        depth: 1,
+        type: "TEXT",
+        fill: "#9A9789",
+        background: "#FFFFFF",
+        text: { content: "Type a command or search…", length: 23, truncated: false, size: 13, family: "Inter", style: "Regular", color: "#9A9789", styled: false },
+      }),
+      node({ id: "gridline", name: "Topology grid horizontal 1", parentId: "map", x: 248, y: 300, w: 930, h: 1, depth: 1, type: "RECTANGLE", fill: "#E7E8DD" }),
+      node({
+        id: "devicelabel",
+        name: "DESKTOP-01",
+        parentId: "map",
+        x: 280,
+        y: 294,
+        w: 180,
+        h: 40,
+        depth: 1,
+        type: "TEXT",
+        fill: "#111111",
+        background: "#0B1512",
+        text: { content: "DESKTOP-01\nRTX 4090", length: 19, truncated: false, size: 10, family: "Geist Mono", style: "Regular", color: "#111111", styled: true },
+      }),
+    ]);
+
+    const findings = runRules(report, "review");
+    const collisions = findings.filter((f) => f.rule === "text-route-collision");
+    const unlabelled = findings.filter((f) => f.rule === "icon-only-control");
+    const tapTargets = findings.filter((f) => f.rule === "tap-target-size");
+    const unmet = [];
+    const onField = collisions.filter((f) => f.nodeIds.includes("placeholder") || f.nodeIds.includes("searchtext"));
+    if (onField.length > 0) {
+      unmet.push(`the search field's placeholder was reported as a route collision: ${onField.map((f) => f.title).join("; ")}`);
+    }
+    const onGrid = collisions.filter((f) => f.nodeIds.includes("devicelabel"));
+    if (onGrid.length > 0) {
+      unmet.push(`a device label on the topology's grid line was reported as a route collision: ${onGrid.map((f) => f.title).join("; ")}`);
+    }
+    const onRoute = collisions.filter((f) => f.nodeIds.includes("warning"));
+    if (onRoute.length === 0) {
+      unmet.push("the label sitting on a real connector was not reported: the rule became too lenient");
+    } else if (onRoute[0].severity !== "serious") {
+      unmet.push(`the genuine collision was reported as ${onRoute[0].severity}, expected serious`);
+    }
+    for (const rule of ["divider", "link"]) {
+      if (unlabelled.some((f) => f.nodeIds.includes(rule))) {
+        unmet.push(`'${rule}' was reported as an unlabelled control: a rule cannot be pressed`);
+      }
+      if (tapTargets.some((f) => f.nodeIds.includes(rule))) {
+        unmet.push(`'${rule}' was reported as a too-small tap target: a rule has no target`);
+      }
+    }
+    if (!unlabelled.some((f) => f.nodeIds.includes("iconbutton"))) {
+      unmet.push("the genuine unlabelled icon button was not reported");
+    }
+    return unmet.length === 0
+      ? ok(`the placeholder inside the search field and the two rules are untouched; the label on the connector is still ${onRoute[0].severity} and the icon button is still reported`)
+      : fail(unmet.join("; "), { collisions: collisions.map((f) => ({ rule: f.rule, title: f.title, nodeIds: f.nodeIds })) });
+  },
+};
+
 /* -------------------------------------------------------------------------- */
 /* F — repair-loop correctness                                                  */
 /* -------------------------------------------------------------------------- */
@@ -1329,7 +1465,7 @@ const I01 = {
 /* The gauntlet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, F01, F02, G01, G02, G03, H01, H02, I01];
+export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, C01, D01, D02, E01, E02, F01, F02, G01, G02, G03, H01, H02, I01];
 
 /**
  * Runs the gauntlet.
@@ -1372,7 +1508,8 @@ export const COVERAGE = [
   { criterion: "Topology edges attach to correct semantic nodes after reflow", tests: ["B03", "C01"] },
   { criterion: "No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text", tests: ["B04", "D01", "D02", "E01"] },
   { criterion: "Contrast is measured against the true rendered surface; thresholds unchanged", tests: ["D01", "D02"] },
-  { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01"] },
+  { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01", "E02"] },
+  { criterion: "The review engine tells a search field from a topology connector", tests: ["E02"] },
   { criterion: "Every repair is verified by a second structural check and render/review", tests: ["F01", "F02", "H02"] },
   { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "H02", "B06"] },
   { criterion: "Performance is measured without bypassing correctness checks", tests: ["G01", "suite:issue15"] },

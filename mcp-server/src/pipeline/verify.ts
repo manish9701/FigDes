@@ -620,6 +620,7 @@ export function verifyLive(
       findings.push({
         id: findingId(`rule-${f.rule}`, i),
         stage: "live",
+        rule: f.rule,
         severity: f.severity === "critical" ? "critical" : f.severity === "serious" ? "high" : "low",
         confidence: f.confidence === "high" ? 0.9 : f.confidence === "medium" ? 0.6 : 0.3,
         nodeIds: f.nodeIds ?? [],

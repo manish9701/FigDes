@@ -169,7 +169,7 @@ async function availableFonts(): Promise<ReadonlyArray<Font>> {
  * A missing family is reported, never silently substituted — otherwise the
  * model believes it applied a brand font when it did not.
  */
-async function loadFont(family: string, style: string): Promise<FontName> {
+export async function loadFont(family: string, style: string): Promise<FontName> {
   const key = `${family}::${style}`;
   const cached = fontCache.get(key);
   if (cached) return cached;

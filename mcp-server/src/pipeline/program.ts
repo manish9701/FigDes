@@ -166,6 +166,10 @@ export function buildProgram(brief: NormalizedBrief, plan: CompositionPlan): Bui
         // engine that this region holds an instrument strip rather than a
         // paragraph, and dropping it turns a band into a single column.
         composition: region.composition,
+        // Whether this region's content may leave it. The compiler refuses a
+        // build whose content escapes a region that does not allow it, so the
+        // plan has to say which regions may.
+        overflow: region.constraints.overflow,
         ...(region.layoutMode === "grid" ? { layout: "grid" } : {}),
         // The column count was worked out from the region's height and the
         // number of items it holds, so the content fits instead of running

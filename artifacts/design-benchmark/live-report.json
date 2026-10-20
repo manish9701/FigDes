@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-20T07:50:39.633Z",
+  "generatedAt": "2026-10-20T09:14:58.919Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -13,7 +13,7 @@
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -23,7 +23,7 @@
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -33,7 +33,7 @@
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -43,7 +43,7 @@
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -53,7 +53,7 @@
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -63,7 +63,7 @@
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -73,7 +73,7 @@
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -83,7 +83,7 @@
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -93,7 +93,7 @@
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": "unknown",
       "pluginBuild": "unknown",
@@ -103,7 +103,7 @@
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
+      "repoHead": "fa9f9ee1345b2d08cf9d0bd5abf7ee3e039ffbf4",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,

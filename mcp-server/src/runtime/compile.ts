@@ -179,7 +179,7 @@ function devicePlacementBox(box: ResolvedBox, spec: ContentSpec): ResolvedBox {
 /* Helpers                                                                     */
 /* -------------------------------------------------------------------------- */
 
-export function compileIR(ir: DesignIR): CompileResult {
+export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: number; height: number }>): CompileResult {
   const started = Date.now();
   const violations: CompileResult["violations"] = [];
   const operations: Operation[] = [];
@@ -453,7 +453,7 @@ export function compileIR(ir: DesignIR): CompileResult {
       h: Math.max(0, region.h - pad.top - pad.bottom),
     };
 
-    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look });
+    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics });
     if (used) algorithms[region.id] = used;
   }
 
@@ -678,6 +678,11 @@ export function compileIR(ir: DesignIR): CompileResult {
     "connector",
     "content-parent",
     "identity",
+    // Content that escapes the region that owns it is a structural defect, and
+    // the review engine cannot see it: by the time the screen exists, the
+    // content and the region have already drifted apart. A region that allows
+    // overflow reports it as "containment-allowed" instead, which is advisory.
+    "containment",
     // Product guardrails are declared as constraints, so violating one is the
     // program contradicting itself. Blocking here is what makes X08 agree with
     // the documented severity.
@@ -1030,8 +1035,10 @@ function emitContent(args: {
   titleScale: number;
   /** Preset look: nav voice, value numerals, header scale, panel padding. */
   look: StyleLook;
+  /** Measured text heights, when the caller could measure them. */
+  textMetrics?: Map<string, { width: number; height: number }>;
 }): string | undefined {
-  const { ir, region, content, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look } = args;
+  const { ir, region, content, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics } = args;
   const grid = ir.canvas.grid;
 
   const textItems = content.filter((c) => c.kind === "text");
@@ -1255,7 +1262,7 @@ function emitContent(args: {
     if (requested === "masonry") {
       const points = runAlgorithm(
         "masonry",
-        flow.map((c, i) => ({ id: c.id, order: i, height: estimateHeight(c, inner.w, typeScale, titleScale) })),
+        flow.map((c, i) => ({ id: c.id, order: i, height: estimateHeight(c, inner.w, typeScale, titleScale, grid, look, textMetrics) })),
         [],
         { bounds: inner, gap, columns: flowColumns },
       ).points;
@@ -1264,7 +1271,7 @@ function emitContent(args: {
         const at = points.get(spec.id);
         if (!at) continue;
         const w = (inner.w - gap * (flowColumns - 1)) / flowColumns;
-        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look) }, spec);
+        const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look, textMetrics) }, spec);
         const final = resolvedSize(spec, box, grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
@@ -1273,7 +1280,7 @@ function emitContent(args: {
     } else {
       const placed = packContent({
         region: inner,
-        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale, grid, look) })),
+        items: flow.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale, grid, look, textMetrics) })),
         gap,
         columns: flowColumns,
       });
@@ -2763,15 +2770,18 @@ function assertResolvedGeometry(
         box.x + box.w > region.x + region.w + CANVAS_TOLERANCE ||
         box.y + box.h > region.y + region.h + CANVAS_TOLERANCE;
       if (!outside) continue;
+      // A region that explicitly allows overflow is a field that may carry a
+      // diagram past its frame; the overflow is reported, but it does not
+      // refuse the build.
+      const allows = (region as { overflow?: string }).overflow === "allow";
       violations.push({
-        // Its own rule, and deliberately not a blocking one. Dense content
-        // overflowing its frame is a density problem the review engine already
-        // has an `overflow` rule for, and refusing to build it would break
-        // legitimate dense layouts. What this catches that review cannot is the
-        // *structural* divergence — a region that moved and took its contents
-        // with it, or failed to.
-        rule: "containment",
-        message: `Content '${child}' is placed at (${Math.round(box.x)}, ${Math.round(box.y)}) ${Math.round(box.w)}x${Math.round(box.h)}, outside its region '${region.id}' which spans (${Math.round(region.x)}, ${Math.round(region.y)}) ${span(region)}.`,
+        // Its own rule. Blocking by default: content that escapes its region
+        // is a structural defect, not a density problem, and the review engine
+        // cannot see it - the review reads a built screen, where the content
+        // and the region have already drifted apart. A region that allows
+        // overflow says so, and then the finding is advisory.
+        rule: allows ? "containment-allowed" : "containment",
+        message: `Content '${child}' is placed at (${Math.round(box.x)}, ${Math.round(box.y)}) ${Math.round(box.w)}x${Math.round(box.h)}, outside its region '${region.id}' which spans (${Math.round(region.x)}, ${Math.round(region.y)}) ${span(region)}.${allows ? " The region allows overflow, so this is reported rather than refused." : ""}`,
       });
     }
   }
@@ -3673,7 +3683,7 @@ const FIXED_COMPONENT_HEIGHT: Record<string, number> = {
   button: 40,
 };
 
-function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK): number {
+function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK, textMetrics?: Map<string, { width: number; height: number }>): number {
   if (spec.kind !== "text") {
     if (spec.kind === "component") {
       if (spec.type === "topologyMap") return Math.round(320 * typeScale);
@@ -3686,6 +3696,13 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
       return Math.round((fixed ?? 90) * typeScale);
     }
     return 32;
+  }
+
+  const measured = textMetrics?.get(spec.id);
+  if (measured !== undefined && measured.height > 0) {
+    // The measurement is the truth, and it already includes the type scale,
+    // because the plugin measured the string at the size it will be drawn.
+    return Math.max(1, Math.round(measured.height));
   }
 
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;

@@ -149,6 +149,7 @@ const REGION_ARGS = new Set([
   "gridColumns",
   "gridGutter",
   "autoLayout",
+  "overflow",
 ]);
 const CONTENT_ARGS = new Set([
   "text",
@@ -535,7 +536,21 @@ warnings: string[];
  * rather than exceptions, because dropping one card is better than failing a
  * whole screen — but the warnings are returned so the caller always knows.
  */
-export function executeRuntime(input: unknown): RuntimeResult {
+/**
+ * What the caller knows that the program does not.
+ *
+ * `textMetrics` is the measured truth about how tall each text node renders.
+ * Without it the compiler falls back to a character-count estimate, which is
+ * close enough to place a screen and nowhere near close enough to be the
+ * truth — and the difference shows up as a dry run that disagrees with the
+ * screen Figma builds.
+ */
+export interface RuntimeOptions {
+  /** Measured text heights, keyed by the text node's id. */
+  textMetrics?: Map<string, { width: number; height: number }>;
+}
+
+export function executeRuntime(input: unknown, options: RuntimeOptions = {}): RuntimeResult {
   const warnings: string[] = [];
 
   // Parsed leniently so a single bad field cannot cost the user the whole
@@ -696,6 +711,9 @@ regions.push({
       ...(args.radius !== undefined ? { radius: coerceNumber(args.radius, 0, 0, 200) } : {}),
       ...(args.gridColumns !== undefined ? { gridColumns: Math.max(1, Math.min(24, Math.round(Number(args.gridColumns) || 12))) } : {}),
       ...(args.gridGutter !== undefined ? { gridGutter: coerceNumber(args.gridGutter, 24, 0, 400) } : {}),
+      // Whether this region's content may leave it. The compiler treats a
+      // violation as blocking unless the region says otherwise.
+      ...(args.overflow === "allow" || args.overflow === "clip" || args.overflow === "forbid" ? { overflow: args.overflow } : {}),
       // A native auto-layout container. The compiler decides whether the
       // children are safe to hand to Figma's own layout (see compile.ts); the
       // request itself is carried here so the decision has something to act on.
@@ -1117,7 +1135,7 @@ case "shape": {
     ...(parsedProgram.constraints ? { constraints: parsedProgram.constraints } : {}),
   };
 
-  const compiled = compileIR(ir);
+  const compiled = compileIR(ir, options.textMetrics);
 
   // The product guard runs here, on every build, rather than only when someone
   // remembers to ask for it.

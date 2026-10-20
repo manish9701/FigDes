@@ -379,8 +379,10 @@ export interface PipelineFinding {
   /** The stage that produced it. */
   stage: "brief" | "plan" | "program" | "structure" | "live" | "visual";
   severity: PipelineSeverity;
-  /** 0–1. Below 0.6 a finding is a question, not a defect. */
+  /** 0-1. Below 0.6 a finding is a question, not a defect. */
   confidence: number;
+  /** The rule that produced it, when a rule did. */
+  rule?: string;
   /** The nodes this finding is about. */
   nodeIds: string[];
   /** What is wrong. */

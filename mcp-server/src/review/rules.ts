@@ -726,6 +726,9 @@ function unnamedFrameChildren(n: NodeMetrics, c: Ctx): Finding[] {
 function tinyTapTarget(n: NodeMetrics): Finding[] {
   if (!INTERACTIVE.test(n.name)) return [];
   if (DECORATIVE.test(n.type) || n.type === "GROUP" || n.type === "TEXT") return [];
+  // A rule is not a control, and a rule cannot have a too-small tap target:
+  // it has no target at all.
+  if (isRuleLike(n)) return [];
   if (n.w >= 44 && n.h >= 44) return [];
 
   return [
@@ -822,6 +825,11 @@ function hasVisibleLabel(n: NodeMetrics, c: Ctx): boolean {
 function iconOnlyControl(n: NodeMetrics, c: Ctx): Finding[] {
   if (!INTERACTIVE.test(n.name)) return [];
   if (DECORATIVE.test(n.type) || n.type === "GROUP" || n.type === "TEXT") return [];
+  // A rule is not a control. A 220x3 rectangle named "Node link left" is a
+  // line the topology drew, and a 330x1 "Quick action divider" is a divider:
+  // both match the interactive *name* pattern and neither can be pressed. A
+  // control has a body.
+  if (isRuleLike(n)) return [];
   if (hasVisibleLabel(n, c)) return [];
 
   return [
@@ -1342,26 +1350,121 @@ function buttonOverload(n: NodeMetrics, c: Ctx): Finding[] {
 
 /** Layer names that identify a connector rather than a decorative rule. */
 const ROUTE_NAME = /\broute|connector|connection|\blink\b|\bedge\b|\btrace\b|\bspan\b|\bwire\b|\bpath\b/i;
+/**
+ * Layer names that identify a decoration rather than a connection.
+ *
+ * A topology's background grid, a divider, a hairline and a field's
+ * background are all long and flat, and all of them sit under content. A
+ * device label that crosses a grid line is not "annotation for the
+ * connection" — the grid is not a connection, and the label was never
+ * claiming to be.
+ */
+const DECORATION_NAME = /\bgrid|divider|separator|underline|hairline|background\b|\bborder\b|\bstroke\b|\brule\b/i;
 /** Types a drawn connection can take in Figma. */
 const ROUTE_TYPES = new Set(["VECTOR", "LINE", "ELLIPSE", "FRAME", "RECTANGLE", "VECTOR_NETWORK"]);
 
 /**
- * A node that reads as a route line rather than as a shape.
+ * What a shape *is*, in the review's terms.
  *
- * A topology connection is long, thin and mostly one axis. That is a stronger
- * signal than the layer name: FigDes emits connectors as `createVector` nodes
- * called "Vector", so name matching alone would miss every line it drew itself.
- * A name that says "route" still counts even for a short one, because a designer
- * labelling something "Route A/B" has told us what it is.
+ * The reviewer has to tell a topology connector from a search field, a card
+ * and a background, because a placeholder inside a search field is the field's
+ * *content* and a label sitting on a connector is a collision. Reading every
+ * long, flat rectangle as a connector is what made the search field's
+ * placeholder a "serious text-route-collision": the field is 320x32, which is
+ * a 10:1 aspect ratio, and the aspect ratio was the only signal the rule had.
  */
-function isRouteLine(m: NodeMetrics): boolean {
-  if (!ROUTE_TYPES.has(m.type)) return false;
+export type SurfaceRole = "connector" | "input" | "card" | "background" | "shape";
+
+/**
+ * Classifies a shape by how it is built.
+ *
+ * The order matters: a name that says "route" wins, because a designer
+ * labelling something "Route A/B" has told us what it is, and a vector is a
+ * vector. Only then does the geometry decide, and the geometry is strict about
+ * *thinness*: a route is a line, and a line is thin in absolute terms.
+ */
+export function surfaceRole(m: NodeMetrics, parent?: NodeMetrics): SurfaceRole {
+  if (m.type === "VECTOR" || m.type === "LINE" || m.type === "VECTOR_NETWORK") return "connector";
+  if (!ROUTE_TYPES.has(m.type)) return "shape";
+  if (ROUTE_NAME.test(m.name)) return "connector";
+  // A named decoration is a decoration, whatever its proportions: a
+  // topology's grid lines are long and flat, and a device label that crosses
+  // one is not annotating a connection.
+  if (DECORATION_NAME.test(m.name)) return "shape";
+
   const long = Math.max(m.w, m.h);
   const thin = Math.min(m.w, m.h);
-  if (ROUTE_NAME.test(m.name)) return true;
-  if (long < 100) return false;
-  // Thin, or a high aspect ratio: an orthogonal route is long and flat.
-  return thin <= 3 || long / Math.max(1, thin) >= 8;
+  // A drawn line: long and thin in absolute terms. Twelve pixels is the
+  // ceiling, because a search field, a divider and a route are all "long and
+  // flat" — and only one of them is a connection.
+  if (long >= 100 && thin <= 12) return "connector";
+  if (long >= 100 && long / Math.max(1, thin) >= 8 && thin <= 4) return "connector";
+
+  // An input: a bordered, shallow surface. The border is what makes it a
+  // field rather than a card.
+  if ((m.type === "RECTANGLE" || m.type === "FRAME") && m.stroke !== undefined && m.h >= 16 && m.h <= 72) return "input";
+  // A card: a filled, rounded surface.
+  if ((m.type === "RECTANGLE" || m.type === "FRAME") && (m.radius ?? 0) > 0 && m.fill) return "card";
+  // A background: a large flat surface behind everything in its parent.
+  if (
+    (m.type === "RECTANGLE" || m.type === "FRAME") &&
+    m.stroke === undefined &&
+    (m.radius ?? 0) === 0 &&
+    parent !== undefined &&
+    m.w >= parent.w * 0.8 &&
+    m.h >= parent.h * 0.8
+  ) {
+    return "background";
+  }
+  return "shape";
+}
+
+/**
+ * A node that reads as a route line rather than as a shape.
+ *
+ * Kept as the narrow question the collision rule asks: is this sibling a
+ * connection? A topology connection is long, thin and mostly one axis. That is
+ * a stronger signal than the layer name: FigDes emits connectors as
+ * `createVector` nodes called "Vector", so name matching alone would miss every
+ * line it drew itself. A name that says "route" still counts even for a short
+ * one, because a designer labelling something "Route A/B" has told us what it
+ * is.
+ */
+function isRouteLine(m: NodeMetrics, parent?: NodeMetrics): boolean {
+  return surfaceRole(m, parent) === "connector";
+}
+
+/**
+ * Whether a box sits *inside* another one.
+ *
+ * The search field's placeholder is inside the field, and a card's title is
+ * inside the card. That is the content of a surface, not a collision with it.
+ */
+function contains(outer: NodeMetrics, inner: NodeMetrics): boolean {
+  return (
+    inner.x >= outer.x - 0.5 &&
+    inner.y >= outer.y - 0.5 &&
+    inner.x + inner.w <= outer.x + outer.w + 0.5 &&
+    inner.y + inner.h <= outer.y + outer.h + 0.5
+  );
+}
+
+/**
+ * Whether a node is a rule rather than a control.
+ *
+ * A divider, a hairline and a topology's link are all flat and thin, and all
+ * of them can be named with a word the interactive pattern matches - "Node link
+ * left", "Quick action divider". They cannot be pressed, they cannot be
+ * tabbed to, and reporting them as unlabelled controls or as too-small tap
+ * targets is a false positive that buries the real ones.
+ */
+function isRuleLike(n: NodeMetrics): boolean {
+  if (n.type === "TEXT" || n.type === "GROUP") return false;
+  // A rule is thin: a control has a body.
+  if (Math.min(n.w, n.h) > 6) return false;
+  // And it is flat: a rule is wider than it is tall, or taller than wide.
+  if (Math.max(n.w, n.h) < 40) return false;
+  return true;
 }
 
 /** Area of the overlap between two boxes, or 0 when they do not touch. */
@@ -1397,14 +1500,21 @@ function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
 
   const hits: Array<{ route: NodeMetrics; area: number }> = [];
   for (const s of siblings) {
-    if (s.id === n.id || !isRouteLine(s)) continue;
+    if (s.id === n.id) continue;
+    const role = surfaceRole(s, c.byId.get(s.parentId ?? ""));
+    // Only a real connection can collide with a label. An input, a card or a
+    // background is a surface the label may legitimately sit inside: the
+    // placeholder in a search field is the field's content, and reporting it
+    // as a collision is a false positive that trains people to ignore the
+    // rule.
+    if (role !== "connector") continue;
     // The line has to pass *through* the label, not graze its edge.
     //
     // Testing for depth of overlap is wrong for exactly the case that matters: a
     // 2px route crossing a 16px label shares only 2px vertically, which is the
     // whole reason the first version of this rule never fired. What separates a
     // collision from a neighbour is whether the line's centre falls within the
-    // label's vertical span and then runs along it — the label is *on* the line.
+    // label's vertical span and then runs along it - the label is *on* the line.
     const lineCentre = s.h <= s.w ? s.y + s.h / 2 : s.x + s.w / 2;
     const withinSpan = s.h <= s.w ? lineCentre >= n.y && lineCentre <= n.y + n.h : lineCentre >= n.x && lineCentre <= n.x + n.w;
     if (!withinSpan) continue;

@@ -29,6 +29,7 @@ import { countByType, DEFAULT_INSPECT, inspectNodes, inspectTopLevelFrames, list
 import { allPages } from "./cache";
 import { DEFAULT_EXTRACT, extractDesignSystem as extract } from "./design-system";
 import { DEFAULT_COLLECT, collectMetrics as collect } from "./metrics";
+import { measureText } from "./measure";
 import { buildPanelSummary, focusNode } from "./panel";
 import { renderBudget, renderNode } from "./render";
 import { createComponent, createComponentSet, createInstance, findComponents, setVariant, assertComponentMaster } from "./components";
@@ -160,6 +161,9 @@ async function handle(tool: PluginToolName, payload: unknown, requestId?: string
 
     case "collect_metrics":
       return collectMetrics(payload);
+
+    case "measure_text":
+      return measureText(payload);
 
     case "render_node":
       return renderNode(payload as RenderRequest);

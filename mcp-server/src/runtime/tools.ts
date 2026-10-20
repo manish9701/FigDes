@@ -9,6 +9,7 @@ import { z } from "zod";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
 import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
+import { measureProgramText } from "./measure";
 import { placeRootFrame } from "./placement";
 import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
@@ -314,24 +315,41 @@ export async function runRuntimeTool(
   const { dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
   const { program, direction } = applyAutoArtDirection(parsed.program);
-  const result = executeRuntime(program);
 
-  // Surface anything that was dropped before it can be mistaken for success.
-  if (result.warnings.length > 0) {
-    console.log(`[runtime] ${result.warnings.length} warning(s): ${result.warnings.join("; ")}`);
+  // Measure the text before the layout is computed, so the screen is laid out
+  // from the heights the renderer will really produce. The first compile
+  // resolves the widths; the plugin measures at those widths; the second
+  // compile uses the measurements. Without a plugin the estimates stand, and
+  // the result says so.
+  const firstPass = executeRuntime(program);
+  let compiled = firstPass;
+  let measuredCount = 0;
+  if (session !== null) {
+    const widths = new Map<string, number>();
+    for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
+    const measured = await measureProgramText(session, program, widths);
+    if (measured.metrics.size > 0) {
+      measuredCount = measured.metrics.size;
+      compiled = executeRuntime(program, { textMetrics: measured.metrics });
+    }
   }
 
-  const advisories = reuseAdvisory(result.operations as Array<Record<string, unknown>>);
+  // Surface anything that was dropped before it can be mistaken for success.
+  if (compiled.warnings.length > 0) {
+    console.log(`[runtime] ${compiled.warnings.length} warning(s): ${compiled.warnings.join("; ")}`);
+  }
+
+  const advisories = reuseAdvisory(compiled.operations as Array<Record<string, unknown>>);
   const payload = {
     // A plan whose geometry is not what was asked for is not "completed", and
     // it is emphatically not "applied". Three distinct states, because issue #11
     // found geometry landing off-canvas while the tool reported success.
-    status: !result.applicable ? "not-applicable" : result.violations.length > 0 ? "completed-with-violations" : "completed",
-    applicable: result.applicable,
-    ...(result.applicable ? {} : { inapplicableReasons: result.inapplicableReasons }),
+    status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
+    applicable: compiled.applicable,
+    ...(compiled.applicable ? {} : { inapplicableReasons: compiled.inapplicableReasons }),
     dryRun: dryRun ?? false,
-    stats: result.stats,
-    regions: result.ir.regions.map((r) => ({ id: r.id, role: r.role, width: r.width, height: r.height, grow: r.grow, layout: r.layout })),
+    stats: compiled.stats,
+    regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role, width: r.width, height: r.height, grow: r.grow, layout: r.layout })),
     /**
      * Which algorithm each region actually used, and how many boxes a relation
      * moved.
@@ -340,17 +358,25 @@ export async function runRuntimeTool(
      * tree layout ran". If the shell layout claimed the region, the model should
      * see that rather than assume the program was understood.
      */
-    algorithms: result.algorithms,
-    constrained: result.constrained,
-    reflowed: result.reflowed,
+    algorithms: compiled.algorithms,
+    constrained: compiled.constrained,
+    reflowed: compiled.reflowed,
     /** What the visual intent changed, so taste is visible rather than silent. */
-    intentNotes: result.intentNotes,
+    intentNotes: compiled.intentNotes,
+    /**
+     * How many text nodes were measured by the plugin.
+     *
+     * The screen is laid out from the heights the renderer will really
+     * produce, rather than from a character-count estimate. Zero means the
+     * plugin could not be asked, and the layout used the estimate.
+     */
+    textMeasurements: measuredCount,
     /** The curated art direction applied when the program stated none. */
     ...(direction !== null ? { artDirection: direction } : {}),
     /** Component-reuse advisories measured from the compiled operations. */
     ...(advisories.length > 0 ? { reuse: advisories } : {}),
-    violations: result.violations,
-    warnings: result.warnings,
+    violations: compiled.violations,
+    warnings: compiled.warnings,
     /**
      * What the product guard concluded about this build.
      *
@@ -360,8 +386,8 @@ export async function runRuntimeTool(
      * build that was fully checked. `verdict` here is INDETERMINATE whenever
      * anything was left to a human judgement, never PASS.
      */
-    productGuard: result.productGuard,
-    operations: result.operations,
+    productGuard: compiled.productGuard,
+    operations: compiled.operations,
   };
 
   // A dry run compiles and validates entirely inside the server, so it must not
@@ -373,12 +399,12 @@ export async function runRuntimeTool(
   // draw regions outside the canvas and connectors to nowhere while reporting
   // success — the exact failure issue #11 opened with. The operations are in the
   // dry-run payload above, so the plan stays inspectable and repairable.
-  if (!result.applicable) {
+  if (!compiled.applicable) {
     return {
       ...payload,
       howToProceed:
-        `This plan was not built: the resolved geometry is not what the program asked for (${result.inapplicableReasons.length} problem(s)). Fix the causes below, or re-run with dryRun:true to inspect the operations without committing.`,
-      problems: result.inapplicableReasons,
+        `This plan was not built: the resolved geometry is not what the program asked for (${compiled.inapplicableReasons.length} problem(s)). Fix the causes below, or re-run with dryRun:true to inspect the operations without committing.`,
+      problems: compiled.inapplicableReasons,
     };
   }
 
@@ -393,17 +419,17 @@ export async function runRuntimeTool(
   // file where free canvas is and shift the root there. Only the compiler's
   // own root (id "root" at 0,0) moves — explicit coordinates stay explicit.
   // A failed lookup never fails the build; it just builds at the origin.
-  const placement = await placeRootInFreeCanvas(session, result.operations as Array<Record<string, unknown>>, {
-    width: canvasSize(result.ir.canvas.width, 1440),
-    height: canvasSize(result.ir.canvas.height, 900),
+  const placement = await placeRootInFreeCanvas(session, compiled.operations as Array<Record<string, unknown>>, {
+    width: canvasSize(compiled.ir.canvas.width, 1440),
+    height: canvasSize(compiled.ir.canvas.height, 900),
   });
 
   // The same checkpoint gate as the low-level mutating tools, applied to the
   // compiled operations rather than to whatever the caller wrote. Going through
   // the runtime must not be a way around it.
-  const existing = await resolveExistingResources(session, result.operations as Array<Record<string, unknown>>);
+  const existing = await resolveExistingResources(session, compiled.operations as Array<Record<string, unknown>>);
   const gate = guardMutation({
-    operations: result.operations as Array<Record<string, unknown>>,
+    operations: compiled.operations as Array<Record<string, unknown>>,
     approved,
     reason,
     dryRun: dryRun ?? false,
@@ -411,12 +437,12 @@ export async function runRuntimeTool(
   });
   if (gate) return { ...payload, ...gate };
 
-  if (chunked === true || (chunked !== false && result.operations.length > CHUNK_SIZE * 2)) {
+  if (chunked === true || (chunked !== false && compiled.operations.length > CHUNK_SIZE * 2)) {
     // Auto-chunk large programs: a single 300-op transaction holds the socket
     // silent for a minute+ and risks losing everything to one bad op. Chunked
     // builds commit progressively (visible in the canvas as they land) with
     // per-chunk rollback. Explicit chunked:false still forces one transaction.
-    const built = await runChunked(session, result.operations, description);
+    const built = await runChunked(session, compiled.operations, description);
     return {
       ...payload,
       ...(placement !== null ? { placement } : {}),
@@ -427,7 +453,7 @@ export async function runRuntimeTool(
     };
   }
 
-  session.notify({ type: "notify", kind: "activity", text: `Building ${result.operations.length} ops…`, at: Date.now() });
+  session.notify({ type: "notify", kind: "activity", text: `Building ${compiled.operations.length} ops…`, at: Date.now() });
   // The same tracked dispatcher the low-level tools use, so a retried runtime
   // build returns the prior result instead of drawing the screen twice, and a
   // timed-out one leaves a ledger record to reconcile against. Going straight
@@ -435,12 +461,12 @@ export async function runRuntimeTool(
   const transaction = registry
     ? await dispatchTransaction(registry, session, "create_design", {
         description: description ?? "Design runtime execution",
-        operations: result.operations,
+        operations: compiled.operations,
         ...(transactionId !== undefined ? { transactionId } : {}),
       })
     : await session.request("create_design", {
         description: description ?? "Design runtime execution",
-        operations: result.operations,
+        operations: compiled.operations,
         transactionId,
       });
 

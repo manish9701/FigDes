@@ -107,6 +107,14 @@ const REGION_COMMON: ArgSpec[] = [
     values: ["vertical"],
     example: '"vertical"',
   },
+  {
+    name: "overflow",
+    type: "enum",
+    description:
+      "Whether this region's content may leave it. 'forbid' (the default) makes the compiler refuse a build whose content escapes the region; 'allow' is for a field that may carry a diagram past its frame.",
+    values: ["allow", "clip", "forbid"],
+    example: '"forbid"',
+  },
 ];
 
 /** Args every state-capable component accepts. */

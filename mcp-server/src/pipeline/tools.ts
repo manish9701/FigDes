@@ -32,10 +32,12 @@
 import { z } from "zod";
 import type { MetricsReport, TransactionResult } from "../../../shared/protocol";
 import { runRules } from "../review/rules";
+import { verifyRepairs } from "../review/verdict";
 import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
+import { measureProgramText } from "../runtime/measure";
 import { reuseAdvisory, placeRootInFreeCanvas } from "../runtime/tools";
 import type { Session, SessionRegistry } from "../sessions";
 import { BriefInputSchema } from "./contracts";
@@ -157,12 +159,19 @@ export async function designPipelineTool(
   /* --- stage 3 + 4: the program and the offline verification -------------- */
 
   const built = buildProgram(brief, plan);
-  // Two passes: the first resolves the layout, the second sets each text's
-  // wrapping width to the column it actually landed in. A width guessed from
-  // the region's width is a guess, and a wrong one fails the build.
+  // Two passes, and the first one is for the *widths*: the column a text lands
+  // in depends on the region's size, and the region's size depends on the
+  // content's heights. So the first compile resolves the widths, the plugin
+  // measures the text at them, and the second compile lays the screen out with
+  // the heights Figma will really produce.
   const firstPass = executeRuntime(built.program) as unknown as CompiledProgram;
+  const widths = new Map<string, number>();
+  for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
+  const measured = await measureProgramText(session, built.program, widths);
   const refined = applyMeasuredWidths(built.program, firstPass.boxes);
-  const compiled = (refined.measured > 0 ? executeRuntime(refined.program) : firstPass) as unknown as CompiledProgram;
+  const compiled = (
+    measured.metrics.size > 0 ? executeRuntime(refined.program, { textMetrics: measured.metrics }) : executeRuntime(refined.program)
+  ) as unknown as CompiledProgram;
   const program = refined.measured > 0 ? refined.program : built.program;
   const operations = compiled.operations as Array<Record<string, unknown>>;
   trace.operations = operations.map((op) => ({
@@ -173,8 +182,11 @@ export async function designPipelineTool(
   stage(
     trace,
     "program",
-    `Compiled ${operations.length} operation(s) from ${program.regions.length} region(s); ${refined.measured} text width(s) set from the resolved layout.`,
+    `Compiled ${operations.length} operation(s) from ${program.regions.length} region(s); ${refined.measured} text width(s) set from the resolved layout; ${measured.measured} text height(s) measured by the plugin.`,
   );
+  if (measured.failed.length > 0) {
+    stage(trace, "measure", `${measured.failed.length} text measurement(s) failed: ${measured.failed.slice(0, 3).map((f) => `${f.id} (${f.reason})`).join("; ")}`);
+  }
 
   const structure = verifyPlan(plan, brief, compiled, programLabels(program));
 
@@ -296,6 +308,10 @@ export async function designPipelineTool(
 
   const repairs: PipelineTrace["repairs"] = [];
   const budget = args.repairBudget ?? 2;
+  // The findings as they were *before* the repair, so the pass can be checked
+  // against them afterwards.
+  const liveBeforeRepair = live.findings;
+  let repairVerification: ReturnType<typeof verifyRepairs> | null = null;
   if (budget > 0) {
     const planOfRepairs = planRepairs(live.findings, { budget });
     for (const instruction of planOfRepairs.instructions) {
@@ -346,7 +362,52 @@ export async function designPipelineTool(
       live.visual = after.visual;
       live.blocked = after.blocked;
       if (after.render !== null) trace.render = after.render;
-      stage(trace, "verify-repaired", `Re-measured and re-rendered after the repair: ${after.status}.`);
+
+      /**
+       * The repair pass verifies itself.
+       *
+       * A committed repair is not a fixed defect: the operation may have hit
+       * the wrong node, the measurement may not have changed, and a repair can
+       * introduce a new finding. So the pass is compared against the re-measure
+       * and given a verdict of its own.
+       */
+      const before = liveBeforeRepair.map((f) => ({
+        key: `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}`,
+        rule: f.rule ?? f.id,
+        severity: f.severity,
+        confidence: String(f.confidence),
+        title: f.summary,
+        nodeIds: [...f.nodeIds],
+        evidence: { detail: f.evidence.detail },
+      }));
+      const afterFindings = after.findings.map((f) => ({
+        key: `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}`,
+        rule: f.rule ?? f.id,
+        severity: f.severity,
+        confidence: String(f.confidence),
+        title: f.summary,
+        nodeIds: [...f.nodeIds],
+        evidence: { detail: f.evidence.detail },
+      }));
+      const applied = repairs
+        .filter((r) => r.result === "applied")
+        .map((r) => {
+          const finding = liveBeforeRepair.find((f) => f.id === r.findingId);
+          return {
+            key: `${finding?.rule ?? finding?.id ?? r.findingId}::${[...(finding?.nodeIds ?? [])].sort().join(",")}`,
+            rule: finding?.rule ?? r.findingId,
+            targets: [...(finding?.nodeIds ?? [])],
+          };
+        });
+      repairVerification = verifyRepairs({
+        before,
+        after: afterFindings,
+        applied,
+        recheck: "ran",
+        notAutoFixable: repairs.filter((r) => r.result === "skipped").length,
+        blocked: repairs.filter((r) => r.result === "failed").length,
+      });
+      stage(trace, "verify-repaired", `The repair pass verified itself: ${repairVerification.verdict}.`);
     }
   }
 
@@ -365,6 +426,17 @@ export async function designPipelineTool(
     live: { status: live.status, checks: live.checks, detail: live.detail },
     visual: live.visual,
     repairs,
+    ...(repairVerification !== null
+      ? {
+          repairVerification: {
+            verdict: repairVerification.verdict,
+            reason: repairVerification.reason,
+            fixed: repairVerification.fixed,
+            unresolved: repairVerification.unresolved,
+            regressions: repairVerification.regressions,
+          },
+        }
+      : {}),
     findings: remaining,
     blocked: live.blocked,
     trace,
@@ -475,6 +547,45 @@ async function verifyLiveScreen(
     currentRevision,
     ruleFindings,
   });
+
+  /**
+   * Does the created screen have the size the plan promised?
+   *
+   * The dry run and the screen Figma builds are two different claims about the
+   * same thing, and the difference between them is invisible until somebody
+   * looks. So they are compared: the root frame's size in the file against the
+   * canvas the plan asked for.
+   */
+  if (metrics !== null && metrics.nodes.length > 0) {
+    const root = metrics.nodes[0]!;
+    const expected = plan.canvas;
+    const dw = Math.abs(Math.round(root.w) - expected.width);
+    const dh = Math.abs(Math.round(root.h) - expected.height);
+    const agrees = dw <= 1 && dh <= 1;
+    live.checks.push({
+      id: "geometry-agreement",
+      question: "Is the created screen the size the plan promised?",
+      status: agrees ? "pass" : "fail",
+      detail: agrees
+        ? `The frame in the file is ${Math.round(root.w)}x${Math.round(root.h)}, as planned.`
+        : `The frame in the file is ${Math.round(root.w)}x${Math.round(root.h)}; the plan asked for ${expected.width}x${expected.height}.`,
+      nodeIds: [root.id],
+    });
+    if (!agrees) {
+      live.findings.push({
+        id: "geometry-disagreement",
+        stage: "live",
+        severity: "high",
+        confidence: 0.9,
+        nodeIds: [root.id],
+        summary: `The created screen is ${Math.round(root.w)}x${Math.round(root.h)}, not the ${expected.width}x${expected.height} the plan promised.`,
+        why: "A dry run and the screen that was built are two claims about the same screen. When they disagree, one of them is describing something that was never built.",
+        evidence: { kind: "geometry", detail: `file ${Math.round(root.w)}x${Math.round(root.h)} vs plan ${expected.width}x${expected.height}` },
+        fix: "Measure the text with the plugin before compiling, so the layout is resolved from real numbers.",
+        automatable: false,
+      });
+    }
+  }
   checks.push(...live.checks);
   findings.push(...live.findings);
 

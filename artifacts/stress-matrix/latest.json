@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T07:49:40.594Z",
+  "generatedAt": "2026-10-20T09:13:58.239Z",
   "totals": {
     "total": 28,
     "pass": 24,
@@ -89,6 +89,8 @@
           "Connector 'c' references 'not-a-node' (not declared anywhere in this IR). Draw the nodes before connecting them.",
           "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
           "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
+          "Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
+          "Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
           "'dup' ends up at (0, -1435) relative to parent 'panel', which is canvas (0, -703), but its resolved box is (0, -1435). The operation trace and the resolved geometry disagree."
         ],
         "violations": [

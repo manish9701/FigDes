@@ -141,6 +141,17 @@ test("figma_status succeeds", async () => {
   assert.equal(reply.data.selectionCount, 1);
 });
 
+test("figma_status reports the build the panel is running", async () => {
+  // Figma loads the bundle once, when the panel opens, so a live measurement
+  // has to be able to say which build it is talking to. Without this, "the
+  // panel did not report a build" is indistinguishable from "the panel is old".
+  const reply = await ask(figma, "figma_status", {});
+  assert.equal(reply.ok, true);
+  assert.equal(typeof reply.data.build, "string");
+  assert.ok(reply.data.build.length > 0, "the status carried no build");
+  assert.notEqual(reply.data.build, "dev", "the build stamp was not baked into the bundle");
+});
+
 test("create_design validates a bad operation without throwing", async () => {
   const reply = await ask(figma, "create_design", {
     operations: [{ type: "notARealOperation", foo: 1 }],

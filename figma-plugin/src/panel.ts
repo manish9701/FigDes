@@ -14,7 +14,7 @@ import { evaluateTextContrast, isBoldStyle } from "../../shared/contrast";
 import { effectiveFill, isDefaultName, primaryFill } from "./resolve";
 import { allPages } from "./cache";
 import { DEFAULT_EXTRACT, extractDesignSystem } from "./design-system";
-import { PLUGIN_VERSION, type PanelSummary } from "../../shared/protocol";
+import { PLUGIN_BUILD, PLUGIN_VERSION, type PanelSummary } from "../../shared/protocol";
 
 /** Reported through the main thread's log channel. */
 function log(level: "info" | "warn" | "error", message: string): void {
@@ -97,6 +97,11 @@ export async function buildPanelSummary(): Promise<PanelSummary> {
     pageName: page.name,
     pageCount,
     pluginVersion: PLUGIN_VERSION,
+    // Which build this panel is running. The panel is the one surface the
+    // user looks at without asking an agent, so the build belongs here too:
+    // an open panel keeps the bundle it loaded, and a live measurement that
+    // cannot name its build describes code that may no longer exist.
+    build: PLUGIN_BUILD,
     selection: selectionRows,
     selectionCount: selection.length,
     system,

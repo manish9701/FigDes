@@ -101,6 +101,16 @@ export const RegionSchema = z
      */
     autoLayout: z.enum(["vertical"]).optional(),
     /**
+     * Whether this region's content is allowed to leave it.
+     *
+     * "forbid" is the default and the compiler treats a violation as blocking:
+     * content that escapes its region is a structural defect, not a density
+     * problem. A region that *allows* overflow says so — a topology field may
+     * carry a diagram past its frame — and then the compiler reports the
+     * overflow without refusing the build.
+     */
+    overflow: z.enum(["allow", "clip", "forbid"]).optional(),
+    /**
      * Visual elevation 0-3. Renders as a soft drop shadow: depth you can see,
      * not a comment about depth. Layer concepts and layered intent set this;
      * everything else stays flat.

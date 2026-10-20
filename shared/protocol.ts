@@ -1443,6 +1443,7 @@ export const PLUGIN_TOOL_NAMES = [
   "inspect_file",
   "extract_design_system",
   "collect_metrics",
+  "measure_text",
   "render_node",
   "reset_render_budget",
   "find_components",
@@ -1673,6 +1674,15 @@ export interface PanelSummary {
   pageName: string;
   pageCount: number;
   pluginVersion: string;
+  /**
+   * Which build this panel is running.
+   *
+   * The panel is the surface the user looks at without asking an agent, so the
+   * build belongs here: an open panel keeps the bundle it loaded, and a live
+   * measurement that cannot name its build describes code that may no longer
+   * exist.
+   */
+  build: string;
 
   selection: Array<{
     id: string;

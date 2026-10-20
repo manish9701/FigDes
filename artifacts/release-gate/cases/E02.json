@@ -1,0 +1,10 @@
+{
+  "id": "E02",
+  "title": "The reviewer tells a search field from a topology connector",
+  "group": "review",
+  "requirement": "A placeholder inside a search field is the field's content, not a collision with a route. A label sitting on a real connector is still a serious finding.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "the placeholder inside the search field and the two rules are untouched; the label on the connector is still serious and the icon button is still reported",
+  "raw": {}
+}

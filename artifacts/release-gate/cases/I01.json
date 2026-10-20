@@ -1,0 +1,10 @@
+{
+  "id": "I01",
+  "title": "Two consecutive builds of the same brief produce the same structure",
+  "group": "reproducibility",
+  "requirement": "The same brief produces the same operations and the same structural verdict on two consecutive runs, so a failure can be reproduced.",
+  "issue": "#17",
+  "status": "PASS",
+  "detail": "38 operation(s) and 4 region(s) identical across two runs",
+  "raw": {}
+}

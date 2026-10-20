@@ -1,0 +1,384 @@
+{
+  "schemaVersion": "release-gate-v1",
+  "runId": "6a4ee738-2026-10-20T04-31-24-224Z",
+  "commit": "6a4ee738bf76695ed829296589583d98759c8d0a",
+  "branch": "main",
+  "startedAt": "2026-10-20T04:31:24.224Z",
+  "finishedAt": "2026-10-20T04:33:27.437Z",
+  "durationMs": 123213,
+  "node": "v22.17.0",
+  "platform": "win32-x64",
+  "config": {
+    "skipLive": false,
+    "groups": [
+      "gauntlet",
+      "stress-matrix",
+      "acceptance",
+      "regression",
+      "design-benchmark",
+      "live"
+    ]
+  },
+  "verdict": "INDETERMINATE",
+  "verdictReason": "1 group(s) could not run: live",
+  "totals": {
+    "groups": 6,
+    "passed": 5,
+    "failed": 0,
+    "blocked": 1,
+    "cases": 18,
+    "casesPassed": 18,
+    "casesFailed": 0
+  },
+  "groups": [
+    {
+      "id": "gauntlet",
+      "title": "Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report)",
+      "command": "node tests/issue-17-gauntlet.mjs",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 801,
+      "detail": "18/18 case(s) passed, run twice with identical verdicts",
+      "extra": {
+        "total": 18,
+        "pass": 18,
+        "fail": 0,
+        "blocked": 0,
+        "indeterminate": 0,
+        "repeatable": true,
+        "cases": [
+          {
+            "id": "A01",
+            "title": "A complex brief becomes a composed screen with a dominant primary visualisation",
+            "group": "generation",
+            "issue": "#16",
+            "requirement": "The reference screen's primary visualisation gets appropriate canvas area, the regions align intentionally, the supporting panels do not compete with the main task, and the composition does not collapse into a generic repeated-card template.",
+            "status": "PASS",
+            "detail": "focal 'content' holds 42% of the canvas; 4 regions, 16 content calls, 2 metric card(s)"
+          },
+          {
+            "id": "A02",
+            "title": "The visual direction is applied across the frame, not only to the dark visualisation",
+            "group": "generation",
+            "issue": "#16",
+            "requirement": "The reference screen keeps a restrained light surface system around one dark technical visualisation, and the direction reaches the whole frame. The data is declared as demo data, so no value is invented.",
+            "status": "PASS",
+            "detail": "style 'technical-instrument' on 4/4 region(s); 1 dark surface(s) of 12; no invented values"
+          },
+          {
+            "id": "B01",
+            "title": "An asymmetric split view keeps the inspector fixed and the canvas fluid",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "The inspector is a fixed width, the canvas takes the rest, the two share a top edge, and the inspector ends on the canvas edge.",
+            "status": "PASS",
+            "detail": "canvas 816 wide at x=272, inspector 320 wide at x=1120, both at y=0"
+          },
+          {
+            "id": "B02",
+            "title": "A five-region dashboard with thirty items keeps every child inside its parent",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "Every content child is contained by the region that holds it, the gaps between siblings are consistent, and nothing runs past the canvas.",
+            "status": "PASS",
+            "detail": "5 regions, 32 items, every child contained"
+          },
+          {
+            "id": "B03",
+            "title": "A diagram's edges resolve their semantic endpoints and survive a resize",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "Every edge names two real nodes, the route touches the intended anchors, and the endpoints are recalculated when a node is resized.",
+            "status": "PASS",
+            "detail": "2 connector(s) resolved against their nodes; a second compile of the same diagram agreed"
+          },
+          {
+            "id": "B04",
+            "title": "Long identifiers and error strings stay inside their region at 390px and 1440px",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "Long device names, model identifiers, paths and error strings wrap rather than run past the region they are in.",
+            "status": "PASS",
+            "detail": "8 text node(s) bounded at both viewports"
+          },
+          {
+            "id": "B05",
+            "title": "Extreme padding, gaps and nested sizing resolve to sane geometry",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "Extreme but valid padding and gaps, nested fixed/fill/hug sizing, a narrow canvas and a large canvas all resolve without a negative or zero extent.",
+            "status": "PASS",
+            "detail": "4 extreme layout(s) resolved with positive extents"
+          },
+          {
+            "id": "B06",
+            "title": "Invalid input fails closed instead of producing a successful screen",
+            "group": "geometry",
+            "issue": "#14",
+            "requirement": "An unknown connector endpoint, a duplicate id, a malformed token, a negative size and an empty scope each fail loudly. A dry run or a successful compiler response is not a pass.",
+            "status": "PASS",
+            "detail": "4 invalid input(s) all failed closed"
+          },
+          {
+            "id": "C01",
+            "title": "Every edge contacts the node it names, and a connector inside its parent is not a defect",
+            "group": "topology",
+            "issue": "#14",
+            "requirement": "Both endpoints of an edge land on the intended node anchors within a documented tolerance, and the reviewer does not report the containing region as the endpoint.",
+            "status": "PASS",
+            "detail": "the edge resolved to both device nodes, and the reviewer did not report its parent as the endpoint"
+          },
+          {
+            "id": "D01",
+            "title": "Seeded legibility defects are detected with targets and measurements",
+            "group": "a11y",
+            "issue": "#14",
+            "requirement": "A low-contrast nav label, a 10px operational label, a clipped identifier and a drifted repeated component are each reported, with the node they are about.",
+            "status": "PASS",
+            "detail": "2 review finding(s); contrast {\"textColor\":\"#C9C6BC\",\"background\":\"#FFFFFF\",\"surfaceSource\":\"parent surface 'Nav'\",\"ratio\":1.71,\"required\":4.5,\"fontSize\":14,\"bold\":false,\"layerName\":\"Cluster\",\"proposedFill\":\"#7C7664\",\"proposedRatio\":4.53,\"repairVerified\":true}; the identifier is truncated and reported"
+          },
+          {
+            "id": "D02",
+            "title": "Legitimate patterns are not reported, and the thresholds are not lowered",
+            "group": "a11y",
+            "issue": "#14",
+            "requirement": "A status dot with the word ONLINE, a button with a sibling text label, repeated table dividers, intentional circles and off-grid diagram nodes are not defects. The WCAG AA thresholds are unchanged.",
+            "status": "PASS",
+            "detail": "no finding against the 1 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline)"
+          },
+          {
+            "id": "E01",
+            "title": "The review engine finds the seeded defects and leaves the legitimate patterns alone",
+            "group": "review",
+            "issue": "#14",
+            "requirement": "True defects are reported with their node ids, legitimate patterns are not, and the counts are reported against the seeded expectations.",
+            "status": "PASS",
+            "detail": "1 true defect(s) found with node ids, 0 false positives"
+          },
+          {
+            "id": "F01",
+            "title": "A repair is proposed with targets, applied, re-checked, and its effect is measured",
+            "group": "repair",
+            "issue": "#14",
+            "requirement": "A repair names the node it will touch, applies only to that node, is verified by a second structural check, and is classified as fixed only when the measurement changed.",
+            "status": "PASS",
+            "detail": "one targeted repair, one named target, nothing else touched"
+          },
+          {
+            "id": "F02",
+            "title": "An unrepairable issue and a failed repair are not reported as fixed",
+            "group": "repair",
+            "issue": "#14",
+            "requirement": "A finding with no safe operation is reported for a human, a repair that does not resolve is not counted as fixed, and a budget that runs out says BUDGET_EXHAUSTED rather than convergence.",
+            "status": "PASS",
+            "detail": "no repair was invented, and the budget exhaustion was reported as such"
+          },
+          {
+            "id": "G01",
+            "title": "The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings",
+            "group": "runtime",
+            "issue": "#15",
+            "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
+            "status": "PASS",
+            "detail": "5 workload(s) applied atomically; median apply 15ms, worst 17ms"
+          },
+          {
+            "id": "G02",
+            "title": "A validation failure, a mid-batch failure and a duplicate transaction all fail safely",
+            "group": "runtime",
+            "issue": "#15",
+            "requirement": "A bad operation is rejected before the document is touched, a mid-batch failure rolls the batch back, and a duplicate transaction does not duplicate nodes.",
+            "status": "PASS",
+            "detail": "validation, mid-batch failure and duplicate submission all behaved"
+          },
+          {
+            "id": "H01",
+            "title": "An empty, stale, missing or disconnected inspection can never report PASS",
+            "group": "false-pass",
+            "issue": "#14",
+            "requirement": "An empty snapshot, a stale node id, a disconnected runtime, a missing render, a review failure, a geometry mismatch, a missing component, a successful operation with a broken result, an unresolved constraint and a skipped check are all reported as something other than PASS.",
+            "status": "PASS",
+            "detail": "every empty or missing input produced a non-PASS outcome"
+          },
+          {
+            "id": "I01",
+            "title": "Two consecutive builds of the same brief produce the same structure",
+            "group": "reproducibility",
+            "issue": "#17",
+            "requirement": "The same brief produces the same operations and the same structural verdict on two consecutive runs, so a failure can be reproduced.",
+            "status": "PASS",
+            "detail": "38 operation(s) and 4 region(s) identical across two runs"
+          }
+        ]
+      }
+    },
+    {
+      "id": "stress-matrix",
+      "title": "Issue #12 stress matrix",
+      "command": "npm run stress:matrix -- --strict",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1343,
+      "detail": "every case(s) passed",
+      "output": "\n> figma-design-agent@0.1.0 stress:matrix\n> node scripts/run-stress-matrix.mjs --strict\n\nstress matrix: 24 PASS, 0 FAIL, 4 BLOCKED (28 total)\n  cases   24 passing, 0 open, 4 blocked\n  json    D:\\Desktop\\Figdes\\artifacts\\stress-matrix\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-12-report.md\n"
+    },
+    {
+      "id": "acceptance",
+      "title": "Issue #13 acceptance matrix",
+      "command": "npm run acceptance -- --strict",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 1219,
+      "detail": "every acceptance case passed",
+      "output": "\n> figma-design-agent@0.1.0 acceptance\n> node scripts/run-acceptance.mjs --strict\n\nacceptance: 25 PASS, 0 FAIL, 0 BLOCKED (25 total)\n  cases   17 offline, 8 live, 0 open\n  json    D:\\Desktop\\Figdes\\artifacts\\acceptance\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-13-report.md\n"
+    },
+    {
+      "id": "regression",
+      "title": "Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation)",
+      "command": "npm test",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 75055,
+      "detail": "879/879 test(s) passed",
+      "tests": 879,
+      "pass": 879,
+      "fail": 0,
+      "skipped": 0,
+      "failures": [],
+      "output": "n accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.1.0 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 972.9113\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 10.6615\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 25.6675\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 49.2957\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 27.9906\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 9.4873\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 70.7334\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 12.9244\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 16.878\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 146.2329\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 8.0628\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 16.7512\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 1.2872\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 4.1368\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 23.1927\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1809.4913\n"
+    },
+    {
+      "id": "design-benchmark",
+      "title": "Offline design-planning benchmark",
+      "command": "npm run benchmark:design",
+      "status": "PASS",
+      "exitCode": 0,
+      "durationMs": 41354,
+      "detail": "9/9 benchmark case(s) passed",
+      "passed": 9,
+      "total": 9,
+      "review": 0,
+      "output": "mcp-server/dist-test --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:code\n> esbuild mcp-server/src/code/export.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/code --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:memory\n> esbuild mcp-server/src/memory/guard.ts mcp-server/src/memory/rules-exo.ts mcp-server/src/memory/store.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/memory --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:native\n> esbuild mcp-server/src/native/use-figma.ts mcp-server/src/native/lock.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/native --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:clients\n> esbuild mcp-server/src/clients/registry.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/clients --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:design\n> esbuild mcp-server/src/design/contracts.ts mcp-server/src/design/discovery/index.ts mcp-server/src/design/context/design-context.ts mcp-server/src/design/system/token-intelligence.ts mcp-server/src/design/system/component-intelligence.ts mcp-server/src/design/system/typography.ts mcp-server/src/design/grammar/patterns.ts mcp-server/src/design/grammar/matcher.ts mcp-server/src/design/grammar/anti-patterns.ts mcp-server/src/design/grammar/registry.ts mcp-server/src/design/composition/planner.ts mcp-server/src/design/composition/candidates.ts mcp-server/src/design/composition/similarity.ts mcp-server/src/design/composition/derive.ts mcp-server/src/design/composition/relationships.ts mcp-server/src/design/graph/graph-model.ts mcp-server/src/design/compiler/screen-compiler.ts mcp-server/src/design/compiler/component-resolver.ts mcp-server/src/design/compiler/native-plan.ts mcp-server/src/design/quality/genericity.ts mcp-server/src/design/quality/revision.ts mcp-server/src/design/quality/finding.ts mcp-server/src/design/quality/dimensions.ts mcp-server/src/design/quality/product-critic.ts mcp-server/src/design/quality/accessibility.ts mcp-server/src/design/quality/repair-history.ts mcp-server/src/design/quality/release-gate.ts mcp-server/src/design/quality/repair-planner.ts mcp-server/src/design/quality/visual-critic.ts mcp-server/src/design/quality/visual-findings.ts mcp-server/src/design/quality/consistency.ts mcp-server/src/design/quality/final-gate.ts mcp-server/src/design/quality/comparison.ts mcp-server/src/design/benchmark/suite.ts mcp-server/src/design/index.ts --bundle --platform=node --format=esm --target=node20 --outbase=mcp-server/src/design --outdir=mcp-server/dist-test/design --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:transport\n> esbuild figma-plugin/ui/transport.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/ui --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:builder\n> esbuild figma-plugin/src/native/builder.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/builder --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:shared\n> esbuild shared/protocol.ts shared/path.ts shared/geometry.ts shared/contrast.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/shared --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:tools\n> esbuild mcp-server/src/tools.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/tools --log-level=warning\n\n\n> figma-design-agent@0.1.0 build:reliability\n> esbuild mcp-server/src/preflight.ts mcp-server/src/metrics.ts mcp-server/src/sessions.ts mcp-server/src/review/edit-screen.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/reliability --log-level=warning\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\latest.json\",\n  \"expectedCases\": 9,\n  \"completedCases\": 9,\n  \"passedCases\": 9,\n  \"reviewCases\": [],\n  \"visualBenchmarkComplete\": false\n}\n"
+    },
+    {
+      "id": "live",
+      "title": "Live Figma evidence (render and review of a real screen)",
+      "command": "npm run benchmark:live",
+      "status": "BLOCKED",
+      "exitCode": 0,
+      "durationMs": 3262,
+      "detail": "the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test)",
+      "found": 9,
+      "expected": 10,
+      "missing": [
+        "hard-stress-test"
+      ],
+      "output": "\n> figma-design-agent@0.1.0 benchmark:live\n> node scripts/run-live-benchmark.mjs\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\live-report.json\",\n  \"expectedCases\": 10,\n  \"foundCases\": 9,\n  \"completeCases\": 9,\n  \"missingCases\": [\n    \"hard-stress-test\"\n  ],\n  \"liveBenchmarkComplete\": false\n}\n"
+    }
+  ],
+  "coverage": [
+    {
+      "criterion": "#14 geometry, constraint, ID/token and empty-scope regressions stay green",
+      "tests": [
+        "B01",
+        "B02",
+        "B03",
+        "B04",
+        "B05",
+        "B06",
+        "H01",
+        "suite:issue14"
+      ]
+    },
+    {
+      "criterion": "#16 generation fixtures G01-G14 are included or mapped",
+      "tests": [
+        "A01",
+        "A02",
+        "I01",
+        "suite:issue16"
+      ]
+    },
+    {
+      "criterion": "#15 transaction safety and failure injection are included or mapped",
+      "tests": [
+        "G01",
+        "G02",
+        "suite:issue15"
+      ]
+    },
+    {
+      "criterion": "Topology edges attach to correct semantic nodes after reflow",
+      "tests": [
+        "B03",
+        "C01"
+      ]
+    },
+    {
+      "criterion": "No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text",
+      "tests": [
+        "B04",
+        "D01",
+        "D02",
+        "E01"
+      ]
+    },
+    {
+      "criterion": "Contrast is measured against the true rendered surface; thresholds unchanged",
+      "tests": [
+        "D01",
+        "D02"
+      ]
+    },
+    {
+      "criterion": "Semantic false-positive and false-negative counts are reported against seeded expectations",
+      "tests": [
+        "D02",
+        "E01"
+      ]
+    },
+    {
+      "criterion": "Every repair is verified by a second structural check and render/review",
+      "tests": [
+        "F01",
+        "F02"
+      ]
+    },
+    {
+      "criterion": "No empty, stale, skipped or failed inspection can return PASS",
+      "tests": [
+        "H01",
+        "B06"
+      ]
+    },
+    {
+      "criterion": "Performance is measured without bypassing correctness checks",
+      "tests": [
+        "G01",
+        "suite:issue15"
+      ]
+    },
+    {
+      "criterion": "Retrying or rolling back leaves no duplicate or orphan nodes",
+      "tests": [
+        "G02",
+        "suite:issue15"
+      ]
+    },
+    {
+      "criterion": "The evidence bundle is complete and tied to an exact commit SHA",
+      "tests": [
+        "gate:summary"
+      ]
+    },
+    {
+      "criterion": "The test is repeatable on two consecutive runs",
+      "tests": [
+        "I01",
+        "gate:repeat"
+      ]
+    }
+  ],
+  "missingArtifacts": [],
+  "failures": []
+}

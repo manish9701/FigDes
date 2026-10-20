@@ -1,0 +1,10 @@
+{
+  "id": "B04",
+  "title": "Long identifiers and error strings stay inside their region at 390px and 1440px",
+  "group": "geometry",
+  "requirement": "Long device names, model identifiers, paths and error strings wrap rather than run past the region they are in.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "8 text node(s) bounded at both viewports",
+  "raw": {}
+}

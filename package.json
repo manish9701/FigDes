@@ -36,7 +36,7 @@
     "start:server": "node mcp-server/dist/index.js",
     "start:local": "node scripts/launch.mjs --no-tunnel",
     "pretest": "npm run build && npm run build:test",
-    "test": "npm run test:review && npm run test:design && npm run test:blueprint && npm run test:context && npm run test:regressions && npm run test:placement && npm run test:geometry && npm run test:builder && npm run test:pipeline && npm run test:clients && npm run test:code && npm run test:ui && npm run test:runtime && npm run test:issue10 && npm run test:issue11 && npm run test:invariants && npm run test:live-evidence && npm run test:issue12 && npm run test:issue13 && npm run test:issue14 && npm run test:issue15 && npm run test:issue16 && npm run test:productguard && npm run test:plugin && npm run test:reliability && npm run test:native && npm run test:smoke && npm run test:e2e",
+    "test": "npm run test:review && npm run test:design && npm run test:blueprint && npm run test:context && npm run test:regressions && npm run test:placement && npm run test:geometry && npm run test:builder && npm run test:pipeline && npm run test:clients && npm run test:code && npm run test:ui && npm run test:runtime && npm run test:issue10 && npm run test:issue11 && npm run test:invariants && npm run test:live-evidence && npm run test:issue12 && npm run test:issue13 && npm run test:issue14 && npm run test:issue15 && npm run test:issue16 && npm run test:issue17 && npm run test:productguard && npm run test:plugin && npm run test:reliability && npm run test:native && npm run test:smoke && npm run test:e2e",
     "test:design": "node --test tests/design-intelligence.test.mjs",
     "test:blueprint": "node --test tests/blueprint-quality.test.mjs",
     "test:placement": "node --test tests/placement.test.mjs",
@@ -68,6 +68,8 @@
     "test:issue14": "node --test tests/issue-14-regressions.test.mjs tests/issue-14-transaction-reliability.test.mjs",
     "test:issue15": "node --test tests/issue-15-performance.test.mjs",
     "test:issue16": "node --test tests/issue-16-pipeline.test.mjs",
+    "test:issue17": "node --test tests/issue-17-release-gate.test.mjs",
+    "gate": "node scripts/run-release-gate.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs"
   },
   "devDependencies": {

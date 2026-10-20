@@ -136,11 +136,11 @@
         },
         "contentHierarchy": [
           "slot-heading-title",
-          "slot-heading-description",
           "slot-action-primary",
-          "slot-4-api-errors",
-          "slot-5-api-throughput",
-          "slot-6-disk-pressure"
+          "slot-3-api-errors",
+          "slot-4-api-throughput",
+          "slot-5-disk-pressure",
+          "slot-6-memory-pressure"
         ],
         "density": "medium",
         "relationships": [
@@ -210,6 +210,7 @@
           "slot-14-clock-skew",
           "slot-15-auth-failures",
           "slot-16-rate-limit-rejections",
+          "slot-heading-description",
           "slot-17-cold-start-time",
           "slot-18-warm-pool-size",
           "slot-19-inference-queue",
@@ -219,14 +220,13 @@
           "slot-23-certificate-expiry",
           "slot-24-change-failure-rate",
           "slot-25-time-to-restore",
-          "slot-26-deploy-frequency",
-          "slot-27-config-drift",
-          "slot-28-batch-backlog",
-          "slot-29-token-refresh-errors",
-          "slot-30-model-errors",
-          "slot-31-model-throughput",
-          "slot-32-network-throughput",
-          "slot-33-memory-pressure"
+          "slot-27-deploy-frequency",
+          "slot-28-config-drift",
+          "slot-29-batch-backlog",
+          "slot-30-token-refresh-errors",
+          "slot-31-model-errors",
+          "slot-32-model-throughput",
+          "slot-33-network-throughput"
         ],
         "density": "low",
         "relationships": [
@@ -240,9 +240,9 @@
         "primitives": [
           "deviceNode",
           "panel",
+          "text",
           "modelRow",
-          "timelineEvent",
-          "statusPill"
+          "timelineEvent"
         ],
         "constraints": {
           "overflow": "allow"
@@ -267,58 +267,58 @@
         "illustrative": true
       },
       {
-        "id": "slot-heading-description",
-        "regionId": "rail",
-        "kind": "heading",
-        "label": "Watch every service at once and catch the one that is wrong",
-        "primitive": "text",
-        "value": null,
-        "order": -9,
-        "because": "Names the screen and states its task in the user's words.",
-        "illustrative": true
-      },
-      {
         "id": "slot-action-primary",
         "regionId": "rail",
         "kind": "action",
         "label": "Acknowledge incident",
         "primitive": "button",
         "value": null,
-        "order": -8,
+        "order": -9,
         "because": "The action the screen exists for: 'Acknowledge incident'.",
         "illustrative": true
       },
       {
-        "id": "slot-4-api-errors",
+        "id": "slot-3-api-errors",
         "regionId": "rail",
         "kind": "signal",
         "label": "API errors",
         "primitive": "metric",
         "value": null,
-        "order": 3,
+        "order": 2,
         "because": "Required for the decision: 'API errors'.",
         "illustrative": true
       },
       {
-        "id": "slot-5-api-throughput",
+        "id": "slot-4-api-throughput",
         "regionId": "rail",
         "kind": "signal",
         "label": "API throughput",
         "primitive": "metric",
         "value": null,
-        "order": 4,
+        "order": 3,
         "because": "Required for the decision: 'API throughput'.",
         "illustrative": true
       },
       {
-        "id": "slot-6-disk-pressure",
+        "id": "slot-5-disk-pressure",
         "regionId": "rail",
         "kind": "signal",
         "label": "Disk pressure",
         "primitive": "statusPill",
         "value": null,
-        "order": 5,
+        "order": 4,
         "because": "Required for the decision: 'Disk pressure'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-memory-pressure",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "Memory pressure",
+        "primitive": "statusPill",
+        "value": null,
+        "order": 5,
+        "because": "Required for the decision: 'Memory pressure'.",
         "illustrative": true
       },
       {
@@ -531,91 +531,91 @@
         "illustrative": true
       },
       {
-        "id": "slot-26-deploy-frequency",
+        "id": "slot-heading-description",
+        "regionId": "map",
+        "kind": "heading",
+        "label": "Watch every service at once and catch the one that is wrong",
+        "primitive": "text",
+        "value": null,
+        "order": 15,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-27-deploy-frequency",
         "regionId": "map",
         "kind": "event",
         "label": "Deploy frequency",
         "primitive": "timelineEvent",
         "value": null,
-        "order": 25,
+        "order": 26,
         "because": "Required for the decision: 'Deploy frequency'.",
         "illustrative": true
       },
       {
-        "id": "slot-27-config-drift",
+        "id": "slot-28-config-drift",
         "regionId": "map",
         "kind": "setting",
         "label": "Config drift",
         "primitive": "panel",
         "value": null,
-        "order": 26,
+        "order": 27,
         "because": "Required for the decision: 'Config drift'.",
         "illustrative": true
       },
       {
-        "id": "slot-28-batch-backlog",
+        "id": "slot-29-batch-backlog",
         "regionId": "map",
         "kind": "event",
         "label": "Batch backlog",
         "primitive": "timelineEvent",
         "value": null,
-        "order": 27,
+        "order": 28,
         "because": "Required for the decision: 'Batch backlog'.",
         "illustrative": true
       },
       {
-        "id": "slot-29-token-refresh-errors",
+        "id": "slot-30-token-refresh-errors",
         "regionId": "map",
         "kind": "signal",
         "label": "Token refresh errors",
         "primitive": "modelRow",
         "value": null,
-        "order": 28,
+        "order": 29,
         "because": "Required for the decision: 'Token refresh errors'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
         "illustrative": true
       },
       {
-        "id": "slot-30-model-errors",
+        "id": "slot-31-model-errors",
         "regionId": "map",
         "kind": "signal",
         "label": "Model errors",
         "primitive": "modelRow",
         "value": null,
-        "order": 29,
+        "order": 30,
         "because": "Required for the decision: 'Model errors'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
         "illustrative": true
       },
       {
-        "id": "slot-31-model-throughput",
+        "id": "slot-32-model-throughput",
         "regionId": "map",
         "kind": "signal",
         "label": "Model throughput",
         "primitive": "modelRow",
         "value": null,
-        "order": 30,
+        "order": 31,
         "because": "Required for the decision: 'Model throughput'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
         "illustrative": true
       },
       {
-        "id": "slot-32-network-throughput",
+        "id": "slot-33-network-throughput",
         "regionId": "map",
         "kind": "signal",
         "label": "Network throughput",
         "primitive": "modelRow",
         "value": null,
-        "order": 31,
-        "because": "Required for the decision: 'Network throughput'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
-        "illustrative": true
-      },
-      {
-        "id": "slot-33-memory-pressure",
-        "regionId": "map",
-        "kind": "signal",
-        "label": "Memory pressure",
-        "primitive": "statusPill",
-        "value": null,
         "order": 32,
-        "because": "Required for the decision: 'Memory pressure'.",
+        "because": "Required for the decision: 'Network throughput'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
         "illustrative": true
       }
     ],
@@ -682,20 +682,11 @@
       "width": 215
     },
     {
-      "type": "createText",
-      "id": "slot-heading-description",
-      "parent": "rail",
-      "name": "Watch every service at once and catch th",
-      "x": 254.67,
-      "y": 16,
-      "width": 215
-    },
-    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "rail",
       "name": "Acknowledge incident",
-      "x": 493.33,
+      "x": 254.67,
       "y": 16,
       "width": 170,
       "height": 40,
@@ -708,9 +699,30 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-4-api-errors",
+      "id": "slot-3-api-errors",
       "parent": "rail",
       "name": "API errors",
+      "x": 493.33,
+      "y": 16,
+      "width": 215,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-3-api-errors",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-3-api-errors",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-4-api-throughput",
+      "parent": "rail",
+      "name": "API throughput",
       "x": 732,
       "y": 16,
       "width": 215,
@@ -719,41 +731,20 @@
     },
     {
       "type": "createText",
-      "parent": "slot-4-api-errors",
+      "parent": "slot-4-api-throughput",
       "name": "Label"
     },
     {
       "type": "createText",
-      "parent": "slot-4-api-errors",
+      "parent": "slot-4-api-throughput",
       "name": "Value"
     },
     {
       "type": "createFrame",
-      "id": "slot-5-api-throughput",
-      "parent": "rail",
-      "name": "API throughput",
-      "x": 970.67,
-      "y": 16,
-      "width": 215,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-api-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-api-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-6-disk-pressure",
+      "id": "slot-5-disk-pressure",
       "parent": "rail",
       "name": "Disk pressure",
-      "x": 1209.33,
+      "x": 970.67,
       "y": 16,
       "width": 93,
       "height": 22,
@@ -761,7 +752,23 @@
     },
     {
       "type": "createText",
-      "parent": "slot-6-disk-pressure",
+      "parent": "slot-5-disk-pressure",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-memory-pressure",
+      "parent": "rail",
+      "name": "Memory pressure",
+      "x": 1209.33,
+      "y": 16,
+      "width": 105,
+      "height": 22,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-memory-pressure",
       "name": "Label"
     },
     {
@@ -781,11 +788,20 @@
       "name": "Device"
     },
     {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "map",
+      "name": "Watch every service at once and catch th",
+      "x": 24,
+      "y": 24,
+      "width": 253
+    },
+    {
       "type": "createFrame",
       "id": "slot-8-queue-depth",
       "parent": "map",
       "name": "Queue depth",
-      "x": 24,
+      "x": 308.8,
       "y": 24,
       "width": 253,
       "height": 90,
@@ -801,7 +817,7 @@
       "id": "slot-9-queue-lag",
       "parent": "map",
       "name": "Queue lag",
-      "x": 308.8,
+      "x": 593.6,
       "y": 24,
       "width": 253,
       "height": 90,
@@ -817,7 +833,7 @@
       "id": "slot-10-worker-saturation",
       "parent": "map",
       "name": "Worker saturation",
-      "x": 593.6,
+      "x": 878.4,
       "y": 24,
       "width": 253,
       "height": 90,
@@ -833,7 +849,7 @@
       "id": "slot-11-cache-hit-rate",
       "parent": "map",
       "name": "Cache hit rate",
-      "x": 878.4,
+      "x": 1163.2,
       "y": 24,
       "width": 253,
       "height": 90,
@@ -849,8 +865,8 @@
       "id": "slot-12-shard-balance",
       "parent": "map",
       "name": "Shard balance",
-      "x": 1163.2,
-      "y": 24,
+      "x": 24,
+      "y": 136,
       "width": 253,
       "height": 90,
       "layoutMode": "VERTICAL"
@@ -865,7 +881,7 @@
       "id": "slot-13-replica-lag",
       "parent": "map",
       "name": "Replica lag",
-      "x": 24,
+      "x": 308.8,
       "y": 146,
       "width": 253,
       "height": 90,
@@ -881,7 +897,7 @@
       "id": "slot-14-clock-skew",
       "parent": "map",
       "name": "Clock skew",
-      "x": 308.8,
+      "x": 593.6,
       "y": 146,
       "width": 253,
       "height": 90,
@@ -897,7 +913,7 @@
       "id": "slot-15-auth-failures",
       "parent": "map",
       "name": "Auth failures",
-      "x": 593.6,
+      "x": 878.4,
       "y": 146,
       "width": 253,
       "height": 90,
@@ -913,7 +929,7 @@
       "id": "slot-16-rate-limit-rejections",
       "parent": "map",
       "name": "Rate limit rejections",
-      "x": 878.4,
+      "x": 1163.2,
       "y": 146,
       "width": 253,
       "height": 90,
@@ -929,8 +945,8 @@
       "id": "slot-17-cold-start-time",
       "parent": "map",
       "name": "Cold start time",
-      "x": 1163.2,
-      "y": 146,
+      "x": 24,
+      "y": 258,
       "width": 253,
       "height": 90,
       "layoutMode": "VERTICAL"
@@ -945,7 +961,7 @@
       "id": "slot-18-warm-pool-size",
       "parent": "map",
       "name": "Warm pool size",
-      "x": 24,
+      "x": 308.8,
       "y": 268,
       "width": 253,
       "height": 90,
@@ -961,7 +977,7 @@
       "id": "slot-19-inference-queue",
       "parent": "map",
       "name": "Inference queue",
-      "x": 308.8,
+      "x": 593.6,
       "y": 268,
       "width": 253,
       "height": 90,
@@ -977,7 +993,7 @@
       "id": "slot-20-index-rebuild",
       "parent": "map",
       "name": "Index rebuild",
-      "x": 593.6,
+      "x": 878.4,
       "y": 268,
       "width": 253,
       "height": 90,
@@ -993,7 +1009,7 @@
       "id": "slot-21-snapshot-age",
       "parent": "map",
       "name": "Snapshot age",
-      "x": 878.4,
+      "x": 1163.2,
       "y": 268,
       "width": 253,
       "height": 90,
@@ -1009,8 +1025,8 @@
       "id": "slot-22-backup-failures",
       "parent": "map",
       "name": "Backup failures",
-      "x": 1163.2,
-      "y": 268,
+      "x": 24,
+      "y": 380,
       "width": 253,
       "height": 90,
       "layoutMode": "VERTICAL"
@@ -1025,7 +1041,7 @@
       "id": "slot-23-certificate-expiry",
       "parent": "map",
       "name": "Certificate expiry",
-      "x": 24,
+      "x": 308.8,
       "y": 390,
       "width": 253,
       "height": 90,
@@ -1041,7 +1057,7 @@
       "id": "slot-24-change-failure-rate",
       "parent": "map",
       "name": "Change failure rate",
-      "x": 308.8,
+      "x": 593.6,
       "y": 390,
       "width": 253,
       "height": 90,
@@ -1057,7 +1073,7 @@
       "id": "slot-25-time-to-restore",
       "parent": "map",
       "name": "Time to restore",
-      "x": 593.6,
+      "x": 878.4,
       "y": 390,
       "width": 253,
       "height": 90,
@@ -1070,30 +1086,9 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-26-deploy-frequency",
+      "id": "slot-27-deploy-frequency",
       "parent": "map",
       "name": "—",
-      "x": 878.4,
-      "y": 390,
-      "width": 253,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-26-deploy-frequency",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-26-deploy-frequency",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-27-config-drift",
-      "parent": "map",
-      "name": "Config drift",
       "x": 1163.2,
       "y": 390,
       "width": 253,
@@ -1102,35 +1097,35 @@
     },
     {
       "type": "createText",
-      "parent": "slot-27-config-drift",
+      "parent": "slot-27-deploy-frequency",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-27-deploy-frequency",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-28-batch-backlog",
+      "id": "slot-28-config-drift",
       "parent": "map",
-      "name": "—",
+      "name": "Config drift",
       "x": 24,
-      "y": 512,
+      "y": 502,
       "width": 253,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
     {
       "type": "createText",
-      "parent": "slot-28-batch-backlog",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-28-batch-backlog",
+      "parent": "slot-28-config-drift",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-29-token-refresh-errors",
+      "id": "slot-29-batch-backlog",
       "parent": "map",
-      "name": "Token refresh errors",
+      "name": "—",
       "x": 308.8,
       "y": 512,
       "width": 253,
@@ -1139,14 +1134,19 @@
     },
     {
       "type": "createText",
-      "parent": "slot-29-token-refresh-errors",
+      "parent": "slot-29-batch-backlog",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-29-batch-backlog",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-30-model-errors",
+      "id": "slot-30-token-refresh-errors",
       "parent": "map",
-      "name": "Model errors",
+      "name": "Token refresh errors",
       "x": 593.6,
       "y": 512,
       "width": 253,
@@ -1155,14 +1155,14 @@
     },
     {
       "type": "createText",
-      "parent": "slot-30-model-errors",
+      "parent": "slot-30-token-refresh-errors",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-31-model-throughput",
+      "id": "slot-31-model-errors",
       "parent": "map",
-      "name": "Model throughput",
+      "name": "Model errors",
       "x": 878.4,
       "y": 512,
       "width": 253,
@@ -1171,14 +1171,14 @@
     },
     {
       "type": "createText",
-      "parent": "slot-31-model-throughput",
+      "parent": "slot-31-model-errors",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-32-network-throughput",
+      "id": "slot-32-model-throughput",
       "parent": "map",
-      "name": "Network throughput",
+      "name": "Model throughput",
       "x": 1163.2,
       "y": 512,
       "width": 253,
@@ -1187,24 +1187,24 @@
     },
     {
       "type": "createText",
-      "parent": "slot-32-network-throughput",
+      "parent": "slot-32-model-throughput",
       "name": "Title"
     },
     {
       "type": "createFrame",
-      "id": "slot-33-memory-pressure",
+      "id": "slot-33-network-throughput",
       "parent": "map",
-      "name": "Memory pressure",
+      "name": "Network throughput",
       "x": 24,
-      "y": 634,
-      "width": 105,
-      "height": 22,
-      "layoutMode": "HORIZONTAL"
+      "y": 624,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
     },
     {
       "type": "createText",
-      "parent": "slot-33-memory-pressure",
-      "name": "Label"
+      "parent": "slot-33-network-throughput",
+      "name": "Title"
     }
   ],
   "structuralChecks": [

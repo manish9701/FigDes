@@ -1,0 +1,16 @@
+{
+  "id": "A02",
+  "title": "The visual direction is applied across the frame, not only to the dark visualisation",
+  "group": "generation",
+  "requirement": "The reference screen keeps a restrained light surface system around one dark technical visualisation, and the direction reaches the whole frame. The data is declared as demo data, so no value is invented.",
+  "issue": "#16",
+  "status": "PASS",
+  "detail": "style 'technical-instrument' on 4/4 region(s); 1 dark surface(s) of 12; no invented values",
+  "raw": {
+    "style": "technical-instrument",
+    "regionsWithWeight": 4,
+    "darkSurfaces": 1,
+    "surfaces": 12,
+    "sampleData": "demo"
+  }
+}

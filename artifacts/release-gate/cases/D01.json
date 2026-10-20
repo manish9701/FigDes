@@ -1,0 +1,10 @@
+{
+  "id": "D01",
+  "title": "Seeded legibility defects are detected with targets and measurements",
+  "group": "a11y",
+  "requirement": "A low-contrast nav label, a 10px operational label, a clipped identifier and a drifted repeated component are each reported, with the node they are about.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "2 review finding(s); contrast {\"textColor\":\"#C9C6BC\",\"background\":\"#FFFFFF\",\"surfaceSource\":\"parent surface 'Nav'\",\"ratio\":1.71,\"required\":4.5,\"fontSize\":14,\"bold\":false,\"layerName\":\"Cluster\",\"proposedFill\":\"#7C7664\",\"proposedRatio\":4.53,\"repairVerified\":true}; the identifier is truncated and reported",
+  "raw": {}
+}

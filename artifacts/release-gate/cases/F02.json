@@ -1,0 +1,10 @@
+{
+  "id": "F02",
+  "title": "An unrepairable issue and a failed repair are not reported as fixed",
+  "group": "repair",
+  "requirement": "A finding with no safe operation is reported for a human, a repair that does not resolve is not counted as fixed, and a budget that runs out says BUDGET_EXHAUSTED rather than convergence.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "no repair was invented, and the budget exhaustion was reported as such",
+  "raw": {}
+}

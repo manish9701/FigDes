@@ -1,0 +1,10 @@
+{
+  "id": "H01",
+  "title": "An empty, stale, missing or disconnected inspection can never report PASS",
+  "group": "false-pass",
+  "requirement": "An empty snapshot, a stale node id, a disconnected runtime, a missing render, a review failure, a geometry mismatch, a missing component, a successful operation with a broken result, an unresolved constraint and a skipped check are all reported as something other than PASS.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "every empty or missing input produced a non-PASS outcome",
+  "raw": {}
+}

@@ -1333,6 +1333,10 @@ function emitText(
       ...(spec.letterSpacing !== undefined ? { letterSpacing: spec.letterSpacing } : {}),
       ...(spec.fill !== undefined ? { fill: resolveToken(spec.fill) } : {}),
       width: Math.max(40, Math.round(spec.maxWidth ?? box.w)),
+      // A deliberately truncated text: the box stays the size the layout
+      // reserved and the text is cut with an ellipsis, which is the honest
+      // rendering of a string that cannot wrap.
+      ...(spec.truncate === true ? { textAutoResize: "TRUNCATE" as const } : {}),
     }),
   );
 }
@@ -3109,11 +3113,25 @@ function checkTextFit(
 
       if (runWidth <= box.w + 1) continue;
 
+      // A deliberately truncated text is not a typography failure: the author
+      // chose to cut it rather than let it overflow. It is still worth saying
+      // so — the value on screen is shorter than the value in the data — but
+      // it is a different finding from "this will overflow".
+      if (spec.truncate === true) {
+        violations.push({
+          rule: "text-truncated",
+          message:
+            `Text '${child}' is truncated at ${Math.round(box.w)}px: the run "${longest.slice(0, 48)}" measures about ${runWidth}px and cannot wrap. ` +
+            `The box holds the value, not the whole value.`,
+        });
+        continue;
+      }
+
       violations.push({
         rule: "typography",
         message:
           `Text '${child}' holds the unbreakable run "${longest.slice(0, 48)}", which measures about ${runWidth}px at ${Math.round(fontSize)}px inside a ${Math.round(box.w)}px box. ` +
-          `It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.`,
+          `It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box.`,
       });
     }
   }

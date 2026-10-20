@@ -262,6 +262,16 @@ export const CreateTextOp = z.object({
   textAlignHorizontal: z.enum(["LEFT", "CENTER", "RIGHT", "JUSTIFIED"]).optional(),
   textAlignVertical: z.enum(["TOP", "CENTER", "BOTTOM"]).optional(),
   width: z.number().positive().max(100000).optional(),
+  /**
+   * How the text behaves when it does not fit.
+   *
+   * `HEIGHT` wraps at the given width and grows downwards — the default for
+   * prose. `TRUNCATE` keeps the height and cuts the text with an ellipsis,
+   * which is what an identifier in a table cell needs: a model id has no
+   * break opportunities, so wrapping it does nothing and truncating it says
+   * what is true.
+   */
+  textAutoResize: z.enum(["NONE", "WIDTH_AND_HEIGHT", "HEIGHT", "TRUNCATE"]).optional(),
 });
 
 export const RenameNodeOp = z.object({

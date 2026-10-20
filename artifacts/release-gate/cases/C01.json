@@ -1,0 +1,10 @@
+{
+  "id": "C01",
+  "title": "Every edge contacts the node it names, and a connector inside its parent is not a defect",
+  "group": "topology",
+  "requirement": "Both endpoints of an edge land on the intended node anchors within a documented tolerance, and the reviewer does not report the containing region as the endpoint.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "the edge resolved to both device nodes, and the reviewer did not report its parent as the endpoint",
+  "raw": {}
+}

@@ -1,0 +1,10 @@
+{
+  "id": "B05",
+  "title": "Extreme padding, gaps and nested sizing resolve to sane geometry",
+  "group": "geometry",
+  "requirement": "Extreme but valid padding and gaps, nested fixed/fill/hug sizing, a narrow canvas and a large canvas all resolve without a negative or zero extent.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "4 extreme layout(s) resolved with positive extents",
+  "raw": {}
+}

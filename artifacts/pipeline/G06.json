@@ -81,6 +81,78 @@
     },
     "regions": [
       {
+        "id": "header",
+        "role": "header",
+        "composition": "editorial",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 240,
+          "y": 0,
+          "w": 1200,
+          "h": 88
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 88
+        },
+        "grow": 0,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 4,
+          "behavior": "keeps its band; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-heading-title",
+          "slot-heading-description",
+          "slot-action-primary"
+        ],
+        "density": "low",
+        "relationships": [
+          {
+            "id": "rel-header-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (the stated decision), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-header-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (cluster health, recent deploys)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-header-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button"
+        ],
+        "constraints": {
+          "overflow": "clip"
+        },
+        "priority": 4,
+        "interaction": "the screen's primary action, and its identity",
+        "why": "the screen's name, its task and the action it exists for: a band of its own, so the navigation rail can stay a wayfinding rail",
+        "autoLayout": false,
+        "columns": 3
+      },
+      {
         "id": "nav",
         "role": "navigation",
         "composition": "instrument",
@@ -114,10 +186,7 @@
           "behavior": "keeps its declared size; collapses first when the viewport narrows"
         },
         "contentHierarchy": [
-          "slot-heading-eyebrow",
-          "slot-heading-title",
-          "slot-heading-description",
-          "slot-action-primary"
+          "slot-heading-eyebrow"
         ],
         "density": "medium",
         "relationships": [
@@ -135,8 +204,7 @@
           }
         ],
         "primitives": [
-          "text",
-          "button"
+          "text"
         ],
         "constraints": {
           "overflow": "clip"
@@ -144,8 +212,7 @@
         "priority": 3,
         "interaction": "move between sections of the product",
         "why": "orientation",
-        "autoLayout": false,
-        "columns": 1
+        "autoLayout": false
       },
       {
         "id": "subject",
@@ -155,9 +222,9 @@
         "order": 1,
         "bounds": {
           "x": 240,
-          "y": 0,
+          "y": 120,
           "w": 1200,
-          "h": 521
+          "h": 561
         },
         "layoutMode": "free",
         "sizing": {
@@ -181,7 +248,8 @@
           "behavior": "fills the space the other regions leave; collapses last"
         },
         "contentHierarchy": [
-          "slot-4-node-topology"
+          "slot-4-node-topology",
+          "slot-5-recent-deploys"
         ],
         "density": "medium",
         "relationships": [
@@ -199,7 +267,8 @@
           }
         ],
         "primitives": [
-          "panel"
+          "panel",
+          "timelineEvent"
         ],
         "constraints": {
           "overflow": "allow"
@@ -218,9 +287,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 553,
+          "y": 713,
           "w": 360,
-          "h": 347
+          "h": 187
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -244,8 +313,7 @@
           "behavior": "keeps its declared size; collapses first when the viewport narrows"
         },
         "contentHierarchy": [
-          "slot-5-cluster-health",
-          "slot-6-recent-deploys"
+          "slot-6-cluster-health"
         ],
         "density": "medium",
         "relationships": [
@@ -263,8 +331,7 @@
           }
         ],
         "primitives": [
-          "statusPill",
-          "timelineEvent"
+          "statusPill"
         ],
         "constraints": {
           "overflow": "forbid"
@@ -279,7 +346,7 @@
     "content": [
       {
         "id": "slot-heading-title",
-        "regionId": "nav",
+        "regionId": "header",
         "kind": "heading",
         "label": "Cluster Console",
         "primitive": "text",
@@ -290,7 +357,7 @@
       },
       {
         "id": "slot-heading-description",
-        "regionId": "nav",
+        "regionId": "header",
         "kind": "heading",
         "label": "Operate a cluster from one console",
         "primitive": "text",
@@ -301,7 +368,7 @@
       },
       {
         "id": "slot-action-primary",
-        "regionId": "nav",
+        "regionId": "header",
         "kind": "action",
         "label": "Drain node",
         "primitive": "button",
@@ -322,25 +389,25 @@
         "illustrative": true
       },
       {
-        "id": "slot-5-cluster-health",
+        "id": "slot-5-recent-deploys",
+        "regionId": "subject",
+        "kind": "event",
+        "label": "recent deploys",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 4,
+        "because": "Required for the decision: 'recent deploys'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-cluster-health",
         "regionId": "context",
         "kind": "signal",
         "label": "cluster health",
         "primitive": "statusPill",
         "value": null,
-        "order": 4,
-        "because": "Required for the decision: 'cluster health'.",
-        "illustrative": true
-      },
-      {
-        "id": "slot-6-recent-deploys",
-        "regionId": "context",
-        "kind": "event",
-        "label": "recent deploys",
-        "primitive": "timelineEvent",
-        "value": null,
         "order": 5,
-        "because": "Required for the decision: 'recent deploys'.",
+        "because": "Required for the decision: 'cluster health'.",
         "illustrative": true
       },
       {
@@ -378,10 +445,10 @@
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 937320,
-      "coverage": 0.7232407407407407,
+      "coveredArea": 1033320,
+      "coverage": 0.7973148148148148,
       "largestEmptyBand": 0,
-      "focalShare": 0.4824074074074074,
+      "focalShare": 0.5194444444444445,
       "notes": []
     }
   },
@@ -405,13 +472,23 @@
     },
     {
       "type": "createFrame",
+      "id": "header",
+      "parent": "root",
+      "name": "Header",
+      "x": 234,
+      "y": 0,
+      "width": 1206,
+      "height": 92
+    },
+    {
+      "type": "createFrame",
       "id": "subject",
       "parent": "root",
       "name": "Subject",
       "x": 234,
-      "y": 0,
+      "y": 116,
       "width": 1206,
-      "height": 528
+      "height": 454
     },
     {
       "type": "createFrame",
@@ -419,9 +496,9 @@
       "parent": "root",
       "name": "Context",
       "x": 234,
-      "y": 552,
+      "y": 594,
       "width": 360,
-      "height": 348,
+      "height": 306,
       "layoutMode": "VERTICAL"
     },
     {
@@ -431,33 +508,33 @@
       "name": "EXO Labs",
       "x": 0,
       "y": 0,
-      "width": 54
+      "width": 210
     },
     {
       "type": "createText",
       "id": "slot-heading-title",
-      "parent": "nav",
+      "parent": "header",
       "name": "Cluster Console",
-      "x": 78,
-      "y": 0,
-      "width": 54
+      "x": 24,
+      "y": 24,
+      "width": 375
     },
     {
       "type": "createText",
       "id": "slot-heading-description",
-      "parent": "nav",
+      "parent": "header",
       "name": "Operate a cluster from one console",
-      "x": 156,
-      "y": 0,
-      "width": 54
+      "x": 415.33000000000004,
+      "y": 24,
+      "width": 375
     },
     {
       "type": "createFrame",
       "id": "slot-action-primary",
-      "parent": "nav",
+      "parent": "header",
       "name": "Drain node",
-      "x": 0,
-      "y": 42,
+      "x": 806.6700000000001,
+      "y": 24,
       "width": 97,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -485,7 +562,28 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-5-cluster-health",
+      "id": "slot-5-recent-deploys",
+      "parent": "subject",
+      "name": "—",
+      "x": 32,
+      "y": 146,
+      "width": 1142,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-recent-deploys",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-recent-deploys",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-cluster-health",
       "parent": "context",
       "name": "cluster health",
       "x": 0,
@@ -496,29 +594,8 @@
     },
     {
       "type": "createText",
-      "parent": "slot-5-cluster-health",
+      "parent": "slot-6-cluster-health",
       "name": "Label"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-6-recent-deploys",
-      "parent": "context",
-      "name": "—",
-      "x": 0,
-      "y": 46,
-      "width": 360,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-recent-deploys",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-recent-deploys",
-      "name": "Title"
     }
   ],
   "structuralChecks": [
@@ -526,14 +603,14 @@
       "id": "regions-built",
       "question": "Was every planned region built?",
       "status": "pass",
-      "detail": "3 region(s) built: nav, subject, context.",
+      "detail": "4 region(s) built: header, nav, subject, context.",
       "nodeIds": []
     },
     {
       "id": "regions-on-canvas",
       "question": "Is every region inside the canvas?",
       "status": "pass",
-      "detail": "All 3 region(s) are within the 1440x900 canvas.",
+      "detail": "All 4 region(s) are within the 1440x900 canvas.",
       "nodeIds": []
     },
     {
@@ -570,14 +647,14 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 72%, largest empty band 0%, focal share 48%.",
+      "detail": "coverage 80%, largest empty band 0%, focal share 52%.",
       "nodeIds": []
     },
     {
       "id": "compiled-geometry",
       "question": "Does the resolved geometry agree with the program?",
-      "status": "fail",
-      "detail": "typography: Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box. | typography: Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "status": "pass",
+      "detail": "No geometry violations.",
       "nodeIds": []
     },
     {
@@ -591,7 +668,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "subject: planned 1200x521, built 1206x528",
+      "detail": "header: planned 1200x88, built 1206x92; subject: planned 1200x561, built 1206x454; context: planned 360x187, built 360x306",
       "nodeIds": []
     },
     {
@@ -604,61 +681,52 @@
   ],
   "findings": [
     {
-      "id": "violation-typography-01",
-      "stage": "structure",
-      "severity": "medium",
-      "confidence": 0.8,
-      "nodeIds": [],
-      "summary": "Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
-      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
-      "evidence": {
-        "kind": "rule",
-        "detail": "rule: typography"
-      },
-      "fix": "Adjust the program so the geometry resolves as intended.",
-      "automatable": false
-    },
-    {
-      "id": "violation-typography-02",
-      "stage": "structure",
-      "severity": "medium",
-      "confidence": 0.8,
-      "nodeIds": [],
-      "summary": "Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
-      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
-      "evidence": {
-        "kind": "rule",
-        "detail": "rule: typography"
-      },
-      "fix": "Adjust the program so the geometry resolves as intended.",
-      "automatable": false
-    },
-    {
       "id": "plan-geometry-drift-01",
       "stage": "plan",
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x521, built 1206x528.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1206x92.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "subject: planned 1200x521, built 1206x528"
+        "detail": "header: planned 1200x88, built 1206x92"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-02",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x561, built 1206x454.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "subject: planned 1200x561, built 1206x454"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-03",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x306.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "context: planned 360x187, built 360x306"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
     }
   ],
-  "violations": [
-    {
-      "rule": "typography",
-      "message": "Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
-    },
-    {
-      "rule": "typography",
-      "message": "Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
-    }
-  ],
+  "violations": [],
   "applicable": true,
-  "status": "fail"
+  "status": "review"
 }

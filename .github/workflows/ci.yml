@@ -74,6 +74,22 @@ jobs:
           name: figdes-design-benchmark
           path: artifacts/design-benchmark/latest.json
           if-no-files-found: error
+      # Issue #17: the release gate. It runs the integrated gauntlet, every
+      # offline regression suite, the acceptance and stress matrices and the
+      # design benchmark, and produces one evidence bundle and one verdict.
+      #
+      # The live group is skipped here because a runner has no Figma plugin:
+      # the gate reports that coverage as BLOCKED rather than as a pass, and
+      # the verdict is INDETERMINATE rather than PASS. A failure is still a
+      # failure, so a red gate turns the build red.
+      - name: Run the release gate
+        run: npm run gate -- --skip-live
+      - name: Upload the release-gate evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: figdes-release-gate
+          path: artifacts/release-gate/
+          if-no-files-found: error
       # Live Figma evidence cannot be produced on a runner, so this step does not
       # gate the build. It publishes the live report so the stress frame
       # (issue #10's "rendered and reviewed after the final mutation") stays

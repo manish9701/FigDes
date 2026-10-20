@@ -149,6 +149,13 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
     num("letterSpacing", "Tracking in 1/100 em."),
     colour,
     num("maxWidth", "Wrapping width in px."),
+    {
+      name: "truncate",
+      type: "boolean",
+      description:
+        "Cut the text with an ellipsis instead of wrapping it. For a string with no break opportunities — a model identifier, a path, a hash — wrapping does nothing, and truncating keeps the layout where it was.",
+      example: "true",
+    },
   ],
   shape: [
     enumArg("shape", "Shape kind.", SHAPE_VALUES, '"polygon"'),

@@ -1,0 +1,10 @@
+{
+  "id": "B01",
+  "title": "An asymmetric split view keeps the inspector fixed and the canvas fluid",
+  "group": "geometry",
+  "requirement": "The inspector is a fixed width, the canvas takes the rest, the two share a top edge, and the inspector ends on the canvas edge.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "canvas 816 wide at x=272, inspector 320 wide at x=1120, both at y=0",
+  "raw": {}
+}

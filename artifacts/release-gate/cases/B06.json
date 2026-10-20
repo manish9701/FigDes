@@ -1,0 +1,10 @@
+{
+  "id": "B06",
+  "title": "Invalid input fails closed instead of producing a successful screen",
+  "group": "geometry",
+  "requirement": "An unknown connector endpoint, a duplicate id, a malformed token, a negative size and an empty scope each fail loudly. A dry run or a successful compiler response is not a pass.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "4 invalid input(s) all failed closed",
+  "raw": {}
+}

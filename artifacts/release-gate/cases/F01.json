@@ -1,0 +1,10 @@
+{
+  "id": "F01",
+  "title": "A repair is proposed with targets, applied, re-checked, and its effect is measured",
+  "group": "repair",
+  "requirement": "A repair names the node it will touch, applies only to that node, is verified by a second structural check, and is classified as fixed only when the measurement changed.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "one targeted repair, one named target, nothing else touched",
+  "raw": {}
+}

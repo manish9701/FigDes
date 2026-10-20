@@ -68,6 +68,77 @@
     },
     "regions": [
       {
+        "id": "header",
+        "role": "header",
+        "composition": "editorial",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 390,
+          "h": 88
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 88
+        },
+        "grow": 0,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 4,
+          "behavior": "keeps its band; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-heading-title",
+          "slot-action-primary"
+        ],
+        "density": "low",
+        "relationships": [
+          {
+            "id": "rel-header-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-header-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-header-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button"
+        ],
+        "constraints": {
+          "overflow": "clip"
+        },
+        "priority": 4,
+        "interaction": "the screen's primary action, and its identity",
+        "why": "the screen's name, its task and the action it exists for: a band of its own, so the navigation rail can stay a wayfinding rail",
+        "autoLayout": false,
+        "columns": 2
+      },
+      {
         "id": "nav",
         "role": "navigation",
         "composition": "instrument",
@@ -75,9 +146,9 @@
         "order": 0,
         "bounds": {
           "x": 0,
-          "y": 0,
+          "y": 120,
           "w": 208,
-          "h": 130
+          "h": 132
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -101,9 +172,7 @@
           "behavior": "keeps its declared size; collapses first when the viewport narrows"
         },
         "contentHierarchy": [
-          "slot-heading-eyebrow",
-          "slot-heading-title",
-          "slot-heading-description"
+          "slot-heading-eyebrow"
         ],
         "density": "medium",
         "relationships": [
@@ -129,8 +198,7 @@
         "priority": 3,
         "interaction": "move between sections of the product",
         "why": "orientation",
-        "autoLayout": false,
-        "columns": 1
+        "autoLayout": false
       },
       {
         "id": "subject",
@@ -140,9 +208,9 @@
         "order": 1,
         "bounds": {
           "x": 0,
-          "y": 162,
+          "y": 284,
           "w": 390,
-          "h": 390
+          "h": 396
         },
         "layoutMode": "free",
         "sizing": {
@@ -166,6 +234,7 @@
           "behavior": "fills the space the other regions leave; collapses last"
         },
         "contentHierarchy": [
+          "slot-heading-description",
           "slot-3-meta-llama-llama-3-1-405b-instru"
         ],
         "density": "medium",
@@ -203,9 +272,9 @@
         "order": 2,
         "bounds": {
           "x": 0,
-          "y": 584,
+          "y": 712,
           "w": 360,
-          "h": 260
+          "h": 132
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -229,8 +298,7 @@
           "behavior": "keeps its declared size; collapses first when the viewport narrows"
         },
         "contentHierarchy": [
-          "slot-action-primary",
-          "slot-4-cuda-out-of-memory-while-allocat"
+          "slot-5-cuda-out-of-memory-while-allocat"
         ],
         "density": "medium",
         "relationships": [
@@ -248,7 +316,6 @@
           }
         ],
         "primitives": [
-          "button",
           "text"
         ],
         "constraints": {
@@ -264,7 +331,7 @@
     "content": [
       {
         "id": "slot-heading-title",
-        "regionId": "nav",
+        "regionId": "header",
         "kind": "heading",
         "label": "Placement",
         "primitive": "text",
@@ -274,14 +341,14 @@
         "illustrative": true
       },
       {
-        "id": "slot-heading-description",
-        "regionId": "nav",
-        "kind": "heading",
-        "label": "Place a very long model identifier on a cluster",
-        "primitive": "text",
+        "id": "slot-action-primary",
+        "regionId": "header",
+        "kind": "action",
+        "label": "Place model",
+        "primitive": "button",
         "value": null,
         "order": -9,
-        "because": "Names the screen and states its task in the user's words.",
+        "because": "The action the screen exists for: 'Place model'.",
         "illustrative": true
       },
       {
@@ -296,25 +363,25 @@
         "illustrative": true
       },
       {
-        "id": "slot-4-cuda-out-of-memory-while-allocat",
+        "id": "slot-heading-description",
+        "regionId": "subject",
+        "kind": "heading",
+        "label": "Place a very long model identifier on a cluster",
+        "primitive": "text",
+        "value": null,
+        "order": -7,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-5-cuda-out-of-memory-while-allocat",
         "regionId": "context",
         "kind": "attribute",
         "label": "CUDA out of memory while allocating the sharded KV cache for shard 7 of 12",
         "primitive": "text",
         "value": null,
-        "order": 3,
+        "order": 4,
         "because": "Required for the decision: 'CUDA out of memory while allocating the sharded KV cache for shard 7 of 12'.",
-        "illustrative": true
-      },
-      {
-        "id": "slot-action-primary",
-        "regionId": "context",
-        "kind": "action",
-        "label": "Place model",
-        "primitive": "button",
-        "value": null,
-        "order": -6,
-        "because": "The action the screen exists for: 'Place model'.",
         "illustrative": true
       },
       {
@@ -352,10 +419,10 @@
     ],
     "usage": {
       "canvasArea": 329160,
-      "coveredArea": 272740,
-      "coverage": 0.8285939968404423,
+      "coveredArea": 263736,
+      "coverage": 0.8012395187750638,
       "largestEmptyBand": 0.037914691943127965,
-      "focalShare": 0.46208530805687204,
+      "focalShare": 0.46919431279620855,
       "notes": []
     }
   },
@@ -369,13 +436,23 @@
     },
     {
       "type": "createFrame",
+      "id": "header",
+      "parent": "root",
+      "name": "Header",
+      "x": 0,
+      "y": 0,
+      "width": 390,
+      "height": 97
+    },
+    {
+      "type": "createFrame",
       "id": "nav",
       "parent": "root",
       "name": "Nav",
       "x": 0,
-      "y": 0,
+      "y": 129,
       "width": 208,
-      "height": 196
+      "height": 101
     },
     {
       "type": "createFrame",
@@ -383,9 +460,9 @@
       "parent": "root",
       "name": "Subject",
       "x": 0,
-      "y": 228,
+      "y": 262,
       "width": 390,
-      "height": 324
+      "height": 330
     },
     {
       "type": "createFrame",
@@ -393,9 +470,34 @@
       "parent": "root",
       "name": "Context",
       "x": 0,
-      "y": 584,
+      "y": 624,
       "width": 360,
-      "height": 260
+      "height": 220
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "header",
+      "name": "Placement",
+      "x": 24,
+      "y": 24,
+      "width": 163
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "header",
+      "name": "Place model",
+      "x": 203,
+      "y": 24,
+      "width": 113,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
     },
     {
       "type": "createText",
@@ -408,21 +510,12 @@
     },
     {
       "type": "createText",
-      "id": "slot-heading-title",
-      "parent": "nav",
-      "name": "Placement",
-      "x": 0,
-      "y": 43,
-      "width": 208
-    },
-    {
-      "type": "createText",
       "id": "slot-heading-description",
-      "parent": "nav",
+      "parent": "subject",
       "name": "Place a very long model identifier on a ",
-      "x": 0,
-      "y": 116,
-      "width": 208
+      "x": 32,
+      "y": 32,
+      "width": 326
     },
     {
       "type": "createText",
@@ -430,33 +523,17 @@
       "parent": "subject",
       "name": "meta-llama/Llama-3.1-405B-Instruct-AWQ-I",
       "x": 32,
-      "y": 32,
+      "y": 110,
       "width": 326
     },
     {
       "type": "createText",
-      "id": "slot-4-cuda-out-of-memory-while-allocat",
+      "id": "slot-5-cuda-out-of-memory-while-allocat",
       "parent": "context",
       "name": "CUDA out of memory while allocating the ",
       "x": 0,
       "y": 0,
       "width": 360
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-action-primary",
-      "parent": "context",
-      "name": "Place model",
-      "x": 0,
-      "y": 67,
-      "width": 113,
-      "height": 40,
-      "layoutMode": "HORIZONTAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-action-primary",
-      "name": "Label"
     }
   ],
   "structuralChecks": [
@@ -464,14 +541,14 @@
       "id": "regions-built",
       "question": "Was every planned region built?",
       "status": "pass",
-      "detail": "3 region(s) built: nav, subject, context.",
+      "detail": "4 region(s) built: header, nav, subject, context.",
       "nodeIds": []
     },
     {
       "id": "regions-on-canvas",
       "question": "Is every region inside the canvas?",
       "status": "pass",
-      "detail": "All 3 region(s) are within the 390x844 canvas.",
+      "detail": "All 4 region(s) are within the 390x844 canvas.",
       "nodeIds": []
     },
     {
@@ -508,14 +585,14 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 83%, largest empty band 4%, focal share 46%.",
+      "detail": "coverage 80%, largest empty band 4%, focal share 47%.",
       "nodeIds": []
     },
     {
       "id": "compiled-geometry",
       "question": "Does the resolved geometry agree with the program?",
       "status": "fail",
-      "detail": "typography: Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "detail": "text-truncated: Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value.",
       "nodeIds": []
     },
     {
@@ -529,7 +606,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "nav: planned 208x130, built 208x196; subject: planned 390x390, built 390x324",
+      "detail": "header: planned 390x88, built 390x97; nav: planned 208x132, built 208x101; subject: planned 390x396, built 390x330; context: planned 360x132, built 360x220",
       "nodeIds": []
     },
     {
@@ -542,16 +619,16 @@
   ],
   "findings": [
     {
-      "id": "violation-typography-01",
+      "id": "violation-text-truncated-01",
       "stage": "structure",
       "severity": "medium",
       "confidence": 0.8,
       "nodeIds": [],
-      "summary": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "summary": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value.",
       "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
       "evidence": {
         "kind": "rule",
-        "detail": "rule: typography"
+        "detail": "rule: text-truncated"
       },
       "fix": "Adjust the program so the geometry resolves as intended.",
       "automatable": false
@@ -562,11 +639,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: nav: planned 208x130, built 208x196.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 390x88, built 390x97.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "nav: planned 208x130, built 208x196"
+        "detail": "header: planned 390x88, built 390x97"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -577,11 +654,41 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: subject: planned 390x390, built 390x324.",
+      "summary": "The build did not produce the geometry the plan promised: nav: planned 208x132, built 208x101.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "subject: planned 390x390, built 390x324"
+        "detail": "nav: planned 208x132, built 208x101"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-03",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 390x396, built 390x330.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "subject: planned 390x396, built 390x330"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-04",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x132, built 360x220.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "context: planned 360x132, built 360x220"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -589,8 +696,8 @@
   ],
   "violations": [
     {
-      "rule": "typography",
-      "message": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+      "rule": "text-truncated",
+      "message": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value."
     }
   ],
   "applicable": true,

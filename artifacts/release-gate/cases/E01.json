@@ -1,0 +1,10 @@
+{
+  "id": "E01",
+  "title": "The review engine finds the seeded defects and leaves the legitimate patterns alone",
+  "group": "review",
+  "requirement": "True defects are reported with their node ids, legitimate patterns are not, and the counts are reported against the seeded expectations.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "1 true defect(s) found with node ids, 0 false positives",
+  "raw": {}
+}

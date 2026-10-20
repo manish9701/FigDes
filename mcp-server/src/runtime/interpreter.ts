@@ -160,6 +160,7 @@ const CONTENT_ARGS = new Set([
   "letterSpacing",
   "fill",
   "maxWidth",
+  "truncate",
   "stroke",
   "strokeWeight",
   "radius",
@@ -952,6 +953,7 @@ const args = call.args as Record<string, unknown>;
           ...(args.letterSpacing !== undefined ? { letterSpacing: coerceNumber(args.letterSpacing, 0, -100, 1000) } : {}),
           ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
           ...(args.maxWidth !== undefined ? { maxWidth: coerceNumber(args.maxWidth, 0, 1, 20000) } : {}),
+          ...(args.truncate === true ? { truncate: true } : {}),
         });
         if (parsed.success) {
           content.push(parsed.data);

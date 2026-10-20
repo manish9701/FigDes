@@ -1,0 +1,60 @@
+{
+  "id": "G01",
+  "title": "The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings",
+  "group": "runtime",
+  "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
+  "issue": "#15",
+  "status": "PASS",
+  "detail": "5 workload(s) applied atomically; median apply 15ms, worst 17ms",
+  "raw": {
+    "measurements": [
+      {
+        "size": 15,
+        "operations": 15,
+        "createdNodes": 15,
+        "applyMs": 7,
+        "totalMs": 10,
+        "yields": 1,
+        "rollback": null
+      },
+      {
+        "size": 40,
+        "operations": 40,
+        "createdNodes": 40,
+        "applyMs": 17,
+        "totalMs": 25,
+        "yields": 1,
+        "rollback": null
+      },
+      {
+        "size": 62,
+        "operations": 62,
+        "createdNodes": 62,
+        "applyMs": 15,
+        "totalMs": 18,
+        "yields": 1,
+        "rollback": null
+      },
+      {
+        "size": 100,
+        "operations": 100,
+        "createdNodes": 100,
+        "applyMs": 16,
+        "totalMs": 19,
+        "yields": 1,
+        "rollback": null
+      },
+      {
+        "size": 150,
+        "operations": 150,
+        "createdNodes": 150,
+        "applyMs": 5,
+        "totalMs": 13,
+        "yields": 1,
+        "rollback": null
+      }
+    ],
+    "medianApplyMs": 15,
+    "worstApplyMs": 17
+  }
+}

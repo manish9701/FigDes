@@ -23,6 +23,7 @@
  * exists.
  */
 import { planScreen, type ScreenIntent } from "../plan/planner";
+import { defaultGutter, layoutRegions } from "../runtime/layout";
 import { classifyInformation, type InfoKind } from "../design/composition/derive";
 import type { Composition } from "../runtime/layout";
 import type { ContentSlot, CompositionPlan, NormalizedBrief, RegionSpec } from "./contracts";
@@ -232,9 +233,65 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
   const plan = planScreen(intent);
   const warnings: string[] = [...plan.warnings];
 
+  /* --- the screen needs somewhere to put its identity --------------------- */
+
+  // The planner's shells are derived from the decision, and not every one of
+  // them has a header: a monitoring screen is a status strip over a field, a
+  // topology screen is a canvas. That is right for the *content* — but the
+  // screen still has a name, a task and a primary action, and without a band
+  // to hold them they land in the navigation rail, which is 208px wide and
+  // meant for wayfinding. A title in a 53px column is not a title.
+  //
+  // So the pipeline adds the band when the plan has nowhere to put the
+  // identity, and re-resolves the layout with it. The composition is the
+  // pipeline's job; the planner's region list is its starting point.
+  const shell = plan.regions.map((r) => ({
+    id: r.id,
+    role: r.role,
+    composition: r.composition,
+    width: r.width as number | "fill" | "hug",
+    height: r.height as number | "fill" | "hug",
+    grow: r.grow,
+    gap: r.gap,
+    padding: r.padding as number | undefined,
+  }));
+  const hasIdentityBand = shell.some((r) => r.role === "header" || r.role === "status-rail");
+  if (!hasIdentityBand) {
+    shell.unshift({
+      id: "header",
+      role: "header",
+      composition: "editorial",
+      width: "fill",
+      height: 88,
+      grow: 0,
+      gap: 16,
+      padding: 24,
+    });
+    warnings.push(
+      "The plan had no band for the screen's identity, so the pipeline added a header: the name, the task and the primary action need somewhere to go that is not the navigation rail.",
+    );
+  }
+
+  // The geometry is re-resolved with the same engine the compiler uses, so
+  // the plan's numbers and the build's numbers are the same numbers.
+  const laid = layoutRegions({
+    regions: shell as unknown as Parameters<typeof layoutRegions>[0]["regions"],
+    canvasW: canvas.width,
+    canvasH: canvas.height,
+    gutter: defaultGutter(canvas.grid),
+  });
+  const boxOf = new Map(laid.map((r) => [r.id, r]));
+
   const boxes = new Map(plan.boxes.map((b) => [b.name, b]));
-  const hierarchy = plan.artDirection.hierarchy;
+  const hierarchy = [...plan.artDirection.hierarchy];
   const focalId = plan.artDirection.focal?.id ?? null;
+  if (!hasIdentityBand) {
+    hierarchy.push({
+      rank: hierarchy.length + 1,
+      id: "header",
+      why: "the screen's identity and its primary action: chrome, and never the thing the eye lands on",
+    });
+  }
 
   /* --- regions ----------------------------------------------------------- */
 
@@ -285,6 +342,43 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
       autoLayout: false,
     };
   });
+
+  // The header the pipeline added, with the geometry the layout resolved.
+  if (!hasIdentityBand) {
+    const laid_ = boxOf.get("header");
+    regions.unshift({
+      id: "header",
+      role: "header",
+      composition: "editorial",
+      parent: null,
+      order: 0,
+      bounds: { x: laid_?.x ?? 0, y: laid_?.y ?? 0, w: laid_?.w ?? canvas.width, h: laid_?.h ?? 88 },
+      layoutMode: "flow-vertical",
+      sizing: { width: "fill", height: 88 },
+      grow: 0,
+      padding: { top: 24, right: 24, bottom: 24, left: 24 },
+      gap: 16,
+      align: { primary: "start", counter: "start" },
+      responsive: { priority: hierarchy.length, behavior: "keeps its band; collapses first when the viewport narrows" },
+      contentHierarchy: [],
+      density: "low",
+      relationships: [],
+      primitives: [],
+      constraints: { overflow: "clip" },
+      priority: hierarchy.length,
+      interaction: "the screen's primary action, and its identity",
+      why: "the screen's name, its task and the action it exists for: a band of its own, so the navigation rail can stay a wayfinding rail",
+      autoLayout: false,
+    });
+    // The other regions moved down by the height of the band, so their
+    // geometry is re-read from the layout rather than from the planner.
+    for (const region of regions) {
+      if (region.id === "header") continue;
+      const box = boxOf.get(region.id);
+      if (box === undefined) continue;
+      region.bounds = { x: box.x, y: box.y, w: box.w, h: box.h };
+    }
+  }
 
   /* --- content slots ----------------------------------------------------- */
 
@@ -452,8 +546,8 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
   /* --- phase 1: where each item would like to go -------------------------- */
 
   /** The items assigned to each region, in order. */
-  const assigned = new Map<string, Array<{ text: string; kind: ContentSlot["kind"]; primitive: string; required: boolean }>>();
-  const add = (regionId: string, entry: { text: string; kind: ContentSlot["kind"]; primitive: string; required: boolean }): void => {
+  const assigned = new Map<string, Array<{ text: string; kind: ContentSlot["kind"]; primitive: string; required: boolean; weight: number }>>();
+  const add = (regionId: string, entry: { text: string; kind: ContentSlot["kind"]; primitive: string; required: boolean; weight: number }): void => {
     const list = assigned.get(regionId) ?? [];
     list.push(entry);
     assigned.set(regionId, list);
@@ -463,11 +557,15 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
   // reserved before the data competes for it. A rail that fits three readouts
   // is a strip; a rail that fits three readouts *and* a title is a band that
   // grows, and a band that grows runs off the canvas.
+  //
+  // The *weight* is what decides what moves when the band is too small. The
+  // name and the primary action are the screen's job, so they are the last
+  // things to be moved; the description is supporting copy, so it goes first.
   if (headerRegion !== undefined) {
-    add(headerRegion.id, { text: brief.screen, kind: "heading", primitive: "text", required: true });
-    add(headerRegion.id, { text: brief.purpose, kind: "heading", primitive: "text", required: true });
+    add(headerRegion.id, { text: brief.screen, kind: "heading", primitive: "text", required: true, weight: 0 });
+    add(headerRegion.id, { text: brief.purpose, kind: "heading", primitive: "text", required: true, weight: 3 });
     if (brief.primaryAction !== null) {
-      add(headerRegion.id, { text: brief.primaryAction, kind: "action", primitive: "button", required: true });
+      add(headerRegion.id, { text: brief.primaryAction, kind: "action", primitive: "button", required: true, weight: 0 });
     }
   }
 
@@ -479,6 +577,7 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
       kind: item.kind,
       primitive: primitiveFor(item.kind, item.text, composition, false),
       required: isRequired(item.text),
+      weight: isRequired(item.text) ? 1 : 2,
     });
   }
 
@@ -549,13 +648,12 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
       const { capacity } = capacityOf(region, entries);
       if (entries.length <= capacity) continue;
 
-      // The least important first: supporting information before required
-      // information, and within each, the most recently placed — the screen's
-      // identity and its primary action are placed first and are the last
-      // things that should be moved to another region.
+      // The least important first: supporting copy before supporting data,
+      // supporting data before required data, and the screen's name and its
+      // primary action last, because those two *are* the screen.
       const ordered = entries
         .map((entry, index) => ({ entry, index }))
-        .sort((a, b) => Number(a.entry.required) - Number(b.entry.required) || b.index - a.index)
+        .sort((a, b) => b.entry.weight - a.entry.weight || Number(a.entry.required) - Number(b.entry.required) || b.index - a.index)
         .map((x) => x.entry);
       while ((assigned.get(region.id) ?? []).length > capacity) {
         const candidate = ordered.shift();

@@ -1,0 +1,10 @@
+{
+  "id": "B02",
+  "title": "A five-region dashboard with thirty items keeps every child inside its parent",
+  "group": "geometry",
+  "requirement": "Every content child is contained by the region that holds it, the gaps between siblings are consistent, and nothing runs past the canvas.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "5 regions, 32 items, every child contained",
+  "raw": {}
+}

@@ -128,6 +128,15 @@ export const TextSpecSchema = z
     fill: TokenRefSchema.optional(),
     maxWidth: z.number().positive().optional(),
     /**
+     * Cut the text with an ellipsis instead of wrapping it.
+     *
+     * For a string with no break opportunities — a model identifier, a path, a
+     * hash — wrapping does nothing: the run is wider than the box and the
+     * text overflows. Truncating keeps the box the layout reserved and says
+     * what is true.
+     */
+    truncate: z.boolean().optional(),
+    /**
      * Letter-spacing in pixels. Positive values space a wordmark out; the
      * tracked-out capitals of a wordmark are what separate it from a label.
      */

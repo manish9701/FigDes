@@ -60,12 +60,28 @@ function regionPrimitive(role: string): string {
 }
 
 /** The type-scale role a heading slot uses. */
-function textRole(slot: ContentSlot): "eyebrow" | "title" | "subtitle" | "body" | "label" {
+function textRole(slot: ContentSlot): "eyebrow" | "title" | "subtitle" | "body" | "label" | "code" {
   if (slot.id.endsWith("eyebrow")) return "eyebrow";
   if (slot.id.endsWith("title")) return "title";
   if (slot.id.endsWith("description")) return "subtitle";
   if (slot.kind === "heading") return "title";
   return "body";
+}
+
+/**
+ * Whether a string can wrap at all.
+ *
+ * A model identifier, a path, a hash or an error code has no break
+ * opportunities, so wrapping it does nothing: the run is wider than the box
+ * and the text runs past it. Such a string is truncated deliberately instead,
+ * which keeps the layout where it was and says that the value on screen is
+ * shorter than the value in the data.
+ */
+function isUnbreakable(text: string): boolean {
+  const longest = text.split(/\s+/).reduce((max, run) => (run.length > max.length ? run : max), "");
+  // A single word longer than this cannot fit a reasonable column, and no
+  // amount of wrapping will help it.
+  return longest.length > 28 && text.length <= longest.length + 2;
 }
 
 /** The value a metric shows when the brief supplied none. */
@@ -255,6 +271,7 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
           // pass (see applyMeasuredWidths): the column a text lands in is not
           // the region's width, and guessing it makes the compiler's own
           // geometry check fail.
+          ...(isUnbreakable(slot.label) ? { truncate: true } : {}),
         },
       };
     case "button":

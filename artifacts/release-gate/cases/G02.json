@@ -1,0 +1,10 @@
+{
+  "id": "G02",
+  "title": "A validation failure, a mid-batch failure and a duplicate transaction all fail safely",
+  "group": "runtime",
+  "requirement": "A bad operation is rejected before the document is touched, a mid-batch failure rolls the batch back, and a duplicate transaction does not duplicate nodes.",
+  "issue": "#15",
+  "status": "PASS",
+  "detail": "validation, mid-batch failure and duplicate submission all behaved",
+  "raw": {}
+}

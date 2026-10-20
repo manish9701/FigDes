@@ -1278,10 +1278,14 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.visible !== undefined) text.visible = op.visible;
 
       if (op.width !== undefined) {
-        text.textAutoResize = "HEIGHT";
+        // `TRUNCATE` is the deliberate choice for a text that cannot wrap —
+        // an identifier, a path, a hash. It keeps the box and cuts the text,
+        // so the layout does not move and the reader is told the value is
+        // longer than the space it has.
+        text.textAutoResize = op.textAutoResize ?? "HEIGHT";
         text.resize(op.width, text.height);
       } else {
-        text.textAutoResize = "WIDTH_AND_HEIGHT";
+        text.textAutoResize = op.textAutoResize ?? "WIDTH_AND_HEIGHT";
       }
       if (op.x !== undefined) text.x = op.x;
       if (op.y !== undefined) text.y = op.y;

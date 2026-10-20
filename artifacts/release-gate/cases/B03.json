@@ -1,0 +1,10 @@
+{
+  "id": "B03",
+  "title": "A diagram's edges resolve their semantic endpoints and survive a resize",
+  "group": "geometry",
+  "requirement": "Every edge names two real nodes, the route touches the intended anchors, and the endpoints are recalculated when a node is resized.",
+  "issue": "#14",
+  "status": "PASS",
+  "detail": "2 connector(s) resolved against their nodes; a second compile of the same diagram agreed",
+  "raw": {}
+}

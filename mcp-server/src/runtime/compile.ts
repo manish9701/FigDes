@@ -336,6 +336,35 @@ export function compileIR(ir: DesignIR): CompileResult {
 
   if (!deck) {
     for (const region of regions) {
+      // A native auto-layout container: Figma stacks the children itself, so
+      // the region survives being re-laid-out by a designer.
+      //
+      // It is only honoured when the children have a *known* extent. A
+      // component's height is either fixed or hugged, and both are exact; a
+      // text node's height is estimated from a character-count heuristic, and
+      // handing an estimated height to Figma's own layout pushes every sibling
+      // below it away from where the plan promised it would be. So a region
+      // holding text keeps absolute placement, and says why.
+      const children = ir.content.filter((c) => region.children.includes(c.id));
+      const wantsAutoLayout = (region as { autoLayout?: string }).autoLayout === "vertical";
+      const flowRegion = region.layout === "flow";
+      const fixedExtentChildren = children.length > 0 && children.every((c) => c.kind === "component");
+      const autoLayout = wantsAutoLayout && flowRegion && fixedExtentChildren;
+      if (wantsAutoLayout && !autoLayout) {
+        violations.push({
+          rule: "auto-layout",
+          message:
+            `Region '${region.id}' asked for a native auto-layout container, which was not applied: ` +
+            (flowRegion ? "" : `its layout is '${region.layout}', not a flow. `) +
+            (children.length === 0 ? "it has no children to lay out. " : "it holds text or graphics whose extent is estimated rather than measured, so Figma's own layout would move them. "),
+        });
+      }
+      if (autoLayout) {
+        // One column: Figma's vertical auto layout is a single stack, and the
+        // flow placement below already computes the same stack.
+        region.columns = 1;
+      }
+
       operations.push(
         op({
           type: "createFrame",
@@ -348,6 +377,15 @@ export function compileIR(ir: DesignIR): CompileResult {
           height: Math.max(1, Math.round(region.h)),
           fill: region.fill !== undefined ? resolveToken(region.fill) : [],
           ...(region.radius !== undefined ? { cornerRadius: region.radius } : {}),
+          ...(autoLayout
+            ? {
+                layoutMode: "VERTICAL",
+                itemSpacing: region.gap ?? canvas.grid,
+                padding: normalizePadding(region.padding, canvas.grid),
+                primaryAxisAlignItems: "MIN",
+                counterAxisAlignItems: "MIN",
+              }
+            : {}),
         }),
       );
       // Elevation is depth you can see: a soft shadow on the region frame.

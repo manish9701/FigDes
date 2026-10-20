@@ -1,0 +1,595 @@
+{
+  "caseId": "G04",
+  "recordedAt": "2026-10-20T03:25:38.423Z",
+  "brief": {
+    "id": "brief",
+    "product": "EXO Labs",
+    "screen": "Placement",
+    "purpose": "Place a very long model identifier on a cluster",
+    "primaryDecision": "place a model on a cluster",
+    "primaryAction": "Place model",
+    "secondaryActions": [],
+    "requiredInformation": [
+      "meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k-context-rev-2026-08",
+      "CUDA out of memory while allocating the sharded KV cache for shard 7 of 12"
+    ],
+    "optionalInformation": [],
+    "values": {},
+    "data": {
+      "mode": "demo",
+      "notes": null,
+      "illustrative": true
+    },
+    "interactions": [],
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "responsive": [],
+    "designSystemConstraints": [],
+    "references": {
+      "observations": [],
+      "assumptions": []
+    },
+    "visualDirection": null,
+    "antiGoals": [],
+    "states": [],
+    "scope": {
+      "create": [],
+      "edit": [],
+      "leaveUntouched": []
+    },
+    "existingPatterns": [],
+    "audience": "general",
+    "archetype": null
+  },
+  "assumptions": [
+    {
+      "id": "assume-default-anti-goals",
+      "statement": "The screen avoids generic SaaS card walls and equal-weight panels.",
+      "source": "inferred",
+      "why": "No anti-goals were given, so the product's standing rules are applied and recorded rather than assumed silently."
+    }
+  ],
+  "clarifications": [
+    "scope-unstated",
+    "no-reference"
+  ],
+  "blockers": [],
+  "plan": {
+    "canvas": {
+      "width": 390,
+      "height": 844,
+      "grid": 8,
+      "name": "Placement"
+    },
+    "regions": [
+      {
+        "id": "nav",
+        "role": "navigation",
+        "composition": "instrument",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 208,
+          "h": 130
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": 208,
+          "height": "fill"
+        },
+        "grow": 0,
+        "padding": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 3,
+          "behavior": "keeps its declared size; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-heading-eyebrow",
+          "slot-heading-title",
+          "slot-heading-description"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-nav-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-nav-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12)",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "text"
+        ],
+        "constraints": {
+          "overflow": "clip"
+        },
+        "priority": 3,
+        "interaction": "move between sections of the product",
+        "why": "orientation",
+        "autoLayout": false,
+        "columns": 1
+      },
+      {
+        "id": "subject",
+        "role": "primary-visual",
+        "composition": "canvas",
+        "parent": null,
+        "order": 1,
+        "bounds": {
+          "x": 0,
+          "y": 162,
+          "w": 390,
+          "h": 390
+        },
+        "layoutMode": "free",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 2,
+        "padding": {
+          "top": 32,
+          "right": 32,
+          "bottom": 32,
+          "left": 32
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 1,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-3-meta-llama-llama-3-1-405b-instru"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-subject-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-subject-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "text"
+        ],
+        "constraints": {
+          "overflow": "allow"
+        },
+        "priority": 1,
+        "interaction": "select and inspect what is shown here",
+        "why": "the thing being understood (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12), given the most room",
+        "autoLayout": false,
+        "columns": 1
+      },
+      {
+        "id": "context",
+        "role": "inspector",
+        "composition": "split-view",
+        "parent": null,
+        "order": 2,
+        "bounds": {
+          "x": 0,
+          "y": 584,
+          "w": 360,
+          "h": 260
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": 360,
+          "height": "fill"
+        },
+        "grow": 0,
+        "padding": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 2,
+          "behavior": "keeps its declared size; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-action-primary",
+          "slot-4-cuda-out-of-memory-while-allocat"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-context-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-context-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "button",
+          "text"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 2,
+        "interaction": "read the detail of the current selection, and change it",
+        "why": "surrounding state that gives the subject meaning (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12)",
+        "autoLayout": false,
+        "columns": 1
+      }
+    ],
+    "content": [
+      {
+        "id": "slot-heading-title",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "Placement",
+        "primitive": "text",
+        "value": null,
+        "order": -10,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-description",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "Place a very long model identifier on a cluster",
+        "primitive": "text",
+        "value": null,
+        "order": -9,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-3-meta-llama-llama-3-1-405b-instru",
+        "regionId": "subject",
+        "kind": "unknown",
+        "label": "meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k-context-rev-2026-08",
+        "primitive": "text",
+        "value": null,
+        "order": 2,
+        "because": "Required for the decision: 'meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k-context-rev-2026-08'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-4-cuda-out-of-memory-while-allocat",
+        "regionId": "context",
+        "kind": "attribute",
+        "label": "CUDA out of memory while allocating the sharded KV cache for shard 7 of 12",
+        "primitive": "text",
+        "value": null,
+        "order": 3,
+        "because": "Required for the decision: 'CUDA out of memory while allocating the sharded KV cache for shard 7 of 12'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-action-primary",
+        "regionId": "context",
+        "kind": "action",
+        "label": "Place model",
+        "primitive": "button",
+        "value": null,
+        "order": -6,
+        "because": "The action the screen exists for: 'Place model'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-eyebrow",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "EXO Labs",
+        "primitive": "text",
+        "value": null,
+        "order": -20,
+        "because": "Names the product at the top of the rail, where the user expects to find it.",
+        "illustrative": false
+      }
+    ],
+    "focal": {
+      "id": "subject",
+      "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "subject",
+        "why": "primary surface: the thing being understood (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12), given the most room"
+      },
+      {
+        "rank": 2,
+        "id": "context",
+        "why": "chrome: surrounding state that gives the subject meaning (CUDA out of memory while allocating the sharded KV cache for shard 7 of 12)"
+      },
+      {
+        "rank": 3,
+        "id": "nav",
+        "why": "chrome: orientation"
+      }
+    ],
+    "usage": {
+      "canvasArea": 329160,
+      "coveredArea": 272740,
+      "coverage": 0.8285939968404423,
+      "largestEmptyBand": 0.037914691943127965,
+      "focalShare": 0.46208530805687204,
+      "notes": []
+    }
+  },
+  "operations": [
+    {
+      "type": "createFrame",
+      "id": "root",
+      "name": "Placement",
+      "width": 390,
+      "height": 844
+    },
+    {
+      "type": "createFrame",
+      "id": "nav",
+      "parent": "root",
+      "name": "Nav",
+      "x": 0,
+      "y": 0,
+      "width": 208,
+      "height": 196
+    },
+    {
+      "type": "createFrame",
+      "id": "subject",
+      "parent": "root",
+      "name": "Subject",
+      "x": 0,
+      "y": 228,
+      "width": 390,
+      "height": 324
+    },
+    {
+      "type": "createFrame",
+      "id": "context",
+      "parent": "root",
+      "name": "Context",
+      "x": 0,
+      "y": 584,
+      "width": 360,
+      "height": 260
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-eyebrow",
+      "parent": "nav",
+      "name": "EXO Labs",
+      "x": 0,
+      "y": 0,
+      "width": 208
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "nav",
+      "name": "Placement",
+      "x": 0,
+      "y": 43,
+      "width": 208
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "nav",
+      "name": "Place a very long model identifier on a ",
+      "x": 0,
+      "y": 116,
+      "width": 208
+    },
+    {
+      "type": "createText",
+      "id": "slot-3-meta-llama-llama-3-1-405b-instru",
+      "parent": "subject",
+      "name": "meta-llama/Llama-3.1-405B-Instruct-AWQ-I",
+      "x": 32,
+      "y": 32,
+      "width": 326
+    },
+    {
+      "type": "createText",
+      "id": "slot-4-cuda-out-of-memory-while-allocat",
+      "parent": "context",
+      "name": "CUDA out of memory while allocating the ",
+      "x": 0,
+      "y": 0,
+      "width": 360
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "context",
+      "name": "Place model",
+      "x": 0,
+      "y": 67,
+      "width": 113,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
+    }
+  ],
+  "structuralChecks": [
+    {
+      "id": "regions-built",
+      "question": "Was every planned region built?",
+      "status": "pass",
+      "detail": "3 region(s) built: nav, subject, context.",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-on-canvas",
+      "question": "Is every region inside the canvas?",
+      "status": "pass",
+      "detail": "All 3 region(s) are within the 390x844 canvas.",
+      "nodeIds": []
+    },
+    {
+      "id": "no-collapsed-regions",
+      "question": "Does every region have a real size?",
+      "status": "pass",
+      "detail": "No region collapsed to zero.",
+      "nodeIds": []
+    },
+    {
+      "id": "required-information-present",
+      "question": "Is every piece of required information on the screen?",
+      "status": "pass",
+      "detail": "All 2 required item(s) are present.",
+      "nodeIds": []
+    },
+    {
+      "id": "primary-action-present",
+      "question": "Is the primary action on the screen?",
+      "status": "pass",
+      "detail": "'Place model' is present.",
+      "nodeIds": []
+    },
+    {
+      "id": "focal-present",
+      "question": "Is there a first thing to look at?",
+      "status": "pass",
+      "detail": "The focal region is 'subject': 'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it.",
+      "nodeIds": [
+        "subject"
+      ]
+    },
+    {
+      "id": "canvas-usage",
+      "question": "Does the composition use the canvas it was given?",
+      "status": "pass",
+      "detail": "coverage 83%, largest empty band 4%, focal share 46%.",
+      "nodeIds": []
+    },
+    {
+      "id": "compiled-geometry",
+      "question": "Does the resolved geometry agree with the program?",
+      "status": "fail",
+      "detail": "typography: Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "nodeIds": []
+    },
+    {
+      "id": "auto-layout-applied",
+      "question": "Were the auto-layout containers actually created as auto-layout frames?",
+      "status": "pass",
+      "detail": "This screen has no region whose content could be handed to Figma's own layout.",
+      "nodeIds": []
+    },
+    {
+      "id": "plan-matches-build",
+      "question": "Does the built geometry match the plan?",
+      "status": "review",
+      "detail": "nav: planned 208x130, built 208x196; subject: planned 390x390, built 390x324",
+      "nodeIds": []
+    },
+    {
+      "id": "product-guard",
+      "question": "Does the build pass the product's own rules?",
+      "status": "review",
+      "detail": "INDETERMINATE: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "nodeIds": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "violation-typography-01",
+      "stage": "structure",
+      "severity": "medium",
+      "confidence": 0.8,
+      "nodeIds": [],
+      "summary": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
+      "evidence": {
+        "kind": "rule",
+        "detail": "rule: typography"
+      },
+      "fix": "Adjust the program so the geometry resolves as intended.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-01",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: nav: planned 208x130, built 208x196.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "nav: planned 208x130, built 208x196"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-02",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 390x390, built 390x324.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "subject: planned 390x390, built 390x324"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    }
+  ],
+  "violations": [
+    {
+      "rule": "typography",
+      "message": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' holds the unbreakable run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\", which measures about 524px at 14px inside a 326px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+    }
+  ],
+  "applicable": true,
+  "status": "fail"
+}

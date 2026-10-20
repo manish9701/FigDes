@@ -1,0 +1,713 @@
+{
+  "caseId": "G01",
+  "recordedAt": "2026-10-20T03:25:38.384Z",
+  "brief": {
+    "id": "brief",
+    "product": "EXO Labs",
+    "screen": "Fleet Overview",
+    "purpose": "See the health of the fleet and decide where to intervene",
+    "primaryDecision": "monitor fleet health and decide where to intervene",
+    "primaryAction": "Open cluster",
+    "secondaryActions": [],
+    "requiredInformation": [
+      "cluster health",
+      "GPU memory",
+      "model throughput",
+      "node topology",
+      "recent deploys"
+    ],
+    "optionalInformation": [
+      "audit log"
+    ],
+    "values": {
+      "cluster health": "Degraded"
+    },
+    "data": {
+      "mode": "demo",
+      "notes": null,
+      "illustrative": true
+    },
+    "interactions": [],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "responsive": [],
+    "designSystemConstraints": [],
+    "references": {
+      "observations": [],
+      "assumptions": []
+    },
+    "visualDirection": "technical-instrument",
+    "antiGoals": [
+      "a wall of identical metric cards"
+    ],
+    "states": [],
+    "scope": {
+      "create": [],
+      "edit": [],
+      "leaveUntouched": []
+    },
+    "existingPatterns": [],
+    "audience": "general",
+    "archetype": null
+  },
+  "assumptions": [
+    {
+      "id": "assume-viewport",
+      "statement": "The screen is designed for a 1440x900 viewport.",
+      "source": "inferred",
+      "why": "No viewport was stated, so the product's default desktop canvas is used and recorded rather than guessed silently."
+    }
+  ],
+  "clarifications": [
+    "scope-unstated",
+    "no-reference"
+  ],
+  "blockers": [],
+  "plan": {
+    "canvas": {
+      "width": 1440,
+      "height": 900,
+      "grid": 8,
+      "name": "Fleet Overview"
+    },
+    "regions": [
+      {
+        "id": "rail",
+        "role": "status-rail",
+        "composition": "instrument",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1440,
+          "h": 64
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 64
+        },
+        "grow": 0,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 3,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-heading-title",
+          "slot-heading-description",
+          "slot-action-primary",
+          "slot-4-cluster-health",
+          "slot-5-gpu-memory",
+          "slot-6-model-throughput"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-rail-primary-visual",
+            "to": "primary-visual",
+            "meaning": "primary surface: the primary signal (cluster health, GPU memory, model throughput), given the most space",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-rail-detail",
+            "to": "detail",
+            "meaning": "supporting surface: the underlying data behind the signal (recent deploys, audit log)",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button",
+          "statusPill",
+          "metric"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 3,
+        "interaction": "read the state of the whole at a glance",
+        "why": "state at a glance (cluster health, GPU memory, model throughput), read without focusing",
+        "autoLayout": false,
+        "columns": 6
+      },
+      {
+        "id": "primary-visual",
+        "role": "primary-visual",
+        "composition": "instrument",
+        "parent": null,
+        "order": 1,
+        "bounds": {
+          "x": 0,
+          "y": 96,
+          "w": 1440,
+          "h": 532
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 2,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 1,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-7-node-topology"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-primary-visual-detail",
+            "to": "detail",
+            "meaning": "supporting surface: the underlying data behind the signal (recent deploys, audit log)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-primary-visual-rail",
+            "to": "rail",
+            "meaning": "chrome: state at a glance (cluster health, GPU memory, model throughput), read without focusing",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "panel"
+        ],
+        "constraints": {
+          "overflow": "allow"
+        },
+        "priority": 1,
+        "interaction": "select and inspect what is shown here",
+        "why": "the primary signal (cluster health, GPU memory, model throughput), given the most space",
+        "autoLayout": true,
+        "columns": 1
+      },
+      {
+        "id": "detail",
+        "role": "secondary",
+        "composition": "split-view",
+        "parent": null,
+        "order": 2,
+        "bounds": {
+          "x": 0,
+          "y": 660,
+          "w": 1440,
+          "h": 240
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 240
+        },
+        "grow": 0,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 2,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-8-recent-deploys",
+          "slot-9-audit-log"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-detail-primary-visual",
+            "to": "primary-visual",
+            "meaning": "primary surface: the primary signal (cluster health, GPU memory, model throughput), given the most space",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-detail-rail",
+            "to": "rail",
+            "meaning": "chrome: state at a glance (cluster health, GPU memory, model throughput), read without focusing",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "timelineEvent"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 2,
+        "interaction": null,
+        "why": "the underlying data behind the signal (recent deploys, audit log)",
+        "autoLayout": true,
+        "columns": 2
+      }
+    ],
+    "content": [
+      {
+        "id": "slot-heading-title",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "Fleet Overview",
+        "primitive": "text",
+        "value": null,
+        "order": -10,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-description",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "See the health of the fleet and decide where to intervene",
+        "primitive": "text",
+        "value": null,
+        "order": -9,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-action-primary",
+        "regionId": "rail",
+        "kind": "action",
+        "label": "Open cluster",
+        "primitive": "button",
+        "value": null,
+        "order": -8,
+        "because": "The action the screen exists for: 'Open cluster'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-4-cluster-health",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "cluster health",
+        "primitive": "statusPill",
+        "value": "Degraded",
+        "order": 3,
+        "because": "Required for the decision: 'cluster health'.",
+        "illustrative": false
+      },
+      {
+        "id": "slot-5-gpu-memory",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "GPU memory",
+        "primitive": "metric",
+        "value": null,
+        "order": 4,
+        "because": "Required for the decision: 'GPU memory'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-model-throughput",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "model throughput",
+        "primitive": "metric",
+        "value": null,
+        "order": 5,
+        "because": "Required for the decision: 'model throughput'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-7-node-topology",
+        "regionId": "primary-visual",
+        "kind": "relationship",
+        "label": "node topology",
+        "primitive": "panel",
+        "value": null,
+        "order": 6,
+        "because": "Required for the decision: 'node topology'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-8-recent-deploys",
+        "regionId": "detail",
+        "kind": "event",
+        "label": "recent deploys",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 7,
+        "because": "Required for the decision: 'recent deploys'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-9-audit-log",
+        "regionId": "detail",
+        "kind": "event",
+        "label": "audit log",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 8,
+        "because": "Supporting information: 'audit log', useful but not needed to act.",
+        "illustrative": true
+      }
+    ],
+    "focal": {
+      "id": "primary-visual",
+      "why": "'primary-visual' is the semantic focal for the monitor decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "primary-visual",
+        "why": "primary surface: the primary signal (cluster health, GPU memory, model throughput), given the most space"
+      },
+      {
+        "rank": 2,
+        "id": "detail",
+        "why": "supporting surface: the underlying data behind the signal (recent deploys, audit log)"
+      },
+      {
+        "rank": 3,
+        "id": "rail",
+        "why": "chrome: state at a glance (cluster health, GPU memory, model throughput), read without focusing"
+      }
+    ],
+    "usage": {
+      "canvasArea": 1296000,
+      "coveredArea": 1203840,
+      "coverage": 0.9288888888888889,
+      "largestEmptyBand": 0.035555555555555556,
+      "focalShare": 0.5911111111111111,
+      "notes": []
+    }
+  },
+  "operations": [
+    {
+      "type": "createFrame",
+      "id": "root",
+      "name": "Fleet Overview",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "type": "createFrame",
+      "id": "rail",
+      "parent": "root",
+      "name": "Rail",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 126
+    },
+    {
+      "type": "createFrame",
+      "id": "primary-visual",
+      "parent": "root",
+      "name": "Primary visual",
+      "x": 0,
+      "y": 158,
+      "width": 1440,
+      "height": 466,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createFrame",
+      "id": "detail",
+      "parent": "root",
+      "name": "Detail",
+      "x": 0,
+      "y": 656,
+      "width": 1440,
+      "height": 244,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "rail",
+      "name": "Fleet Overview",
+      "x": 16,
+      "y": 16,
+      "width": 215
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "rail",
+      "name": "See the health of the fleet and decide w",
+      "x": 254.67,
+      "y": 16,
+      "width": 215
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "rail",
+      "name": "Open cluster",
+      "x": 493.33,
+      "y": 16,
+      "width": 120,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-4-cluster-health",
+      "parent": "rail",
+      "name": "cluster health",
+      "x": 732,
+      "y": 16,
+      "width": 103,
+      "height": 22,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-cluster-health",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-5-gpu-memory",
+      "parent": "rail",
+      "name": "GPU memory",
+      "x": 970.67,
+      "y": 16,
+      "width": 215,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-gpu-memory",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-gpu-memory",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-model-throughput",
+      "parent": "rail",
+      "name": "model throughput",
+      "x": 1209.33,
+      "y": 16,
+      "width": 215,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-model-throughput",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-model-throughput",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-7-node-topology",
+      "parent": "primary-visual",
+      "name": "node topology",
+      "x": 24,
+      "y": 24,
+      "width": 1392,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-node-topology",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-8-recent-deploys",
+      "parent": "detail",
+      "name": "—",
+      "x": 24,
+      "y": 24,
+      "width": 1392,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-8-recent-deploys",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-8-recent-deploys",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-9-audit-log",
+      "parent": "detail",
+      "name": "—",
+      "x": 24,
+      "y": 130,
+      "width": 1392,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-9-audit-log",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-9-audit-log",
+      "name": "Title"
+    }
+  ],
+  "structuralChecks": [
+    {
+      "id": "regions-built",
+      "question": "Was every planned region built?",
+      "status": "pass",
+      "detail": "3 region(s) built: rail, primary-visual, detail.",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-on-canvas",
+      "question": "Is every region inside the canvas?",
+      "status": "pass",
+      "detail": "All 3 region(s) are within the 1440x900 canvas.",
+      "nodeIds": []
+    },
+    {
+      "id": "no-collapsed-regions",
+      "question": "Does every region have a real size?",
+      "status": "pass",
+      "detail": "No region collapsed to zero.",
+      "nodeIds": []
+    },
+    {
+      "id": "required-information-present",
+      "question": "Is every piece of required information on the screen?",
+      "status": "pass",
+      "detail": "All 5 required item(s) are present.",
+      "nodeIds": []
+    },
+    {
+      "id": "primary-action-present",
+      "question": "Is the primary action on the screen?",
+      "status": "pass",
+      "detail": "'Open cluster' is present.",
+      "nodeIds": []
+    },
+    {
+      "id": "focal-present",
+      "question": "Is there a first thing to look at?",
+      "status": "pass",
+      "detail": "The focal region is 'primary-visual': 'primary-visual' is the semantic focal for the monitor decision; geometry supports the role rather than defining it.",
+      "nodeIds": [
+        "primary-visual"
+      ]
+    },
+    {
+      "id": "canvas-usage",
+      "question": "Does the composition use the canvas it was given?",
+      "status": "pass",
+      "detail": "coverage 93%, largest empty band 4%, focal share 59%.",
+      "nodeIds": []
+    },
+    {
+      "id": "compiled-geometry",
+      "question": "Does the resolved geometry agree with the program?",
+      "status": "pass",
+      "detail": "No geometry violations.",
+      "nodeIds": []
+    },
+    {
+      "id": "auto-layout-applied",
+      "question": "Were the auto-layout containers actually created as auto-layout frames?",
+      "status": "pass",
+      "detail": "2 region(s) built as native auto-layout containers.",
+      "nodeIds": []
+    },
+    {
+      "id": "plan-matches-build",
+      "question": "Does the built geometry match the plan?",
+      "status": "review",
+      "detail": "rail: planned 1440x64, built 1440x126; primary-visual: planned 1440x532, built 1440x466",
+      "nodeIds": []
+    },
+    {
+      "id": "product-guard",
+      "question": "Does the build pass the product's own rules?",
+      "status": "review",
+      "detail": "INDETERMINATE: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "nodeIds": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "plan-geometry-drift-01",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x64, built 1440x126.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "rail: planned 1440x64, built 1440x126"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-02",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: primary-visual: planned 1440x532, built 1440x466.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "primary-visual: planned 1440x532, built 1440x466"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    }
+  ],
+  "violations": [],
+  "applicable": true,
+  "status": "review"
+}

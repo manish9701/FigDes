@@ -99,6 +99,14 @@ const REGION_COMMON: ArgSpec[] = [
   num("columns", "Column count for grid/masonry layouts."),
   num("gridColumns", "Figma layout-grid columns drawn on this region."),
   num("gridGutter", "Figma layout-grid gutter."),
+  {
+    name: "autoLayout",
+    type: "enum",
+    description:
+      "Make this region a native Figma auto-layout container ('vertical'). The children are then stacked by Figma itself, so the region can be re-laid-out by a designer without rewriting coordinates. Only honoured when every child is a fixed-extent component; a region holding text keeps absolute placement because text height is estimated, not measured.",
+    values: ["vertical"],
+    example: '"vertical"',
+  },
 ];
 
 /** Args every state-capable component accepts. */

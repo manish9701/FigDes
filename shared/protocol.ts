@@ -1385,6 +1385,7 @@ export const TOOL_NAMES = [
   "design_guard",
   "plan_screen",
   "design_brief",
+  "design_pipeline",
   "create_slide",
   "create_design",
   "modify_design",

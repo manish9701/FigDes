@@ -91,6 +91,16 @@ export const RegionSchema = z
     gridColumns: z.number().int().min(1).max(24).optional(),
     gridGutter: z.number().min(0).max(400).optional(),
     /**
+     * Make this region a native Figma auto-layout container.
+     *
+     * When set, the region's children are stacked by Figma itself rather than
+     * by absolute coordinates, so a designer can re-lay the region out in the
+     * file. The compiler only honours it when every child has a known,
+     * fixed extent — text height is estimated, not measured, and handing
+     * estimated text to Figma's own layout moves every sibling below it.
+     */
+    autoLayout: z.enum(["vertical"]).optional(),
+    /**
      * Visual elevation 0-3. Renders as a soft drop shadow: depth you can see,
      * not a comment about depth. Layer concepts and layered intent set this;
      * everything else stays flat.

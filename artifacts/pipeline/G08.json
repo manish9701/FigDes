@@ -1,0 +1,1323 @@
+{
+  "caseId": "G08",
+  "recordedAt": "2026-10-20T03:25:38.453Z",
+  "brief": {
+    "id": "brief",
+    "product": "EXO Labs",
+    "screen": "Operations",
+    "purpose": "Watch every service at once and catch the one that is wrong",
+    "primaryDecision": "monitor every service and find the one that needs attention",
+    "primaryAction": "Acknowledge incident",
+    "secondaryActions": [],
+    "requiredInformation": [
+      "API latency",
+      "API errors",
+      "API throughput",
+      "Queue depth",
+      "Queue lag",
+      "Worker saturation",
+      "Disk pressure",
+      "Memory pressure",
+      "Network throughput",
+      "Cache hit rate",
+      "Model throughput",
+      "Model errors",
+      "Shard balance",
+      "Replica lag",
+      "Clock skew",
+      "Auth failures",
+      "Token refresh errors",
+      "Rate limit rejections",
+      "Cold start time",
+      "Warm pool size",
+      "Inference queue",
+      "Batch backlog",
+      "Index rebuild",
+      "Snapshot age",
+      "Backup failures",
+      "Certificate expiry",
+      "Config drift",
+      "Deploy frequency",
+      "Change failure rate",
+      "Time to restore"
+    ],
+    "optionalInformation": [],
+    "values": {},
+    "data": {
+      "mode": "unknown",
+      "notes": null,
+      "illustrative": true
+    },
+    "interactions": [],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "responsive": [],
+    "designSystemConstraints": [],
+    "references": {
+      "observations": [],
+      "assumptions": []
+    },
+    "visualDirection": "dense-admin",
+    "antiGoals": [],
+    "states": [],
+    "scope": {
+      "create": [],
+      "edit": [],
+      "leaveUntouched": []
+    },
+    "existingPatterns": [],
+    "audience": "general",
+    "archetype": null
+  },
+  "assumptions": [
+    {
+      "id": "assume-illustrative-data",
+      "statement": "Values on this screen are illustrative, not live telemetry.",
+      "source": "inferred",
+      "why": "The brief did not say the data is live, and fabricating live-looking telemetry is forbidden. Values are placeholders and the report says so."
+    },
+    {
+      "id": "assume-default-anti-goals",
+      "statement": "The screen avoids generic SaaS card walls and equal-weight panels.",
+      "source": "inferred",
+      "why": "No anti-goals were given, so the product's standing rules are applied and recorded rather than assumed silently."
+    }
+  ],
+  "clarifications": [
+    "scope-unstated",
+    "no-reference"
+  ],
+  "blockers": [],
+  "plan": {
+    "canvas": {
+      "width": 1440,
+      "height": 900,
+      "grid": 8,
+      "name": "Operations"
+    },
+    "regions": [
+      {
+        "id": "rail",
+        "role": "status-rail",
+        "composition": "instrument",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1440,
+          "h": 56
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 56
+        },
+        "grow": 0,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 2,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-heading-title",
+          "slot-heading-description",
+          "slot-action-primary",
+          "slot-4-api-errors",
+          "slot-5-api-throughput",
+          "slot-6-disk-pressure"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-rail-map",
+            "to": "map",
+            "meaning": "primary surface: the relationships themselves (API latency, Warm pool size): API latency, which are the content",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button",
+          "metric",
+          "statusPill"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 2,
+        "interaction": "read the state of the whole at a glance",
+        "why": "fleet summary for the relationship field (API errors, API throughput, Disk pressure (+6 more)), read without focusing",
+        "autoLayout": false,
+        "columns": 6
+      },
+      {
+        "id": "map",
+        "role": "primary-visual",
+        "composition": "topology",
+        "parent": null,
+        "order": 1,
+        "bounds": {
+          "x": 0,
+          "y": 88,
+          "w": 1440,
+          "h": 812
+        },
+        "layoutMode": "free",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 1,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 32,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 1,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-7-api-latency",
+          "slot-8-queue-depth",
+          "slot-9-queue-lag",
+          "slot-10-worker-saturation",
+          "slot-11-cache-hit-rate",
+          "slot-12-shard-balance",
+          "slot-13-replica-lag",
+          "slot-14-clock-skew",
+          "slot-15-auth-failures",
+          "slot-16-rate-limit-rejections",
+          "slot-17-cold-start-time",
+          "slot-18-warm-pool-size",
+          "slot-19-inference-queue",
+          "slot-20-index-rebuild",
+          "slot-21-snapshot-age",
+          "slot-22-backup-failures",
+          "slot-23-certificate-expiry",
+          "slot-24-change-failure-rate",
+          "slot-25-time-to-restore",
+          "slot-26-deploy-frequency",
+          "slot-27-config-drift",
+          "slot-28-batch-backlog",
+          "slot-29-token-refresh-errors",
+          "slot-30-model-errors",
+          "slot-31-model-throughput",
+          "slot-32-network-throughput",
+          "slot-33-memory-pressure"
+        ],
+        "density": "low",
+        "relationships": [
+          {
+            "id": "rel-map-rail",
+            "to": "rail",
+            "meaning": "chrome: fleet summary for the relationship field (API errors, API throughput, Disk pressure (+6 more)), read without focusing",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "deviceNode",
+          "panel",
+          "modelRow",
+          "timelineEvent",
+          "statusPill"
+        ],
+        "constraints": {
+          "overflow": "allow"
+        },
+        "priority": 1,
+        "interaction": "select and inspect what is shown here",
+        "why": "the relationships themselves (API latency, Warm pool size): API latency, which are the content",
+        "autoLayout": false,
+        "columns": 5
+      }
+    ],
+    "content": [
+      {
+        "id": "slot-heading-title",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "Operations",
+        "primitive": "text",
+        "value": null,
+        "order": -10,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-description",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "Watch every service at once and catch the one that is wrong",
+        "primitive": "text",
+        "value": null,
+        "order": -9,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-action-primary",
+        "regionId": "rail",
+        "kind": "action",
+        "label": "Acknowledge incident",
+        "primitive": "button",
+        "value": null,
+        "order": -8,
+        "because": "The action the screen exists for: 'Acknowledge incident'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-4-api-errors",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "API errors",
+        "primitive": "metric",
+        "value": null,
+        "order": 3,
+        "because": "Required for the decision: 'API errors'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-5-api-throughput",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "API throughput",
+        "primitive": "metric",
+        "value": null,
+        "order": 4,
+        "because": "Required for the decision: 'API throughput'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-disk-pressure",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "Disk pressure",
+        "primitive": "statusPill",
+        "value": null,
+        "order": 5,
+        "because": "Required for the decision: 'Disk pressure'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-7-api-latency",
+        "regionId": "map",
+        "kind": "relationship",
+        "label": "API latency",
+        "primitive": "deviceNode",
+        "value": null,
+        "order": 6,
+        "because": "Required for the decision: 'API latency'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-8-queue-depth",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Queue depth",
+        "primitive": "panel",
+        "value": null,
+        "order": 7,
+        "because": "Required for the decision: 'Queue depth'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-9-queue-lag",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Queue lag",
+        "primitive": "panel",
+        "value": null,
+        "order": 8,
+        "because": "Required for the decision: 'Queue lag'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-10-worker-saturation",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Worker saturation",
+        "primitive": "panel",
+        "value": null,
+        "order": 9,
+        "because": "Required for the decision: 'Worker saturation'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-11-cache-hit-rate",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Cache hit rate",
+        "primitive": "panel",
+        "value": null,
+        "order": 10,
+        "because": "Required for the decision: 'Cache hit rate'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-12-shard-balance",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Shard balance",
+        "primitive": "panel",
+        "value": null,
+        "order": 11,
+        "because": "Required for the decision: 'Shard balance'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-13-replica-lag",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Replica lag",
+        "primitive": "panel",
+        "value": null,
+        "order": 12,
+        "because": "Required for the decision: 'Replica lag'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-14-clock-skew",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Clock skew",
+        "primitive": "panel",
+        "value": null,
+        "order": 13,
+        "because": "Required for the decision: 'Clock skew'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-15-auth-failures",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Auth failures",
+        "primitive": "panel",
+        "value": null,
+        "order": 14,
+        "because": "Required for the decision: 'Auth failures'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-16-rate-limit-rejections",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Rate limit rejections",
+        "primitive": "panel",
+        "value": null,
+        "order": 15,
+        "because": "Required for the decision: 'Rate limit rejections'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-17-cold-start-time",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Cold start time",
+        "primitive": "panel",
+        "value": null,
+        "order": 16,
+        "because": "Required for the decision: 'Cold start time'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-18-warm-pool-size",
+        "regionId": "map",
+        "kind": "attribute",
+        "label": "Warm pool size",
+        "primitive": "modelRow",
+        "value": null,
+        "order": 17,
+        "because": "Required for the decision: 'Warm pool size'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-19-inference-queue",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Inference queue",
+        "primitive": "panel",
+        "value": null,
+        "order": 18,
+        "because": "Required for the decision: 'Inference queue'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-20-index-rebuild",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Index rebuild",
+        "primitive": "panel",
+        "value": null,
+        "order": 19,
+        "because": "Required for the decision: 'Index rebuild'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-21-snapshot-age",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Snapshot age",
+        "primitive": "panel",
+        "value": null,
+        "order": 20,
+        "because": "Required for the decision: 'Snapshot age'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-22-backup-failures",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Backup failures",
+        "primitive": "panel",
+        "value": null,
+        "order": 21,
+        "because": "Required for the decision: 'Backup failures'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-23-certificate-expiry",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Certificate expiry",
+        "primitive": "panel",
+        "value": null,
+        "order": 22,
+        "because": "Required for the decision: 'Certificate expiry'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-24-change-failure-rate",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Change failure rate",
+        "primitive": "panel",
+        "value": null,
+        "order": 23,
+        "because": "Required for the decision: 'Change failure rate'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-25-time-to-restore",
+        "regionId": "map",
+        "kind": "unknown",
+        "label": "Time to restore",
+        "primitive": "panel",
+        "value": null,
+        "order": 24,
+        "because": "Required for the decision: 'Time to restore'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-26-deploy-frequency",
+        "regionId": "map",
+        "kind": "event",
+        "label": "Deploy frequency",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 25,
+        "because": "Required for the decision: 'Deploy frequency'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-27-config-drift",
+        "regionId": "map",
+        "kind": "setting",
+        "label": "Config drift",
+        "primitive": "panel",
+        "value": null,
+        "order": 26,
+        "because": "Required for the decision: 'Config drift'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-28-batch-backlog",
+        "regionId": "map",
+        "kind": "event",
+        "label": "Batch backlog",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 27,
+        "because": "Required for the decision: 'Batch backlog'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-29-token-refresh-errors",
+        "regionId": "map",
+        "kind": "signal",
+        "label": "Token refresh errors",
+        "primitive": "modelRow",
+        "value": null,
+        "order": 28,
+        "because": "Required for the decision: 'Token refresh errors'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-30-model-errors",
+        "regionId": "map",
+        "kind": "signal",
+        "label": "Model errors",
+        "primitive": "modelRow",
+        "value": null,
+        "order": 29,
+        "because": "Required for the decision: 'Model errors'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-31-model-throughput",
+        "regionId": "map",
+        "kind": "signal",
+        "label": "Model throughput",
+        "primitive": "modelRow",
+        "value": null,
+        "order": 30,
+        "because": "Required for the decision: 'Model throughput'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-32-network-throughput",
+        "regionId": "map",
+        "kind": "signal",
+        "label": "Network throughput",
+        "primitive": "modelRow",
+        "value": null,
+        "order": 31,
+        "because": "Required for the decision: 'Network throughput'. Drawn as a row rather than a card: a screen may carry two metric cards, and more than that is a wall.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-33-memory-pressure",
+        "regionId": "map",
+        "kind": "signal",
+        "label": "Memory pressure",
+        "primitive": "statusPill",
+        "value": null,
+        "order": 32,
+        "because": "Required for the decision: 'Memory pressure'.",
+        "illustrative": true
+      }
+    ],
+    "focal": {
+      "id": "map",
+      "why": "'map' is the semantic focal for the topology decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "map",
+        "why": "primary surface: the relationships themselves (API latency, Warm pool size): API latency, which are the content"
+      },
+      {
+        "rank": 2,
+        "id": "rail",
+        "why": "chrome: fleet summary for the relationship field (API errors, API throughput, Disk pressure (+6 more)), read without focusing"
+      }
+    ],
+    "usage": {
+      "canvasArea": 1296000,
+      "coveredArea": 1249920,
+      "coverage": 0.9644444444444444,
+      "largestEmptyBand": 0.035555555555555556,
+      "focalShare": 0.9022222222222223,
+      "notes": []
+    }
+  },
+  "operations": [
+    {
+      "type": "createFrame",
+      "id": "root",
+      "name": "Operations",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "type": "createFrame",
+      "id": "rail",
+      "parent": "root",
+      "name": "Rail",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 122
+    },
+    {
+      "type": "createFrame",
+      "id": "map",
+      "parent": "root",
+      "name": "Map",
+      "x": 0,
+      "y": 146,
+      "width": 1440,
+      "height": 754
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "rail",
+      "name": "Operations",
+      "x": 16,
+      "y": 16,
+      "width": 215
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "rail",
+      "name": "Watch every service at once and catch th",
+      "x": 254.67,
+      "y": 16,
+      "width": 215
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "rail",
+      "name": "Acknowledge incident",
+      "x": 493.33,
+      "y": 16,
+      "width": 170,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-4-api-errors",
+      "parent": "rail",
+      "name": "API errors",
+      "x": 732,
+      "y": 16,
+      "width": 215,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-api-errors",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-api-errors",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-5-api-throughput",
+      "parent": "rail",
+      "name": "API throughput",
+      "x": 970.67,
+      "y": 16,
+      "width": 215,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-api-throughput",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-api-throughput",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-disk-pressure",
+      "parent": "rail",
+      "name": "Disk pressure",
+      "x": 1209.33,
+      "y": 16,
+      "width": 93,
+      "height": 22,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-disk-pressure",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-7-api-latency",
+      "parent": "map",
+      "name": "API latency",
+      "x": 24,
+      "y": 24,
+      "width": 96,
+      "height": 60,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-api-latency",
+      "name": "Device"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-8-queue-depth",
+      "parent": "map",
+      "name": "Queue depth",
+      "x": 24,
+      "y": 24,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-8-queue-depth",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-9-queue-lag",
+      "parent": "map",
+      "name": "Queue lag",
+      "x": 308.8,
+      "y": 24,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-9-queue-lag",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-10-worker-saturation",
+      "parent": "map",
+      "name": "Worker saturation",
+      "x": 593.6,
+      "y": 24,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-10-worker-saturation",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-11-cache-hit-rate",
+      "parent": "map",
+      "name": "Cache hit rate",
+      "x": 878.4,
+      "y": 24,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-11-cache-hit-rate",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-12-shard-balance",
+      "parent": "map",
+      "name": "Shard balance",
+      "x": 1163.2,
+      "y": 24,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-12-shard-balance",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-13-replica-lag",
+      "parent": "map",
+      "name": "Replica lag",
+      "x": 24,
+      "y": 146,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-13-replica-lag",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-14-clock-skew",
+      "parent": "map",
+      "name": "Clock skew",
+      "x": 308.8,
+      "y": 146,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-14-clock-skew",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-15-auth-failures",
+      "parent": "map",
+      "name": "Auth failures",
+      "x": 593.6,
+      "y": 146,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-15-auth-failures",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-16-rate-limit-rejections",
+      "parent": "map",
+      "name": "Rate limit rejections",
+      "x": 878.4,
+      "y": 146,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-16-rate-limit-rejections",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-17-cold-start-time",
+      "parent": "map",
+      "name": "Cold start time",
+      "x": 1163.2,
+      "y": 146,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-17-cold-start-time",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-18-warm-pool-size",
+      "parent": "map",
+      "name": "Warm pool size",
+      "x": 24,
+      "y": 268,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-18-warm-pool-size",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-19-inference-queue",
+      "parent": "map",
+      "name": "Inference queue",
+      "x": 308.8,
+      "y": 268,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-19-inference-queue",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-20-index-rebuild",
+      "parent": "map",
+      "name": "Index rebuild",
+      "x": 593.6,
+      "y": 268,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-20-index-rebuild",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-21-snapshot-age",
+      "parent": "map",
+      "name": "Snapshot age",
+      "x": 878.4,
+      "y": 268,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-21-snapshot-age",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-22-backup-failures",
+      "parent": "map",
+      "name": "Backup failures",
+      "x": 1163.2,
+      "y": 268,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-22-backup-failures",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-23-certificate-expiry",
+      "parent": "map",
+      "name": "Certificate expiry",
+      "x": 24,
+      "y": 390,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-23-certificate-expiry",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-24-change-failure-rate",
+      "parent": "map",
+      "name": "Change failure rate",
+      "x": 308.8,
+      "y": 390,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-24-change-failure-rate",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-25-time-to-restore",
+      "parent": "map",
+      "name": "Time to restore",
+      "x": 593.6,
+      "y": 390,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-25-time-to-restore",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-26-deploy-frequency",
+      "parent": "map",
+      "name": "—",
+      "x": 878.4,
+      "y": 390,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-26-deploy-frequency",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-26-deploy-frequency",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-27-config-drift",
+      "parent": "map",
+      "name": "Config drift",
+      "x": 1163.2,
+      "y": 390,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-27-config-drift",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-28-batch-backlog",
+      "parent": "map",
+      "name": "—",
+      "x": 24,
+      "y": 512,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-28-batch-backlog",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-28-batch-backlog",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-29-token-refresh-errors",
+      "parent": "map",
+      "name": "Token refresh errors",
+      "x": 308.8,
+      "y": 512,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-29-token-refresh-errors",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-30-model-errors",
+      "parent": "map",
+      "name": "Model errors",
+      "x": 593.6,
+      "y": 512,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-30-model-errors",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-31-model-throughput",
+      "parent": "map",
+      "name": "Model throughput",
+      "x": 878.4,
+      "y": 512,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-31-model-throughput",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-32-network-throughput",
+      "parent": "map",
+      "name": "Network throughput",
+      "x": 1163.2,
+      "y": 512,
+      "width": 253,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-32-network-throughput",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-33-memory-pressure",
+      "parent": "map",
+      "name": "Memory pressure",
+      "x": 24,
+      "y": 634,
+      "width": 105,
+      "height": 22,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-33-memory-pressure",
+      "name": "Label"
+    }
+  ],
+  "structuralChecks": [
+    {
+      "id": "regions-built",
+      "question": "Was every planned region built?",
+      "status": "pass",
+      "detail": "2 region(s) built: rail, map.",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-on-canvas",
+      "question": "Is every region inside the canvas?",
+      "status": "pass",
+      "detail": "All 2 region(s) are within the 1440x900 canvas.",
+      "nodeIds": []
+    },
+    {
+      "id": "no-collapsed-regions",
+      "question": "Does every region have a real size?",
+      "status": "pass",
+      "detail": "No region collapsed to zero.",
+      "nodeIds": []
+    },
+    {
+      "id": "required-information-present",
+      "question": "Is every piece of required information on the screen?",
+      "status": "pass",
+      "detail": "All 30 required item(s) are present.",
+      "nodeIds": []
+    },
+    {
+      "id": "primary-action-present",
+      "question": "Is the primary action on the screen?",
+      "status": "pass",
+      "detail": "'Acknowledge incident' is present.",
+      "nodeIds": []
+    },
+    {
+      "id": "focal-present",
+      "question": "Is there a first thing to look at?",
+      "status": "pass",
+      "detail": "The focal region is 'map': 'map' is the semantic focal for the topology decision; geometry supports the role rather than defining it.",
+      "nodeIds": [
+        "map"
+      ]
+    },
+    {
+      "id": "canvas-usage",
+      "question": "Does the composition use the canvas it was given?",
+      "status": "pass",
+      "detail": "coverage 96%, largest empty band 4%, focal share 90%.",
+      "nodeIds": []
+    },
+    {
+      "id": "compiled-geometry",
+      "question": "Does the resolved geometry agree with the program?",
+      "status": "pass",
+      "detail": "No geometry violations.",
+      "nodeIds": []
+    },
+    {
+      "id": "auto-layout-applied",
+      "question": "Were the auto-layout containers actually created as auto-layout frames?",
+      "status": "pass",
+      "detail": "This screen has no region whose content could be handed to Figma's own layout.",
+      "nodeIds": []
+    },
+    {
+      "id": "plan-matches-build",
+      "question": "Does the built geometry match the plan?",
+      "status": "review",
+      "detail": "rail: planned 1440x56, built 1440x122; map: planned 1440x812, built 1440x754",
+      "nodeIds": []
+    },
+    {
+      "id": "product-guard",
+      "question": "Does the build pass the product's own rules?",
+      "status": "review",
+      "detail": "WARNING: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "nodeIds": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "plan-geometry-drift-01",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "rail: planned 1440x56, built 1440x122"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-02",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x754.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "map: planned 1440x812, built 1440x754"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    }
+  ],
+  "violations": [],
+  "applicable": true,
+  "status": "review"
+}

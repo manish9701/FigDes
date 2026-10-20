@@ -1,0 +1,661 @@
+{
+  "caseId": "G06",
+  "recordedAt": "2026-10-20T03:25:38.436Z",
+  "brief": {
+    "id": "brief",
+    "product": "EXO Labs",
+    "screen": "Cluster Console",
+    "purpose": "Operate a cluster from one console",
+    "primaryDecision": "operate a cluster from one console",
+    "primaryAction": "Drain node",
+    "secondaryActions": [],
+    "requiredInformation": [
+      "cluster health",
+      "node topology",
+      "recent deploys"
+    ],
+    "optionalInformation": [],
+    "values": {},
+    "data": {
+      "mode": "demo",
+      "notes": null,
+      "illustrative": true
+    },
+    "interactions": [],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "responsive": [],
+    "designSystemConstraints": [],
+    "references": {
+      "observations": [
+        "The reference console uses a dark instrument surface for the live region and a light chrome around it."
+      ],
+      "assumptions": [
+        "The dark region is the focal area, not the whole screen."
+      ]
+    },
+    "visualDirection": "quiet-instrument",
+    "antiGoals": [
+      "scanlines on every surface",
+      "green accents on unrelated elements"
+    ],
+    "states": [],
+    "scope": {
+      "create": [],
+      "edit": [],
+      "leaveUntouched": []
+    },
+    "existingPatterns": [],
+    "audience": "general",
+    "archetype": null
+  },
+  "assumptions": [
+    {
+      "id": "assume-viewport",
+      "statement": "The screen is designed for a 1440x900 viewport.",
+      "source": "inferred",
+      "why": "No viewport was stated, so the product's default desktop canvas is used and recorded rather than guessed silently."
+    },
+    {
+      "id": "reference-assumption-2",
+      "statement": "The dark region is the focal area, not the whole screen.",
+      "source": "inferred",
+      "why": "Recorded as an inference from a reference, not as a stated requirement."
+    }
+  ],
+  "clarifications": [
+    "scope-unstated"
+  ],
+  "blockers": [],
+  "plan": {
+    "canvas": {
+      "width": 1440,
+      "height": 900,
+      "grid": 8,
+      "name": "Cluster Console"
+    },
+    "regions": [
+      {
+        "id": "nav",
+        "role": "navigation",
+        "composition": "instrument",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 208,
+          "h": 900
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": 208,
+          "height": "fill"
+        },
+        "grow": 0,
+        "padding": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 3,
+          "behavior": "keeps its declared size; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-heading-eyebrow",
+          "slot-heading-title",
+          "slot-heading-description",
+          "slot-action-primary"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-nav-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (the stated decision), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-nav-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (cluster health, recent deploys)",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button"
+        ],
+        "constraints": {
+          "overflow": "clip"
+        },
+        "priority": 3,
+        "interaction": "move between sections of the product",
+        "why": "orientation",
+        "autoLayout": false,
+        "columns": 1
+      },
+      {
+        "id": "subject",
+        "role": "primary-visual",
+        "composition": "canvas",
+        "parent": null,
+        "order": 1,
+        "bounds": {
+          "x": 240,
+          "y": 0,
+          "w": 1200,
+          "h": 521
+        },
+        "layoutMode": "free",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 2,
+        "padding": {
+          "top": 32,
+          "right": 32,
+          "bottom": 32,
+          "left": 32
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 1,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-4-node-topology"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-subject-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (cluster health, recent deploys)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-subject-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "panel"
+        ],
+        "constraints": {
+          "overflow": "allow"
+        },
+        "priority": 1,
+        "interaction": "select and inspect what is shown here",
+        "why": "the thing being understood (the stated decision), given the most room",
+        "autoLayout": false,
+        "columns": 1
+      },
+      {
+        "id": "context",
+        "role": "inspector",
+        "composition": "split-view",
+        "parent": null,
+        "order": 2,
+        "bounds": {
+          "x": 240,
+          "y": 553,
+          "w": 360,
+          "h": 347
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": 360,
+          "height": "fill"
+        },
+        "grow": 0,
+        "padding": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 2,
+          "behavior": "keeps its declared size; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-5-cluster-health",
+          "slot-6-recent-deploys"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-context-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (the stated decision), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-context-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "statusPill",
+          "timelineEvent"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 2,
+        "interaction": "read the detail of the current selection, and change it",
+        "why": "surrounding state that gives the subject meaning (cluster health, recent deploys)",
+        "autoLayout": true,
+        "columns": 1
+      }
+    ],
+    "content": [
+      {
+        "id": "slot-heading-title",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "Cluster Console",
+        "primitive": "text",
+        "value": null,
+        "order": -10,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-description",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "Operate a cluster from one console",
+        "primitive": "text",
+        "value": null,
+        "order": -9,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-action-primary",
+        "regionId": "nav",
+        "kind": "action",
+        "label": "Drain node",
+        "primitive": "button",
+        "value": null,
+        "order": -8,
+        "because": "The action the screen exists for: 'Drain node'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-4-node-topology",
+        "regionId": "subject",
+        "kind": "relationship",
+        "label": "node topology",
+        "primitive": "panel",
+        "value": null,
+        "order": 3,
+        "because": "Required for the decision: 'node topology'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-5-cluster-health",
+        "regionId": "context",
+        "kind": "signal",
+        "label": "cluster health",
+        "primitive": "statusPill",
+        "value": null,
+        "order": 4,
+        "because": "Required for the decision: 'cluster health'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-recent-deploys",
+        "regionId": "context",
+        "kind": "event",
+        "label": "recent deploys",
+        "primitive": "timelineEvent",
+        "value": null,
+        "order": 5,
+        "because": "Required for the decision: 'recent deploys'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-eyebrow",
+        "regionId": "nav",
+        "kind": "heading",
+        "label": "EXO Labs",
+        "primitive": "text",
+        "value": null,
+        "order": -20,
+        "because": "Names the product at the top of the rail, where the user expects to find it.",
+        "illustrative": false
+      }
+    ],
+    "focal": {
+      "id": "subject",
+      "why": "'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "subject",
+        "why": "primary surface: the thing being understood (the stated decision), given the most room"
+      },
+      {
+        "rank": 2,
+        "id": "context",
+        "why": "chrome: surrounding state that gives the subject meaning (cluster health, recent deploys)"
+      },
+      {
+        "rank": 3,
+        "id": "nav",
+        "why": "chrome: orientation"
+      }
+    ],
+    "usage": {
+      "canvasArea": 1296000,
+      "coveredArea": 937320,
+      "coverage": 0.7232407407407407,
+      "largestEmptyBand": 0,
+      "focalShare": 0.4824074074074074,
+      "notes": []
+    }
+  },
+  "operations": [
+    {
+      "type": "createFrame",
+      "id": "root",
+      "name": "Cluster Console",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "type": "createFrame",
+      "id": "nav",
+      "parent": "root",
+      "name": "Nav",
+      "x": 0,
+      "y": 0,
+      "width": 210,
+      "height": 900
+    },
+    {
+      "type": "createFrame",
+      "id": "subject",
+      "parent": "root",
+      "name": "Subject",
+      "x": 234,
+      "y": 0,
+      "width": 1206,
+      "height": 528
+    },
+    {
+      "type": "createFrame",
+      "id": "context",
+      "parent": "root",
+      "name": "Context",
+      "x": 234,
+      "y": 552,
+      "width": 360,
+      "height": 348,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-eyebrow",
+      "parent": "nav",
+      "name": "EXO Labs",
+      "x": 0,
+      "y": 0,
+      "width": 54
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "nav",
+      "name": "Cluster Console",
+      "x": 78,
+      "y": 0,
+      "width": 54
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "nav",
+      "name": "Operate a cluster from one console",
+      "x": 156,
+      "y": 0,
+      "width": 54
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "nav",
+      "name": "Drain node",
+      "x": 0,
+      "y": 42,
+      "width": 97,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-4-node-topology",
+      "parent": "subject",
+      "name": "node topology",
+      "x": 32,
+      "y": 32,
+      "width": 1142,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-node-topology",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-5-cluster-health",
+      "parent": "context",
+      "name": "cluster health",
+      "x": 0,
+      "y": 0,
+      "width": 99,
+      "height": 22,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-cluster-health",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-recent-deploys",
+      "parent": "context",
+      "name": "—",
+      "x": 0,
+      "y": 46,
+      "width": 360,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-recent-deploys",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-recent-deploys",
+      "name": "Title"
+    }
+  ],
+  "structuralChecks": [
+    {
+      "id": "regions-built",
+      "question": "Was every planned region built?",
+      "status": "pass",
+      "detail": "3 region(s) built: nav, subject, context.",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-on-canvas",
+      "question": "Is every region inside the canvas?",
+      "status": "pass",
+      "detail": "All 3 region(s) are within the 1440x900 canvas.",
+      "nodeIds": []
+    },
+    {
+      "id": "no-collapsed-regions",
+      "question": "Does every region have a real size?",
+      "status": "pass",
+      "detail": "No region collapsed to zero.",
+      "nodeIds": []
+    },
+    {
+      "id": "required-information-present",
+      "question": "Is every piece of required information on the screen?",
+      "status": "pass",
+      "detail": "All 3 required item(s) are present.",
+      "nodeIds": []
+    },
+    {
+      "id": "primary-action-present",
+      "question": "Is the primary action on the screen?",
+      "status": "pass",
+      "detail": "'Drain node' is present.",
+      "nodeIds": []
+    },
+    {
+      "id": "focal-present",
+      "question": "Is there a first thing to look at?",
+      "status": "pass",
+      "detail": "The focal region is 'subject': 'subject' is the semantic focal for the inspect decision; geometry supports the role rather than defining it.",
+      "nodeIds": [
+        "subject"
+      ]
+    },
+    {
+      "id": "canvas-usage",
+      "question": "Does the composition use the canvas it was given?",
+      "status": "pass",
+      "detail": "coverage 72%, largest empty band 0%, focal share 48%.",
+      "nodeIds": []
+    },
+    {
+      "id": "compiled-geometry",
+      "question": "Does the resolved geometry agree with the program?",
+      "status": "fail",
+      "detail": "typography: Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box. | typography: Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "nodeIds": []
+    },
+    {
+      "id": "auto-layout-applied",
+      "question": "Were the auto-layout containers actually created as auto-layout frames?",
+      "status": "pass",
+      "detail": "1 region(s) built as native auto-layout containers.",
+      "nodeIds": []
+    },
+    {
+      "id": "plan-matches-build",
+      "question": "Does the built geometry match the plan?",
+      "status": "review",
+      "detail": "subject: planned 1200x521, built 1206x528",
+      "nodeIds": []
+    },
+    {
+      "id": "product-guard",
+      "question": "Does the build pass the product's own rules?",
+      "status": "review",
+      "detail": "INDETERMINATE: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "nodeIds": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "violation-typography-01",
+      "stage": "structure",
+      "severity": "medium",
+      "confidence": 0.8,
+      "nodeIds": [],
+      "summary": "Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
+      "evidence": {
+        "kind": "rule",
+        "detail": "rule: typography"
+      },
+      "fix": "Adjust the program so the geometry resolves as intended.",
+      "automatable": false
+    },
+    {
+      "id": "violation-typography-02",
+      "stage": "structure",
+      "severity": "medium",
+      "confidence": 0.8,
+      "nodeIds": [],
+      "summary": "Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box.",
+      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
+      "evidence": {
+        "kind": "rule",
+        "detail": "rule: typography"
+      },
+      "fix": "Adjust the program so the geometry resolves as intended.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-01",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x521, built 1206x528.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "subject: planned 1200x521, built 1206x528"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    }
+  ],
+  "violations": [
+    {
+      "rule": "typography",
+      "message": "Text 'slot-heading-title' holds the unbreakable run \"Cluster\", which measures about 111px at 29px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+    },
+    {
+      "rule": "typography",
+      "message": "Text 'slot-heading-description' holds the unbreakable run \"Operate\", which measures about 70px at 18px inside a 54px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, or give it a wider box."
+    }
+  ],
+  "applicable": true,
+  "status": "fail"
+}

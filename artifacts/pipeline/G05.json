@@ -1,0 +1,601 @@
+{
+  "caseId": "G05",
+  "recordedAt": "2026-10-20T03:25:38.431Z",
+  "brief": {
+    "id": "brief",
+    "product": "EXO Labs",
+    "screen": "Topology",
+    "purpose": "See how the cluster is wired and where the traffic goes",
+    "primaryDecision": "inspect the network topology of the fleet",
+    "primaryAction": "Trace path",
+    "secondaryActions": [],
+    "requiredInformation": [
+      "node topology",
+      "GPU memory",
+      "model throughput",
+      "latency"
+    ],
+    "optionalInformation": [],
+    "values": {},
+    "data": {
+      "mode": "demo",
+      "notes": null,
+      "illustrative": true
+    },
+    "interactions": [
+      {
+        "from": "node topology",
+        "to": "GPU memory",
+        "kind": "connect"
+      },
+      {
+        "from": "node topology",
+        "to": "latency",
+        "kind": "connect"
+      }
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "responsive": [],
+    "designSystemConstraints": [],
+    "references": {
+      "observations": [],
+      "assumptions": []
+    },
+    "visualDirection": null,
+    "antiGoals": [],
+    "states": [],
+    "scope": {
+      "create": [],
+      "edit": [],
+      "leaveUntouched": []
+    },
+    "existingPatterns": [],
+    "audience": "general",
+    "archetype": null
+  },
+  "assumptions": [
+    {
+      "id": "assume-viewport",
+      "statement": "The screen is designed for a 1440x900 viewport.",
+      "source": "inferred",
+      "why": "No viewport was stated, so the product's default desktop canvas is used and recorded rather than guessed silently."
+    },
+    {
+      "id": "assume-default-anti-goals",
+      "statement": "The screen avoids generic SaaS card walls and equal-weight panels.",
+      "source": "inferred",
+      "why": "No anti-goals were given, so the product's standing rules are applied and recorded rather than assumed silently."
+    }
+  ],
+  "clarifications": [
+    "scope-unstated",
+    "no-reference"
+  ],
+  "blockers": [],
+  "plan": {
+    "canvas": {
+      "width": 1440,
+      "height": 900,
+      "grid": 8,
+      "name": "Topology"
+    },
+    "regions": [
+      {
+        "id": "rail",
+        "role": "status-rail",
+        "composition": "instrument",
+        "parent": null,
+        "order": 0,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1440,
+          "h": 56
+        },
+        "layoutMode": "flow-vertical",
+        "sizing": {
+          "width": "fill",
+          "height": 56
+        },
+        "grow": 0,
+        "padding": {
+          "top": 16,
+          "right": 16,
+          "bottom": 16,
+          "left": 16
+        },
+        "gap": 24,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 2,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-heading-title",
+          "slot-heading-description",
+          "slot-action-primary",
+          "slot-4-gpu-memory",
+          "slot-5-model-throughput"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-rail-map",
+            "to": "map",
+            "meaning": "primary surface: the relationships themselves (node topology, latency): node topology, latency, which are the content",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "text",
+          "button",
+          "metric"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 2,
+        "interaction": "read the state of the whole at a glance",
+        "why": "fleet summary for the relationship field (GPU memory, model throughput), read without focusing",
+        "autoLayout": false,
+        "columns": 5
+      },
+      {
+        "id": "map",
+        "role": "primary-visual",
+        "composition": "topology",
+        "parent": null,
+        "order": 1,
+        "bounds": {
+          "x": 0,
+          "y": 88,
+          "w": 1440,
+          "h": 812
+        },
+        "layoutMode": "free",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 1,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 32,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 1,
+          "behavior": "fills the space the other regions leave; collapses last"
+        },
+        "contentHierarchy": [
+          "slot-6-node-topology",
+          "slot-7-latency"
+        ],
+        "density": "low",
+        "relationships": [
+          {
+            "id": "rel-map-rail",
+            "to": "rail",
+            "meaning": "chrome: fleet summary for the relationship field (GPU memory, model throughput), read without focusing",
+            "importance": "primary"
+          }
+        ],
+        "primitives": [
+          "deviceNode"
+        ],
+        "constraints": {
+          "overflow": "allow"
+        },
+        "priority": 1,
+        "interaction": "select and inspect what is shown here",
+        "why": "the relationships themselves (node topology, latency): node topology, latency, which are the content",
+        "autoLayout": false,
+        "columns": 1
+      }
+    ],
+    "content": [
+      {
+        "id": "slot-heading-title",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "Topology",
+        "primitive": "text",
+        "value": null,
+        "order": -10,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-heading-description",
+        "regionId": "rail",
+        "kind": "heading",
+        "label": "See how the cluster is wired and where the traffic goes",
+        "primitive": "text",
+        "value": null,
+        "order": -9,
+        "because": "Names the screen and states its task in the user's words.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-action-primary",
+        "regionId": "rail",
+        "kind": "action",
+        "label": "Trace path",
+        "primitive": "button",
+        "value": null,
+        "order": -8,
+        "because": "The action the screen exists for: 'Trace path'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-4-gpu-memory",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "GPU memory",
+        "primitive": "metric",
+        "value": null,
+        "order": 3,
+        "because": "Required for the decision: 'GPU memory'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-5-model-throughput",
+        "regionId": "rail",
+        "kind": "signal",
+        "label": "model throughput",
+        "primitive": "metric",
+        "value": null,
+        "order": 4,
+        "because": "Required for the decision: 'model throughput'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-6-node-topology",
+        "regionId": "map",
+        "kind": "relationship",
+        "label": "node topology",
+        "primitive": "deviceNode",
+        "value": null,
+        "order": 5,
+        "because": "Required for the decision: 'node topology'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-7-latency",
+        "regionId": "map",
+        "kind": "relationship",
+        "label": "latency",
+        "primitive": "deviceNode",
+        "value": null,
+        "order": 6,
+        "because": "Required for the decision: 'latency'.",
+        "illustrative": true
+      }
+    ],
+    "focal": {
+      "id": "map",
+      "why": "'map' is the semantic focal for the topology decision; geometry supports the role rather than defining it."
+    },
+    "hierarchy": [
+      {
+        "rank": 1,
+        "id": "map",
+        "why": "primary surface: the relationships themselves (node topology, latency): node topology, latency, which are the content"
+      },
+      {
+        "rank": 2,
+        "id": "rail",
+        "why": "chrome: fleet summary for the relationship field (GPU memory, model throughput), read without focusing"
+      }
+    ],
+    "usage": {
+      "canvasArea": 1296000,
+      "coveredArea": 1249920,
+      "coverage": 0.9644444444444444,
+      "largestEmptyBand": 0.035555555555555556,
+      "focalShare": 0.9022222222222223,
+      "notes": []
+    }
+  },
+  "operations": [
+    {
+      "type": "createFrame",
+      "id": "root",
+      "name": "Topology",
+      "width": 1440,
+      "height": 900
+    },
+    {
+      "type": "createFrame",
+      "id": "rail",
+      "parent": "root",
+      "name": "Rail",
+      "x": 0,
+      "y": 0,
+      "width": 1440,
+      "height": 122
+    },
+    {
+      "type": "createFrame",
+      "id": "map",
+      "parent": "root",
+      "name": "Map",
+      "x": 0,
+      "y": 154,
+      "width": 1440,
+      "height": 746
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-title",
+      "parent": "rail",
+      "name": "Topology",
+      "x": 16,
+      "y": 16,
+      "width": 262
+    },
+    {
+      "type": "createText",
+      "id": "slot-heading-description",
+      "parent": "rail",
+      "name": "See how the cluster is wired and where t",
+      "x": 302.4,
+      "y": 16,
+      "width": 262
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-action-primary",
+      "parent": "rail",
+      "name": "Trace path",
+      "x": 588.8,
+      "y": 16,
+      "width": 105,
+      "height": 40,
+      "layoutMode": "HORIZONTAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-action-primary",
+      "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-4-gpu-memory",
+      "parent": "rail",
+      "name": "GPU memory",
+      "x": 875.2,
+      "y": 16,
+      "width": 262,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-gpu-memory",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-4-gpu-memory",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-5-model-throughput",
+      "parent": "rail",
+      "name": "model throughput",
+      "x": 1161.6,
+      "y": 16,
+      "width": 262,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-model-throughput",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-model-throughput",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-node-topology",
+      "parent": "map",
+      "name": "node topology",
+      "x": 24,
+      "y": 24,
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-node-topology",
+      "name": "Device"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-7-latency",
+      "parent": "map",
+      "name": "latency",
+      "x": 24,
+      "y": 136,
+      "width": 128,
+      "height": 80,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-latency",
+      "name": "Device"
+    },
+    {
+      "type": "createVector",
+      "id": "connector-1",
+      "parent": "root",
+      "name": "orthogonal connector slot-6-node-topology -> slot-4-gpu-memory",
+      "x": 152,
+      "y": 80.19,
+      "width": 723.2,
+      "height": 126.87
+    },
+    {
+      "type": "createVector",
+      "id": "connector-2",
+      "parent": "root",
+      "name": "orthogonal connector slot-6-node-topology -> slot-7-latency",
+      "x": 83,
+      "y": 258,
+      "width": 10,
+      "height": 32
+    },
+    {
+      "type": "createText",
+      "id": "connector-1-label",
+      "parent": "root",
+      "name": "Label connect",
+      "x": 519.6,
+      "y": 69.43
+    },
+    {
+      "type": "createText",
+      "id": "connector-2-label",
+      "parent": "root",
+      "name": "Label connect",
+      "x": 94,
+      "y": 260
+    }
+  ],
+  "structuralChecks": [
+    {
+      "id": "regions-built",
+      "question": "Was every planned region built?",
+      "status": "pass",
+      "detail": "2 region(s) built: rail, map.",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-on-canvas",
+      "question": "Is every region inside the canvas?",
+      "status": "pass",
+      "detail": "All 2 region(s) are within the 1440x900 canvas.",
+      "nodeIds": []
+    },
+    {
+      "id": "no-collapsed-regions",
+      "question": "Does every region have a real size?",
+      "status": "pass",
+      "detail": "No region collapsed to zero.",
+      "nodeIds": []
+    },
+    {
+      "id": "required-information-present",
+      "question": "Is every piece of required information on the screen?",
+      "status": "pass",
+      "detail": "All 4 required item(s) are present.",
+      "nodeIds": []
+    },
+    {
+      "id": "primary-action-present",
+      "question": "Is the primary action on the screen?",
+      "status": "pass",
+      "detail": "'Trace path' is present.",
+      "nodeIds": []
+    },
+    {
+      "id": "focal-present",
+      "question": "Is there a first thing to look at?",
+      "status": "pass",
+      "detail": "The focal region is 'map': 'map' is the semantic focal for the topology decision; geometry supports the role rather than defining it.",
+      "nodeIds": [
+        "map"
+      ]
+    },
+    {
+      "id": "canvas-usage",
+      "question": "Does the composition use the canvas it was given?",
+      "status": "pass",
+      "detail": "coverage 96%, largest empty band 4%, focal share 90%.",
+      "nodeIds": []
+    },
+    {
+      "id": "compiled-geometry",
+      "question": "Does the resolved geometry agree with the program?",
+      "status": "pass",
+      "detail": "No geometry violations.",
+      "nodeIds": []
+    },
+    {
+      "id": "auto-layout-applied",
+      "question": "Were the auto-layout containers actually created as auto-layout frames?",
+      "status": "pass",
+      "detail": "This screen has no region whose content could be handed to Figma's own layout.",
+      "nodeIds": []
+    },
+    {
+      "id": "plan-matches-build",
+      "question": "Does the built geometry match the plan?",
+      "status": "review",
+      "detail": "rail: planned 1440x56, built 1440x122; map: planned 1440x812, built 1440x746",
+      "nodeIds": []
+    },
+    {
+      "id": "product-guard",
+      "question": "Does the build pass the product's own rules?",
+      "status": "review",
+      "detail": "WARNING: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "nodeIds": []
+    }
+  ],
+  "findings": [
+    {
+      "id": "plan-geometry-drift-01",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "rail: planned 1440x56, built 1440x122"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-02",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x746.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "map: planned 1440x812, built 1440x746"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    }
+  ],
+  "violations": [],
+  "applicable": true,
+  "status": "review"
+}

@@ -488,6 +488,7 @@ async function main() {
         "critique_visual",
         "design_brief",
         "design_guard",
+        "design_pipeline",
         "design_runtime",
         "design_snapshot",
         "diff_design",

@@ -148,6 +148,7 @@ const REGION_ARGS = new Set([
   "columns",
   "gridColumns",
   "gridGutter",
+  "autoLayout",
 ]);
 const CONTENT_ARGS = new Set([
   "text",
@@ -694,6 +695,10 @@ regions.push({
       ...(args.radius !== undefined ? { radius: coerceNumber(args.radius, 0, 0, 200) } : {}),
       ...(args.gridColumns !== undefined ? { gridColumns: Math.max(1, Math.min(24, Math.round(Number(args.gridColumns) || 12))) } : {}),
       ...(args.gridGutter !== undefined ? { gridGutter: coerceNumber(args.gridGutter, 24, 0, 400) } : {}),
+      // A native auto-layout container. The compiler decides whether the
+      // children are safe to hand to Figma's own layout (see compile.ts); the
+      // request itself is carried here so the decision has something to act on.
+      ...(args.autoLayout === "vertical" ? { autoLayout: "vertical" as const } : {}),
       elevation: 0,
       children: [],
     });

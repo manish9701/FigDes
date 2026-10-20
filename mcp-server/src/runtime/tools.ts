@@ -13,7 +13,8 @@ import { placeRootFrame } from "./placement";
 import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
-import type { Session } from "../sessions";
+import { dispatchTransaction } from "../transaction";
+import type { Session, SessionRegistry } from "../sessions";
 
 /* -------------------------------------------------------------------------- */
 /* Schemas                                                                    */
@@ -304,7 +305,11 @@ export function reuseAdvisory(operations: Array<Record<string, unknown>>): Array
   return advisories;
 }
 
-export async function runRuntimeTool(session: Session | null, args: unknown): Promise<unknown> {
+export async function runRuntimeTool(
+  session: Session | null,
+  args: unknown,
+  registry?: SessionRegistry,
+): Promise<unknown> {
   const parsed = RuntimeArgs.parse(args);
   const { dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
@@ -458,11 +463,21 @@ export async function runRuntimeTool(session: Session | null, args: unknown): Pr
   }
 
   session.notify({ type: "notify", kind: "activity", text: `Building ${result.operations.length} ops…`, at: Date.now() });
-  const transaction = await session.request("create_design", {
-    description: description ?? "Design runtime execution",
-    operations: result.operations,
-    transactionId,
-  });
+  // The same tracked dispatcher the low-level tools use, so a retried runtime
+  // build returns the prior result instead of drawing the screen twice, and a
+  // timed-out one leaves a ledger record to reconcile against. Going straight
+  // to the socket — which is what this did — meant neither was true.
+  const transaction = registry
+    ? await dispatchTransaction(registry, session, "create_design", {
+        description: description ?? "Design runtime execution",
+        operations: result.operations,
+        ...(transactionId !== undefined ? { transactionId } : {}),
+      })
+    : await session.request("create_design", {
+        description: description ?? "Design runtime execution",
+        operations: result.operations,
+        transactionId,
+      });
 
   return { ...payload, ...(placement !== null ? { placement } : {}), transaction };
 }

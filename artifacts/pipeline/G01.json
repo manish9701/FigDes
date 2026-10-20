@@ -150,16 +150,16 @@
       {
         "id": "primary-visual",
         "role": "primary-visual",
-        "composition": "instrument",
+        "composition": "topology",
         "parent": null,
         "order": 1,
         "bounds": {
           "x": 0,
           "y": 96,
           "w": 1440,
-          "h": 532
+          "h": 300
         },
-        "layoutMode": "flow-vertical",
+        "layoutMode": "free",
         "sizing": {
           "width": "fill",
           "height": "fill"
@@ -199,15 +199,15 @@
           }
         ],
         "primitives": [
-          "panel"
+          "sectionHeader"
         ],
         "constraints": {
           "overflow": "allow"
         },
         "priority": 1,
-        "interaction": "select and inspect what is shown here",
-        "why": "the primary signal (cluster health, GPU memory, model throughput), given the most space",
-        "autoLayout": true,
+        "interaction": "select a node and follow the relationships out of it",
+        "why": "the relationships the brief names (node topology): a diagram, because a relationship drawn as a row is a list, not a relationship",
+        "autoLayout": false,
         "columns": 1
       },
       {
@@ -218,7 +218,7 @@
         "order": 2,
         "bounds": {
           "x": 0,
-          "y": 660,
+          "y": 428,
           "w": 1440,
           "h": 240
         },
@@ -273,6 +273,70 @@
         "why": "the underlying data behind the signal (recent deploys, audit log)",
         "autoLayout": true,
         "columns": 2
+      },
+      {
+        "id": "support",
+        "role": "secondary",
+        "composition": "table",
+        "parent": null,
+        "order": 2,
+        "bounds": {
+          "x": 0,
+          "y": 700,
+          "w": 1440,
+          "h": 200
+        },
+        "layoutMode": "grid",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 1,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 4,
+          "behavior": "fills the space the diagram leaves; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-support-primary-visual",
+            "to": "primary-visual",
+            "meaning": "primary surface: the primary signal (cluster health, GPU memory, model throughput), given the most space",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-detail",
+            "to": "detail",
+            "meaning": "supporting surface: the underlying data behind the signal (recent deploys, audit log)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-rail",
+            "to": "rail",
+            "meaning": "chrome: state at a glance (cluster health, GPU memory, model throughput), read without focusing",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 4,
+        "interaction": "read the readouts that support the diagram",
+        "why": "the readouts, summaries and activity that support the diagram without competing with it",
+        "autoLayout": false
       }
     ],
     "content": [
@@ -347,7 +411,7 @@
         "regionId": "primary-visual",
         "kind": "relationship",
         "label": "node topology",
-        "primitive": "panel",
+        "primitive": "sectionHeader",
         "value": null,
         "order": 6,
         "because": "Required for the decision: 'node topology'.",
@@ -395,14 +459,19 @@
         "rank": 3,
         "id": "rail",
         "why": "chrome: state at a glance (cluster health, GPU memory, model throughput), read without focusing"
+      },
+      {
+        "rank": 4,
+        "id": "support",
+        "why": "the readouts that support the diagram: subordinate to it, and never competing with it"
       }
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 1203840,
-      "coverage": 0.9288888888888889,
+      "coveredArea": 1157760,
+      "coverage": 0.8933333333333333,
       "largestEmptyBand": 0.035555555555555556,
-      "focalShare": 0.5911111111111111,
+      "focalShare": 0.3333333333333333,
       "notes": []
     }
   },
@@ -432,8 +501,7 @@
       "x": 0,
       "y": 158,
       "width": 1440,
-      "height": 466,
-      "layoutMode": "VERTICAL"
+      "height": 234
     },
     {
       "type": "createFrame",
@@ -441,10 +509,20 @@
       "parent": "root",
       "name": "Detail",
       "x": 0,
-      "y": 656,
+      "y": 424,
       "width": 1440,
       "height": 244,
       "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createFrame",
+      "id": "support",
+      "parent": "root",
+      "name": "Support",
+      "x": 0,
+      "y": 700,
+      "width": 1440,
+      "height": 200
     },
     {
       "type": "createText",
@@ -539,20 +617,12 @@
       "name": "Value"
     },
     {
-      "type": "createFrame",
+      "type": "createText",
       "id": "slot-7-node-topology",
       "parent": "primary-visual",
       "name": "node topology",
       "x": 24,
-      "y": 24,
-      "width": 1392,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-node-topology",
-      "name": "Title"
+      "y": 24
     },
     {
       "type": "createFrame",
@@ -602,14 +672,14 @@
       "id": "regions-built",
       "question": "Was every planned region built?",
       "status": "pass",
-      "detail": "3 region(s) built: rail, primary-visual, detail.",
+      "detail": "4 region(s) built: rail, primary-visual, detail, support.",
       "nodeIds": []
     },
     {
       "id": "regions-on-canvas",
       "question": "Is every region inside the canvas?",
       "status": "pass",
-      "detail": "All 3 region(s) are within the 1440x900 canvas.",
+      "detail": "All 4 region(s) are within the 1440x900 canvas.",
       "nodeIds": []
     },
     {
@@ -646,7 +716,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 93%, largest empty band 4%, focal share 59%.",
+      "detail": "coverage 89%, largest empty band 4%, focal share 33%.",
       "nodeIds": []
     },
     {
@@ -660,14 +730,21 @@
       "id": "auto-layout-applied",
       "question": "Were the auto-layout containers actually created as auto-layout frames?",
       "status": "pass",
-      "detail": "2 region(s) built as native auto-layout containers.",
+      "detail": "1 region(s) built as native auto-layout containers.",
       "nodeIds": []
     },
     {
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "rail: planned 1440x64, built 1440x126; primary-visual: planned 1440x532, built 1440x466",
+      "detail": "rail: planned 1440x64, built 1440x126; primary-visual: planned 1440x300, built 1440x234",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
       "nodeIds": []
     },
     {
@@ -700,11 +777,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: primary-visual: planned 1440x532, built 1440x466.",
+      "summary": "The build did not produce the geometry the plan promised: primary-visual: planned 1440x300, built 1440x234.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "primary-visual: planned 1440x532, built 1440x466"
+        "detail": "primary-visual: planned 1440x300, built 1440x234"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

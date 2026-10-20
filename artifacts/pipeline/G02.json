@@ -217,22 +217,22 @@
       },
       {
         "id": "content",
-        "role": "content",
-        "composition": "table",
+        "role": "primary-visual",
+        "composition": "topology",
         "parent": null,
         "order": 2,
         "bounds": {
           "x": 272,
           "y": 104,
           "w": 1168,
-          "h": 458
+          "h": 366
         },
-        "layoutMode": "grid",
+        "layoutMode": "free",
         "sizing": {
           "width": "fill",
           "height": "fill"
         },
-        "grow": 1,
+        "grow": 2,
         "padding": {
           "top": 24,
           "right": 24,
@@ -249,10 +249,7 @@
           "behavior": "fills the space the other regions leave; collapses last"
         },
         "contentHierarchy": [
-          "slot-4-model-throughput",
-          "slot-5-gpu-memory",
-          "slot-6-shard-count",
-          "slot-7-latency"
+          "slot-4-latency"
         ],
         "density": "medium",
         "relationships": [
@@ -276,15 +273,14 @@
           }
         ],
         "primitives": [
-          "metric",
-          "panel"
+          "sectionHeader"
         ],
         "constraints": {
-          "overflow": "forbid"
+          "overflow": "allow"
         },
         "priority": 1,
-        "interaction": "read and act on the listed information",
-        "why": "the options (the stated decision) compared across the stated decision — alignment does the comparing, not decoration",
+        "interaction": "select a node and follow the relationships out of it",
+        "why": "the relationships the brief names (latency): a diagram, because a relationship drawn as a row is a list, not a relationship",
         "autoLayout": false,
         "columns": 1
       },
@@ -296,9 +292,9 @@
         "order": 3,
         "bounds": {
           "x": 272,
-          "y": 594,
+          "y": 502,
           "w": 360,
-          "h": 306
+          "h": 122
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -351,6 +347,84 @@
         "interaction": "read the detail of the current selection, and change it",
         "why": "detail for the currently focused option (the stated decision)",
         "autoLayout": false
+      },
+      {
+        "id": "support",
+        "role": "secondary",
+        "composition": "table",
+        "parent": null,
+        "order": 3,
+        "bounds": {
+          "x": 272,
+          "y": 656,
+          "w": 1168,
+          "h": 244
+        },
+        "layoutMode": "grid",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 1,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 5,
+          "behavior": "fills the space the diagram leaves; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-5-model-throughput",
+          "slot-6-gpu-memory",
+          "slot-7-shard-count"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-support-content",
+            "to": "content",
+            "meaning": "supporting surface: the options (the stated decision) compared across the stated decision — alignment does the comparing, not decoration",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-inspector",
+            "to": "inspector",
+            "meaning": "chrome: detail for the currently focused option (the stated decision)",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation: where am I in the product",
+            "importance": "secondary"
+          },
+          {
+            "id": "rel-support-header",
+            "to": "header",
+            "meaning": "chrome: the decision, stated: \"compare a model against the cluster it has to fit\"",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "metric",
+          "panel"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 5,
+        "interaction": "read the readouts that support the diagram",
+        "why": "the readouts, summaries and activity that support the diagram without competing with it",
+        "autoLayout": false,
+        "columns": 2
       }
     ],
     "content": [
@@ -388,47 +462,47 @@
         "illustrative": true
       },
       {
-        "id": "slot-4-model-throughput",
+        "id": "slot-4-latency",
         "regionId": "content",
+        "kind": "relationship",
+        "label": "latency",
+        "primitive": "sectionHeader",
+        "value": null,
+        "order": 3,
+        "because": "Required for the decision: 'latency'.",
+        "illustrative": true
+      },
+      {
+        "id": "slot-5-model-throughput",
+        "regionId": "support",
         "kind": "signal",
         "label": "model throughput",
         "primitive": "metric",
         "value": null,
-        "order": 3,
+        "order": 4,
         "because": "Required for the decision: 'model throughput'.",
         "illustrative": true
       },
       {
-        "id": "slot-5-gpu-memory",
-        "regionId": "content",
+        "id": "slot-6-gpu-memory",
+        "regionId": "support",
         "kind": "signal",
         "label": "GPU memory",
         "primitive": "metric",
         "value": null,
-        "order": 4,
+        "order": 5,
         "because": "Required for the decision: 'GPU memory'.",
         "illustrative": true
       },
       {
-        "id": "slot-6-shard-count",
-        "regionId": "content",
+        "id": "slot-7-shard-count",
+        "regionId": "support",
         "kind": "unknown",
         "label": "shard count",
         "primitive": "panel",
         "value": null,
-        "order": 5,
-        "because": "Required for the decision: 'shard count'.",
-        "illustrative": true
-      },
-      {
-        "id": "slot-7-latency",
-        "regionId": "content",
-        "kind": "relationship",
-        "label": "latency",
-        "primitive": "panel",
-        "value": null,
         "order": 6,
-        "because": "Required for the decision: 'latency'.",
+        "because": "Required for the decision: 'shard count'.",
         "illustrative": true
       },
       {
@@ -467,14 +541,19 @@
         "rank": 4,
         "id": "header",
         "why": "chrome: the decision, stated: \"compare a model against the cluster it has to fit\""
+      },
+      {
+        "rank": 5,
+        "id": "support",
+        "why": "the readouts that support the diagram: subordinate to it, and never competing with it"
       }
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 945200,
-      "coverage": 0.729320987654321,
+      "coveredArea": 1056496,
+      "coverage": 0.8151975308641976,
       "largestEmptyBand": 0,
-      "focalShare": 0.41276543209876543,
+      "focalShare": 0.32985185185185184,
       "notes": []
     }
   },
@@ -514,7 +593,7 @@
       "x": 272,
       "y": 134,
       "width": 1168,
-      "height": 428
+      "height": 249
     },
     {
       "type": "createFrame",
@@ -522,9 +601,19 @@
       "parent": "root",
       "name": "Inspector",
       "x": 272,
-      "y": 594,
+      "y": 415,
       "width": 360,
-      "height": 306
+      "height": 209
+    },
+    {
+      "type": "createFrame",
+      "id": "support",
+      "parent": "root",
+      "name": "Support",
+      "x": 272,
+      "y": 656,
+      "width": 1168,
+      "height": 244
     },
     {
       "type": "createText",
@@ -570,77 +659,69 @@
       "name": "Label"
     },
     {
-      "type": "createFrame",
-      "id": "slot-4-model-throughput",
-      "parent": "content",
-      "name": "model throughput",
-      "x": 24,
-      "y": 24,
-      "width": 363,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
       "type": "createText",
-      "parent": "slot-4-model-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-model-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-5-gpu-memory",
-      "parent": "content",
-      "name": "GPU memory",
-      "x": 402.66999999999996,
-      "y": 24,
-      "width": 363,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-gpu-memory",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-gpu-memory",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-6-shard-count",
-      "parent": "content",
-      "name": "shard count",
-      "x": 781.3299999999999,
-      "y": 24,
-      "width": 363,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-shard-count",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-7-latency",
+      "id": "slot-4-latency",
       "parent": "content",
       "name": "latency",
       "x": 24,
-      "y": 130,
-      "width": 363,
+      "y": 24
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-5-model-throughput",
+      "parent": "support",
+      "name": "model throughput",
+      "x": 24,
+      "y": 24,
+      "width": 552,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
     {
       "type": "createText",
-      "parent": "slot-7-latency",
+      "parent": "slot-5-model-throughput",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-5-model-throughput",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-gpu-memory",
+      "parent": "support",
+      "name": "GPU memory",
+      "x": 592,
+      "y": 24,
+      "width": 552,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-gpu-memory",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-gpu-memory",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-7-shard-count",
+      "parent": "support",
+      "name": "shard count",
+      "x": 24,
+      "y": 130,
+      "width": 552,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-shard-count",
       "name": "Title"
     }
   ],
@@ -649,14 +730,14 @@
       "id": "regions-built",
       "question": "Was every planned region built?",
       "status": "pass",
-      "detail": "4 region(s) built: nav, header, content, inspector.",
+      "detail": "5 region(s) built: nav, header, content, inspector, support.",
       "nodeIds": []
     },
     {
       "id": "regions-on-canvas",
       "question": "Is every region inside the canvas?",
       "status": "pass",
-      "detail": "All 4 region(s) are within the 1440x900 canvas.",
+      "detail": "All 5 region(s) are within the 1440x900 canvas.",
       "nodeIds": []
     },
     {
@@ -693,7 +774,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 73%, largest empty band 0%, focal share 41%.",
+      "detail": "coverage 82%, largest empty band 0%, focal share 33%.",
       "nodeIds": []
     },
     {
@@ -714,7 +795,14 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1168x72, built 1168x102; content: planned 1168x458, built 1168x428",
+      "detail": "header: planned 1168x72, built 1168x102; content: planned 1168x366, built 1168x249; inspector: planned 360x122, built 360x209",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
       "nodeIds": []
     },
     {
@@ -747,11 +835,26 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x428.",
+      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x366, built 1168x249.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "content: planned 1168x458, built 1168x428"
+        "detail": "content: planned 1168x366, built 1168x249"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-03",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x122, built 360x209.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "inspector: planned 360x122, built 360x209"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

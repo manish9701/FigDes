@@ -311,6 +311,8 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
       };
     case "panel":
       return { fn: "panel", id, parent, args: { title: slot.label } };
+    case "sectionHeader":
+      return { fn: "sectionHeader", id, parent, args: { title: slot.label } };
     case "timelineEvent":
       return { fn: "timelineEvent", id, parent, args: { title: slot.label, date: "—" } };
     case "deviceNode":

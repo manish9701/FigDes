@@ -415,6 +415,11 @@
         "rank": 3,
         "id": "nav",
         "why": "chrome: orientation"
+      },
+      {
+        "rank": 4,
+        "id": "header",
+        "why": "the screen's identity and its primary action: chrome, and never the thing the eye lands on"
       }
     ],
     "usage": {
@@ -607,6 +612,13 @@
       "question": "Does the built geometry match the plan?",
       "status": "review",
       "detail": "header: planned 390x88, built 390x97; nav: planned 208x132, built 208x101; subject: planned 390x396, built 390x330; context: planned 360x132, built 360x220",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
       "nodeIds": []
     },
     {

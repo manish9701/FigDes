@@ -24,7 +24,7 @@
  */
 import { planScreen, type ScreenIntent } from "../plan/planner";
 import { defaultGutter, layoutRegions } from "../runtime/layout";
-import { classifyInformation, type InfoKind } from "../design/composition/derive";
+import { classifyInformation, classifyInfoItem, type InfoKind } from "../design/composition/derive";
 import type { Composition } from "../runtime/layout";
 import type { ContentSlot, CompositionPlan, NormalizedBrief, RegionSpec } from "./contracts";
 
@@ -153,9 +153,14 @@ function primitiveFor(kind: InfoKind, label: string, composition: Composition, d
     case "attribute":
       return "metric";
     case "option":
-      return "modelRow";
+      // In a diagram, the things that are *in* the diagram are its nodes; in a
+      // table, the same things are its rows.
+      return composition === "topology" || composition === "diagram" ? "deviceNode" : "modelRow";
     case "relationship":
-      return composition === "topology" || composition === "diagram" ? "deviceNode" : "panel";
+      // The relationship itself is what the diagram *shows*, so in a diagram it
+      // is the field's label and the edges between the nodes; elsewhere it is a
+      // panel that names it.
+      return composition === "topology" || composition === "diagram" ? "sectionHeader" : "panel";
     case "setting":
       return "panel";
     case "event":
@@ -380,6 +385,96 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
     }
   }
 
+  /* --- a region for the relationships ------------------------------------- */
+
+  // A brief whose information is about relationships needs somewhere to *draw*
+  // them. A table region cannot: a relationship drawn as a table row is a list,
+  // not a diagram, and the planner picks the shell from the decision's
+  // phrasing — so "inspect the cluster routing" plans a list even when the
+  // brief's whole point is the routing.
+  //
+  // So the pipeline gives the relationships a region of their own, in the
+  // composition that can draw them, and moves the rest of the information into
+  // a supporting region beside it. The relationships become the focal
+  // visualisation, which is what the brief asked for.
+  const relationshipItems = brief.requiredInformation.filter((i) => classifyInfoItem(i) === "relationship");
+  const hasDiagramRegion = regions.some((r) => r.composition === "topology" || r.composition === "spatial" || r.composition === "diagram");
+  if (relationshipItems.length > 0 && !hasDiagramRegion) {
+    const host = regions.find((r) => r.role === "primary-visual" || r.role === "content" || r.role === "secondary");
+    if (host !== undefined) {
+      // The host becomes the diagram: same place on the canvas, the
+      // composition that can draw a relationship.
+      host.composition = "topology";
+      host.layoutMode = "free";
+      host.role = "primary-visual";
+      host.grow = 2;
+      host.why = `the relationships the brief names (${relationshipItems.join(", ")}): a diagram, because a relationship drawn as a row is a list, not a relationship`;
+      host.interaction = "select a node and follow the relationships out of it";
+      host.constraints = { ...host.constraints, overflow: "allow" };
+      // Everything else needs somewhere to live, or the diagram region ends up
+      // holding a table of readouts around the diagram.
+      const support: RegionSpec = {
+        id: "support",
+        role: "secondary",
+        composition: "table",
+        parent: null,
+        order: host.order + 1,
+        bounds: { x: host.bounds.x, y: host.bounds.y, w: host.bounds.w, h: host.bounds.h },
+        layoutMode: "grid",
+        sizing: { width: "fill", height: "fill" },
+        grow: 1,
+        padding: { top: 24, right: 24, bottom: 24, left: 24 },
+        gap: 16,
+        align: { primary: "start", counter: "start" },
+        responsive: { priority: host.priority + 1, behavior: "fills the space the diagram leaves; collapses first when the viewport narrows" },
+        contentHierarchy: [],
+        density: "medium",
+        relationships: [],
+        primitives: [],
+        constraints: { overflow: "forbid" },
+        priority: host.priority + 1,
+        interaction: "read the readouts that support the diagram",
+        why: "the readouts, summaries and activity that support the diagram without competing with it",
+        autoLayout: false,
+      };
+      regions.push(support);
+      // The new region has to be in the hierarchy too, or the visual direction
+      // does not reach it — the weight map is built from the hierarchy.
+      hierarchy.push({
+        rank: hierarchy.length + 1,
+        id: "support",
+        why: "the readouts that support the diagram: subordinate to it, and never competing with it",
+      });
+      support.priority = hierarchy.length;
+      support.responsive.priority = hierarchy.length;
+      warnings.push(
+        `The brief names relationships (${relationshipItems.join(", ")}), so the composition gave them a diagram region ('${host.id}') and moved the supporting information into 'support'.`,
+      );
+      // The layout is re-resolved: the screen now has one more region, and the
+      // numbers have to come from the engine rather than from the old plan.
+      const relaid = layoutRegions({
+        regions: regions.map((r) => ({
+          id: r.id,
+          role: r.role,
+          composition: r.composition,
+          width: r.sizing.width,
+          height: r.sizing.height,
+          grow: r.grow,
+          gap: r.gap,
+          padding: r.padding.top,
+        })) as unknown as Parameters<typeof layoutRegions>[0]["regions"],
+        canvasW: canvas.width,
+        canvasH: canvas.height,
+        gutter: defaultGutter(canvas.grid),
+      });
+      for (const region of regions) {
+        const box = relaid.find((x) => x.id === region.id);
+        if (box === undefined) continue;
+        region.bounds = { x: box.x, y: box.y, w: box.w, h: box.h };
+      }
+    }
+  }
+
   /* --- content slots ----------------------------------------------------- */
 
   const { slots: content, notPlaced } = planContent(brief, regions, plan.composition);
@@ -445,7 +540,7 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
     regions,
     content,
     focal: plan.artDirection.focal,
-    hierarchy: plan.artDirection.hierarchy,
+    hierarchy,
     usage: {
       canvasArea,
       coveredArea,
@@ -570,12 +665,16 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
   }
 
   for (const item of classified) {
-    const region = pickRegion(item.kind, regions);
-    if (region === null) continue;
-    add(region, {
+    const regionId = pickRegion(item.kind, regions);
+    if (regionId === null) continue;
+    // The primitive follows the *region's* composition, not the screen's: a
+    // device in a diagram is a node in the diagram, and the same word in a
+    // table is a row in the table.
+    const host = regions.find((r) => r.id === regionId);
+    add(regionId, {
       text: item.text,
       kind: item.kind,
-      primitive: primitiveFor(item.kind, item.text, composition, false),
+      primitive: primitiveFor(item.kind, item.text, host?.composition ?? composition, false),
       required: isRequired(item.text),
       weight: isRequired(item.text) ? 1 : 2,
     });

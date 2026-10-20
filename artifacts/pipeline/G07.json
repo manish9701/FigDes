@@ -213,14 +213,14 @@
       {
         "id": "subject",
         "role": "primary-visual",
-        "composition": "canvas",
+        "composition": "topology",
         "parent": null,
         "order": 1,
         "bounds": {
           "x": 240,
           "y": 120,
           "w": 1200,
-          "h": 561
+          "h": 358
         },
         "layoutMode": "free",
         "sizing": {
@@ -244,11 +244,7 @@
           "behavior": "fills the space the other regions leave; collapses last"
         },
         "contentHierarchy": [
-          "slot-4-node-topology",
-          "slot-5-audit-log",
-          "slot-6-recent-deploys",
-          "slot-7-model-throughput",
-          "slot-8-gpu-memory"
+          "slot-4-node-topology"
         ],
         "density": "medium",
         "relationships": [
@@ -266,18 +262,16 @@
           }
         ],
         "primitives": [
-          "panel",
-          "timelineEvent",
-          "metric"
+          "sectionHeader"
         ],
         "constraints": {
           "overflow": "allow"
         },
         "priority": 1,
-        "interaction": "select and inspect what is shown here",
-        "why": "the thing being understood (the stated decision), given the most room",
+        "interaction": "select a node and follow the relationships out of it",
+        "why": "the relationships the brief names (node topology): a diagram, because a relationship drawn as a row is a list, not a relationship",
         "autoLayout": false,
-        "columns": 2
+        "columns": 1
       },
       {
         "id": "context",
@@ -287,9 +281,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 713,
+          "y": 510,
           "w": 360,
-          "h": 187
+          "h": 119
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -312,9 +306,7 @@
           "priority": 2,
           "behavior": "keeps its declared size; collapses first when the viewport narrows"
         },
-        "contentHierarchy": [
-          "slot-9-cluster-health"
-        ],
+        "contentHierarchy": [],
         "density": "medium",
         "relationships": [
           {
@@ -330,17 +322,89 @@
             "importance": "secondary"
           }
         ],
-        "primitives": [
-          "statusPill"
-        ],
+        "primitives": [],
         "constraints": {
           "overflow": "forbid"
         },
         "priority": 2,
         "interaction": "read the detail of the current selection, and change it",
         "why": "surrounding state that gives the subject meaning (cluster health, GPU memory, model throughput (+2 more))",
-        "autoLayout": true,
-        "columns": 1
+        "autoLayout": false
+      },
+      {
+        "id": "support",
+        "role": "secondary",
+        "composition": "table",
+        "parent": null,
+        "order": 2,
+        "bounds": {
+          "x": 240,
+          "y": 661,
+          "w": 1200,
+          "h": 239
+        },
+        "layoutMode": "grid",
+        "sizing": {
+          "width": "fill",
+          "height": "fill"
+        },
+        "grow": 1,
+        "padding": {
+          "top": 24,
+          "right": 24,
+          "bottom": 24,
+          "left": 24
+        },
+        "gap": 16,
+        "align": {
+          "primary": "start",
+          "counter": "start"
+        },
+        "responsive": {
+          "priority": 5,
+          "behavior": "fills the space the diagram leaves; collapses first when the viewport narrows"
+        },
+        "contentHierarchy": [
+          "slot-5-cluster-health",
+          "slot-6-gpu-memory",
+          "slot-7-model-throughput",
+          "slot-8-recent-deploys",
+          "slot-9-audit-log"
+        ],
+        "density": "medium",
+        "relationships": [
+          {
+            "id": "rel-support-subject",
+            "to": "subject",
+            "meaning": "primary surface: the thing being understood (the stated decision), given the most room",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-context",
+            "to": "context",
+            "meaning": "chrome: surrounding state that gives the subject meaning (cluster health, GPU memory, model throughput (+2 more))",
+            "importance": "primary"
+          },
+          {
+            "id": "rel-support-nav",
+            "to": "nav",
+            "meaning": "chrome: orientation",
+            "importance": "secondary"
+          }
+        ],
+        "primitives": [
+          "statusPill",
+          "metric",
+          "timelineEvent"
+        ],
+        "constraints": {
+          "overflow": "forbid"
+        },
+        "priority": 5,
+        "interaction": "read the readouts that support the diagram",
+        "why": "the readouts, summaries and activity that support the diagram without competing with it",
+        "autoLayout": false,
+        "columns": 5
       }
     ],
     "content": [
@@ -382,37 +446,37 @@
         "regionId": "subject",
         "kind": "relationship",
         "label": "node topology",
-        "primitive": "panel",
+        "primitive": "sectionHeader",
         "value": null,
         "order": 3,
         "because": "Required for the decision: 'node topology'.",
         "illustrative": true
       },
       {
-        "id": "slot-5-audit-log",
-        "regionId": "subject",
-        "kind": "event",
-        "label": "audit log",
-        "primitive": "timelineEvent",
-        "value": null,
+        "id": "slot-5-cluster-health",
+        "regionId": "support",
+        "kind": "signal",
+        "label": "cluster health",
+        "primitive": "statusPill",
+        "value": "Degraded",
         "order": 4,
-        "because": "Supporting information: 'audit log', useful but not needed to act.",
-        "illustrative": true
+        "because": "Required for the decision: 'cluster health'.",
+        "illustrative": false
       },
       {
-        "id": "slot-6-recent-deploys",
-        "regionId": "subject",
-        "kind": "event",
-        "label": "recent deploys",
-        "primitive": "timelineEvent",
+        "id": "slot-6-gpu-memory",
+        "regionId": "support",
+        "kind": "signal",
+        "label": "GPU memory",
+        "primitive": "metric",
         "value": null,
         "order": 5,
-        "because": "Required for the decision: 'recent deploys'.",
+        "because": "Required for the decision: 'GPU memory'.",
         "illustrative": true
       },
       {
         "id": "slot-7-model-throughput",
-        "regionId": "subject",
+        "regionId": "support",
         "kind": "signal",
         "label": "model throughput",
         "primitive": "metric",
@@ -422,26 +486,26 @@
         "illustrative": true
       },
       {
-        "id": "slot-8-gpu-memory",
-        "regionId": "subject",
-        "kind": "signal",
-        "label": "GPU memory",
-        "primitive": "metric",
+        "id": "slot-8-recent-deploys",
+        "regionId": "support",
+        "kind": "event",
+        "label": "recent deploys",
+        "primitive": "timelineEvent",
         "value": null,
         "order": 7,
-        "because": "Required for the decision: 'GPU memory'.",
+        "because": "Required for the decision: 'recent deploys'.",
         "illustrative": true
       },
       {
-        "id": "slot-9-cluster-health",
-        "regionId": "context",
-        "kind": "signal",
-        "label": "cluster health",
-        "primitive": "statusPill",
-        "value": "Degraded",
+        "id": "slot-9-audit-log",
+        "regionId": "support",
+        "kind": "event",
+        "label": "audit log",
+        "primitive": "timelineEvent",
+        "value": null,
         "order": 8,
-        "because": "Required for the decision: 'cluster health'.",
-        "illustrative": false
+        "because": "Supporting information: 'audit log', useful but not needed to act.",
+        "illustrative": true
       },
       {
         "id": "slot-heading-eyebrow",
@@ -474,14 +538,24 @@
         "rank": 3,
         "id": "nav",
         "why": "chrome: orientation"
+      },
+      {
+        "rank": 4,
+        "id": "header",
+        "why": "the screen's identity and its primary action: chrome, and never the thing the eye lands on"
+      },
+      {
+        "rank": 5,
+        "id": "support",
+        "why": "the readouts that support the diagram: subordinate to it, and never competing with it"
       }
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 1033320,
-      "coverage": 0.7973148148148148,
+      "coveredArea": 1052040,
+      "coverage": 0.8117592592592593,
       "largestEmptyBand": 0,
-      "focalShare": 0.5194444444444445,
+      "focalShare": 0.3314814814814815,
       "notes": []
     }
   },
@@ -521,7 +595,7 @@
       "x": 240,
       "y": 134,
       "width": 1200,
-      "height": 435
+      "height": 292
     },
     {
       "type": "createFrame",
@@ -529,10 +603,19 @@
       "parent": "root",
       "name": "Context",
       "x": 240,
-      "y": 601,
+      "y": 458,
       "width": 360,
-      "height": 299,
-      "layoutMode": "VERTICAL"
+      "height": 205
+    },
+    {
+      "type": "createFrame",
+      "id": "support",
+      "parent": "root",
+      "name": "Support",
+      "x": 240,
+      "y": 695,
+      "width": 1200,
+      "height": 205
     },
     {
       "type": "createText",
@@ -578,120 +661,112 @@
       "name": "Label"
     },
     {
-      "type": "createFrame",
+      "type": "createText",
       "id": "slot-4-node-topology",
       "parent": "subject",
       "name": "node topology",
       "x": 32,
-      "y": 32,
-      "width": 556,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-node-topology",
-      "name": "Title"
+      "y": 32
     },
     {
       "type": "createFrame",
-      "id": "slot-5-audit-log",
-      "parent": "subject",
-      "name": "—",
-      "x": 612,
-      "y": 32,
-      "width": 556,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-audit-log",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-audit-log",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-6-recent-deploys",
-      "parent": "subject",
-      "name": "—",
-      "x": 32,
-      "y": 146,
-      "width": 556,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-recent-deploys",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-recent-deploys",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-7-model-throughput",
-      "parent": "subject",
-      "name": "model throughput",
-      "x": 612,
-      "y": 146,
-      "width": 556,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-model-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-model-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-8-gpu-memory",
-      "parent": "subject",
-      "name": "GPU memory",
-      "x": 32,
-      "y": 260,
-      "width": 556,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-8-gpu-memory",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-8-gpu-memory",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-9-cluster-health",
-      "parent": "context",
+      "id": "slot-5-cluster-health",
+      "parent": "support",
       "name": "cluster health",
-      "x": 0,
-      "y": 0,
+      "x": 24,
+      "y": 24,
       "width": 103,
       "height": 22,
       "layoutMode": "HORIZONTAL"
     },
     {
       "type": "createText",
-      "parent": "slot-9-cluster-health",
+      "parent": "slot-5-cluster-health",
       "name": "Label"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-6-gpu-memory",
+      "parent": "support",
+      "name": "GPU memory",
+      "x": 257.6,
+      "y": 24,
+      "width": 218,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-gpu-memory",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-6-gpu-memory",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-7-model-throughput",
+      "parent": "support",
+      "name": "model throughput",
+      "x": 491.20000000000005,
+      "y": 24,
+      "width": 218,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-model-throughput",
+      "name": "Label"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-7-model-throughput",
+      "name": "Value"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-8-recent-deploys",
+      "parent": "support",
+      "name": "—",
+      "x": 724.8,
+      "y": 24,
+      "width": 218,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-8-recent-deploys",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-8-recent-deploys",
+      "name": "Title"
+    },
+    {
+      "type": "createFrame",
+      "id": "slot-9-audit-log",
+      "parent": "support",
+      "name": "—",
+      "x": 958.4000000000001,
+      "y": 24,
+      "width": 218,
+      "height": 90,
+      "layoutMode": "VERTICAL"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-9-audit-log",
+      "name": "Date"
+    },
+    {
+      "type": "createText",
+      "parent": "slot-9-audit-log",
+      "name": "Title"
     }
   ],
   "structuralChecks": [
@@ -699,14 +774,14 @@
       "id": "regions-built",
       "question": "Was every planned region built?",
       "status": "pass",
-      "detail": "4 region(s) built: header, nav, subject, context.",
+      "detail": "5 region(s) built: header, nav, subject, context, support.",
       "nodeIds": []
     },
     {
       "id": "regions-on-canvas",
       "question": "Is every region inside the canvas?",
       "status": "pass",
-      "detail": "All 4 region(s) are within the 1440x900 canvas.",
+      "detail": "All 5 region(s) are within the 1440x900 canvas.",
       "nodeIds": []
     },
     {
@@ -743,7 +818,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 80%, largest empty band 0%, focal share 52%.",
+      "detail": "coverage 81%, largest empty band 0%, focal share 33%.",
       "nodeIds": []
     },
     {
@@ -757,14 +832,21 @@
       "id": "auto-layout-applied",
       "question": "Were the auto-layout containers actually created as auto-layout frames?",
       "status": "pass",
-      "detail": "1 region(s) built as native auto-layout containers.",
+      "detail": "This screen has no region whose content could be handed to Figma's own layout.",
       "nodeIds": []
     },
     {
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1200x88, built 1200x102; subject: planned 1200x561, built 1200x435; context: planned 360x187, built 360x299",
+      "detail": "header: planned 1200x88, built 1200x102; subject: planned 1200x358, built 1200x292; context: planned 360x119, built 360x205; support: planned 1200x239, built 1200x205",
+      "nodeIds": []
+    },
+    {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
       "nodeIds": []
     },
     {
@@ -797,11 +879,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x561, built 1200x435.",
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x358, built 1200x292.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "subject: planned 1200x561, built 1200x435"
+        "detail": "subject: planned 1200x358, built 1200x292"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -812,11 +894,26 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x299.",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x119, built 360x205.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "context: planned 360x187, built 360x299"
+        "detail": "context: planned 360x119, built 360x205"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-04",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: support: planned 1200x239, built 1200x205.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "support: planned 1200x239, built 1200x205"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

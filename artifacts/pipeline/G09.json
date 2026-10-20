@@ -761,6 +761,13 @@
       "nodeIds": []
     },
     {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
+      "nodeIds": []
+    },
+    {
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",

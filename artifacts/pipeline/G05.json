@@ -196,7 +196,7 @@
           }
         ],
         "primitives": [
-          "deviceNode"
+          "sectionHeader"
         ],
         "constraints": {
           "overflow": "allow"
@@ -269,7 +269,7 @@
         "regionId": "map",
         "kind": "relationship",
         "label": "node topology",
-        "primitive": "deviceNode",
+        "primitive": "sectionHeader",
         "value": null,
         "order": 5,
         "because": "Required for the decision: 'node topology'.",
@@ -280,7 +280,7 @@
         "regionId": "map",
         "kind": "relationship",
         "label": "latency",
-        "primitive": "deviceNode",
+        "primitive": "sectionHeader",
         "value": null,
         "order": 6,
         "because": "Required for the decision: 'latency'.",
@@ -417,54 +417,38 @@
       "name": "Value"
     },
     {
-      "type": "createFrame",
+      "type": "createText",
       "id": "slot-6-node-topology",
       "parent": "map",
       "name": "node topology",
       "x": 24,
-      "y": 24,
-      "width": 128,
-      "height": 80,
-      "layoutMode": "VERTICAL"
+      "y": 24
     },
     {
       "type": "createText",
-      "parent": "slot-6-node-topology",
-      "name": "Device"
-    },
-    {
-      "type": "createFrame",
       "id": "slot-7-latency",
       "parent": "map",
       "name": "latency",
       "x": 24,
-      "y": 136,
-      "width": 128,
-      "height": 80,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-latency",
-      "name": "Device"
+      "y": 146
     },
     {
       "type": "createVector",
       "id": "connector-1",
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-4-gpu-memory",
-      "x": 152,
-      "y": 80.19,
-      "width": 723.2,
-      "height": 126.87
+      "x": 799.56,
+      "y": 106,
+      "width": 127.28,
+      "height": 72
     },
     {
       "type": "createVector",
       "id": "connector-2",
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-7-latency",
-      "x": 83,
-      "y": 258,
+      "x": 715,
+      "y": 268,
       "width": 10,
       "height": 32
     },
@@ -473,16 +457,16 @@
       "id": "connector-1-label",
       "parent": "root",
       "name": "Label connect",
-      "x": 519.6,
-      "y": 69.43
+      "x": 869.2,
+      "y": 92
     },
     {
       "type": "createText",
       "id": "connector-2-label",
       "parent": "root",
       "name": "Label connect",
-      "x": 94,
-      "y": 260
+      "x": 726,
+      "y": 270
     }
   ],
   "structuralChecks": [
@@ -559,10 +543,17 @@
       "nodeIds": []
     },
     {
+      "id": "regions-filled",
+      "question": "Do the regions fill the space they were given?",
+      "status": "pass",
+      "detail": "Every region with content fills the space it was given.",
+      "nodeIds": []
+    },
+    {
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "WARNING: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
       "nodeIds": []
     }
   ],

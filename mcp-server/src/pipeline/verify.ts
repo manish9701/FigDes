@@ -379,6 +379,58 @@ export function verifyPlan(
     });
   }
 
+  /* --- 11. the content fills the region it was given ---------------------- */
+
+  // A region that was given a thousand pixels and filled two hundred of them
+  // is not a dense screen; it is a screen with a hole in it. The live render
+  // of the stress frame is what made this worth measuring: every structural
+  // check passed, and the screen was sixty percent empty.
+  const underfilled: string[] = [];
+  for (const region of plan.regions) {
+    const box = compiled.boxes.get(region.id);
+    if (box === undefined) continue;
+    const children = compiled.ir.content.filter((c) => c.parent === region.id);
+    if (children.length === 0) continue;
+    let bottom = -Infinity;
+    for (const child of children) {
+      const childBox = compiled.boxes.get(child.id);
+      if (childBox === undefined) continue;
+      bottom = Math.max(bottom, childBox.y + childBox.h);
+    }
+    if (!Number.isFinite(bottom)) continue;
+    const used = bottom - box.y;
+    const ratio = box.h > 0 ? used / box.h : 1;
+    if (ratio < 0.55) {
+      underfilled.push(
+        `${region.id} holds ${children.length} item(s) in ${Math.round(box.h)}px and fills ${Math.round(ratio * 100)}% of it`,
+      );
+    }
+  }
+  checks.push({
+    id: "regions-filled",
+    question: "Do the regions fill the space they were given?",
+    status: underfilled.length === 0 ? "pass" : "review",
+    detail:
+      underfilled.length === 0
+        ? "Every region with content fills the space it was given."
+        : underfilled.join("; "),
+    nodeIds: [],
+  });
+  for (const [i, note] of underfilled.entries()) {
+    findings.push({
+      id: findingId("region-underfilled", i),
+      stage: "plan",
+      severity: "medium",
+      confidence: 0.85,
+      nodeIds: [],
+      summary: `A region is mostly empty: ${note}.`,
+      why: "A region with a hole in it reads as an unfinished composition. Either the region is too big for its content, or the content was placed somewhere else.",
+      evidence: { kind: "geometry", detail: note },
+      fix: "Give the region the content it needs, or take the space back for the region that has the work on it.",
+      automatable: false,
+    });
+  }
+
   /* --- 12. the guard's verdict is carried, not swallowed ------------------ */
 
   if (compiled.productGuard !== undefined) {

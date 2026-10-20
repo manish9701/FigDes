@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-20T11:39:17.202Z",
+  "generatedAt": "2026-10-20T17:59:34.399Z",
   "runner": "FigDes executable planning benchmark",
   "mode": "offline-planner-structural",
   "expectedCases": 9,

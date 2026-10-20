@@ -202,41 +202,23 @@ export async function findNode(raw: FindNodeOptions): Promise<FindNodeResult> {
   let scanned = 0;
   let truncated = false;
 
-  /**
-   * Walks the tree bottom-up: each call returns the text content of its whole
-   * subtree, so a container matches a text query when any descendant holds it.
-   * That is what makes find_text("Qwen2.5") return both the text layer and the
-   * card around it, with the layer scoring higher.
-   */
-  const walk = (node: BaseNode, path: string[]): string[] => {
-    if (scanned >= maxNodes) {
-      truncated = true;
-      return [];
-    }
-    scanned += 1;
-
+  /** Scores one node against the query. Shared by the deep walk and the shallow screen pass. */
+  const scoreNode = (node: BaseNode, path: string[], texts: string[], kidCount: number): void => {
     const name = node.name ?? "";
     const lower = name.toLowerCase();
     const type = node.type;
-    // Newest first within each parent: children append at the end, so
-    // oldest-first order truncates exactly the nodes the agent just built.
-    // Matches are score-sorted afterwards, so only truncation changes.
-    const kids: BaseNode[] = "children" in node && node.children ? [...(node.children as BaseNode[])].reverse() : [];
-
-    const ownText = node.type === "TEXT" ? String((node as TextNode).characters ?? "") : "";
-    const childTexts = kids.flatMap((child) => walk(child, [...path, name]));
-    const texts = ownText ? [ownText, ...childTexts] : childTexts;
 
     const ctx: Ctx = {
       name,
       lower,
       type,
       texts,
-      childTypes: kids.map((c) => c.type),
+      childTypes: "children" in node && node.children ? (node.children as BaseNode[]).map((c) => c.type) : [],
       width: "width" in node && typeof node.width === "number" ? node.width : 0,
       height: "height" in node && typeof node.height === "number" ? node.height : 0,
       fontSize: node.type === "TEXT" && typeof (node as TextNode).fontSize === "number" ? ((node as TextNode).fontSize as number) : null,
     };
+    void kidCount;
 
     let score = 0;
     const reasons: string[] = [];
@@ -262,6 +244,7 @@ export async function findNode(raw: FindNodeOptions): Promise<FindNodeResult> {
     if (textQuery) {
       // The node's own text scores highest; a container holding the text
       // scores lower but is still the answer when the caller wants the card.
+      const ownText = node.type === "TEXT" ? String((node as TextNode).characters ?? "") : "";
       if (ownText.toLowerCase().includes(textQuery)) {
         score += 1.0;
         reasons.push(`text is "${raw.text}"`);
@@ -284,9 +267,59 @@ export async function findNode(raw: FindNodeOptions): Promise<FindNodeResult> {
         ...("width" in scene && typeof scene.width === "number" ? { width: Math.round(scene.width), height: Math.round((scene as SceneNode).height) } : {}),
       });
     }
+  };
+
+  /**
+   * Walks the tree bottom-up: each call returns the text content of its whole
+   * subtree, so a container matches a text query when any descendant holds it.
+   * That is what makes find_text("Qwen2.5") return both the text layer and the
+   * card around it, with the layer scoring higher.
+   */
+  const walk = (node: BaseNode, path: string[]): string[] => {
+    if (scanned >= maxNodes) {
+      truncated = true;
+      return [];
+    }
+    scanned += 1;
+
+    const name = node.name ?? "";
+    // Newest first within each parent: children append at the end, so
+    // oldest-first order truncates exactly the nodes the agent just built.
+    // Matches are score-sorted afterwards, so only truncation changes.
+    const kids: BaseNode[] = "children" in node && node.children ? [...(node.children as BaseNode[])].reverse() : [];
+    const ownText = node.type === "TEXT" ? String((node as TextNode).characters ?? "") : "";
+    const childTexts = kids.flatMap((child) => walk(child, [...path, name]));
+    const texts = ownText ? [ownText, ...childTexts] : childTexts;
+
+    scoreNode(node, path, texts, kids.length);
 
     return texts;
   };
+
+  // A screen named by the caller is matched *before* anything is walked deep.
+  //
+  // A frame's own name costs nothing to read, and a name query is usually
+  // asking for a screen. Walking every subtree first spent the budget on
+  // thousands of nodes and then reported "no match" for a frame that was on
+  // the page all along - which reads as a missing screen rather than as an
+  // exhausted budget, and is exactly how a scope resolution turns into a
+  // wrong verdict.
+  if (nameQuery) {
+    for (const page of roots) {
+      const frames = "children" in page ? (page.children as BaseNode[]) : [];
+      for (const frame of frames) {
+        if (scanned >= maxNodes) {
+          truncated = true;
+          break;
+        }
+        scanned += 1;
+        const lower = (frame.name ?? "").toLowerCase();
+        if (!lower.includes(nameQuery)) continue;
+        const ownText = frame.type === "TEXT" ? String((frame as TextNode).characters ?? "") : "";
+        scoreNode(frame, [(page.name ?? "")], ownText ? [ownText] : [], "children" in frame && frame.children ? frame.children.length : 0);
+      }
+    }
+  }
 
   for (const root of roots) walk(root, []);
 

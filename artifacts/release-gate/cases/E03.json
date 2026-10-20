@@ -1,0 +1,10 @@
+{
+  "id": "E03",
+  "title": "Intended containment is not a collision; every real overlap still is",
+  "group": "review",
+  "requirement": "Placeholder-in-field, text-in-row, label-on-button, content-in-card and status-inside-badge are containment. An intentional overlay is intentional. Unrelated text overlapping, clipped text and a connector crossing content are defects.",
+  "issue": "#18",
+  "status": "PASS",
+  "detail": "5 intended containments left alone; the stray connector and the overlapping text are reported",
+  "raw": {}
+}

@@ -2,21 +2,21 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `50916707-2026-10-20T11-38-16-585Z` on commit `50916707bc74ebf4f6816cace6c2814c50449540` (main), 2026-10-20T11:38:16.585Z → 2026-10-20T11:39:19.221Z, 62.6s.
+Run `e8ce335a-2026-10-20T17-58-24-013Z` on commit `e8ce335a39d74e8b9c25a3904af4ab95578dd581` (main), 2026-10-20T17:58:24.013Z → 2026-10-20T17:59:37.616Z, 73.6s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 25/25 case(s) passed, run twice with identical verdicts |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.9s | 26/26 case(s) passed, run twice with identical verdicts |
 | **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
 | **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 50.8s | 898/898 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.5s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.4s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 58.4s | 898/898 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 10.7s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 2.3s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
-## Gauntlet cases (25/25 passed)
+## Gauntlet cases (26/26 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
@@ -35,9 +35,10 @@ Node v22.17.0 on win32-x64.
 | **D02** | Legitimate patterns are not reported, and the thresholds are not lowered | #14 | **PASS** | no finding against the 1 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline) |
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **E02** | The reviewer tells a search field from a topology connector | #14 | **PASS** | the placeholder inside the search field and the two rules are untouched; the label on the connector is still serious and the icon button is still reported |
+| **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 5ms, worst 17ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 13ms, worst 24ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
@@ -59,8 +60,8 @@ The gate is only as good as this map: a criterion with no test is a criterion no
 | Topology edges attach to correct semantic nodes after reflow | `B03`, `C01` |
 | No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text | `B04`, `D01`, `D02`, `E01` |
 | Contrast is measured against the true rendered surface; thresholds unchanged | `D01`, `D02` |
-| Semantic false-positive and false-negative counts are reported against seeded expectations | `D02`, `E01`, `E02` |
-| The review engine tells a search field from a topology connector | `E02` |
+| Semantic false-positive and false-negative counts are reported against seeded expectations | `D02`, `E01`, `E02`, `E03` |
+| The review engine tells a search field from a topology connector, and containment from a collision | `E02`, `E03` |
 | Every repair is verified by a second structural check and render/review | `F01`, `F02`, `H02` |
 | No empty, stale, skipped or failed inspection can return PASS | `H01`, `H02`, `H03`, `B06` |
 | Scope is resolved to the intended screen, and an ambiguous scope asks | `H04` |

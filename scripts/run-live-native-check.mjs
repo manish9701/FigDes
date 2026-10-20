@@ -77,6 +77,13 @@ if (!status?.connected) {
 }
 console.log("plugin:", status.fileName, "page:", status.pageName, "plugin build:", status.build ?? "unknown");
 
+/** How many frames with this check's name the file already holds. */
+const countFrames = async () => {
+  const listing = (await tool("inspect_file", {})).data;
+  return (listing?.topLevelFrames ?? []).filter((f) => f.name === "FIGDES_NATIVE_CHECK_V01").length;
+};
+const before = await countFrames();
+
 /**
  * The script.
  *
@@ -129,8 +136,16 @@ const cleanup = (await tool("modify_design", {
   operations: [{ type: "removeNode", target: rootId }],
 })).data;
 
-const after = (await tool("find_node", { name: "FIGDES_NATIVE_CHECK_V01" })).data;
-const remaining = (after?.matches ?? []).length;
+/**
+ * The file is read back through the file listing, not through a name search.
+ *
+ * A search misses what it does not look at: the first version of this check
+ * searched for the frame by name, found nothing, and reported the file clean
+ * while the frame was still sitting in it at x=24000. The listing sees every
+ * top-level frame, so it cannot be fooled that way.
+ */
+const after = await countFrames();
+const leftBehind = Math.max(0, after - before);
 
 const rec = {
   caseId: "native-path-check",
@@ -142,8 +157,8 @@ const rec = {
   rootId,
   createdNodeIds: created,
   measured,
-  cleanup: { status: cleanup?.status ?? null, remainingMatches: remaining },
-  status: remaining === 0 ? "COMPLETE" : "INCOMPLETE",
+  cleanup: { status: cleanup?.status ?? null, framesBefore: before, framesAfter: after, leftBehind },
+  status: leftBehind === 0 ? "COMPLETE" : "INCOMPLETE",
   note: "The native path ran against the real Plugin API and the frame it created was removed again. A check that leaves debris behind is not a check.",
 };
 
@@ -155,7 +170,10 @@ console.log(`  root          ${rootId} (${created.length} node(s) created)`);
 console.log(
   `  measured      ${measured.canvas?.width ?? "?"}x${measured.canvas?.height ?? "?"}, ${measured.nodeCount ?? "?"} node(s), ${measured.textLayers ?? "?"} text layer(s), render ${measured.renderStatus}`,
 );
-console.log(`  cleanup       ${remaining} matching frame(s) left in the file`);
+console.log(`  cleanup       ${leftBehind} frame(s) left behind by this run (${before} → ${after} in the file)`);
+if (after > 0) {
+  console.log(`  note          ${after} frame(s) named FIGDES_NATIVE_CHECK_V01 are in the file: debris from an earlier run.`);
+}
 if (rec.status !== "COMPLETE") {
   console.log("");
   console.log("The check did not complete cleanly; the native-path coverage is not proven.");

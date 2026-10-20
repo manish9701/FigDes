@@ -70,7 +70,7 @@ const nativeCheck = (overrides = {}) => ({
   rootId: "279:1090",
   createdNodeIds: ["279:1090", "279:1091", "279:1092"],
   measured: { canvas: { width: 480, height: 220 }, nodeCount: 5, textLayers: 2, renderStatus: "ok" },
-  cleanup: { status: "success", remainingMatches: 0 },
+  cleanup: { status: "success", framesBefore: 0, framesAfter: 0, leftBehind: 0 },
   ...overrides,
 });
 
@@ -136,9 +136,10 @@ test("live validator: a missing native-path check does not pass", async () => {
 
 test("live validator: a native-path check that left debris does not pass", async () => {
   const files = allComplete();
-  files["native-check.json"] = nativeCheck({ cleanup: { status: "success", remainingMatches: 1 } });
+  files["native-check.json"] = nativeCheck({ cleanup: { status: "success", framesBefore: 0, framesAfter: 1, leftBehind: 1 } });
   const { report } = await validate(files);
   assert.equal(report.liveBenchmarkComplete, false);
+  assert.equal(report.nativePath.cleanupVerified, false);
 });
 
 test("live validator: a full evidence set, including a fresh stress render, passes", async () => {

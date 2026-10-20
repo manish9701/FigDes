@@ -218,7 +218,10 @@ if (existsSync(nativePathPath)) {
     const body = JSON.parse(await readFile(nativePathPath, "utf8"));
     // The native path is only proven if the frame it created was removed
     // again: a check that leaves debris behind is not a check, it is a change.
-    const cleanupVerified = body.cleanup?.remainingMatches === 0;
+    // `leftBehind` is what *this* run left; the absolute count is reported too,
+    // because debris from an earlier run is still debris.
+    const leftBehind = body.cleanup?.leftBehind ?? body.cleanup?.remainingMatches ?? null;
+    const cleanupVerified = leftBehind === 0;
     nativePath = {
       status: body.status === "COMPLETE" && cleanupVerified ? "COMPLETE" : "INCOMPLETE",
       reportedStatus: body.status ?? "UNKNOWN",

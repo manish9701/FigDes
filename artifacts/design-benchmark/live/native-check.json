@@ -1,17 +1,17 @@
 {
   "caseId": "native-path-check",
-  "commit": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
+  "commit": "a13ecf41f0b9092b5d137f06185b21c5bf1d1d78",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-20T07:39:42.869Z",
+  "startedAt": "2026-10-20T07:48:02.030Z",
   "serverBuild": "unknown",
   "pluginBuild": "unknown",
-  "rootId": "438:447",
+  "rootId": "440:457",
   "createdNodeIds": [
-    "438:447",
-    "438:448",
-    "438:449",
-    "438:450",
-    "438:451"
+    "440:457",
+    "440:458",
+    "440:459",
+    "440:460",
+    "440:461"
   ],
   "measured": {
     "canvas": {
@@ -25,7 +25,9 @@
   },
   "cleanup": {
     "status": "success",
-    "remainingMatches": 0
+    "framesBefore": 0,
+    "framesAfter": 0,
+    "leftBehind": 0
   },
   "status": "COMPLETE",
   "note": "The native path ran against the real Plugin API and the frame it created was removed again. A check that leaves debris behind is not a check."

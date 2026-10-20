@@ -2,7 +2,7 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `48a6480d-2026-10-20T07-45-14-385Z` on commit `48a6480dd564e51f9b4fb67c5d894ce2831e16e5` (main), 2026-10-20T07:45:14.385Z → 2026-10-20T07:46:14.881Z, 60.5s.
+Run `a13ecf41-2026-10-20T07-49-39-950Z` on commit `a13ecf41f0b9092b5d137f06185b21c5bf1d1d78` (main), 2026-10-20T07:49:39.950Z → 2026-10-20T07:50:40.231Z, 60.3s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
@@ -10,10 +10,10 @@ Node v22.17.0 on win32-x64.
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
 | **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 21/21 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.6s | every case(s) passed |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
 | **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 49.0s | 893/893 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.4s | 9/9 benchmark case(s) passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 48.9s | 893/893 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.2s | 9/9 benchmark case(s) passed |
 | **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.4s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
 ## Gauntlet cases (21/21 passed)
@@ -35,7 +35,7 @@ Node v22.17.0 on win32-x64.
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 6ms, worst 14ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 11ms, worst 19ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |

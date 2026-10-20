@@ -20,6 +20,7 @@ import {
   type PluginToolName,
   type TransactionResult,
   type ReviewVerdict,
+  type StatusResult,
 } from "../../shared/protocol";
 import { SessionRegistry, type Session, TransactionTimeoutError, SessionDisconnectedError } from "./sessions";
 import { runRules, summarise, evaluatedRuleCount, type RuleSet } from "./review/rules";
@@ -627,8 +628,29 @@ export const TOOLS: ToolDefinition[] = [
       try {
         const session = registry.resolve(sessionId);
         const status = session.status();
+        /**
+         * The build is asked of the plugin, not read from a cache.
+         *
+         * The server learns a plugin's build from a register or a state frame,
+         * and neither arrives until the plugin has something to say. So a
+         * panel that was reopened minutes ago still reported the build of the
+         * bundle it started with — which is the one thing a stale panel hides.
+         * Asking costs one round trip and answers it for certain.
+         */
+        let liveBuild: string | null = null;
+        try {
+          const probed = (await Promise.race([
+            session.request("figma_status", {}, 3000),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 3200)),
+          ])) as StatusResult | null;
+          if (probed && typeof probed.build === "string" && probed.build.length > 0) liveBuild = probed.build;
+        } catch {
+          liveBuild = null;
+        }
+        const build = liveBuild ?? status.build;
         return {
           ...status,
+          ...(liveBuild !== null ? { build: liveBuild } : {}),
           connected: true,
           sessionName: `${status.fileName} - ${status.pageName || "?"}`,
           /**
@@ -642,26 +664,27 @@ export const TOOLS: ToolDefinition[] = [
           serverBuild: SERVER_BUILD,
           builds: {
             server: SERVER_BUILD,
-            plugin: status.build ?? "unknown",
+            plugin: build ?? "unknown",
             /**
              * Whether the two can be assumed to be the same code.
              *
              * `same-commit` is the only state that lets a live measurement be
              * read as a measurement of the repository.
              */
-            compatibility: buildCompatibility(SERVER_BUILD, status.build),
+            compatibility: buildCompatibility(SERVER_BUILD, build),
+            buildSource: liveBuild !== null ? "live" : "cached",
             note:
-              status.build && status.build !== "unknown"
-                ? `Server build ${SERVER_BUILD}, plugin bundle build ${status.build}. If either does not match the repository HEAD, redeploy the server and reload the plugin (close and reopen it) before measuring.`
-                : `Server build ${SERVER_BUILD}. This panel did not report a build, so the plugin side cannot be tied to a commit: rebuild the plugin and reopen it.`,
+              build && build !== "unknown"
+                ? `Server build ${SERVER_BUILD}, plugin bundle build ${build}${liveBuild !== null ? "" : " (from the last frame the plugin sent)"}. If either does not match the repository HEAD, redeploy the server and reload the plugin (close and reopen it) before measuring.`
+                : `Server build ${SERVER_BUILD}. The plugin did not report a build, so the plugin side cannot be tied to a commit: rebuild the plugin and close and reopen it in Figma.`,
           },
           // Spelled out where it cannot be missed. Figma loads the plugin bundle
           // once, when the panel opens, so a rebuild does not reach an open
           // session: live measurements taken against an old panel describe code
           // that is no longer in the repo. Check this before trusting a timing.
           pluginBuildNote:
-            status.build && status.build !== "unknown"
-              ? `Plugin bundle build ${status.build}. If this does not match the repository HEAD, reload the plugin (close and reopen it) before measuring — Figma does not hot-reload the bundle.`
+            build && build !== "unknown"
+              ? `Plugin bundle build ${build}${liveBuild !== null ? " (asked live)" : " (cached)"}. If this does not match the repository HEAD, reload the plugin (close and reopen it) before measuring — Figma does not hot-reload the bundle.`
               : "This panel did not report a build (older bundle, or built without the build stamp). Rebuild and reopen the plugin to get one; until then live timings cannot be tied to a commit.",
           clients: connections,
           activity: recent,

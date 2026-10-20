@@ -33,6 +33,8 @@ import { z } from "zod";
 import type { MetricsReport, TransactionResult } from "../../../shared/protocol";
 import { runRules } from "../review/rules";
 import { verifyRepairs } from "../review/verdict";
+import { loadMemory, projectKey } from "../memory/store";
+import { runGuard, snapshotFromMetrics } from "../memory/tools";
 import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
@@ -411,6 +413,42 @@ export async function designPipelineTool(
     }
   }
 
+  /* --- the guard, after the final repair ---------------------------------- */
+
+  // The guard's verdict is about the screen as it *is*, not as it was planned.
+  // So it runs last: a repair can move a screen off a product truth, and a
+  // guard verdict recorded before the repair is a verdict about a screen that
+  // no longer exists.
+  let finalGuard: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number } | null = null;
+  const finalMetrics = live.metrics ?? null;
+  if (finalMetrics !== null) {
+    try {
+      const { memory } = loadMemory(projectKey(session.fileKey ?? undefined, session.fileName ?? undefined));
+      const guarded = runGuard(memory.rules, snapshotFromMetrics(finalMetrics, rootNodeId ?? undefined));
+      finalGuard = {
+        verdict: guarded.verdict,
+        rulesChecked: guarded.stats?.rulesChecked ?? 0,
+        failures: guarded.stats?.failures ?? 0,
+        warnings: guarded.stats?.warnings ?? 0,
+        manual: guarded.stats?.manual ?? 0,
+      };
+    } catch (err) {
+      stage(trace, "guard", `The final guard could not run: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  if (finalGuard !== null) {
+    const guardCheck = {
+      id: "product-guard-final",
+      question: "Does the repaired screen pass the product's own rules?",
+      status: (finalGuard.verdict === "PASS" ? "pass" : finalGuard.verdict === "FAIL" ? "fail" : "review") as PipelineCheck["status"],
+      detail: `${finalGuard.verdict}: ${finalGuard.rulesChecked} rule(s) checked, ${finalGuard.failures} failure(s), ${finalGuard.manual} needing judgement.`,
+      nodeIds: [],
+    };
+    live.checks.push(guardCheck);
+    trace.checks.push(guardCheck);
+    stage(trace, "guard", `The final guard: ${finalGuard.verdict} over ${finalGuard.rulesChecked} rule(s).`);
+  }
+
   /* --- stage 8: the report ----------------------------------------------- */
 
   const remaining = live.findings.filter(
@@ -474,6 +512,7 @@ async function verifyLiveScreen(
   visual: { status: "pass" | "fail" | "review" | "indeterminate" | "not-run"; detail: string; renderRevision: string | null };
   blocked: Array<{ check: string; why: string }>;
   render: { revisionId: string | null; nodeId: string | null; detail: "low" | "high" | null; at: number } | null;
+  metrics: MetricsReport | null;
 }> {
   const checks: PipelineCheck[] = [];
   const findings: PipelineFinding[] = [];
@@ -614,5 +653,6 @@ async function verifyLiveScreen(
     },
     blocked,
     render,
+    metrics,
   };
 }

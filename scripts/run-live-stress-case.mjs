@@ -34,8 +34,8 @@ import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { tool, rpc, settleTransaction, MCP } from "./lib/live-client.mjs";
 
-const MCP = process.env.FIGDES_MCP_URL ?? "https://figdes.onrender.com/mcp";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(root, "artifacts/design-benchmark/live");
 const shotsDir = resolve(liveDir, "shots");
@@ -43,7 +43,6 @@ const CASE_ID = "hard-stress-test";
 const CANVAS = { width: 1600, height: 1100 };
 const argv = process.argv.slice(2);
 const redo = argv.includes("--redo");
-
 /**
  * Issue #10's six defects.
  *
@@ -104,37 +103,6 @@ const BRIEF = {
   values: { "cluster health": "Degraded" },
 };
 
-let rpcId = 0;
-async function rpc(method, params) {
-  const res = await fetch(MCP, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      accept: "application/json, text/event-stream",
-      "mcp-protocol-version": "2024-11-05",
-      "user-agent": "opencode/live-stress-case",
-    },
-    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }),
-  });
-  const text = await res.text();
-  const json = JSON.parse(text);
-  if (json.error) throw new Error(`RPC ${method}: ${JSON.stringify(json.error).slice(0, 300)}`);
-  return json.result;
-}
-
-async function tool(name, args) {
-  const result = await rpc("tools/call", { name, arguments: args });
-  if (result.isError) throw new Error(`tool ${name}: ${JSON.stringify(result.content).slice(0, 600)}`);
-  const t = result.content?.find((b) => b.type === "text")?.text;
-  let data;
-  try {
-    data = t ? JSON.parse(t) : (result.structuredContent ?? null);
-  } catch {
-    data = { note: t, structuredContent: result.structuredContent ?? null };
-  }
-  return { data, blocks: result.content ?? [] };
-}
-
 const commit = (() => {
   try {
     return execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -162,8 +130,41 @@ try {
 } catch {
   prior = null;
 }
-if (prior?.screenshotReference && prior?.status !== "FAILED" && !redo) {
-  console.log(`skip ${CASE_ID} (already ${prior.status} on frame=${prior.nativeFrameId})`);
+/**
+ * A screen with this case's name may already be in the file, from a run that
+ * timed out and committed late.
+ *
+ * Rebuilding would draw the same screen twice, so the existing frame is
+ * adopted: that is the whole difference between a retry and a duplicate. The
+ * frames are only adopted when they are disposable test frames — the product's
+ * own screens are never touched, and a test frame is named for the case that
+ * owns it.
+ */
+const existingFrames = ((await tool("inspect_file", {})).data?.topLevelFrames ?? []).filter(
+  (f) => f.name === BRIEF.screen,
+);
+if (existingFrames.length > 1) {
+  console.log(`${existingFrames.length} frame(s) named '${BRIEF.screen}' are in the file; keeping the first and removing the rest.`);
+  const keep = existingFrames[0];
+  for (const extra of existingFrames.slice(1)) {
+    await tool("modify_design", {
+      description: `FigDes live stress case: remove a duplicate of ${CASE_ID}`,
+      reason: "A frame an earlier timed-out run committed late. The case owns this name; only one frame can be its evidence.",
+      approved: true,
+      operations: [{ type: "removeNode", target: extra.id }],
+    });
+  }
+  prior = { ...(prior ?? {}), nativeFrameId: keep.id };
+} else if (existingFrames.length === 1) {
+  prior = { ...(prior ?? {}), nativeFrameId: existingFrames[0].id };
+}
+
+// A prior case whose frame no longer exists is not evidence: the frame is
+// what the render and the review are *of*.
+const priorFrameId = prior?.nativeFrameId ?? null;
+const priorFrameExists = priorFrameId !== null && existingFrames.some((f) => f.id === priorFrameId);
+if (prior?.screenshotReference && priorFrameExists && prior?.status !== "FAILED" && !redo) {
+  console.log(`skip ${CASE_ID} (already ${prior.status} on frame=${priorFrameId})`);
   process.exit(0);
 }
 
@@ -204,20 +205,57 @@ const rec = {
 /* --- 1. build, verify, repair, verify ------------------------------------ */
 
 console.log("building the stress screen through the design pipeline…");
-const build = (await tool("design_pipeline", {
-  mode: "build",
-  brief: BRIEF,
-  description: `FigDes live stress case ${CASE_ID}`,
-  repairBudget: 4,
-})).data;
+let build = null;
+let buildError = null;
+let settled = null;
+try {
+  build = (await tool("design_pipeline", {
+    mode: "build",
+    brief: BRIEF,
+    description: `FigDes live stress case ${CASE_ID}`,
+    repairBudget: 4,
+  })).data;
+} catch (err) {
+  buildError = err instanceof Error ? err.message : String(err);
+}
+
+// A live build can outlive the server's patience: the Figma main thread keeps
+// working after the server stops waiting, so a timed-out transaction may still
+// commit. The error names its transaction; the ledger is polled until the
+// transaction settles, and the created nodes are read from wherever it
+// settled. That is what makes a retry safe rather than a duplicate.
+if (build === null || build?.applied !== true) {
+  const transactionId = /transaction (pipe_[a-z0-9]+)/i.exec(buildError ?? "")?.[1] ?? null;
+  if (transactionId === null) {
+    console.error("the pipeline did not build the screen:", (buildError ?? JSON.stringify(build?.report?.summary ?? build)).slice(0, 400));
+    process.exit(1);
+  }
+  console.log(`the build timed out (transaction ${transactionId}); reconciling before doing anything else…`);
+  settled = await settleTransaction(transactionId);
+  if (settled.state !== "committed") {
+    console.error(`the transaction settled to '${settled.state}': the screen is not built, and nothing more can be verified. Re-run the case when the plugin is idle.`);
+    process.exit(1);
+  }
+  console.log(`the transaction committed late; ${settled.createdIds.length} node(s) are in the file.`);
+}
 
 if (!build?.applied) {
-  console.error("the pipeline did not apply the screen:", JSON.stringify(build?.report?.summary ?? build).slice(0, 400));
-  process.exit(1);
+  // The pipeline call did not report the apply, but the transaction may have
+  // settled during the reconcile above. The frame is read from the file in
+  // that case, so the evidence points at the real thing either way.
+  const candidates = (await tool("inspect_file", {})).data?.topLevelFrames ?? [];
+  const built = candidates.find((f) => f.name === BRIEF.screen);
+  if (!built || settled === null) {
+    console.error("the pipeline did not apply the screen:", JSON.stringify(build?.report?.summary ?? build).slice(0, 400));
+    process.exit(1);
+  }
+  console.log(`the build settled during reconciliation; using the frame the file reports (${built.id}).`);
+  rec.nativeFrameId = built.id;
+} else {
+  rec.nativeFrameId = build.nodeIds?.[0] ?? null;
 }
-const frameId = build.nodeIds?.[0] ?? null;
-rec.nativeFrameId = frameId;
-rec.buildStatus = build.report?.summary ?? "built";
+const frameId = rec.nativeFrameId;
+rec.buildStatus = build?.report?.summary ?? `built (reconciled: ${settled?.state ?? "unknown"})`;
 rec.program = build.program ?? null;
 rec.plan = build.plan
   ? {

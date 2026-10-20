@@ -144,13 +144,21 @@ function toMain(msg: UiToMain): void {
 /**
  * Renders the panel header from a summary.
  *
- * Deliberately minimal: file, page and version. Everything else the agent needs
- * lives in ChatGPT's tool calls, not in this 340px window.
+ * Deliberately minimal: file, page, version and the build. The build is the
+ * one thing that says whether this panel is running the code in the
+ * repository, and Figma does not hot-reload the bundle - so a stale panel is
+ * invisible unless the build is on screen.
  */
 function render(summary: PanelSummary): void {
   fileEl.textContent = summary.fileName;
   pageEl.textContent = summary.pageName;
   versionEl.textContent = `v${summary.pluginVersion}`;
+  // The build, where a stale panel can be seen rather than assumed away. The
+  // summary carries it; a panel built before the stamp existed reports
+  // "unknown", which is itself the signal.
+  const build = (summary as { build?: string }).build;
+  versionEl.title = build ? `build ${build}` : "no build stamp: rebuild the plugin and reopen the panel";
+  if (build && build !== "unknown") versionEl.textContent = `v${summary.pluginVersion} · ${build}`;
 }
 
 /**

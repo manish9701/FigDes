@@ -404,4 +404,4 @@ async function resolveGuardTarget(
   };
 }
 
-export { VerdictSchema };
+export { VerdictSchema, snapshotFromMetrics, resolveGuardTarget, runGuard };

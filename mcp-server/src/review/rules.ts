@@ -1595,7 +1595,14 @@ function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
  * serious, because content is genuinely unreachable behind it.
  */
 function siblingRegionOverlap(n: NodeMetrics, c: Ctx): Finding[] {
-  if (n.type !== "FRAME" && n.type !== "COMPONENT" && n.type !== "INSTANCE") return [];
+  // Two text layers sharing the same pixels is a collision on its own: a
+  // label drawn on top of another label has no surface that explains it. So
+  // text is a candidate too, but only against other text - a text inside a
+  // surface is that surface's content, which is the containment case and not
+  // a defect.
+  const isRegion = n.type === "FRAME" || n.type === "COMPONENT" || n.type === "INSTANCE";
+  const isText = n.type === "TEXT";
+  if (!isRegion && !isText) return [];
   const siblings = c.childrenOf.get(n.parentId ?? "");
   if (!siblings || siblings.length < 2) return [];
 
@@ -1606,7 +1613,11 @@ function siblingRegionOverlap(n: NodeMetrics, c: Ctx): Finding[] {
   const order = new Map(siblings.map((s, i) => [s.id, i]));
   for (const s of siblings) {
     if (s.id === n.id) continue;
-    if (s.type !== "FRAME" && s.type !== "COMPONENT" && s.type !== "INSTANCE") continue;
+    if (isText) {
+      // Text is only compared against text. A text inside a rectangle, a
+      // frame or a card is that surface's content.
+      if (s.type !== "TEXT") continue;
+    } else if (s.type !== "FRAME" && s.type !== "COMPONENT" && s.type !== "INSTANCE") continue;
     const area = overlapArea(n, s);
     if (area <= 0) continue;
     const overlapW = Math.min(n.x + n.w, s.x + s.w) - Math.max(n.x, s.x);

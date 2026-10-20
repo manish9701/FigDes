@@ -1118,6 +1118,101 @@ const E02 = {
   },
 };
 
+const E03 = {
+  id: "E03",
+  title: "Intended containment is not a collision; every real overlap still is",
+  group: "review",
+  requirement:
+    "Placeholder-in-field, text-in-row, label-on-button, content-in-card and status-inside-badge are containment. An intentional overlay is intentional. Unrelated text overlapping, clipped text and a connector crossing content are defects.",
+  issue: "#18",
+  run: () => {
+    const findings = runRules(
+      metrics([
+        node({ id: "screen", name: "Screen", parentId: null, x: 0, y: 0, w: 1440, h: 900, depth: 0, type: "FRAME", fill: "#FFFFFF" }),
+        // Placeholder inside its search field: containment, not a collision.
+        node({ id: "field", name: "Search field", parentId: "screen", x: 960, y: 16, w: 320, h: 32, depth: 1, type: "RECTANGLE", fill: "#FFFFFF", stroke: { hex: "#D9D8D0", weight: 1 }, radius: 6 }),
+        node({
+          id: "placeholder", name: "Search", parentId: "screen", x: 972, y: 26, w: 120, h: 14, depth: 1, type: "TEXT",
+          fill: "#9A9789", background: "#FFFFFF",
+          text: { content: "Search clusters", length: 14, truncated: false, size: 12, family: "Inter", style: "Regular", color: "#9A9789", styled: false },
+        }),
+        // Model metadata inside a row surface: containment.
+        node({ id: "row", name: "Model row", parentId: "screen", x: 40, y: 100, w: 1128, h: 118, depth: 1, type: "FRAME", fill: "#FFFFFF", radius: 8 }),
+        node({
+          id: "meta", name: "Model metadata", parentId: "screen", x: 64, y: 140, w: 400, h: 40, depth: 1, type: "TEXT",
+          fill: "#242521", background: "#FFFFFF",
+          text: { content: "atlas-7b · 41 GB · 88 tok/s", length: 27, truncated: false, size: 13, family: "Geist Mono", style: "Regular", color: "#242521", styled: true },
+        }),
+        // A label on a button: containment.
+        node({ id: "button", name: "Primary action", parentId: "screen", x: 40, y: 260, w: 172, h: 40, depth: 1, type: "FRAME", fill: "#111111", radius: 8 }),
+        node({
+          id: "buttonlabel", name: "Run a model", parentId: "screen", x: 60, y: 274, w: 132, h: 14, depth: 1, type: "TEXT",
+          fill: "#FFFFFF", background: "#111111",
+          text: { content: "Run a model", length: 11, truncated: false, size: 13, family: "Inter", style: "Medium", color: "#FFFFFF", styled: false },
+        }),
+        // A status pill with its text inside: containment.
+        node({ id: "badge", name: "Status badge", parentId: "screen", x: 240, y: 260, w: 96, h: 24, depth: 1, type: "FRAME", fill: "#E7F0E4", radius: 12 }),
+        node({
+          id: "badgetext", name: "Ready", parentId: "screen", x: 256, y: 266, w: 64, h: 12, depth: 1, type: "TEXT",
+          fill: "#2D7A4D", background: "#E7F0E4",
+          text: { content: "Ready", length: 5, truncated: false, size: 11, family: "Inter", style: "Medium", color: "#2D7A4D", styled: false },
+        }),
+        // An intentional overlay: a legend on top of the diagram field, with
+        // room around it, and nothing underneath it but canvas.
+        node({ id: "field2", name: "Topology", parentId: "screen", x: 400, y: 400, w: 700, h: 400, depth: 1, type: "FRAME", fill: "#0B1512", radius: 12 }),
+        node({
+          id: "legend", name: "Legend", parentId: "screen", x: 420, y: 620, w: 140, h: 120, depth: 1, type: "FRAME", fill: "#FFFFFF", radius: 8,
+          layoutMode: "VERTICAL", itemSpacing: 8,
+        }),
+        // A genuine defect: two unrelated text nodes occupying the same box.
+        node({
+          id: "overlap-a", name: "Left column", parentId: "screen", x: 40, y: 700, w: 200, h: 40, depth: 1, type: "TEXT",
+          fill: "#111111", background: "#FFFFFF",
+          text: { content: "Storage summary", length: 15, truncated: false, size: 14, family: "Inter", style: "Medium", color: "#111111", styled: true },
+        }),
+        node({
+          id: "overlap-b", name: "Right column", parentId: "screen", x: 60, y: 706, w: 200, h: 40, depth: 1, type: "TEXT",
+          fill: "#111111", background: "#FFFFFF",
+          text: { content: "312 GB of 1 TB used", length: 19, truncated: false, size: 14, family: "Inter", style: "Regular", color: "#111111", styled: true },
+        }),
+        // A genuine defect: text clipped by the frame that holds it.
+        node({
+          id: "clipped", name: "Clipped heading", parentId: "screen", x: 40, y: 760, w: 200, h: 14, depth: 1, type: "TEXT",
+          fill: "#111111", background: "#FFFFFF", clipsContent: true,
+          text: { content: "A heading that is much longer than the two hundred pixels it was given", length: 68, truncated: true, size: 14, family: "Inter", style: "Medium", color: "#111111", styled: true },
+        }),
+        // A genuine defect: a connector crossing content it does not belong to.
+        node({ id: "stray", name: "Vector", parentId: "screen", x: 500, y: 300, w: 300, h: 2, depth: 1, type: "VECTOR" }),
+        node({
+          id: "victim", name: "Storage heading", parentId: "screen", x: 620, y: 294, w: 160, h: 16, depth: 1, type: "TEXT",
+          fill: "#111111", background: "#FFFFFF",
+          text: { content: "STORAGE", length: 7, truncated: false, size: 11, family: "Geist Mono", style: "Regular", color: "#111111", styled: true },
+        }),
+      ]),
+    );
+
+    const collisions = findings.filter((f) => f.rule === "text-route-collision");
+    const overlaps = findings.filter((f) => f.rule === "sibling-region-overlap");
+    const contained = ["placeholder", "meta", "buttonlabel", "badgetext", "legend"];
+    const unmet = [];
+    for (const id of contained) {
+      const hit = collisions.filter((f) => f.nodeIds.includes(id));
+      if (hit.length > 0) unmet.push(`'${id}' is contained by the surface it belongs to and was reported as a collision: ${hit.map((f) => f.title).join("; ")}`);
+    }
+    if (!collisions.some((f) => f.nodeIds.includes("victim"))) {
+      unmet.push("a connector crossing unrelated content was not reported");
+    }
+    if (overlaps.length === 0) unmet.push("two unrelated text nodes occupying the same box were not reported");
+
+    return unmet.length === 0
+      ? ok(`${contained.length} intended containments left alone; the stray connector and the overlapping text are reported`)
+      : fail(unmet.join("; "), {
+          collisions: collisions.map((f) => ({ title: f.title, nodeIds: f.nodeIds, evidence: f.evidence })),
+          overlaps: overlaps.map((f) => ({ title: f.title, nodeIds: f.nodeIds })),
+        });
+  },
+};
+
 /* -------------------------------------------------------------------------- */
 /* F — repair-loop correctness                                                  */
 /* -------------------------------------------------------------------------- */
@@ -1580,7 +1675,7 @@ const I01 = {
 /* The gauntlet                                                                 */
 /* -------------------------------------------------------------------------- */
 
-export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, B08, C01, D01, D02, E01, E02, F01, F02, G01, G02, G03, H01, H02, H03, H04, I01];
+export const CASES = [A01, A02, A03, B01, B02, B03, B04, B05, B06, B08, C01, D01, D02, E01, E02, E03, F01, F02, G01, G02, G03, H01, H02, H03, H04, I01];
 
 /**
  * Runs the gauntlet.
@@ -1624,8 +1719,8 @@ export const COVERAGE = [
   { criterion: "Topology edges attach to correct semantic nodes after reflow", tests: ["B03", "C01"] },
   { criterion: "No unexpected clipping, collision, overflow, broken hierarchy or unreadable operational text", tests: ["B04", "D01", "D02", "E01"] },
   { criterion: "Contrast is measured against the true rendered surface; thresholds unchanged", tests: ["D01", "D02"] },
-  { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01", "E02"] },
-  { criterion: "The review engine tells a search field from a topology connector", tests: ["E02"] },
+  { criterion: "Semantic false-positive and false-negative counts are reported against seeded expectations", tests: ["D02", "E01", "E02", "E03"] },
+  { criterion: "The review engine tells a search field from a topology connector, and containment from a collision", tests: ["E02", "E03"] },
   { criterion: "Every repair is verified by a second structural check and render/review", tests: ["F01", "F02", "H02"] },
   { criterion: "No empty, stale, skipped or failed inspection can return PASS", tests: ["H01", "H02", "H03", "B06"] },
   { criterion: "Scope is resolved to the intended screen, and an ambiguous scope asks", tests: ["H04"] },

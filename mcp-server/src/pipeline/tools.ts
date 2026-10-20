@@ -32,10 +32,11 @@
 import { z } from "zod";
 import type { MetricsReport, TransactionResult } from "../../../shared/protocol";
 import { runRules } from "../review/rules";
+import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
-import { reuseAdvisory } from "../runtime/tools";
+import { reuseAdvisory, placeRootInFreeCanvas } from "../runtime/tools";
 import type { Session, SessionRegistry } from "../sessions";
 import { BriefInputSchema } from "./contracts";
 import { normalizeBrief } from "./brief";
@@ -258,6 +259,14 @@ export async function designPipelineTool(
     };
   }
 
+  // The compiler puts the root at the origin, so a screen built twice lands
+  // on top of the first one. Ask the file where there is room.
+  const placement = await placeRootInFreeCanvas(session, operations, {
+    width: plan.canvas.width,
+    height: plan.canvas.height,
+  });
+  if (placement !== null) stage(trace, "placement", `Placed the screen at (${placement.x}, ${placement.y}).`);
+
   const transactionId = args.transactionId ?? `pipe_${Date.now().toString(36)}`;
   const transaction = (await dispatchTransaction(registry, session, "create_design", {
     description: args.description ?? `Design pipeline: ${brief.screen}`,
@@ -413,16 +422,29 @@ async function verifyLiveScreen(
   }
 
   let render: { revisionId: string | null; nodeId: string | null; detail: "low" | "high" | null; at: number } | null = null;
+  // The render is bound to the revision of the screen it was taken of. The
+  // plugin's render result carries no revision of its own, so the pipeline
+  // fingerprints the measured state and binds the render to that. A render
+  // that is not of the current revision cannot certify the current revision.
+  const currentRevision =
+    metrics !== null
+      ? contentRevision(
+          {
+            target: evidence.rootNodeId,
+            nodes: metrics.nodes.map((n) => [n.id, n.x, n.y, n.w, n.h, n.fill, n.name]),
+          },
+          "rev",
+        )
+      : null;
   if (evidence.render && evidence.rootNodeId !== null) {
     try {
       const result = (await session.request("render_node", { nodeId: evidence.rootNodeId, maxWidth: 1024, detail: "low" })) as {
         data?: string;
-        revisionId?: string;
         nodeId?: string;
       };
       if (typeof result?.data === "string" && result.data.length > 0) {
         render = {
-          revisionId: typeof result.revisionId === "string" ? result.revisionId : null,
+          revisionId: currentRevision,
           nodeId: typeof result.nodeId === "string" ? result.nodeId : evidence.rootNodeId,
           detail: "low",
           at: Date.now(),
@@ -438,7 +460,7 @@ async function verifyLiveScreen(
     rootNodeId: evidence.rootNodeId,
     metrics,
     render,
-    currentRevision: null,
+    currentRevision,
     ruleFindings,
   });
   checks.push(...live.checks);

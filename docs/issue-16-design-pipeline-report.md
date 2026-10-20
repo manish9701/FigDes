@@ -65,7 +65,7 @@ Two more findings came out of building the pipeline:
 | File | Change | Why |
 | --- | --- | --- |
 | `mcp-server/src/transaction.ts` | `dispatchTransaction` moved out of the tool table | The semantic runtime reached the plugin directly and bypassed the job ledger, so a retried runtime build duplicated the whole screen and a timed-out one left nothing to reconcile against. One dispatcher, three callers. |
-| `mcp-server/src/runtime/tools.ts` | `design_runtime` now dispatches through the ledger | G10: a retry must not duplicate a screen. |
+| `mcp-server/src/runtime/tools.ts` | `design_runtime` now dispatches through the ledger; the root-frame auto-placement extracted into `placeRootInFreeCanvas()` | G10: a retry must not duplicate a screen. The pipeline places its screen in free canvas too, so building twice does not stack two screens on the same spot. |
 | `mcp-server/src/runtime/compile.ts` | New `autoLayout: "vertical"` region option | Stage 3/5: a region whose children have known extents is built as a native Figma auto-layout container, so a designer can re-lay it out in the file. Refused (with a stated reason) when the region holds text, because text height is estimated rather than measured and Figma's own layout would move every sibling below it. |
 | `mcp-server/src/runtime/interpreter.ts`, `primitive-schema.ts`, `shared/ir.ts` | The new option is carried through the IR | — |
 | `mcp-server/src/tools.ts`, `shared/protocol.ts` | The `design_pipeline` tool | The pipeline is one call, not eight. |

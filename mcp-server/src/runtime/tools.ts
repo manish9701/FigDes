@@ -393,45 +393,10 @@ export async function runRuntimeTool(
   // file where free canvas is and shift the root there. Only the compiler's
   // own root (id "root" at 0,0) moves — explicit coordinates stay explicit.
   // A failed lookup never fails the build; it just builds at the origin.
-  let placement: { x: number; y: number; reason: string } | null = null;
-  const rootOp = result.operations.find(
-    (op) => typeof op === "object" && op !== null && (op as Record<string, unknown>).type === "createFrame" && (op as Record<string, unknown>).id === "root",
-  ) as Record<string, unknown> | undefined;
-  if (rootOp !== undefined && rootOp.x === 0 && rootOp.y === 0) {
-    try {
-      const file = (await session.request("inspect_file", {})) as {
-        topLevelFrames?: Array<{ x?: unknown; y?: unknown; width?: unknown; height?: unknown }>;
-      };
-      const existing = (file.topLevelFrames ?? [])
-        .filter(
-          (f): f is { x: number; y: number; width: number; height: number } =>
-            typeof f.x === "number" && typeof f.y === "number" && typeof f.width === "number" && typeof f.height === "number",
-        )
-        .map((f) => ({ x: f.x, y: f.y, w: f.width, h: f.height }));
-      const canvas = result.ir.canvas;
-      const placed = placeRootFrame(existing, canvasSize(canvas.width, 1440), canvasSize(canvas.height, 900));
-      // The compiler emits region frames, connectors and their labels in
-      // page-absolute coordinates parented to the root — correct only while
-      // the root sits at the origin. Moving the root without converting them
-      // would offset everything twice, so root-parented ops become
-      // root-relative here. Region-parented content already is.
-      const dx = placed.x;
-      const dy = placed.y;
-      for (const op of result.operations) {
-        if (typeof op !== "object" || op === null) continue;
-        const o = op as Record<string, unknown>;
-        if (o.parent !== "root" || typeof o.x !== "number" || typeof o.y !== "number") continue;
-        if (o.id === "root") continue;
-        o.x = (o.x as number) - dx;
-        o.y = (o.y as number) - dy;
-      }
-      rootOp.x = placed.x;
-      rootOp.y = placed.y;
-      placement = placed;
-    } catch {
-      placement = { x: 0, y: 0, reason: "File listing failed; building at the origin." };
-    }
-  }
+  const placement = await placeRootInFreeCanvas(session, result.operations as Array<Record<string, unknown>>, {
+    width: canvasSize(result.ir.canvas.width, 1440),
+    height: canvasSize(result.ir.canvas.height, 900),
+  });
 
   // The same checkpoint gate as the low-level mutating tools, applied to the
   // compiled operations rather than to whatever the caller wrote. Going through
@@ -480,6 +445,61 @@ export async function runRuntimeTool(
       });
 
   return { ...payload, ...(placement !== null ? { placement } : {}), transaction };
+}
+
+/**
+ * Moves the compiled root frame into free canvas.
+ *
+ * The compiler puts every root frame at the origin, so consecutive screens
+ * pile onto the same spot. Before committing, the file is asked where there is
+ * room and the root is shifted there.
+ *
+ * The subtlety is the coordinates: region frames, connectors and their labels
+ * are emitted in page-absolute coordinates parented to the root, which is
+ * correct only while the root sits at the origin. Moving the root without
+ * converting them would offset everything twice, so root-parented ops become
+ * root-relative here. Region-parented content already is.
+ *
+ * A failed lookup never fails the build; it just builds at the origin.
+ */
+export async function placeRootInFreeCanvas(
+  session: Session,
+  operations: Array<Record<string, unknown>>,
+  canvas: { width: number; height: number },
+): Promise<{ x: number; y: number; reason: string } | null> {
+  const rootOp = operations.find(
+    (op) => typeof op === "object" && op !== null && op.type === "createFrame" && op.id === "root",
+  ) as Record<string, unknown> | undefined;
+  if (rootOp === undefined || rootOp.x !== 0 || rootOp.y !== 0) return null;
+
+  let placed: { x: number; y: number; reason: string };
+  try {
+    const file = (await session.request("inspect_file", {})) as {
+      topLevelFrames?: Array<{ x?: unknown; y?: unknown; width?: unknown; height?: unknown }>;
+    };
+    const existing = (file.topLevelFrames ?? [])
+      .filter(
+        (f): f is { x: number; y: number; width: number; height: number } =>
+          typeof f.x === "number" && typeof f.y === "number" && typeof f.width === "number" && typeof f.height === "number",
+      )
+      .map((f) => ({ x: f.x, y: f.y, w: f.width, h: f.height }));
+    placed = placeRootFrame(existing, canvasSize(canvas.width, 1440), canvasSize(canvas.height, 900));
+  } catch {
+    return { x: 0, y: 0, reason: "File listing failed; building at the origin." };
+  }
+
+  const dx = placed.x;
+  const dy = placed.y;
+  for (const op of operations) {
+    if (typeof op !== "object" || op === null) continue;
+    if (op.parent !== "root" || typeof op.x !== "number" || typeof op.y !== "number") continue;
+    if (op.id === "root") continue;
+    op.x = (op.x as number) - dx;
+    op.y = (op.y as number) - dy;
+  }
+  rootOp.x = placed.x;
+  rootOp.y = placed.y;
+  return placed;
 }
 
 /** Operations per chunk. Small enough to stay well under node caps, large enough to keep chunks few. */

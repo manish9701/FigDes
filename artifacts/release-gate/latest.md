@@ -2,7 +2,7 @@
 
 **Verdict: INDETERMINATE** — 1 group(s) could not run: live
 
-Run `4b480995-2026-10-20T04-39-34-731Z` on commit `4b4809951a80c24130b81665e997635fc39e18ad` (main), 2026-10-20T04:39:34.731Z → 2026-10-20T04:40:45.674Z, 70.9s.
+Run `6e05424f-2026-10-20T04-41-38-075Z` on commit `6e05424ffa9fc36cabf7c2a0f9c4fdf23994efe2` (main), 2026-10-20T04:41:38.075Z → 2026-10-20T04:42:50.617Z, 72.5s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
@@ -10,11 +10,11 @@ Node v22.17.0 on win32-x64.
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
 | **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 20/20 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.6s | every case(s) passed |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
 | **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 55.7s | 881/881 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 12.5s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 0.7s | the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test) |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 58.8s | 881/881 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 11.0s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 0.6s | the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test) |
 
 ## Gauntlet cases (20/20 passed)
 
@@ -34,7 +34,7 @@ Node v22.17.0 on win32-x64.
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 20ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 10ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
@@ -87,6 +87,26 @@ Each scenario the issue names, and the test that covers it. A scenario nobody cl
 | Operation success with a visually broken result | `H02`, `A01` |
 | An unresolved mandatory constraint | `B06` |
 | A skipped test or an absent artifact | `gate:summary` |
+
+## What this gate does not cover
+
+Stated here rather than left for someone to find. A gate that lists its gaps is more useful than one that claims to check everything.
+
+### The native path (figdes_use_figma) is not exercised
+
+The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate.
+
+### The live render and review are BLOCKED without a plugin
+
+A true pixel render, the vision critic's judgement and the repair loop against a real file need Figma Desktop. The gate reports that coverage as BLOCKED and the verdict as INDETERMINATE, never as a pass.
+
+### Visual regression against reviewed goldens is not compared pixel-wise
+
+The live benchmark records the renders and their structure, but there is no golden-image comparison with a documented stable policy yet. Structural and semantic checks stand in for it, and the issue's own rule is that pixel differences alone are not sufficient.
+
+### Text height is estimated, not measured
+
+The server has no font metrics, so a text node's height is a character-count estimate. The pipeline measures the width a text lands at, and a region holding text cannot be handed to Figma's own auto layout for that reason.
 
 ## How to reproduce
 

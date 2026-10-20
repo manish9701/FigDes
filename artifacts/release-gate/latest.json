@@ -1,11 +1,11 @@
 {
   "schemaVersion": "release-gate-v1",
-  "runId": "4b480995-2026-10-20T04-39-34-731Z",
-  "commit": "4b4809951a80c24130b81665e997635fc39e18ad",
+  "runId": "6e05424f-2026-10-20T04-41-38-075Z",
+  "commit": "6e05424ffa9fc36cabf7c2a0f9c4fdf23994efe2",
   "branch": "main",
-  "startedAt": "2026-10-20T04:39:34.731Z",
-  "finishedAt": "2026-10-20T04:40:45.674Z",
-  "durationMs": 70943,
+  "startedAt": "2026-10-20T04:41:38.075Z",
+  "finishedAt": "2026-10-20T04:42:50.617Z",
+  "durationMs": 72542,
   "node": "v22.17.0",
   "platform": "win32-x64",
   "config": {
@@ -37,7 +37,7 @@
       "command": "node tests/issue-17-gauntlet.mjs",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 788,
+      "durationMs": 774,
       "detail": "20/20 case(s) passed, run twice with identical verdicts",
       "extra": {
         "total": 20,
@@ -180,7 +180,7 @@
             "issue": "#15",
             "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
             "status": "PASS",
-            "detail": "5 workload(s) applied atomically; median apply 8ms, worst 20ms"
+            "detail": "5 workload(s) applied atomically; median apply 7ms, worst 10ms"
           },
           {
             "id": "G02",
@@ -236,7 +236,7 @@
       "command": "npm run stress:matrix -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 610,
+      "durationMs": 741,
       "detail": "every case(s) passed",
       "output": "\n> figma-design-agent@0.1.0 stress:matrix\n> node scripts/run-stress-matrix.mjs --strict\n\nstress matrix: 24 PASS, 0 FAIL, 4 BLOCKED (28 total)\n  cases   24 passing, 0 open, 4 blocked\n  json    D:\\Desktop\\Figdes\\artifacts\\stress-matrix\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-12-report.md\n"
     },
@@ -246,7 +246,7 @@
       "command": "npm run acceptance -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 558,
+      "durationMs": 647,
       "detail": "every acceptance case passed",
       "output": "\n> figma-design-agent@0.1.0 acceptance\n> node scripts/run-acceptance.mjs --strict\n\nacceptance: 25 PASS, 0 FAIL, 0 BLOCKED (25 total)\n  cases   17 offline, 8 live, 0 open\n  json    D:\\Desktop\\Figdes\\artifacts\\acceptance\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-13-report.md\n"
     },
@@ -256,14 +256,14 @@
       "command": "npm test",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 55728,
+      "durationMs": 58762,
       "detail": "881/881 test(s) passed",
       "tests": 881,
       "pass": 881,
       "fail": 0,
       "skipped": 0,
       "failures": [],
-      "output": "en accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.1.0 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 1072.7152\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 19.805\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 46.8799\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 97.2967\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 21.2082\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 11.9537\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 43.4433\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 11.9188\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 20.6927\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 9.7549\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 9.1363\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 21.2081\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 1.3981\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 5.7003\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 20.9149\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1888.443\n"
+      "output": "een accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.1.0 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 991.0601\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 12.7577\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 33.6059\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 71.4262\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 17.6148\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 11.8412\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 52.4347\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 13.6663\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 21.8292\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 9.1825\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 9.048\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 14.9015\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 0.9716\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 3.9996\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 20.464\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1681.4727\n"
     },
     {
       "id": "design-benchmark",
@@ -271,7 +271,7 @@
       "command": "npm run benchmark:design",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 12457,
+      "durationMs": 11019,
       "detail": "9/9 benchmark case(s) passed",
       "passed": 9,
       "total": 9,
@@ -284,7 +284,7 @@
       "command": "npm run benchmark:live",
       "status": "BLOCKED",
       "exitCode": 0,
-      "durationMs": 692,
+      "durationMs": 581,
       "detail": "the live benchmark did not complete (9/10 case(s) produced, missing hard-stress-test)",
       "found": 9,
       "expected": 10,
@@ -536,6 +536,24 @@
       "tests": [
         "gate:summary"
       ]
+    }
+  ],
+  "gaps": [
+    {
+      "gap": "The native path (figdes_use_figma) is not exercised",
+      "detail": "The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate."
+    },
+    {
+      "gap": "The live render and review are BLOCKED without a plugin",
+      "detail": "A true pixel render, the vision critic's judgement and the repair loop against a real file need Figma Desktop. The gate reports that coverage as BLOCKED and the verdict as INDETERMINATE, never as a pass."
+    },
+    {
+      "gap": "Visual regression against reviewed goldens is not compared pixel-wise",
+      "detail": "The live benchmark records the renders and their structure, but there is no golden-image comparison with a documented stable policy yet. Structural and semantic checks stand in for it, and the issue's own rule is that pixel differences alone are not sufficient."
+    },
+    {
+      "gap": "Text height is estimated, not measured",
+      "detail": "The server has no font metrics, so a text node's height is a character-count estimate. The pipeline measures the width a text lands at, and a region holding text cannot be handed to Figma's own auto layout for that reason."
     }
   ],
   "missingArtifacts": [],

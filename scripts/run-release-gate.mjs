@@ -267,6 +267,40 @@ const gauntletGroup = {
 };
 
 /* -------------------------------------------------------------------------- */
+/* What the gate does not cover                                                 */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The gaps, stated in the evidence rather than left for someone to find.
+ *
+ * A gate that lists what it does not check is more useful than one that
+ * claims to check everything, and the issue asks for exactly this: the
+ * limitation has to be recorded, not implied.
+ */
+const GAPS = [
+  {
+    gap: "The native path (figdes_use_figma) is not exercised",
+    detail:
+      "The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate.",
+  },
+  {
+    gap: "The live render and review are BLOCKED without a plugin",
+    detail:
+      "A true pixel render, the vision critic's judgement and the repair loop against a real file need Figma Desktop. The gate reports that coverage as BLOCKED and the verdict as INDETERMINATE, never as a pass.",
+  },
+  {
+    gap: "Visual regression against reviewed goldens is not compared pixel-wise",
+    detail:
+      "The live benchmark records the renders and their structure, but there is no golden-image comparison with a documented stable policy yet. Structural and semantic checks stand in for it, and the issue's own rule is that pixel differences alone are not sufficient.",
+  },
+  {
+    gap: "Text height is estimated, not measured",
+    detail:
+      "The server has no font metrics, so a text node's height is a character-count estimate. The pipeline measures the width a text lands at, and a region holding text cannot be handed to Figma's own auto layout for that reason.",
+  },
+];
+
+/* -------------------------------------------------------------------------- */
 /* The verdict                                                                  */
 /* -------------------------------------------------------------------------- */
 
@@ -319,6 +353,7 @@ const summary = {
   groups: allGroups,
   coverage: COVERAGE,
   scenarios: SCENARIO_MAP,
+  gaps: GAPS,
   missingArtifacts,
   failures: [
     ...first.filter((c) => c.status !== "PASS").map((c) => ({ id: c.id, title: c.title, issue: c.issue, status: c.status, detail: c.detail })),
@@ -372,6 +407,11 @@ function markdown(s) {
     "| --- | --- |",
     ...s.scenarios.map((c) => `| ${cell(c.scenario)} | ${c.tests.map((t) => `\`${t}\``).join(", ")} |`),
     "",
+    "## What this gate does not cover",
+    "",
+    "Stated here rather than left for someone to find. A gate that lists its gaps is more useful than one that claims to check everything.",
+    "",
+    ...s.gaps.flatMap((g) => [`### ${g.gap}`, "", g.detail, ""]),
   ];
   if (s.failures.length > 0) {
     lines.push("## Failures", "");

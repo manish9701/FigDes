@@ -5,15 +5,15 @@
   "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
   "issue": "#15",
   "status": "PASS",
-  "detail": "5 workload(s) applied atomically; median apply 15ms, worst 21ms",
+  "detail": "5 workload(s) applied atomically; median apply 7ms, worst 18ms",
   "raw": {
     "measurements": [
       {
         "size": 15,
         "operations": 15,
         "createdNodes": 15,
-        "applyMs": 8,
-        "totalMs": 13,
+        "applyMs": 5,
+        "totalMs": 8,
         "yields": 1,
         "rollback": null
       },
@@ -21,8 +21,8 @@
         "size": 40,
         "operations": 40,
         "createdNodes": 40,
-        "applyMs": 21,
-        "totalMs": 30,
+        "applyMs": 7,
+        "totalMs": 14,
         "yields": 1,
         "rollback": null
       },
@@ -39,8 +39,8 @@
         "size": 100,
         "operations": 100,
         "createdNodes": 100,
-        "applyMs": 9,
-        "totalMs": 15,
+        "applyMs": 5,
+        "totalMs": 9,
         "yields": 1,
         "rollback": null
       },
@@ -48,13 +48,13 @@
         "size": 150,
         "operations": 150,
         "createdNodes": 150,
-        "applyMs": 20,
-        "totalMs": 29,
+        "applyMs": 18,
+        "totalMs": 23,
         "yields": 1,
         "rollback": null
       }
     ],
-    "medianApplyMs": 15,
-    "worstApplyMs": 21
+    "medianApplyMs": 7,
+    "worstApplyMs": 18
   }
 }

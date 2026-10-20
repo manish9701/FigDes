@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-20T06:18:29.003Z",
+  "generatedAt": "2026-10-20T06:33:55.061Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -13,91 +13,101 @@
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     },
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-      "stale": false,
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
+      "stale": true,
       "serverBuild": "unknown",
       "pluginBuild": "unknown",
+      "buildNamed": false,
       "note": null
     },
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
+      "repoHead": "a2ff976f30c8233ee29a33efd5466b98bd4ab111",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
+      "buildNamed": false,
       "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
     }
   ],
@@ -110,6 +120,19 @@
     "exo-model-detail",
     "exo-runtime-monitoring",
     "generic-saas-dashboard",
+    "hard-stress-test",
+    "spatial-relationship"
+  ],
+  "casesWithoutBuild": [
+    "data-heavy-workspace",
+    "editorial-product-page",
+    "exo-compute-topology",
+    "exo-configuration",
+    "exo-enterprise-workspace",
+    "exo-model-detail",
+    "exo-runtime-monitoring",
+    "generic-saas-dashboard",
+    "hard-stress-test",
     "spatial-relationship"
   ],
   "stressFrame": {

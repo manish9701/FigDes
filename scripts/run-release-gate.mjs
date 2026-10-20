@@ -225,7 +225,16 @@ if (!skipLive) {
           .flatMap((m) => m[1].split(","))
           .map((s) => s.replace(/["\s]/g, ""))
           .filter((s) => s.length > 0);
-        const drift = stale.length > 0 ? `; ${stale.length} case(s) were measured against an older commit` : "";
+        const unnamed = [...output.matchAll(/"casesWithoutBuild":\s*\[([^\]]*)\]/g)]
+          .flatMap((m) => m[1].split(","))
+          .map((s) => s.replace(/["\s]/g, ""))
+          .filter((s) => s.length > 0);
+        const drift = [
+          stale.length > 0 ? `${stale.length} case(s) were measured against an older commit` : null,
+          unnamed.length > 0 ? `${unnamed.length} case(s) cannot name the build that produced them` : null,
+        ]
+          .filter(Boolean)
+          .join("; ");
         if (code !== 0 && !complete) {
           return {
             status: "BLOCKED",
@@ -242,8 +251,8 @@ if (!skipLive) {
         }
         return {
           status: "PASS",
-          detail: `the live benchmark completed (${found}/${expected} case(s) with real renders and reviews)${drift}`,
-          extra: { found, expected, missing, stale },
+          detail: `the live benchmark completed (${found}/${expected} case(s) with real renders and reviews)${drift ? `; ${drift}` : ""}`,
+          extra: { found, expected, missing, stale, unnamed },
         };
       },
     }),
@@ -288,14 +297,14 @@ const gauntletGroup = {
  */
 const GAPS = [
   {
+    gap: "The live evidence was measured against a deployment, and the deployment is not the repository",
+    detail:
+      "The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.",
+  },
+  {
     gap: "The native path (figdes_use_figma) is not exercised",
     detail:
       "The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate.",
-  },
-  {
-    gap: "The live render and review are BLOCKED without a plugin",
-    detail:
-      "A true pixel render, the vision critic's judgement and the repair loop against a real file need Figma Desktop. The gate reports that coverage as BLOCKED and the verdict as INDETERMINATE, never as a pass.",
   },
   {
     gap: "Visual regression against reviewed goldens is not compared pixel-wise",

@@ -185,6 +185,20 @@ const rec = {
    */
   serverBuild: status.serverBuild ?? "unknown",
   pluginBuild: status.build ?? "unknown",
+  /**
+   * Whether the deployment that produced this evidence is the repository.
+   *
+   * The server is deployed and Figma loads the plugin bundle once, so either
+   * can be older than the commit this file names. Saying "unknown" is the
+   * honest answer when the deployment does not report its build; saying
+   * "older" is the honest answer when it does and it differs.
+   */
+  buildNote:
+    status.serverBuild === undefined
+      ? "The deployment did not report a build, so this evidence cannot be tied to the code that produced it. Redeploy the server and re-run the case."
+      : status.build === undefined || status.build === "unknown"
+        ? `The server build is ${status.serverBuild}; the open plugin panel did not report a build, so the plugin side is untied.`
+        : `Server ${status.serverBuild}, plugin ${status.build}.`,
 };
 
 /* --- 1. build, verify, repair, verify ------------------------------------ */

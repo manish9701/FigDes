@@ -230,10 +230,15 @@ const buildDrift = cases.map((c) => {
     stale: measured !== null && repoHead !== null && !measured.startsWith(repoHead.slice(0, 12)),
     serverBuild: c.build?.serverBuild ?? null,
     pluginBuild: c.build?.pluginBuild ?? null,
+    // A case that names a commit but not the build that produced it is
+    // claiming more than it can back: the commit is the repository's, and the
+    // deployment is not the repository until it is redeployed.
+    buildNamed: Boolean(c.build?.serverBuild) && c.build.serverBuild !== "unknown",
     note: c.build?.note ?? null,
   };
 });
 const staleCases = buildDrift.filter((d) => d.stale);
+const casesWithoutBuild = buildDrift.filter((d) => !d.buildNamed);
 
 const report = {
   schemaVersion: 2,
@@ -250,6 +255,7 @@ const report = {
     : "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
   buildDrift,
   staleCases: staleCases.map((d) => d.caseId),
+  casesWithoutBuild: casesWithoutBuild.map((d) => d.caseId),
   stressFrame: {    caseId: STRESS_CASE_ID,
     canvas: STRESS_CANVAS,
     mustResolve: STRESS_MUST_RESOLVE,
@@ -282,6 +288,7 @@ console.log(JSON.stringify({
   liveBenchmarkComplete: report.liveBenchmarkComplete,
   repoHead: repoHead ? repoHead.slice(0, 12) : null,
   staleCases: report.staleCases,
+  casesWithoutBuild: report.casesWithoutBuild,
 }, null, 2));
 
 if (strict && !liveBenchmarkComplete) process.exitCode = 1;

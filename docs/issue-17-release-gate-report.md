@@ -2,19 +2,19 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `d5996222-2026-10-20T06-17-16-295Z` on commit `d59962227204dbd8bb2764b5a2b3bb61aec465f7` (main), 2026-10-20T06:17:16.295Z → 2026-10-20T06:18:29.798Z, 73.5s.
+Run `a2ff976f-2026-10-20T06-32-57-660Z` on commit `a2ff976f30c8233ee29a33efd5466b98bd4ab111` (main), 2026-10-20T06:32:57.660Z → 2026-10-20T06:33:55.634Z, 58.0s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 21/21 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 60.1s | 882/882 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 10.5s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 0.6s | the live benchmark completed (10/10 case(s) with real renders and reviews); 9 case(s) were measured against an older commit |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.5s | 21/21 case(s) passed, run twice with identical verdicts |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.6s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 47.7s | 882/882 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.0s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 0.5s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
 ## Gauntlet cases (21/21 passed)
 
@@ -35,7 +35,7 @@ Node v22.17.0 on win32-x64.
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 15ms, worst 21ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 18ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
@@ -93,13 +93,13 @@ Each scenario the issue names, and the test that covers it. A scenario nobody cl
 
 Stated here rather than left for someone to find. A gate that lists its gaps is more useful than one that claims to check everything.
 
+### The live evidence was measured against a deployment, and the deployment is not the repository
+
+The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.
+
 ### The native path (figdes_use_figma) is not exercised
 
 The gauntlet drives the semantic runtime and the plugin's create_design transaction. The native path — model-authored JavaScript against the real Plugin API — has its own rules, and a regression there would not be caught by this gate.
-
-### The live render and review are BLOCKED without a plugin
-
-A true pixel render, the vision critic's judgement and the repair loop against a real file need Figma Desktop. The gate reports that coverage as BLOCKED and the verdict as INDETERMINATE, never as a pass.
 
 ### Visual regression against reviewed goldens is not compared pixel-wise
 

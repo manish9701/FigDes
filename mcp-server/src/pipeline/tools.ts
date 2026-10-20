@@ -326,15 +326,27 @@ export async function designPipelineTool(
     trace.repairs.push(...repairs);
     stage(trace, "repair", `${repairs.filter((r) => r.result === "applied").length} repair(s) applied, ${repairs.filter((r) => r.result !== "applied").length} not.`);
 
-    // A repair changes the screen, so the render of the screen before the
-    // repair no longer certifies it. The visual bucket is re-opened rather
-    // than quietly left as it was.
+    // A repair changes the screen, so the render taken before it no longer
+    // certifies it. The screen is measured and rendered again, and the new
+    // revision is what the visual bucket is bound to — a render of the screen
+    // as it was *before* the fix is not evidence that the fix held.
     if (repairs.some((r) => r.result === "applied")) {
-      live.checks = live.checks.map((c) =>
-        c.id === "render-freshness"
-          ? { ...c, status: "indeterminate" as const, detail: "The screen was repaired after the render, so that render no longer certifies it. Render again." }
-          : c,
-      );
+      const after = await verifyLiveScreen(session, plan, {
+        createdNodes,
+        rootNodeId,
+        render: args.render !== false,
+      });
+      live.checks = [
+        ...live.checks.filter((c) => c.id !== "render-freshness" && c.id !== "nodes-created" && c.id !== "live-structure" && c.id !== "review-rules"),
+        ...after.checks,
+      ];
+      live.findings = [...live.findings, ...after.findings];
+      live.status = after.status;
+      live.detail = `${after.checks.length} live check(s) ran against the repaired screen.`;
+      live.visual = after.visual;
+      live.blocked = after.blocked;
+      if (after.render !== null) trace.render = after.render;
+      stage(trace, "verify-repaired", `Re-measured and re-rendered after the repair: ${after.status}.`);
     }
   }
 

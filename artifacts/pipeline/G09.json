@@ -1,6 +1,9 @@
 {
   "caseId": "G09",
-  "recordedAt": "2026-10-20T03:30:11.491Z",
+  "runtime": {
+    "plugin": "figma-design-agent",
+    "pipeline": "design-pipeline-v1"
+  },
   "brief": {
     "id": "brief",
     "product": "EXO Labs",

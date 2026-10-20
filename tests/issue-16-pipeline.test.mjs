@@ -57,7 +57,9 @@ function storeEvidence(id, result) {
   mkdirSync(ARTIFACT_DIR, { recursive: true });
   const evidence = {
     caseId: id,
-    recordedAt: new Date().toISOString(),
+    // Deliberately no timestamp: the fixtures are deterministic, and an
+    // evidence file that changes every run is one nobody reviews.
+    runtime: { plugin: "figma-design-agent", pipeline: "design-pipeline-v1" },
     brief: result.brief,
     assumptions: result.assumptions,
     clarifications: result.clarifications.map((c) => c.id),

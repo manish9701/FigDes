@@ -191,6 +191,85 @@ test("resumed transaction ids are idempotent via priorResult", async () => {
   assert.ok(registry.jobs.priorResult("txn-dedupe-1"), "prior result retained for idempotent retry");
 });
 
+/* --------- P0: reconnect lineage for null fileKeys (#18 session) --------- */
+
+/**
+ * Local/desktop files report a null fileKey on every connection, which used
+ * to disable lineage entirely: after a disconnect the stale id error could
+ * only give the generic hint instead of naming the replacement session.
+ */
+const fakeSocket = () => {
+  const handlers = {};
+  return {
+    handlers,
+    on: (event, cb) => {
+      handlers[event] = cb;
+    },
+    readyState: 1,
+    OPEN: 1,
+    send: () => {},
+    close: () => {},
+  };
+};
+
+test("a reconnect on a null fileKey links by fileName", async () => {
+  const { SessionRegistry: Registry } = await import("../mcp-server/dist-test/reliability/sessions.js");
+  const registry = new Registry();
+  const sock1 = fakeSocket();
+  const s1 = registry.add(sock1);
+  Object.assign(s1, { fileKey: null, fileName: "Exo Labs" });
+  sock1.handlers.close();
+
+  const sock2 = fakeSocket();
+  const s2 = registry.add(sock2);
+  Object.assign(s2, { fileKey: null, fileName: "Exo Labs" });
+  const linked = registry.linkGeneration(s2);
+  assert.equal(linked.reboundFrom, s1.id, "the new generation names the disconnected one");
+
+  assert.throws(() => registry.resolve(s1.id), new RegExp(`Unknown plugin session.*${s2.id}`, "s"),
+    "the stale id error names the replacement session instead of only hinting");
+});
+
+test("the 'Unknown file' default never links generations", async () => {
+  const { SessionRegistry: Registry } = await import("../mcp-server/dist-test/reliability/sessions.js");
+  const registry = new Registry();
+  const sock1 = fakeSocket();
+  const s1 = registry.add(sock1);
+  Object.assign(s1, { fileKey: null, fileName: "Unknown file" });
+  sock1.handlers.close();
+
+  const s2 = registry.add(fakeSocket());
+  Object.assign(s2, { fileKey: null, fileName: "Unknown file" });
+  assert.deepEqual(registry.linkGeneration(s2), {}, "no identity, no lineage");
+});
+
+test("lineage stays bounded across many reconnects", async () => {
+  const { SessionRegistry: Registry } = await import("../mcp-server/dist-test/reliability/sessions.js");
+  const registry = new Registry();
+  const stale = [];
+  for (let i = 0; i < 25; i++) {
+    const sock = fakeSocket();
+    const s = registry.add(sock);
+    Object.assign(s, { fileKey: "k-same", fileName: "F" });
+    sock.handlers.close();
+    stale.push(s.id);
+    const next = registry.add(fakeSocket());
+    Object.assign(next, { fileKey: "k-same", fileName: "F" });
+    registry.linkGeneration(next);
+  }
+  // The oldest generations aged out of the bounded lineage: their stale ids
+  // fall back to the generic hint instead of naming a replacement.
+  let oldestNamesRebound = false;
+  try {
+    registry.resolve(stale[0]);
+  } catch (e) {
+    oldestNamesRebound = /reconnected as/.test(String(e.message ?? e));
+  }
+  assert.equal(oldestNamesRebound, false, "evicted lineage must not name a replacement");
+  // A recent generation still recovers with the rebound hint.
+  assert.throws(() => registry.resolve(stale[stale.length - 1]), /reconnected as/);
+});
+
 /* ---------------- P1: critic provenance + card-wall semantics ------------ */
 
 test("runRules findings carry provenance", async () => {

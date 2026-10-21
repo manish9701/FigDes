@@ -698,10 +698,9 @@ export class SessionRegistry {
 
   add(socket: WebSocket): Session {
     const session = new Session(socket);
-    // Stable lineage: if a recent disconnect shares a fileKey, this connection
-    // is its generation successor — never silently retargeted, always explicit.
-    const prior = [...this.recentDisconnects].reverse().find((d) => d.fileKey !== null && d.fileKey === session.fileKey);
-    void prior;
+    // Lineage is linked in linkGeneration(), not here: fileKey is still
+    // unset until the plugin's register message arrives, so any lookup at
+    // add-time could never match and would only mislead.
     this.sessions.set(session.id, session);
     this.wsToSession.set(socket, session);
 
@@ -718,13 +717,36 @@ export class SessionRegistry {
 
   /**
    * Called when a registered session's file identity arrives: links the new
-   * generation to any prior disconnected session on the same fileKey so a
+   * generation to any prior disconnected session on the same file so a
    * reconnect can report "your old session X is now Y on the same file".
+   *
+   * Identity prefers fileKey, but local/desktop files report a null key (as
+   * this deployment does on every connection), which used to disable lineage
+   * entirely: every reconnect after a disconnect produced only the generic
+   * "your session id changed" hint instead of naming the replacement. The
+   * fallback matches on fileName, excluding the "Unknown file" default,
+   * which carries no identity. The hint always names the file, and recovery
+   * still goes through the job ledger with the SAME transactionId, so a
+   * same-named different file can cost at most a ledger check, never a
+   * blind duplicate.
    */
   linkGeneration(session: Session): { reboundFrom?: string; readyMs?: number } {
-    const match = [...this.recentDisconnects].reverse().find((d) => d.fileKey !== null && d.fileKey === session.fileKey);
+    const match = [...this.recentDisconnects]
+      .reverse()
+      .find(
+        (d) =>
+          (d.fileKey !== null && d.fileKey === session.fileKey) ||
+          (d.fileKey === null &&
+            session.fileKey === null &&
+            d.fileName !== "Unknown file" &&
+            d.fileName === session.fileName),
+      );
     if (!match) return {};
     this.lineage.set(match.sessionId, { to: session.id, fileKey: session.fileKey, fileName: session.fileName, at: Date.now() });
+    if (this.lineage.size > 20) {
+      const oldest = [...this.lineage.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) this.lineage.delete(oldest[0]);
+    }
     const idx = this.recentDisconnects.indexOf(match);
     if (idx >= 0) this.recentDisconnects.splice(idx, 1);
     const readyMs = Date.now() - match.at;

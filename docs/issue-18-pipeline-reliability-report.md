@@ -47,6 +47,19 @@ genuine unlabelled icon button is still reported. Case E02.
   rather than a random selection that is checked. The resolved target is
   reported with the verdict.
 
+### P0 — reconnect lineage for files without a key
+
+Live, every connection reports `fileKey: null`, and lineage only matched
+non-null keys — so no reconnect ever linked, and every stale session id
+fell back to the generic hint instead of naming the replacement session.
+`linkGeneration` now falls back to `fileName` (excluding the `"Unknown
+file"` default, which carries no identity); recovery still goes through
+the job ledger with the SAME transactionId, so a same-named different
+file costs at most a ledger check, never a blind duplicate. The dead
+add-time lookup is removed (the key is unset until `register`), and the
+lineage map is bounded at 20 generations. Covered by three reconnect
+tests in `tests/figdes-reliability.test.mjs`. Shipped in **0.3.4**.
+
 ### P1 — a verified repair loop
 
 `mcp-server/src/review/verdict.ts`. Every loop re-measures, pairs the findings

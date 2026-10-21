@@ -1,7 +1,7 @@
 {
   "name": "figma-design-agent",
   "private": true,
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Native Figma Plugin + custom MCP server. ChatGPT -> MCP -> plugin -> Figma Plugin API.",
   "type": "module",
   "workspaces": [

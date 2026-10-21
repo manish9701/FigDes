@@ -78,6 +78,10 @@ metrics, so the topology rules remain manual by construction — and say so
   render confirming the layout. Target selection verified on the same
   builds: blank target returns INDETERMINATE ("No target was named",
   no throw); "Row" reports "matches at least 80 … first 25".
+  Re-verified again on same-commit **`6f5d8b2ba735`** (0.3.2, clean both
+  sides) after the report push: review PASS, audit PASS, guard 10/0/0
+  with the same three INDETERMINATEs, blank-target and capped-window
+  behavior unchanged.
 
 ## Remaining deliberately-manual checks
 

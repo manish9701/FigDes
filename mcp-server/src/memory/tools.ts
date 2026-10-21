@@ -169,32 +169,58 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
   const { memory, problem } = loadMemory(key);
 
   let snapshot: GuardSnapshot;
+  let escalation: { requested: string; checked: string } | undefined;
 
   if (args.inspect || args.target !== undefined) {
     if (!session) throw new Error("design_guard(inspect:true) needs a connected Figma plugin.");
-    const resolved = await resolveGuardTarget(session, args.target);
-    if ("ambiguity" in resolved) {
-      // The screen could not be resolved uniquely. Say so, rather than
-      // checking a random selection and reporting a verdict about it.
-      return {
-        status: "indeterminate",
-        project: key,
-        verdict: "INDETERMINATE",
-        findings: [
-          {
-            verdict: "INDETERMINATE",
-            rule: "scope",
-            message: resolved.ambiguity,
-            evidence: { candidates: resolved.candidates },
-            nextStep: "Pass the target as a node id, or a name that matches exactly one frame.",
-          },
-        ],
-        stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
-        snapshot: { source: "resolved-target", resolved: false, scope: null },
-        howToProceed: "Resolve the target and re-run. Nothing was checked, so nothing was approved.",
-      };
+    if (args.target !== undefined) {
+      const resolved = await resolveGuardTarget(session, args.target);
+      if ("ambiguity" in resolved) {
+        // The screen could not be resolved uniquely. Say so, rather than
+        // checking a random selection and reporting a verdict about it.
+        return {
+          status: "indeterminate",
+          project: key,
+          verdict: "INDETERMINATE",
+          findings: [
+            {
+              verdict: "INDETERMINATE",
+              rule: "scope",
+              message: resolved.ambiguity,
+              evidence: { candidates: resolved.candidates },
+              nextStep: "Pass the target as a node id, or a name that matches exactly one frame.",
+            },
+          ],
+          stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+          snapshot: { source: "resolved-target", resolved: false, scope: null },
+          howToProceed: "Resolve the target and re-run. Nothing was checked, so nothing was approved.",
+        };
+      }
+      snapshot = resolved.snapshot;
+    } else {
+      const inspected = await resolveInspectSelection(session);
+      if ("ambiguity" in inspected) {
+        return {
+          status: "indeterminate",
+          project: key,
+          verdict: "INDETERMINATE",
+          findings: [
+            {
+              verdict: "INDETERMINATE",
+              rule: "scope",
+              message: inspected.ambiguity,
+              evidence: { candidates: inspected.candidates },
+              nextStep: "Select the frame you want checked, or pass it as a node id.",
+            },
+          ],
+          stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+          snapshot: { source: "live", resolved: false, scope: null },
+          howToProceed: "Resolve the target and re-run. Nothing was checked, so nothing was approved.",
+        };
+      }
+      snapshot = inspected.snapshot;
+      if (inspected.escalation) escalation = inspected.escalation;
     }
-    snapshot = resolved.snapshot;
   } else if (args.program !== undefined) {
     const { executeRuntime } = await import("../runtime/interpreter");
     const result = executeRuntime(args.program);
@@ -233,6 +259,7 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
             "Resolve the target and re-run. An empty snapshot means no rule was evaluated — it is never evidence that the design passes.",
         }
       : {}),
+    ...(escalation ? { scopeResolution: escalation } : {}),
     ...(problem ? { warning: problem } : {}),
   };
 }
@@ -352,6 +379,134 @@ async function snapshotForId(session: Session, id: string): Promise<{ snapshot: 
   return { snapshot: snapshotFromMetrics(metrics, id) };
 }
 
+/** Node types that can stand for a screen on their own. */
+const SCREEN_LIKE_TYPES = new Set(["FRAME", "COMPONENT", "COMPONENT_SET", "INSTANCE", "PAGE", "DOCUMENT", "SECTION", "GROUP", "SLIDE"]);
+
+/**
+ * Walks from a node up to its enclosing screen frame.
+ *
+ * Instance children carry synthetic ids (`I<instance>;<child>`) that embed
+ * their instance, so the walk starts there. Anything else climbs `parentId
+ * one step at a time. Returns null at pages, documents, dead ends and
+ * lookup failures — all of which mean "no screen found", never a guess.
+ */
+async function enclosingScreenFrame(session: Session, startId: string): Promise<{ id: string; name: string } | null> {
+  const instanceChild = /^I([^;]+);/.exec(startId);
+  let current: string | null = instanceChild ? instanceChild[1]! : startId;
+  const seen = new Set<string>();
+  for (let depth = 0; depth < 12 && current && !seen.has(current); depth++) {
+    seen.add(current);
+    let nodes: Array<{ id: string; type?: string; name?: string; parentId?: string | null }>;
+    try {
+      const metrics = (await session.request("collect_metrics", { target: current, maxNodes: 10, depth: 1 })) as MetricsReport;
+      nodes = (metrics.nodes ?? []) as Array<{ id: string; type?: string; name?: string; parentId?: string | null }>;
+    } catch {
+      return null;
+    }
+    const self = nodes[0];
+    if (!self) return null;
+    const type = (self.type ?? "").toUpperCase();
+    if (type === "FRAME") return { id: self.id, name: self.name ?? self.id };
+    if (type === "PAGE" || type === "DOCUMENT") return null;
+    current = self.parentId ?? null;
+  }
+  return null;
+}
+
+/**
+ * Resolves an inspect-selection guard run to the screen it is about.
+ *
+ * A single screen-like selection is checked as-is (long-standing
+ * behaviour). Anything else — one leaf, or several layers — is resolved
+ * layer by layer to its enclosing screen frame: unanimous agreement checks
+ * that frame and says so via `escalation`; anything else asks, listing
+ * where each selected layer resolved. Checking the first layer and
+ * ignoring the rest, or checking a leaf as if it were a screen, are both
+ * how a verdict about the wrong thing gets reported.
+ */
+async function resolveInspectSelection(session: Session): Promise<
+  | { snapshot: GuardSnapshot; escalation?: { requested: string; checked: string } }
+  | { ambiguity: string; candidates: string[] }
+> {
+  const inspected = (await session.request("inspect_selection", { maxNodes: 2000 })) as Record<string, unknown>;
+  const raw = (inspected as { selection?: unknown }).selection;
+  const roots = (
+    Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : []
+  ) as Array<{ id?: unknown; name?: unknown; type?: unknown }>;
+
+  if (roots.length === 0) return { snapshot: snapshotFromInspected(inspected) };
+
+  const describe = (r: { id?: unknown; name?: unknown; type?: unknown }): string =>
+    `${typeof r.type === "string" ? r.type : "layer"}${typeof r.name === "string" && r.name ? ` "${r.name}"` : ""}`;
+
+  if (roots.length === 1) {
+    const only = roots[0]!;
+    if (typeof only.type === "string" && SCREEN_LIKE_TYPES.has(only.type.toUpperCase())) {
+      return { snapshot: snapshotFromInspected(inspected) };
+    }
+    if (typeof only.id !== "string" || only.id.length === 0) {
+      return { snapshot: snapshotFromInspected(inspected) };
+    }
+    const frame = await enclosingScreenFrame(session, only.id);
+    if (!frame) return { snapshot: snapshotFromInspected(inspected) };
+    const metrics = (await session.request("collect_metrics", { target: frame.id, maxNodes: 2000 })) as MetricsReport;
+    return {
+      snapshot: snapshotFromMetrics(metrics, frame.id),
+      escalation: {
+        requested: `selected ${describe(only)}`,
+        checked: `enclosing frame ${frame.id} ("${frame.name}")`,
+      },
+    };
+  }
+
+  const frames = new Map<string, { name: string; roots: string[] }>();
+  const unresolvable: string[] = [];
+  for (const root of roots) {
+    const label = describe(root);
+    let frame: { id: string; name: string } | null = null;
+    if (typeof root.id === "string" && root.id.length > 0) {
+      if (typeof root.type === "string" && SCREEN_LIKE_TYPES.has(root.type.toUpperCase())) {
+        frame = { id: root.id, name: typeof root.name === "string" && root.name ? root.name : root.id };
+      } else {
+        frame = await enclosingScreenFrame(session, root.id);
+      }
+    }
+    if (frame) {
+      const entry = frames.get(frame.id) ?? { name: frame.name, roots: [] };
+      entry.roots.push(label);
+      frames.set(frame.id, entry);
+    } else {
+      unresolvable.push(label);
+    }
+  }
+
+  if (frames.size === 1 && unresolvable.length === 0) {
+    const first = [...frames.entries()][0]!;
+    const frameId = first[0];
+    const entry = first[1];
+    const metrics = (await session.request("collect_metrics", { target: frameId, maxNodes: 2000 })) as MetricsReport;
+    return {
+      snapshot: snapshotFromMetrics(metrics, frameId),
+      escalation: {
+        requested: `${roots.length} selected layers (${[...new Set(entry.roots)].slice(0, 5).join(", ")})`,
+        checked: `enclosing frame ${frameId} ("${entry.name}")`,
+      },
+    };
+  }
+
+  const candidates = [
+    ...[...frames.entries()].map(([id, entry]) => `${id} ("${entry.name}") via ${entry.roots.length} selected layer(s)`),
+    ...unresolvable.map((label) => `${label} (no enclosing screen found)`),
+  ];
+  return {
+    ambiguity:
+      frames.size > 1
+        ? `The selection spans ${frames.size} screens, so there is no single screen to check.`
+        : "The selection could not be resolved to a screen.",
+    candidates,
+  };
+}
+
 /** Builds a guard snapshot from an `inspect_selection` payload. */function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapshot {
   const textNode = (node: Record<string, unknown>): string => (typeof node.characters === "string" ? node.characters : "");
 
@@ -440,4 +595,4 @@ async function snapshotForId(session: Session, id: string): Promise<{ snapshot: 
   };
 }
 
-export { VerdictSchema, snapshotFromMetrics, resolveGuardTarget, runGuard };
+export { VerdictSchema, snapshotFromMetrics, resolveGuardTarget, resolveInspectSelection, runGuard };

@@ -14,7 +14,7 @@ import { z } from "zod";
  * The plugin's semantic version. Hand-maintained, so it says nothing about
  * which build is loaded — see `StatusResult.build` for that.
  */
-export const PLUGIN_VERSION = "0.3.2";
+export const PLUGIN_VERSION = "0.3.3";
 
 /**
  * The commit the bundle was built from, baked in by esbuild.

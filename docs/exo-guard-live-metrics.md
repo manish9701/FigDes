@@ -113,3 +113,16 @@ is preserved. Covered by `decideGuardTarget` unit tests plus two
 capped windows report honestly) in
 `tests/product-guard-regressions.test.mjs`; shipped in **0.3.1**, with the
 blank-path resolution fix in **0.3.2**.
+
+## Follow-up: inspect-selection resolves to its screen (#18 scope)
+
+Probed live: with a "Row title" text selected, `design_guard({inspect:
+true})` checked that one text layer and evaluated zero product rules —
+formally correct per #18, but a dead end for anyone pointing at the
+design. `resolveInspectSelection` now resolves every selected root to
+its screen frame (instance children resolve through the embedded
+instance id; everything else climbs `parentId`): unanimous agreement
+checks that frame and reports the escalation in `scopeResolution`;
+split frames or unresolvable layers ask with per-layer candidates.
+Single screen-like selections behave exactly as before. Shipped in
+**0.3.3** with four `resolveInspectSelection` tests.

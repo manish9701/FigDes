@@ -23,7 +23,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { runGuard, snapshotFromIR, metricsFromLiveNodes, decideGuardTarget } from "../mcp-server/dist-test/memory/guard.js";
-import { resolveGuardTarget } from "../mcp-server/dist-test/memory/tools.js";
+import { resolveGuardTarget, resolveInspectSelection } from "../mcp-server/dist-test/memory/tools.js";
 import { EXO_RULES } from "../mcp-server/dist-test/memory/rules-exo.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
@@ -411,4 +411,106 @@ test("guard target resolution reports a capped window honestly", async () => {
   assert.ok("ambiguity" in resolved);
   assert.match(resolved.ambiguity, /at least 80/);
   assert.equal(resolved.candidates.length, 10);
+});
+
+/* -------------------------------------------------------------------------- */
+/* Inspect-selection: a leaf selection checks its screen, transparently (#18)  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Live, `design_guard({inspect: true})` with a "Row title" text selected
+ * checked that one text layer and evaluated zero product rules. The
+ * selection is the user's way of pointing at the screen — so a leaf
+ * selection now resolves to its enclosing frame, and the response says
+ * what was actually checked.
+ */
+const selectionStub = (selection, frames) => ({
+  fileKey: null,
+  fileName: "Guard Selection Test",
+  request: async (tool, payload) => {
+    if (tool === "inspect_selection") return { selection };
+    if (tool === "collect_metrics") {
+      const target = payload?.target;
+      if (frames[target]) return frames[target];
+      throw new Error(`unexpected metrics target ${target}`);
+    }
+    throw new Error(`unexpected tool ${tool}`);
+  },
+});
+
+const frameMetrics = (id, name, texts = []) => ({
+  target: id,
+  scope: name,
+  nodeCount: texts.length + 1,
+  truncated: false,
+  nodes: [
+    { id, parentId: "0:1", type: "FRAME", name, depth: 0, x: 0, y: 0, w: 1440, h: 960, visible: true, defaultNamed: false, zIndex: 0 },
+    ...texts.map((t, i) => ({
+      id: t.id,
+      parentId: id,
+      type: "TEXT",
+      name: t.name,
+      depth: 1,
+      x: 10,
+      y: 10 + i * 20,
+      w: 200,
+      h: 15,
+      visible: true,
+      defaultNamed: false,
+      zIndex: i,
+      text: { content: t.content, length: t.content.length, truncated: false, size: 12, family: "Inter", style: "Regular", color: "#111111", styled: false },
+    })),
+  ],
+});
+
+test("guard inspect: a single leaf selection checks its enclosing frame", async () => {
+  const leaf = { id: "t1", type: "TEXT", name: "Row title" };
+  const stub = selectionStub([leaf], {
+    t1: { target: "t1", scope: "t1", nodeCount: 1, truncated: false, nodes: [{ id: "t1", parentId: "f1", type: "TEXT", name: "Row title", depth: 1, x: 12, y: 24, w: 100, h: 15, visible: true, defaultNamed: false, zIndex: 0 }] },
+    f1: frameMetrics("f1", "Model library", [{ id: "t1", name: "Row title", content: "Hello" }]),
+  });
+  const resolved = await resolveInspectSelection(stub);
+  assert.ok("snapshot" in resolved, "a leaf in a frame resolves");
+  assert.equal(resolved.snapshot.scope.id, "f1");
+  assert.match(resolved.escalation.checked, /f1/);
+  assert.match(resolved.escalation.requested, /Row title/);
+});
+
+test("guard inspect: an instance child resolves through its instance to the frame", async () => {
+  const leaf = { id: "I9:9;3:3", type: "TEXT", name: "Row title" };
+  const stub = selectionStub([leaf], {
+    "9:9": { target: "9:9", scope: "9:9", nodeCount: 1, truncated: false, nodes: [{ id: "9:9", parentId: "f1", type: "INSTANCE", name: "Model row", depth: 1, x: 0, y: 0, w: 100, h: 40, visible: true, defaultNamed: false, zIndex: 0 }] },
+    f1: frameMetrics("f1", "Model library", [{ id: "t1", name: "Row title", content: "Hello" }]),
+  });
+  const resolved = await resolveInspectSelection(stub);
+  assert.ok("snapshot" in resolved);
+  assert.equal(resolved.snapshot.scope.id, "f1");
+});
+
+test("guard inspect: a selection spanning two frames asks", async () => {
+  const stub = selectionStub(
+    [
+      { id: "t1", type: "TEXT", name: "A" },
+      { id: "t2", type: "TEXT", name: "B" },
+    ],
+    {
+      t1: { target: "t1", scope: "t1", nodeCount: 1, truncated: false, nodes: [{ id: "t1", parentId: "f1", type: "TEXT", name: "A", depth: 1, x: 0, y: 0, w: 10, h: 10, visible: true, defaultNamed: false, zIndex: 0 }] },
+      f1: frameMetrics("f1", "One", []),
+      t2: { target: "t2", scope: "t2", nodeCount: 1, truncated: false, nodes: [{ id: "t2", parentId: "f2", type: "TEXT", name: "B", depth: 1, x: 0, y: 0, w: 10, h: 10, visible: true, defaultNamed: false, zIndex: 0 }] },
+      f2: frameMetrics("f2", "Two", []),
+    },
+  );
+  const resolved = await resolveInspectSelection(stub);
+  assert.ok("ambiguity" in resolved, "two screens is a question");
+  assert.match(resolved.ambiguity, /2 screens/);
+  assert.equal(resolved.candidates.length, 2);
+});
+
+test("guard inspect: a lone frame selection is unchanged", async () => {
+  const frame = { id: "f1", type: "FRAME", name: "Model library", children: [] };
+  const stub = selectionStub([frame], {});
+  const resolved = await resolveInspectSelection(stub);
+  assert.ok("snapshot" in resolved);
+  assert.equal(resolved.snapshot.scope.id, "f1");
+  assert.ok(!("escalation" in resolved) || resolved.escalation === undefined, "no escalation to report");
 });

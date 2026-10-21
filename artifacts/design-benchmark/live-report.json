@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-21T10:20:57.698Z",
+  "generatedAt": "2026-10-21T11:14:09.638Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -13,7 +13,7 @@
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -23,7 +23,7 @@
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -33,7 +33,7 @@
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -43,7 +43,7 @@
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -53,7 +53,7 @@
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -63,7 +63,7 @@
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -73,7 +73,7 @@
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -83,7 +83,7 @@
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -92,18 +92,18 @@
     },
     {
       "caseId": "hard-stress-test",
-      "measuredAtCommit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
-      "stale": true,
-      "serverBuild": "unknown",
-      "pluginBuild": "unknown",
-      "buildNamed": false,
+      "measuredAtCommit": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279",
+      "buildNamed": true,
       "note": null
     },
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "1b15f1f",
-      "repoHead": "2f1987e7253ffc586de2f8cb41916c6035d8e259",
+      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
       "stale": true,
       "serverBuild": null,
       "pluginBuild": null,
@@ -120,7 +120,6 @@
     "exo-model-detail",
     "exo-runtime-monitoring",
     "generic-saas-dashboard",
-    "hard-stress-test",
     "spatial-relationship"
   ],
   "casesWithoutBuild": [
@@ -132,7 +131,6 @@
     "exo-model-detail",
     "exo-runtime-monitoring",
     "generic-saas-dashboard",
-    "hard-stress-test",
     "spatial-relationship"
   ],
   "nativePath": {
@@ -282,17 +280,17 @@
       },
       {
         "caseId": "hard-stress-test",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1440,
           "height": 990,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 1.921,
+          "changedPixelShare": 0.01044,
+          "maxDifference": 238
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "spatial-relationship",
@@ -309,7 +307,9 @@
         "reason": null
       }
     ],
-    "differing": [],
+    "differing": [
+      "hard-stress-test"
+    ],
     "uncovered": [],
     "note": "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it."
   },
@@ -465,9 +465,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "d59962227204dbd8bb2764b5a2b3bb61aec465f7",
-        "serverBuild": "unknown",
-        "pluginBuild": "unknown",
+        "commit": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279",
         "note": null
       }
     },

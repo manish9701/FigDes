@@ -316,6 +316,16 @@ async function resolveGuardTarget(
     return { snapshot: snapshotFromInspected(inspected) };
   }
 
+  // A blank target must never reach `find_node`: an empty query throws a
+  // bare transport error, where #18 requires an explicit indeterminate
+  // result with the same shape as every other miss.
+  if (target.trim().length === 0) {
+    return {
+      ambiguity: "No target was named: pass a node id, or a name that matches a frame.",
+      candidates: [],
+    };
+  }
+
   // A node id is unambiguous; a name has to be looked up. The window is
   // deliberately wider than a disambiguation question can show: the count
   // reported to the caller is the lookup's file-wide total, so a capped

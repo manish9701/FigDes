@@ -98,5 +98,8 @@ resolves its target (`decideGuardTarget` / `resolveGuardTarget`):
   #18 forbids. It is now a not-found miss.
 
 Existing H04 wording (exact count, unique-name and missing-name messages)
-is preserved. Covered by three `decideGuardTarget` unit tests in
-`tests/product-guard-regressions.test.mjs`; shipped in **0.3.1**.
+is preserved. Covered by `decideGuardTarget` unit tests plus two
+`resolveGuardTarget` integration tests (blank never reaches `find_node`;
+capped windows report honestly) in
+`tests/product-guard-regressions.test.mjs`; shipped in **0.3.1**, with the
+blank-path resolution fix in **0.3.2**.

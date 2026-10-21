@@ -23,6 +23,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { runGuard, snapshotFromIR, metricsFromLiveNodes, decideGuardTarget } from "../mcp-server/dist-test/memory/guard.js";
+import { resolveGuardTarget } from "../mcp-server/dist-test/memory/tools.js";
 import { EXO_RULES } from "../mcp-server/dist-test/memory/rules-exo.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
@@ -374,4 +375,40 @@ test("guard target: a match without an id never becomes an empty use-id", () => 
   const decided = decideGuardTarget("Ghost", [{ name: "Ghost" }]);
   assert.equal(decided.kind, "not-found");
   assert.match(decided.message, /no usable node id/);
+});
+
+test("guard target resolution never calls find_node for a blank target", async () => {
+  // Regression for the live defect: the blank check lived in
+  // `decideGuardTarget`, which runs *after* the `find_node` lookup — so a
+  // blank target threw before the pure function could refuse it.
+  let findCalls = 0;
+  const stubSession = {
+    request: async (tool) => {
+      if (tool === "find_node") {
+        findCalls += 1;
+        throw new Error("find_node must not be called for a blank target");
+      }
+      throw new Error(`unexpected tool ${tool}`);
+    },
+  };
+  for (const blank of ["", "   "]) {
+    const resolved = await resolveGuardTarget(stubSession, blank);
+    assert.ok("ambiguity" in resolved, "a blank target asks");
+    assert.match(resolved.ambiguity, /No target was named/);
+  }
+  assert.equal(findCalls, 0, "no lookup was attempted");
+});
+
+test("guard target resolution reports a capped window honestly", async () => {
+  const ten = Array.from({ length: 10 }, (_, i) => ({ id: `3:${i}`, name: `Device row ${i}`, type: "FRAME" }));
+  const stubSession = {
+    request: async (tool) => {
+      if (tool === "find_node") return { matches: ten, total: 80 };
+      throw new Error(`collect_metrics must not run for an ambiguity, got ${tool}`);
+    },
+  };
+  const resolved = await resolveGuardTarget(stubSession, "Row");
+  assert.ok("ambiguity" in resolved);
+  assert.match(resolved.ambiguity, /at least 80/);
+  assert.equal(resolved.candidates.length, 10);
 });

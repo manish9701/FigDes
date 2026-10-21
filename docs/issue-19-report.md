@@ -40,7 +40,7 @@ Row titles became `✓ Qwen2.5 Coder 7B`, `✓ Mistral Nemo 12B`,
 backed by two text cues per row: the leading glyph and the right-hand
 status word. Txn `txn_bf5f0202`.
 
-**Row structure + reusable component.**
+**Row structure + reusable component — completed to all-instance.**
 The four flat 5-node row clusters were grouped (`txn_2ca8455b`) into
 `Model row — …` groups (`466:574`–`466:577`), then the first group was
 promoted with `create_component` to **`Model row / Installed` (`466:578`)**.
@@ -49,9 +49,16 @@ Promotion consumed the group into a page-level master, so an instance
 `update_component` normalised the master's children to component-relative
 coordinates (they had retained absolute frame coordinates, which rendered
 the instance double-offset and briefly produced a false `overflow`
-finding). The other three rows stay as identically-structured groups;
-migrating them to instances with per-model text overrides is open work
-(the operation layer has no text-override primitive for instances).
+finding). Then rows 2–4 were converted the same way: instances `477:324`
+(Mistral, `264,350`), `477:330` (Llama, `264,496`), `477:336` (Gemma,
+`264,642`) with per-model title/detail/status text overrides
+(`txn_68ab0df3` — instance-child overrides via the `I<instance>;<child>`
+ids resolve and commit), verified via metrics, and the three superseded
+groups were removed with explicit user approval (`txn_1ae15e78`, one
+Figma undo reverses it). **All four rows are now instances of one master:**
+`466:579` (Qwen), `477:324` (Mistral), `477:330` (Llama), `477:336`
+(Gemma). The guard snapshot counts all four instances, and the frame
+holds exactly 4 rows, confirmed by metrics and render.
 
 ## 3. After (re-run on the same frame, per the acceptance criteria)
 
@@ -75,14 +82,33 @@ styles ✓ (all 23 bound, audit PASS — §6).
 
 ## 4. Contrast evidence (measured, not claimed)
 
-`#77766E` on `#EEECE5` = **3.86:1**; on `#F7F6F2` = **4.22:1**;
-on `#FFFFFF` = 4.56:1 (which is why row details on white were never
-flagged). Applied repairs: `#6C6B64` on `#EEECE5` = **4.53:1** (sidebar
-texts `1554`, `1562`, `1563`, `1565`); `#72716A` on `#F7F6F2` =
-**4.53:1** (main-column texts `1555`, `1557`, `1561`). The fills are
+Every text/background pair on the frame was enumerated from live
+`collect_metrics` (23 text nodes) and measured with the reviewer's own
+effective-surface precedence (enclosing opaque sibling → parent fill →
+composited background) and thresholds (3:1 for ≥18 px, else 4.5:1).
+`.tools/contrast-issue19.mjs` reproduces the table:
+
+| Text | Pair | Ratio | Required |
+|---|---|---|---|
+| EXO wordmark (25 Bold) | `#252620` on `#F7F6F2` | 14.11:1 | 3:1 |
+| Workspace (11) | `#6C6B64` on `#EEECE5` | 4.53:1 | 4.5:1 |
+| Breadcrumb (11) | `#72716A` on `#F7F6F2` | 4.53:1 | 4.5:1 |
+| Page title (24 Semi Bold) | `#252620` on `#F7F6F2` | 14.11:1 | 3:1 |
+| Page subtitle (13) | `#72716A` on `#F7F6F2` | 4.53:1 | 4.5:1 |
+| Primary action label (13 Semi Bold) | `#252620` on `#D9E66A` | 11.24:1 | 4.5:1 |
+| Section label (11) | `#72716A` on `#F7F6F2` | 4.53:1 | 4.5:1 |
+| Overview / Devices / Connections (13) | `#6C6B64` on `#EEECE5` | 4.53:1 | 4.5:1 |
+| Models nav (13 Semi Bold) | `#252620` on `#EEECE5` | 12.90:1 | 4.5:1 |
+| Row titles ×4 (18 Semi Bold) | `#252620` on `#FFFFFF` | 15.25:1 | 3:1 |
+| Row details ×4 (12) | `#77766E` on `#FFFFFF` | 4.56:1 | 4.5:1 |
+| Row statuses ×4 (11 Medium) | `#52633A` on `#FFFFFF` | 6.55:1 | 4.5:1 |
+
+All 23 pass, including the tight ones (five at 4.53:1, four at 4.56:1).
+Row details read against the white row surface that actually backs them
+(`#77766E` on `#F7F6F2` would be 4.22:1 — which is why the surface, not
+the text, is the correct thing to measure against). The fills are
 surface-specific and not interchangeable: `#72716A` on `#EEECE5` measures
-4.15:1 and fails. Status `#52633A` on white = 6.55:1; action label
-`#252620` on `#D9E66A` = 11.24:1. These pairs are locked by
+4.15:1 and fails. These pairs are locked by
 `tests/issue-19-regressions.test.mjs`.
 
 ## 5. Repo change: the missing `setTextStyle` operation

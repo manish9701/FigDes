@@ -2,19 +2,19 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `1d9b14ee-2026-10-21T10-02-28-652Z` on commit `1d9b14ee24ef58c098c2af6c8a42631964c5c830` (main), 2026-10-21T10:02:28.652Z → 2026-10-21T10:03:41.656Z, 73.0s.
+Run `2f1987e7-2026-10-21T10-19-48-094Z` on commit `2f1987e7253ffc586de2f8cb41916c6035d8e259` (main), 2026-10-21T10:19:48.094Z → 2026-10-21T10:20:58.286Z, 70.2s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 26/26 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.8s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 60.8s | 947/947 test(s) passed |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.5s | 26/26 case(s) passed, run twice with identical verdicts |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.9s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 57.6s | 947/947 test(s) passed |
 | **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.7s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.3s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.7s | the live benchmark completed (10/10 case(s) with real renders and reviews); 10 case(s) were measured against an older commit; 10 case(s) cannot name the build that produced them |
 
 ## Gauntlet cases (26/26 passed)
 
@@ -38,7 +38,7 @@ Node v22.17.0 on win32-x64.
 | **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 17ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 11ms, worst 17ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |

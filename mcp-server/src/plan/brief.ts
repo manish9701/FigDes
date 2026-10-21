@@ -15,6 +15,7 @@
  */
 import { z } from "zod";
 import { classifyDecision, planScreen, templateFor, type ScreenIntent } from "./planner";
+import { pipelineBriefFromDesignBrief, type UnmappedField, type DesignBriefArgsShape } from "../pipeline/adapters";
 import type { Session } from "../sessions";
 
 export const DesignBriefArgs = z
@@ -48,7 +49,7 @@ export const DesignBriefArgs = z
  * Pure apart from planning, which is itself pure: no session, no Figma, no
  * network. Testable without a live anything.
  */
-export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
+export function buildBrief(args: DesignBriefArgsShape): unknown {
   const intent: ScreenIntent = {
     primaryDecision: args.primaryDecision,
     ...(args.goal !== undefined ? { goal: args.goal } : {}),
@@ -63,6 +64,20 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
   const plan = planScreen(intent);
   const kind = classifyDecision(args.primaryDecision);
   const template = templateFor(kind);
+
+  /**
+   * The pipeline bridge, computed here so the two brief tools are joined by
+   * construction rather than by a caller's copy-and-paste (issue #20): a
+   * brief whose fields survive `design_brief` but die between the tools is a
+   * schema leak. Renames and unmapped fields travel with the bridge, so every
+   * adaptation is documented at the moment it happens.
+   */
+  const { brief: pipelineBrief, renamed, unmapped } = pipelineBriefFromDesignBrief(args);
+  const bridge: { brief: unknown; renamed: UnmappedField[]; unmapped: UnmappedField[] } = {
+    brief: pipelineBrief,
+    renamed,
+    unmapped,
+  };
 
   const focal = plan.artDirection.focal;
   const [primary, ...secondary] = plan.artDirection.hierarchy;
@@ -96,8 +111,9 @@ export function buildBrief(args: z.infer<typeof DesignBriefArgs>): unknown {
     interactionStates: plan.artDirection.interactionStates,
     designRisks: plan.artDirection.designRisks,
     warnings: plan.warnings,
+    pipelineBrief: bridge,
     howToProceed:
-      "Hand the decision, template, available information and visualDirection to plan_screen for geometry and passes. The brief is the why; the plan is the where.",
+      "Hand the decision, template, available information and visualDirection to plan_screen for geometry and passes — or hand `pipelineBrief` straight to design_pipeline, whose input it already parses as. The brief is the why; the plan is the where.",
   };
 }
 

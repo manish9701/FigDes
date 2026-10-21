@@ -519,7 +519,7 @@ function textContrast(n: NodeMetrics, c: Ctx): Finding[] {
         : {}),
       guidance: repair
         ? `Set this layer's fill to ${repair.hex} to reach ${repair.ratio}:1, holding the hue and moving only lightness.`
-        : "Lighten or darken the surface behind it — no text colour reaches this ratio on ${n.background} without changing the design's voice.",
+        : `Lighten or darken the surface behind it — no text colour reaches this ratio on ${n.background ?? "this surface"} without changing the design's voice.`,
     },
   ];
 }
@@ -574,8 +574,15 @@ function overflow(n: NodeMetrics, c: Ctx): Finding[] {
         parentSize: `${parent.w}x${parent.h}`,
         childBox: `x=${round2(n.x)} y=${round2(n.y)} w=${n.w} h=${n.h}`,
         spills: spills.join(", "),
+        /**
+         * The collision taxonomy (issue #20): every collision-class finding
+         * carries a machine-readable classification, so a consumer can tell
+         * a containment breach from a sibling overlap or an intentional
+         * layering without parsing rule names or reasoning prose.
+         */
+        collision: { type: "containment", involvedIds: [n.id, parent.id], intent: "accidental", classification: `${n.type} escaping ${parent.type}` },
       },
-      nodeIds: [n.id],
+      nodeIds: [n.id, parent.id],
       guidance: `Shrink or reposition it so it stays inside "${parent.name}", or turn on clip content if the overhang is intentional.`,
     },
   ];
@@ -1559,10 +1566,11 @@ function textRouteCollision(n: NodeMetrics, c: Ctx): Finding[] {
         routeBox: `${Math.round(worst.w)}x${Math.round(worst.h)} at (${Math.round(worst.x)}, ${Math.round(worst.y)})`,
         overlapPx2: Math.round(hits[0]!.area),
         collidingRoutes: hits.length,
+        collision: { type: "label-over-route", involvedIds: [n.id, worst.id], intent: "accidental", classification: "text across a route line" },
         reasoning:
           "the label's box and the route's box occupy the same pixels, so the label reads as annotation for the connection rather than as information about the node it belongs to",
       },
-      nodeIds: [n.id],
+      nodeIds: [n.id, worst.id],
       guidance:
         "Move the label clear of the route — above or below the line, or beside its own node — or give it a surface so it separates from the line behind it. Do not move the route: it is the one element in a topology whose position carries meaning.",
     },
@@ -1679,6 +1687,7 @@ function siblingRegionOverlap(n: NodeMetrics, c: Ctx): Finding[] {
         overlapPx2: Math.round(worst.area),
         percentCovered: swallowed,
         overlappingSiblings: hits.length,
+        collision: { type: "sibling", involvedIds: [occluded.id, occluding.id], intent: "accidental", classification: "two siblings of the same parent drawn over each other" },
         reasoning:
           "two sibling regions share pixels and the covered one is drawn first, so whatever it paints is hidden behind the one drawn later. Neither region leaves its parent, so an overflow check cannot see it.",
       },

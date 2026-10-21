@@ -16,7 +16,7 @@ import type {
   StatusResult,
   PluginToolName,
 } from "../../shared/protocol";
-import { recordDisconnect, recordReconnect, recordUnknownSession } from "./metrics";
+import { recordDisconnect, recordReconnect, recordTimeout, recordUnknownSession } from "./metrics";
 
 const REQUEST_TIMEOUT_MS = 60_000;
 /** Long builds (fonts + hundreds of ops) legitimately take minutes. Timing out
@@ -106,6 +106,16 @@ function timeoutForTool(tool: PluginToolName): number {
  * bounded wait rather than a request that never returns.
  */
 const MAX_SLIDING_FACTOR = 4;
+
+/**
+ * Plugin requests one session may owe at once (issue #20, workstream 9).
+ *
+ * Generous by design: a real build is one transaction at a time plus a probe,
+ * and even a parallel review rarely exceeds a handful. The ceiling exists to
+ * turn runaway looping into an explicit, described limit instead of an
+ * unbounded queue against a single Figma thread.
+ */
+const MAX_SESSION_IN_FLIGHT = 24;
 
 interface Pending {
   resolve: (data: unknown) => void;
@@ -285,6 +295,25 @@ export class Session {
       return Promise.reject(new Error(`Plugin session ${this.id} is not connected.`));
     }
 
+    /**
+     * A per-session in-flight ceiling (issue #20, workstream 9).
+     *
+     * Nothing bounded the number of plugin requests one session could owe at
+     * once, so a loop that fired reviews/renders in parallel could queue
+     * unboundedly against a single Figma thread — the shape of a rate limit,
+     * self-inflicted. The ceiling is generous (a pipeline's genuine parallel
+     * work never approaches it) and the failure is explicit: the caller is
+     * told it has outrun the session and to retry after in-flight requests
+     * settle, rather than watching an opaque queue grow.
+     */
+    if (this.pending.size >= MAX_SESSION_IN_FLIGHT) {
+      return Promise.reject(
+        new Error(
+          `Rate limit: session ${this.id} already has ${this.pending.size} plugin request(s) in flight (ceiling ${MAX_SESSION_IN_FLIGHT}). Wait for the outstanding calls to settle — get_job_status names what is still being applied — then retry rather than queueing further work.`,
+        ),
+      );
+    }
+
     const budget = timeoutMs ?? timeoutForTool(tool);
     const requestId = `r_${randomUUID()}`;
     const transactionId = transactionIdOf(payload);
@@ -296,6 +325,7 @@ export class Session {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(requestId);
+        recordTimeout();
         // Keep the binding for the late-result path: the Figma main thread
         // keeps running after we stop waiting. Dropping it here is what turned
         // a stall into "failure, then everything pops at once anyway".
@@ -393,6 +423,7 @@ export class Session {
     if (elapsed >= ceiling) {
       clearTimeout(entry.timer);
       this.pending.delete(requestId);
+      recordTimeout();
       this.rememberTimedOut(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
       this.cancel(requestId, entry.transactionId, `server gave up after ${Math.round(elapsed)}ms of progress on ${done}/${total} ${label}`);
       entry.reject(
@@ -410,6 +441,7 @@ export class Session {
     clearTimeout(entry.timer);
     entry.timer = setTimeout(() => {
       this.pending.delete(requestId);
+      recordTimeout();
       this.rememberTimedOut(requestId, { tool: entry.tool, transactionId: entry.transactionId, timeoutMs: entry.timeoutMs, at: Date.now() });
       this.cancel(requestId, entry.transactionId, `server timeout after ${entry.timeoutMs}ms without progress`);
       entry.reject(
@@ -567,6 +599,18 @@ export class JobLedger {
   /** Monotonic attempt counter per transactionId; guards stale late results. */
   private readonly attempts = new Map<string, number>();
   private order: string[] = [];
+  /**
+   * Terminal records the bounded window evicted, kept only as ids.
+   *
+   * After eviction a `get_job_status` would report "unknown" — which is
+   * honest about memory, but a lie about history: the job *did* run and
+   * complete, and the retry-safety that the ledger exists for (a same-id
+   * retry must not re-execute a committed mutation) silently lapses once the
+   * record and the result cache drop. The ids let the status answer say so:
+   * "this transaction committed but its record was evicted; the idempotency
+   * guarantee no longer holds for a blind retry."
+   */
+  private readonly evicted = new Set<string>();
 
   begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string }): JobRecord {
     // A re-dispatch of the same id is a new attempt. Late results belonging to
@@ -592,15 +636,25 @@ export class JobLedger {
     if (this.order.length > 200) {
       const drop = this.order.splice(0, this.order.length - 200);
       for (const id of drop) {
-        if (this.jobs.get(id)?.state === "committed" || this.jobs.get(id)?.state === "rolled-back") {
-          // Keep terminal records longer than the window would suggest? No:
-          // bounded memory wins; get_job_status reports "unknown" with hints.
+        // Record which ids the bounded window gave up: a later get_job_status
+        // for one of them will be told the record was evicted, so a caller
+        // trusting "unknown" as "never ran" cannot be misled in either
+        // direction (issue #20).
+        this.evicted.add(id);
+        if (this.evicted.size > 400) {
+          const first = this.evicted.values().next().value;
+          if (first) this.evicted.delete(first);
         }
         this.jobs.delete(id);
         this.results.delete(id);
       }
     }
     return rec;
+  }
+
+  /** Whether a transaction id had a ledger record that was since evicted. */
+  wasEvicted(transactionId: string): boolean {
+    return this.evicted.has(transactionId);
   }
 
   update(transactionId: string, patch: Partial<JobRecord>): JobRecord | undefined {

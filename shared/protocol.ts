@@ -1221,13 +1221,23 @@ export interface MetricsReport {
 export type Confidence = "high" | "medium" | "low";
 export type Severity = "critical" | "serious" | "minor";
 
+/**
+ * The measured material a finding carries.
+ *
+ * Mostly flat scalars (the verdict machinery snapshots kept keys by name), but
+ * one nested value is allowed: the `collision` classification block, which is
+ * an object by design so a consumer can read its type/ids/intent without
+ * parsing prose (issue #20's collision-taxonomy requirement).
+ */
+export type FindingEvidenceValue = string | number | boolean | null | { [key: string]: string | number | boolean | string[] };
+
 export interface Finding {
   rule: string;
   confidence: Confidence;
   severity: Severity;
   title: string;
   /** What was measured, in plain numbers. Never a made-up score. */
-  evidence: Record<string, string | number | boolean | null>;
+  evidence: Record<string, FindingEvidenceValue>;
   nodeIds: string[];
   /** Pre-validated against OperationSchema; safe to hand straight to modify_design. */
   suggestedOperations?: Operation[];
@@ -1245,6 +1255,15 @@ export interface Finding {
 
 export interface ReviewReport {
   scope: string;
+  /**
+   * The resolved target and its name, in the report itself: a scope *name*
+   ("Homepage" or "current page (nothing was selected)") without the node id
+   leaves the reader trusting a label. The frame id is what makes "checked"
+   reproducible (issue #20).
+   */
+  target: string | null;
+  /** Null when no explicit target was given (selection or page fallback). */
+  targetName: string | null;
   reviewedNodes: number;
   truncated: boolean;
   summary: {
@@ -1272,10 +1291,24 @@ export interface ReviewReport {
   evidence: {
     nodesExamined: number;
     rulesEvaluated: number;
+    /** The names of every rule the ruleset ran, so a report is auditable. */
+    rulesEvaluatedNames: string[];
+    /**
+     * The node material the rules never saw.
+     *
+     * Zero only when the scan was complete. Rules are never silently skipped:
+     * a rule that cannot run throws, but hidden layers and nodes beyond the
+     * scan budget are a real omission with a real reason (skipReason), and a
+     * verdict built over them must not read as complete.
+     */
     rulesSkipped: number;
+    /** Why the skipped material was outside the rules' reach. */
+    skipReason?: string;
     truncated: boolean;
     /** Whether the scope was a whole screen rather than a layer or two. */
     scopeIsScreen: boolean;
+    /** Whether the scan names an explicit target rather than selection/page fallback. */
+    scopeIsNamedTarget: boolean;
     /** One line saying what the verdict means. */
     reason: string;
   };

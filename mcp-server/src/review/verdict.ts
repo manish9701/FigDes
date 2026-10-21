@@ -20,6 +20,17 @@ export interface ReviewVerdictInput {
   findings: Array<{ severity: string }>;
 }
 
+/**
+ * A review of fewer nodes than this has not judged a screen.
+ *
+ * The same floor the design guard applies (a leaf or a two-node stub passing
+ * every rule is an artefact of there being nothing to contradict — see the
+ * guard's MIN_SCREEN_NODES) applies here too: issue #20's retest showed a
+ * 1-node review with zero findings reading as PASS. It is deliberately low —
+ * it catches the one-node accident, not a legitimately sparse component.
+ */
+export const MIN_REVIEW_NODES = 3;
+
 export interface ReviewVerdictResult {
   verdict: ReviewVerdict;
   reason: string;
@@ -37,6 +48,12 @@ export function reviewVerdict(input: ReviewVerdictInput): ReviewVerdictResult {
     return {
       verdict: "INDETERMINATE",
       reason: `The scan was truncated after ${input.nodesExamined} node(s), so the screen was not fully examined.`,
+    };
+  }
+  if (input.nodesExamined < MIN_REVIEW_NODES) {
+    return {
+      verdict: "INDETERMINATE",
+      reason: `The scan examined ${input.nodesExamined} node(s), which is not enough to judge a screen. Review the frame, not a layer inside it.`,
     };
   }
   if (serious.length > 0) {

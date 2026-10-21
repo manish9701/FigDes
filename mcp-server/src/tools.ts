@@ -23,8 +23,8 @@ import {
   type StatusResult,
 } from "../../shared/protocol";
 import { SessionRegistry, type Session, TransactionTimeoutError, SessionDisconnectedError } from "./sessions";
-import { runRules, summarise, evaluatedRuleCount, type RuleSet } from "./review/rules";
-import { reviewVerdict } from "./review/verdict";
+import { runRules, summarise, evaluatedRuleCount, evaluatedRuleNames, type RuleSet } from "./review/rules";
+import { reviewVerdict, MIN_REVIEW_NODES } from "./review/verdict";
 import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue } from "./runtime/tools";
 import { renderDesign } from "./render-tool";
 import { DesignGuardArgs, ProjectMemoryArgs, designGuardTool, projectMemoryTool } from "./memory/tools";
@@ -474,6 +474,58 @@ export function buildCompatibility(serverBuild: string, pluginBuild: string | un
 }
 
 /**
+ * The tools that measure or change a live design and therefore depend on the
+ * plugin and server being the same code.
+ *
+ * Issue #20's compatibility requirement was only "reported" before: it lived
+ * in `figma_status`, which a workflow never reads. Every workflow tool below
+ * gets its result annotated with a build-compatibility warning when the two
+ * builds are not a same-commit pair, so the finding travels with the work
+ * instead of hiding in a separate tool's output.
+ */
+export const BUILD_DEPENDENT_TOOLS = new Set<string>([
+  "inspect_selection",
+  "inspect_file",
+  "render_design",
+  "review_design",
+  "audit_design",
+  "design_runtime",
+  "score_design",
+  "critique_visual",
+  "refine_screen",
+  "final_qa",
+  "design_snapshot",
+  "compile_ir",
+  "design_guard",
+  "design_pipeline",
+  "figdes_use_figma",
+  "figdes_inspect_visual",
+  "compare_visuals",
+  "create_design",
+  "modify_design",
+  "edit_screen",
+]);
+
+/**
+ * The compatibility finding for the session a tool is about to touch, or null
+ * when the build pair is the same commit.
+ *
+ * `unverifiable` is a warning too, not a silence: a plugin that reports no
+ * build cannot be tied to a commit, which is exactly the state where a live
+ * measurement describes code nobody can point at.
+ */
+export function buildScopeWarning(session: { build?: string } | null | undefined): { compatibility: "different-commit" | "unverifiable"; note: string } | null {
+  const pluginBuild = typeof session?.build === "string" ? session.build : undefined;
+  const compatibility = buildCompatibility(SERVER_BUILD, pluginBuild);
+  if (compatibility === "same-commit") return null;
+  const note =
+    compatibility === "different-commit"
+      ? `Build mismatch: the server is ${SERVER_BUILD} and the connected plugin reports ${pluginBuild}. Rules, schemas and layout behaviour can differ between the two — the measures below may not describe this repository's behaviour. Rebuild the plugin and reload it (close and reopen the panel) before trusting a verdict from this run.`
+      : `Build unverifiable: the connected plugin did not report a build stamp, so this run cannot be tied to a commit. Rebuild the plugin and reload it (close and reopen the panel), then re-run this tool before relying on a verdict.`;
+  return { compatibility, note };
+}
+
+/**
  * A failed transaction is thrown as an MCP tool error rather than returned as a
  * successful payload. Returning `{status:"failed"}` as a *success* invites the
  * model to gloss over it and report the design as done.
@@ -529,7 +581,42 @@ async function reviewSession(
    */
   const rulesEvaluated = evaluatedRuleCount(ruleset);
   const nodesExamined = raw.nodeCount;
-  const scopeIsScreen = raw.nodeCount > 0;
+  // "No explicit target" is part of the verdict's provenance: the report names
+  // it rather than leaving a page-or-selection scan looking like a named one.
+  const targetless = collectArgs.target === undefined;
+  /**
+   * Was a screen actually judged?
+   *
+   * "Some nodes came back" is not "a screen was checked": the live retest
+   * produced a page-fallback scan and a one-layer selection, and both read as
+   * screen-level evidence. A page scan is wider than one screen, and fewer
+   * nodes than MIN_REVIEW_NODES cannot certify one — both say so instead of
+   * setting scopeIsScreen: true.
+   */
+  const scopeName = typeof raw.scope === "string" ? raw.scope : "";
+  const pageFallback = /current page/i.test(scopeName);
+  const selectionOnly = /\ selected$|empty/i.test(scopeName) && scopeName.includes("selection");
+  const scopeIsScreen = nodesExamined >= MIN_REVIEW_NODES && !pageFallback && !selectionOnly;
+  /**
+   * What the rules could not see, said in numbers rather than hardwired to zero.
+   *
+   * The engine never judges hidden layers or nodes the scan could not reach,
+   * so "rulesSkipped: 0" is only true when the scan itself was complete. A
+   * rule that crashed is a thrown error (never a silent skip), but hidden and
+   * truncated nodes are a real skip with a real reason.
+   */
+  const hiddenNodes = raw.nodes.filter((n) => !n.visible).length;
+  const truncatedNodes = raw.truncated ? Math.max(0, raw.scanBudget - raw.nodeCount) : 0;
+  const skippedNodeCount = hiddenNodes + truncatedNodes;
+  const skipReason =
+    skippedNodeCount === 0
+      ? null
+      : [
+          truncatedNodes > 0 ? `the scan budget cut off ${truncatedNodes} node(s)` : null,
+          hiddenNodes > 0 ? `${hiddenNodes} hidden layer(s) outside the rules' scope` : null,
+        ]
+          .filter(Boolean)
+          .join("; ");
   const judged = reviewVerdict({
     nodesExamined,
     rulesEvaluated,
@@ -540,8 +627,10 @@ async function reviewSession(
 
   return {
     scope: raw.scope,
-    reviewedNodes: raw.nodeCount,
-    truncated,
+    /** The resolved target, so a reader can tell which frame/id produced this verdict. */
+    target: raw.target ?? null,
+    targetName: targetless ? null : raw.scope,
+    reviewedNodes: raw.nodeCount,    truncated,
     summary,
     autoFixable: findings.filter((f) => f.confidence === "high" && f.suggestedOperations?.length).length,
     findings,
@@ -554,9 +643,13 @@ async function reviewSession(
     evidence: {
       nodesExamined,
       rulesEvaluated,
-      rulesSkipped: 0,
+      rulesEvaluatedNames: evaluatedRuleNames(ruleset),
+      /** The node materials the rules never saw. Zero only when the scan was complete. */
+      rulesSkipped: skippedNodeCount,
+      skipReason: skipReason ?? undefined,
       truncated: raw.truncated === true,
       scopeIsScreen,
+      scopeIsNamedTarget: !targetless,
       reason: judged.reason,
     },
     ...(verdict === "INDETERMINATE"
@@ -1737,10 +1830,14 @@ inputSchema: ModifyArgs,
       const parsed = (z.object({ transactionId: z.string().min(1).max(200), sessionId: SessionArg }).strict()).parse(args ?? {});
       const job = registry.jobs.get(parsed.transactionId);
       if (!job) {
+        const evicted = registry.jobs.wasEvicted?.(parsed.transactionId) ?? false;
         return {
           status: "unknown",
           transactionId: parsed.transactionId,
-          howToProceed: "No ledger record for this id. It either predates this server run or never dispatched. Re-send with the SAME transactionId once; if it was already applied you will get a duplicate-safe result instead of duplicated nodes.",
+          ...(evicted ? { evicted: true } : {}),
+          howToProceed: evicted
+            ? "This transaction ran and completed earlier, but the bounded ledger window evicted its record, so the same-id idempotency guarantee no longer holds: the result cache and history are gone. Inspect the target subtree for the expected nodes and confirm what landed before re-sending; if you re-send, the plugin-side dedupe is the remaining (bounded) guard."
+            : "No ledger record for this id. It either predates this server run or never dispatched. Re-send with the SAME transactionId once; if it was already applied you will get a duplicate-safe result instead of duplicated nodes.",
           recentJobs: registry.jobs.recent(5),
         };
       }

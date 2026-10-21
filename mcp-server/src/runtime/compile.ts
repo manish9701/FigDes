@@ -667,6 +667,14 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // This is what "prefer tokens automatically" means mechanically: the model
   // writes the token name where a hex would go, and the binding is emitted for
   // it. Literals pass through untouched.
+  // Before that pass runs, a design that *declares* its own colour variables
+  // gets its matching literals bound to them (bindPaletteToTokens): a program
+  // that says "this surface is exo/surface = #23241F" and then paints
+  // #23241F/raw hex everywhere was reporting its own palette and still
+  // shipping one-off fills — exactly the drift issue #20's reuse requirement
+  // names. Only exact, unambiguous hex matches bind; literals whose value two
+  // declared variables share are left alone.
+  bindPaletteToTokens(operations);
   bindTokenRefs(operations);
 
   /* -------------------------------------------------------- constraints --- */
@@ -808,6 +816,70 @@ function bindTokenRefs(operations: Operation[]): void {
     }
   }
 
+  operations.push(...binds);
+}
+
+/**
+ * Binds hardcoded colour literals to the variables the design itself declared.
+ *
+ * `bindTokenRefs` handles token *names*; this handles the other half of reuse:
+ * the compiler's own palette constants (and any raw hex the caller used) that
+ * match a colour variable the same program declares with `seed_exo_system` or
+ * a `variable` primitive. The result is that a repeated UI pattern painted
+ * with one-off hexes ends up on the file's variables instead — the token
+ * adoption issue #20 asks for — without changing any visible colour.
+ *
+ * Only unambiguous single-mode colour values bind. A literal two variables
+ * share, or a variable whose chosen mode is not a colour literal, is left as
+ * a literal; binding the wrong token is worse than shipping the hex.
+ */
+function bindPaletteToTokens(operations: Operation[]): void {
+  // Variables are defined by createVariable ops in declaration order; only a
+  // single-mode value is unambiguous, and "default" is preferred when present.
+  const byHex = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  for (const candidate of operations) {
+    const c = candidate as { type?: string; id?: string; name?: string; variableType?: string; values?: Record<string, unknown> };
+    if (c.type !== "createVariable" || typeof c.name !== "string") continue;
+    if (c.variableType !== undefined && String(c.variableType).toUpperCase() !== "COLOR") continue;
+    const values = c.values;
+    if (!values) continue;
+    const modes = Object.keys(values);
+    const mode = modes.includes("default") ? "default" : modes.length === 1 ? modes[0]! : undefined;
+    if (mode === undefined) continue;
+    const value = values[mode];
+    if (typeof value !== "string" || !isColorLiteral(value)) continue;
+    const hex = value.trim().toUpperCase();
+    if (byHex.has(hex)) {
+      // A second variable claiming the same value makes the hex ambiguous:
+      // mark it, and the bind step leaves those literals as literals.
+      ambiguous.add(hex);
+      byHex.delete(hex);
+      continue;
+    }
+    if (ambiguous.has(hex)) continue;
+    byHex.set(hex, c.name);
+  }
+  if (byHex.size === 0) return;
+
+  // Token definitions themselves are definitions, not painted nodes.
+  const SELF_DEFINING = new Set(["createVariable", "createPaintStyle", "createTextStyle", "bindVariable"]);
+  const binds: Operation[] = [];
+  for (let i = 0; i < operations.length; i++) {
+    const candidate = operations[i] as { type?: string; id?: string; fill?: unknown; stroke?: unknown } & Record<string, unknown>;
+    if (SELF_DEFINING.has(candidate.type ?? "")) continue;
+    for (const [key, field] of [["fill", "fills"], ["stroke", "strokes"]] as const) {
+      const value = candidate[key];
+      if (typeof value !== "string" || !isColorLiteral(value)) continue;
+      const hex = value.trim().toUpperCase();
+      if (ambiguous.has(hex)) continue;
+      const variable = byHex.get(hex);
+      if (variable === undefined) continue;
+      if (candidate.id === undefined) candidate.id = `bind-target-${i}`;
+      candidate[key] = key === "fill" ? [] : "#000000";
+      binds.push(op({ type: "bindVariable", target: candidate.id, field, variable }));
+    }
+  }
   operations.push(...binds);
 }
 
@@ -3610,7 +3682,18 @@ function patchPosition(operations: Operation[], id: string, x: number, y: number
   for (let i = operations.length - 1; i >= 0; i--) {
     const candidate = operations[i] as { type?: string; id?: string } & Record<string, unknown>;
     if (candidate.id !== id) continue;
-    if (candidate.type !== "createText" && candidate.type !== "createFrame" && candidate.type !== "createRectangle" && candidate.type !== "createEllipse") continue;
+    // createVector is included because chart and logo geometry emit vector
+    // nodes with an x/y of their own; patchEmit (which re-writes a node
+    // wholesale) already learned this — this narrower patch had not, and a
+    // moved region that produced vector content kept its stale coordinates.
+    if (
+      candidate.type !== "createText" &&
+      candidate.type !== "createFrame" &&
+      candidate.type !== "createRectangle" &&
+      candidate.type !== "createEllipse" &&
+      candidate.type !== "createVector"
+    )
+      continue;
     candidate.x = Math.round(x);
     candidate.y = Math.round(y);
     return;

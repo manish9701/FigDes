@@ -109,6 +109,17 @@ export function evaluateFinalGate(input: {
    */
   states?: { declared: number };
   /**
+   * Accessibility coverage (issue #20, workstream 7), opt-in by shape.
+   *
+   * The blueprint's accessibility evaluator produces findings and a list of
+   * what was NOT checked — and the gate that actually runs (this one) had no
+   * accessibility dimension at all, so contrast and target-size failures
+   * never blocked. Now: one or more accessibility findings blocks PASS, and
+   * outstanding (notChecked) accessibility checks also refuse a clean PASS —
+   * evaluating nothing is not the same as passing everything.
+   */
+  accessibility?: { findings: number; notChecked: string[] };
+  /**
    * Adjudicated issues stop blocking only as false-positive/intentional WITH
    * a tested rule correction and retained rationale. Confirmed, unresolved,
    * or correction-less rulings keep blocking. The moved issues land in
@@ -166,33 +177,41 @@ export function evaluateFinalGate(input: {
     }
     return true;
   });
-  if (remaining.length > 0) {
+  const a11yFailures = input.accessibility?.findings ?? 0;
+  const a11yBlocking = a11yFailures > 0 ? [`Accessibility: ${a11yFailures} finding(s) below WCAG thresholds.`] : [];
+  if (remaining.length > 0 || a11yBlocking.length > 0) {
     return {
       status: "FAIL",
       scores,
-      blockingIssues: remaining,
+      blockingIssues: [...remaining, ...a11yBlocking],
       repairHistory: input.repairHistory ?? [],
       renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
-      reason: "Blocking visual-quality issues remain. Repair and re-render within budget.",
+      reason: a11yBlocking.length > 0
+        ? "Blocking issues remain, including accessibility findings below WCAG thresholds. Repair and re-render within budget."
+        : "Blocking visual-quality issues remain. Repair and re-render within budget.",
       adjudicated,
     };
   }
+  const a11yNotChecked = input.accessibility?.notChecked ?? [];
   const needsReview =
     input.visualEvidenceVerified !== true ||
-    scores.hierarchy < FINAL_THRESHOLDS.hierarchyReviewBelow || scores.productFit < FINAL_THRESHOLDS.productFitReviewBelow;
+    scores.hierarchy < FINAL_THRESHOLDS.hierarchyReviewBelow ||
+    scores.productFit < FINAL_THRESHOLDS.productFitReviewBelow;
   const stateless = input.states !== undefined && input.states.declared === 0;
-  if (needsReview || stateless) {
+  if (needsReview || stateless || a11yNotChecked.length > 0) {
     return {
       status: "REVIEW",
       scores,
       blockingIssues: [],
       repairHistory: input.repairHistory ?? [],
       renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
-      reason: input.visualEvidenceVerified !== true
-        ? "Structural checks are incomplete as final evidence: inspect a fresh rendered screenshot before marking PASS."
-        : stateless
-          ? "No interaction states declared: add at least one hover, selected or non-default state so the screen reads as finished."
-          : "No blocking issues, but hierarchy or product fit needs a human look before done.",
+      reason: a11yNotChecked.length > 0
+        ? `Accessibility could not be fully verified (not checked: ${a11yNotChecked.join("; ")}), so a clean PASS is not available — verify those manually.`
+        : input.visualEvidenceVerified !== true
+          ? "Structural checks are incomplete as final evidence: inspect a fresh rendered screenshot before marking PASS."
+          : stateless
+            ? "No interaction states declared: add at least one hover, selected or non-default state so the screen reads as finished."
+            : "No blocking issues, but hierarchy or product fit needs a human look before done.",
       adjudicated,
     };
   }

@@ -12,6 +12,8 @@
  * this module never reports a conformance verdict — only findings and coverage.
  */
 import { makeFinding, type DesignFinding } from "./finding";
+import { evaluateTextContrast } from "../../../../shared/contrast";
+import type { MetricsReport, NodeMetrics } from "../../../../shared/protocol";
 
 /** WCAG AA for normal text. Large text (≥18pt / 24px bold) relaxes to 3:1. */
 export const CONTRAST_MIN_NORMAL = 4.5;
@@ -421,4 +423,123 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
       : `${findings.length} accessibility finding(s) (${critical} critical); ${notChecked.length} check(s) could not be verified from a static frame. This is not a conformance claim.`;
 
   return { findings, checked, notChecked, summary };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live-material adapter                                                       */
+/* -------------------------------------------------------------------------- */
+
+/** Interactive-looking node shapes the target-size check applies to. */
+const INTERACTIVE_TYPES = new Set(["FRAME", "INSTANCE", "COMPONENT", "COMPONENT_SET"]);
+const INTERACTIVE_NAME = /\b(button|btn|icon|tab|link|control|toggle|checkbox|radio|input|field|menu|dropdown|select|chip|cta|action)\b/i;
+
+/**
+ * Builds the evaluator's input from the plugin's measured node tree.
+ *
+ * Only what the measurement can honestly supply enters the input: text with a
+ * resolved colour pair and size, targets that look interactive by name and
+ * shape, unlabelled icon controls, and colour-only state text. Everything
+ * else is omitted on purpose, so the evaluator's `notChecked` list says what
+ * could not be verified rather than silently evaluating nothing.
+ */
+export function accessibilityInputFromMetrics(report: MetricsReport, revisionId: string): AccessibilityInput {
+  const nodes = report.nodes.filter((n) => n.visible);
+  const typeById = new Map(nodes.map((n) => [n.id, n.type] as const));
+
+  const texts: AccessibilityText[] = [];
+  const nonText: Array<{ id: string; label: string; contrastRatio: number }> = [];
+  const targets: AccessibilityTarget[] = [];
+  const controls: AccessibilityControl[] = [];
+  const stateIndicators: AccessibilityStateIndicator[] = [];
+
+  for (const n of nodes) {
+    if (n.type === "TEXT" && n.text) {
+      // The live critic's measurement discipline: the text's own fill is the
+      // foreground; the composited background behind it is what contrast is
+      // measured against. Variable-bound fills carry no hex, and evaluating
+      // one guessed colour would be worse than skipping the text — those go
+      // to the adapter's blind spot and the report says so.
+      if (typeof n.text.color === "string" && typeof n.background === "string") {
+        const measured = evaluateTextContrast({ color: n.text.color, background: n.background, fontSize: n.text.size, bold: false });
+        if (!("unmeasurable" in measured)) {
+          const perLine = estimateLineLength(n);
+          texts.push({
+            id: n.id,
+            content: n.text.content.slice(0, 120),
+            size: n.text.size ?? undefined,
+            lineLength: perLine,
+            contrastRatio: measured.ratio,
+            isBold: false,
+            encodesState: /\b(offline|online|error|fail|pass|ready|queued|connected|disconnected)\b/i.test(n.text.content),
+          });
+        }
+        if (/\b(offline|online|error|fail|pass|ready|queued|connected|disconnected)\b/i.test(n.text.content)) {
+          // Colour-only state cannot be inferable from fill alone when the
+          // content itself carries the word; the rules-level check (colour-
+          // only-state) is authoritative, so the state indicator here only
+          // flags texts whose content names a state with no colour pair
+          // measurable at all — otherwise omitted.
+          if (!("unmeasurable" in measured) && measured.ratio < CONTRAST_MIN_NORMAL) {
+            stateIndicators.push({ id: n.id, label: n.text.content.slice(0, 40), colorOnly: true });
+          }
+        }
+      }
+    } else if (INTERACTIVE_TYPES.has(n.type) && INTERACTIVE_NAME.test(n.name ?? "") && n.w >= 8 && n.h >= 8) {
+      const hasLabel = nodes.some((s) => s.parentId === n.id && s.type === "TEXT" && (s.text?.content ?? "").trim().length > 0);
+      targets.push({ id: n.id, label: n.name, width: n.w, height: n.h });
+      controls.push({ id: n.id, label: n.name, hasAccessibleName: hasLabel });
+    }
+    // Non-text contrast: filled shapes that visibly carry meaning (indicators)
+    if (n.type !== "TEXT" && INTERACTIVE_TYPES.has(n.type) === false && typeof n.fill === "string" && INDICATOR_VS_SHAPE.test(n.name ?? "")) {
+      const measured = evaluateTextContrast({ color: n.fill, background: n.background ?? null, fontSize: null, bold: false });
+      if (!("unmeasurable" in measured) && (n.background ?? null)) {
+        nonText.push({ id: n.id, label: n.name, contrastRatio: measured.ratio });
+      }
+    }
+  }
+
+  // Nearest-gap for targets is computable from the boxes: same-parent
+  // neighbours only, so a gap measurement names what it measured.
+  for (const t of targets) {
+    const own = nodes.find((n) => n.id === t.id);
+    let nearestGap: number | undefined;
+    if (own?.parentId) {
+      for (const s of nodes) {
+        if (s.id === t.id || s.parentId !== own.parentId) continue;
+        if (!INTERACTIVE_TYPES.has(s.type) || !INTERACTIVE_NAME.test(s.name ?? "")) continue;
+        const gap = gapBetween(own, s);
+        if (nearestGap === undefined || gap < nearestGap) nearestGap = gap;
+      }
+    }
+    if (nearestGap !== undefined) t.nearestGap = nearestGap;
+  }
+
+  return {
+    revisionId,
+    texts: texts.length > 0 ? texts : undefined,
+    nonText: nonText.length > 0 ? nonText : undefined,
+    stateIndicators: stateIndicators.length > 0 ? stateIndicators : undefined,
+    targets: targets.length > 0 ? targets : undefined,
+    controls: controls.length > 0 ? controls : undefined,
+  };
+}
+
+const INDICATOR_VS_SHAPE = /\b(dot|indicator|badge|led|status)\b/i;
+
+/** Rough characters-per-line for the 95-char limit check. */
+function estimateLineLength(n: NodeMetrics): number | undefined {
+  if (!n.text) return undefined;
+  const content = n.text.content;
+  if (content.includes("\n")) return Math.round(content.length / Math.max(1, content.split("\n").length));
+  // Single-line text: the measured fill width against the font size gives the
+  // characters that fit one line; a narrower box than the content means wrap.
+  if (n.w <= 0 || !n.text.size) return undefined;
+  return Math.round(n.w / (n.text.size * 0.5));
+}
+
+/** Horizontal/vertical gap between two boxes that do not overlap. */
+function gapBetween(a: NodeMetrics, b: NodeMetrics): number {
+  const dx = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w), 0);
+  const dy = Math.max(b.y - (a.y + a.h), a.y - (b.y + b.h), 0);
+  return Math.round(Math.max(dx, dy));
 }

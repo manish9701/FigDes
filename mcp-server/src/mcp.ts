@@ -8,12 +8,25 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { ZodError } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { TOOL_NAMES } from "../../shared/protocol";
 import { SessionRegistry } from "./sessions";
-import { TOOLS } from "./tools";
+import { TOOLS, BUILD_DEPENDENT_TOOLS, buildScopeWarning } from "./tools";
 import { clients, inferClientFromUserAgent } from "./clients/registry";
 import { randomUUID } from "node:crypto";
+import type { Session } from "./sessions";
+
+/** The session a tool call targeted, from its args — the same lookup targetOf does. */
+function sessionOf(args: unknown, registry: SessionRegistry): Session | null {
+  try {
+    const sessionId = (args as { sessionId?: unknown } | null)?.sessionId;
+    if (typeof sessionId !== "string" || !sessionId) return null;
+    return registry.get(sessionId) ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export interface McpHandle {
   handle: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
@@ -407,7 +420,21 @@ function buildServer(registry: SessionRegistry, requestClient?: RequestClient): 
         clients.start(clientName, callId, tool.name, target, clientVersion);
         console.log(`${stamp()} CALL ${tool.name} [${entry.display}]${preview(args)}`);
         try {
-          const data = await tool.handler(args, registry);
+          let data = await tool.handler(args, registry);
+          /**
+           * The build-compatibility warning travels with the work (issue #20).
+           *
+           * It used to live only inside `figma_status`; a workflow never read
+           * that, so rules and layout behaviour could differ between the two
+           * builds while every verdict below looked ordinary. When the session
+           * a workflow tool touched is not a same-commit pair, the result is
+           * annotated so the mismatch is standing next to the verdict it
+           * colours.
+           */
+          if (typeof tool?.name === "string" && BUILD_DEPENDENT_TOOLS.has(tool.name) && data && typeof data === "object") {
+            const warn = buildScopeWarning(sessionOf(args, registry));
+            if (warn) data = { ...(data as Record<string, unknown>), buildCompatibility: warn };
+          }
           const status =
             data && typeof data === "object" && "status" in data && "transactionId" in data
               ? ` -> ${String((data as { status: unknown }).status)}`
@@ -437,8 +464,24 @@ function buildServer(registry: SessionRegistry, requestClient?: RequestClient): 
             structuredContent: wrapStructured(data),
           };
         } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          console.log(`${stamp()} ERR  ${tool.name} [${entry.display}]: ${message}`);
+          /**
+           * A validation error names its stage (issue #20, workstream 1).
+           *
+           * Zod messages carry the field path but not the tool, so an error
+           * surfacing from a twelve-tool server read as "invalid input" with
+           * no hint which boundary rejected or what stage it was. Prefixing
+           * the tool name at the single place every tool call passes through
+           * turns each error into "which tool, which field, what was wrong".
+           */
+          const message =
+            err instanceof ZodError
+              ? `${tool.name}: invalid arguments — ${err.issues
+                  .map((i) => `${i.path.length > 0 ? i.path.join(".") : "(root)"}: ${i.message}`)
+                  .join("; ")}. Fix the named field(s) and call ${tool.name} again.`
+              : err instanceof Error
+                ? err.message
+                : String(err);
+          console.log(`${stamp()} ERR  ${tool.name} [${entry.display}]: ${message.slice(0, 500)}`);
           clients.finish(callId, "error", message.slice(0, 120));
           announce(registry, entry.display, tool.name, `failed: ${message.slice(0, 120)}`);
           return {

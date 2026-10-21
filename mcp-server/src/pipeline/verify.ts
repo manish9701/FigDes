@@ -605,6 +605,35 @@ export function verifyLive(
     }
   }
 
+  /**
+   * An incomplete census is incomplete evidence, even when everything
+   * collected agrees with the plan. The absence rules judge what is *absent*
+   * from the scan; a scan cut off at the cap has unscanned nodes that could
+   * contradict every pass it reports, so the incompleteness is a state of its
+   * own rather than a footnote (issue #20).
+   */
+  if (metrics !== null && metrics.truncated === true) {
+    checks.push({
+      id: "live-scan-complete",
+      question: "Did the scan see the whole built screen?",
+      status: "indeterminate",
+      detail: `The scan capped at ${metrics.scanBudget} node(s) after reading ${metrics.nodeCount}; the rest of the screen was not examined.`,
+      nodeIds: [],
+    });
+    findings.push({
+      id: "live-scan-truncated",
+      stage: "live",
+      severity: "medium",
+      confidence: 0.9,
+      nodeIds: [],
+      summary: "The live scan was truncated before the whole screen was read.",
+      why: "A truncated census fails closed: rules that judge absence cannot certify what they never read, and reporting their passes as complete would be a false pass.",
+      evidence: { kind: "rule", detail: `scan cap ${metrics.scanBudget}, read ${metrics.nodeCount}` },
+      fix: "Inspect the screen in sections (per region) with a higher scan budget, and verify again.",
+      automatable: true,
+    });
+  }
+
   /* --- the review rules --------------------------------------------------- */
 
   if (evidence.ruleFindings !== undefined) {
@@ -632,6 +661,37 @@ export function verifyLive(
         ...(f.suggestedOperations !== undefined && f.suggestedOperations.length > 0 ? { suggestedOperations: f.suggestedOperations } : {}),
       });
     }
+  }
+
+  /**
+   * The rules could not run is a state of its own, not an absence of checks.
+   *
+   * When `runRules` threw, `ruleFindings` stays undefined — and without this
+   * branch the review-rules check simply does not exist in the result, so a
+   * built screen whose rule engine crashed could still aggregate to "pass"
+   * through the checks that did run (issue #20). The check is recorded as
+   * INDETERMINATE, which the status aggregator can never read as clean.
+   */
+  else if (evidence.metrics !== null && evidence.metrics !== undefined) {
+    checks.push({
+      id: "review-rules",
+      question: "Does the built screen pass the review rules?",
+      status: "indeterminate",
+      detail: "The rule engine could not run over the measured screen, so the structural review of the live build did not happen.",
+      nodeIds: [],
+    });
+    findings.push({
+      id: "review-rules-unverified",
+      stage: "live",
+      severity: "medium",
+      confidence: 0.8,
+      nodeIds: [],
+      summary: "The review rules could not run over the built screen.",
+      why: "A rule engine that crashed is not a rule engine that found nothing. Skipping the check silently would let an unchecked screen aggregate to a pass.",
+      evidence: { kind: "rule", detail: "the rule engine could not run over the collected metrics" },
+      fix: "Re-run the pipeline, or review the frame with design_guard / review_design before calling it done.",
+      automatable: true,
+    });
   }
 
   /* --- the render is fresh ------------------------------------------------ */

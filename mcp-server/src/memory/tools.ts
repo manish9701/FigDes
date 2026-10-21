@@ -14,6 +14,7 @@ import { VerdictSchema } from "../../../shared/memory";
 import type { MetricsReport } from "../../../shared/protocol";
 import { inferComposition } from "../runtime/layout";
 import { runGuard, snapshotFromIR, decideGuardTarget, metricsFromLiveNodes, type GuardSnapshot } from "./guard";
+import { checkCapabilityTruth } from "./capability-truth";
 import { addNote, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
 import type { Session } from "../sessions";
 
@@ -235,15 +236,36 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
 
   const result = runGuard(memory.rules, snapshot);
 
+  /**
+   * The capability-truth stage: what the screen *claims*, checked separately
+   * from how it behaves (issue #20, workstream 8). A screen can pass every
+   * design rule and still present unconfirmed Enterprise features as shipped.
+   * The fold is deliberate: a FAIL here fails the guard verdict, a
+   * WARNING/INDETERMINATE is reported and downgrades an otherwise clean PASS
+   * to WARNING-level truth, but never silently upgrades anything.
+   */
+  const capability = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });
+  let verdict = result.verdict;
+  if (capability.verdict === "FAIL" && verdict !== "FAIL") verdict = "FAIL";
+  if (capability.verdict !== "PASS" && verdict === "PASS") verdict = "WARNING";
+  const capabilityNote = `capability-truth: ${capability.reason}`;
+
   return {
     // `indeterminate` is deliberately not `ok`: nothing was checked, so there
     // is no outcome to report as a success. A caller keying on `status` must
     // not treat an empty snapshot as a clean run.
-    status: result.verdict === "INDETERMINATE" ? "indeterminate" : "ok",
+    status: verdict === "INDETERMINATE" ? "indeterminate" : "ok",
     project: key,
-    verdict: result.verdict,
+    verdict,
     findings: result.findings,
     stats: result.stats,
+    /** What the screen claims, and whether the product can back it. */
+    capabilityTruth: {
+      verdict: capability.verdict,
+      reason: capability.reason,
+      source: capability.source,
+      findings: capability.findings,
+    },
     snapshot: {
       source: snapshot.source ?? "unknown",
       resolved: snapshot.resolved ?? true,
@@ -253,7 +275,8 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
       components: snapshot.components,
       metrics: snapshot.metrics,
     },
-    ...(result.verdict === "INDETERMINATE"
+    ...(verdict !== result.verdict ? { note: capabilityNote } : {}),
+    ...(verdict === "INDETERMINATE"
       ? {
           howToProceed:
             "Resolve the target and re-run. An empty snapshot means no rule was evaluated — it is never evidence that the design passes.",
@@ -301,7 +324,15 @@ function snapshotFromMetrics(metrics: MetricsReport, targetId?: string): GuardSn
 
   return {
     source: "live",
-    resolved: nodes.length > 0,
+    /**
+     * A truncated scan is NOT resolved evidence: the guard's absence rules
+     * (maxNodes, maxTexts, forbiddenText) judge what is *absent* from the
+     * scan, and a 2000-node frame truncated at the cap still has unscanned
+     * nodes that could contradict every one of those passes. Absence of
+     * evidence over an incomplete census is not evidence of absence — so the
+     * snapshot refuses rather than evaluating half a frame (issue #20).
+     */
+    resolved: nodes.length > 0 && !truncated,
     nodeNames: names,
     texts,
     components,

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T06:48:10.519Z",
+  "generatedAt": "2026-10-21T10:02:30.226Z",
   "totals": {
     "total": 25,
     "pass": 25,
@@ -284,7 +284,7 @@
       "raw": {
         "findings": [
           "tiny-technical-text(serious) [status]",
-          "text-route-collision(serious) [status]"
+          "text-route-collision(serious) [status,route]"
         ]
       }
     },

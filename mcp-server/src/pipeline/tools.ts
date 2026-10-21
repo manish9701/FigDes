@@ -35,6 +35,7 @@ import { runRules } from "../review/rules";
 import { verifyRepairs } from "../review/verdict";
 import { loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromMetrics } from "../memory/tools";
+import { checkCapabilityTruth } from "../memory/capability-truth";
 import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
@@ -47,7 +48,7 @@ import { normalizeBrief } from "./brief";
 import { buildCompositionPlan } from "./plan";
 import { buildProgram, applyMeasuredWidths } from "./program";
 import { verifyLive, verifyPlan, type CompiledProgram, type LiveEvidence } from "./verify";
-import { planRepairs } from "./repair";
+import { planRepairs, deduplicateOperations } from "./repair";
 import { buildReport } from "./report";
 import type { PipelineCheck, PipelineFinding, PipelineTrace } from "./contracts";
 
@@ -306,26 +307,84 @@ export async function designPipelineTool(
   if (live.render !== null) trace.render = live.render;
   stage(trace, "verify-live", `Live verification: ${live.status} (${live.checks.length} check(s)).`);
 
-  /* --- stage 7: targeted repairs ----------------------------------------- */
+  /* --- stage 7: targeted repairs, bounded and self-verifying --------------- */
 
   const repairs: PipelineTrace["repairs"] = [];
   const budget = args.repairBudget ?? 2;
-  // The findings as they were *before* the repair, so the pass can be checked
+  const maxRounds = args.maxRounds ?? 1;
+
+  // The findings as they were *before* any repair, so the pass can be checked
   // against them afterwards.
   const liveBeforeRepair = live.findings;
+  /**
+   * The repair loop.
+   *
+   * `maxRounds` was advertised in the schema but never implemented (issue #20):
+   * only one build → verify → repair → re-check pass ever ran, so unresolved
+   * findings ended in `incomplete` with no retry — and the tool promised a
+   * loop it did not have. Now the loop is real, and bounded from every side:
+   *
+   *  - a total repair budget across all rounds (`repairBudget`);
+   *  - a round cap (`maxRounds`);
+   *  - an anti-repeat guard: after two attempts that leave a finding in place,
+   *    the loop refuses to apply the same mutation again and asks for a new
+   *    diagnosis, instead of burning budget on a mutation that does not work;
+   *  - a stop condition on a verified pass, and an inventoried stop on a
+   *    re-check that could not run (no blind retries after a plugin failure).
+   */
+  const attempted = new Map<string, number>();
+  let budgetLeft = budget;
   let repairVerification: ReturnType<typeof verifyRepairs> | null = null;
-  if (budget > 0) {
-    const planOfRepairs = planRepairs(live.findings, { budget });
-    for (const instruction of planOfRepairs.instructions) {
+  let roundFindings = live.findings;
+  let repairsSubsumed = false;
+
+  const asVerifiable = (findings: PipelineFinding[]) =>
+    findings.map((f) => ({
+      key: `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}`,
+      rule: f.rule ?? f.id,
+      severity: f.severity,
+      confidence: String(f.confidence),
+      title: f.summary,
+      nodeIds: [...f.nodeIds],
+      evidence: { detail: f.evidence.detail },
+    }));
+
+  for (let round = 1; round <= maxRounds && budgetLeft > 0 && !repairsSubsumed; round++) {
+    const appliedBeforeRound = repairs.filter((r) => r.result === "applied").length;
+    const roundPlan = planRepairs(roundFindings, { budget: budgetLeft });
+    for (const skipped of roundPlan.skipped) {
+      if (!repairs.some((r) => r.findingId === skipped.findingId)) {
+        repairs.push({ findingId: skipped.findingId, operations: 0, result: "skipped", detail: skipped.why });
+      }
+    }
+    for (const instruction of roundPlan.instructions) {
       if (!instruction.automatable) {
         repairs.push({ findingId: instruction.findingId, operations: instruction.operations.length, result: "skipped", detail: "The repair needs a human decision." });
+        continue;
+      }
+      const tries = attempted.get(instruction.findingId) ?? 0;
+      if (tries >= 2) {
+        repairs.push({
+          findingId: instruction.findingId,
+          operations: instruction.operations.length,
+          result: "skipped",
+          detail: "Two repair attempts already left this finding in place. Applying the same mutation a third time is not a fix; the diagnosis needs to be revised.",
+        });
         continue;
       }
       try {
         await dispatchTransaction(registry, session, "modify_design", {
           description: `Design pipeline repair: ${instruction.title}`,
-          operations: instruction.operations,
-          transactionId: `${transactionId}_fix_${instruction.findingId}`,
+          // A repaired finding that survives is planned again from the new
+          // measurement; the deduplication drops operations that set values
+          // the node already has, so a re-planned retry cannot re-apply what
+          // already happened.
+          operations: deduplicateOperations(instruction.operations),
+          // Round 1 keeps the historical id; a later round repairing the same
+          // finding must NOT reuse it — the ledger short-circuits a known
+          // transaction id with its cached success, which would report the
+          // retry as applied without touching the file.
+          transactionId: tries === 0 ? `${transactionId}_fix_${instruction.findingId}` : `${transactionId}_fix_${instruction.findingId}_${tries + 1}`,
           targets: instruction.targetIds,
         });
         repairs.push({ findingId: instruction.findingId, operations: instruction.operations.length, result: "applied", detail: instruction.expectedEffect });
@@ -336,82 +395,149 @@ export async function designPipelineTool(
           result: "failed",
           detail: err instanceof Error ? err.message : String(err),
         });
+        attempted.set(instruction.findingId, tries + 1);
       }
     }
-    for (const skipped of planOfRepairs.skipped) {
-      repairs.push({ findingId: skipped.findingId, operations: 0, result: "skipped", detail: skipped.why });
+
+    budgetLeft -= Math.max(0, repairs.filter((r) => r.result === "applied").length - appliedBeforeRound);
+    const appliedThisRound = repairs.filter((r) => r.result === "applied").length > appliedBeforeRound;
+    if (!appliedThisRound) {
+      stage(trace, "repair", `Round ${round}: no repair was applied; the loop stops here.`);
+      break;
     }
-    trace.repairs.push(...repairs);
-    stage(trace, "repair", `${repairs.filter((r) => r.result === "applied").length} repair(s) applied, ${repairs.filter((r) => r.result !== "applied").length} not.`);
+    stage(
+      trace,
+      "repair",
+      `Round ${round}: ${repairs.filter((r) => r.result === "applied").length - appliedBeforeRound} repair(s) applied, ${repairs.filter((r) => r.result !== "applied").length} not.`,
+    );
 
     // A repair changes the screen, so the render taken before it no longer
     // certifies it. The screen is measured and rendered again, and the new
     // revision is what the visual bucket is bound to — a render of the screen
     // as it was *before* the fix is not evidence that the fix held.
-    if (repairs.some((r) => r.result === "applied")) {
-      const after = await verifyLiveScreen(session, plan, {
+    let after: Awaited<ReturnType<typeof verifyLiveScreen>> | null = null;
+    let recheckError: string | null = null;
+    try {
+      after = await verifyLiveScreen(session, plan, {
         createdNodes,
         rootNodeId,
         render: args.render !== false,
       });
-      live.checks = [
-        ...live.checks.filter((c) => c.id !== "render-freshness" && c.id !== "nodes-created" && c.id !== "live-structure" && c.id !== "review-rules"),
-        ...after.checks,
-      ];
-      live.findings = [...live.findings, ...after.findings];
-      live.status = after.status;
-      live.detail = `${after.checks.length} live check(s) ran against the repaired screen.`;
-      live.visual = after.visual;
-      live.blocked = after.blocked;
-      if (after.render !== null) trace.render = after.render;
+    } catch (err) {
+      recheckError = err instanceof Error ? err.message : String(err);
+    }
 
+    if (after === null) {
       /**
-       * The repair pass verifies itself.
+       * The re-check could not run, so nothing below this line is verified.
        *
-       * A committed repair is not a fixed defect: the operation may have hit
-       * the wrong node, the measurement may not have changed, and a repair can
-       * introduce a new finding. So the pass is compared against the re-measure
-       * and given a verdict of its own.
+       * The applied repairs are in the file; their effects are unknown. The
+       * loop stops and reports INDETERMINATE rather than either glossing over
+       * the repairs or blindly retrying against a plugin that just failed.
+       * Last known good: the pre-repair state is whatever the transaction
+       * history can restore, so the report names the ledger path to it.
        */
-      const before = liveBeforeRepair.map((f) => ({
-        key: `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}`,
-        rule: f.rule ?? f.id,
-        severity: f.severity,
-        confidence: String(f.confidence),
-        title: f.summary,
-        nodeIds: [...f.nodeIds],
-        evidence: { detail: f.evidence.detail },
-      }));
-      const afterFindings = after.findings.map((f) => ({
-        key: `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}`,
-        rule: f.rule ?? f.id,
-        severity: f.severity,
-        confidence: String(f.confidence),
-        title: f.summary,
-        nodeIds: [...f.nodeIds],
-        evidence: { detail: f.evidence.detail },
-      }));
-      const applied = repairs
-        .filter((r) => r.result === "applied")
-        .map((r) => {
+      const blockedCheck: PipelineCheck = {
+        id: "repair-recheck",
+        question: "Were the repairs re-checked?",
+        status: "indeterminate",
+        detail: `The post-repair measurement could not run: ${recheckError}. The repairs are applied but unverified.`,
+        nodeIds: [],
+      };
+      live.checks.push(blockedCheck);
+      trace.checks.push(blockedCheck);
+      live.blocked.push({ check: "repair-recheck", why: recheckError ?? "the re-check failed" });
+      const appliedNow = repairs.filter((r) => r.result === "applied");
+      repairVerification = verifyRepairs({
+        before: asVerifiable(liveBeforeRepair),
+        after: [],
+        applied: appliedNow.map((r) => {
           const finding = liveBeforeRepair.find((f) => f.id === r.findingId);
           return {
             key: `${finding?.rule ?? finding?.id ?? r.findingId}::${[...(finding?.nodeIds ?? [])].sort().join(",")}`,
             rule: finding?.rule ?? r.findingId,
             targets: [...(finding?.nodeIds ?? [])],
           };
-        });
-      repairVerification = verifyRepairs({
-        before,
-        after: afterFindings,
-        applied,
-        recheck: "ran",
+        }),
+        recheck: "failed",
+        recheckReason: recheckError ?? "unknown error",
         notAutoFixable: repairs.filter((r) => r.result === "skipped").length,
         blocked: repairs.filter((r) => r.result === "failed").length,
       });
-      stage(trace, "verify-repaired", `The repair pass verified itself: ${repairVerification.verdict}.`);
+      stage(trace, "verify-repaired", `The repair re-check could not run: ${repairVerification.verdict}.`);
+      break;
     }
+
+    live.checks = [
+      ...live.checks.filter((c) =>
+        !["render-freshness", "nodes-created", "live-structure", "review-rules", "live-scan-complete", "geometry-agreement"].includes(c.id),
+      ),
+      ...after.checks,
+    ];
+    live.findings = [...live.findings, ...after.findings];
+    live.status = after.status;
+    live.detail = `${after.checks.length} live check(s) ran against the repaired screen (round ${round}).`;
+    live.visual = after.visual;
+    live.blocked = [...live.blocked, ...after.blocked];
+    if (after.render !== null) trace.render = after.render;
+
+    /**
+     * The repair pass verifies itself.
+     *
+     * A committed repair is not a fixed defect: the operation may have hit
+     * the wrong node, the measurement may not have changed, and a repair can
+     * introduce a new finding. So the pass is compared against the re-measure
+     * and given a verdict of its own.
+     */
+    const beforeFindings = asVerifiable(liveBeforeRepair);
+    const afterFindings = asVerifiable(after.findings);
+    const applied = repairs
+      .filter((r) => r.result === "applied")
+      .map((r) => {
+        const finding = liveBeforeRepair.find((f) => f.id === r.findingId);
+        return {
+          key: `${finding?.rule ?? finding?.id ?? r.findingId}::${[...(finding?.nodeIds ?? [])].sort().join(",")}`,
+          rule: finding?.rule ?? r.findingId,
+          targets: [...(finding?.nodeIds ?? [])],
+        };
+      });
+    repairVerification = verifyRepairs({
+      before: beforeFindings,
+      after: afterFindings,
+      applied,
+      recheck: "ran",
+      notAutoFixable: repairs.filter((r) => r.result === "skipped").length,
+      blocked: repairs.filter((r) => r.result === "failed").length,
+    });
+    stage(trace, "verify-repaired", `Round ${round}: the repair pass verified itself with ${repairVerification.verdict}.`);
+
+    // Bookkeeping for the anti-repeat guard: a finding whose repair was
+    // applied but is still reported has had one attempt that did not work.
+    // The pairing is by rule+nodes key, so the finding id is recovered from
+    // the applied repairs before the attempt is counted.
+    for (const u of repairVerification.unresolved) {
+      const appliedEntry = repairs
+        .filter((r) => r.result === "applied")
+        .find((r) => {
+          const f = liveBeforeRepair.find((bf) => bf.id === r.findingId);
+          return !f ? false : `${f.rule ?? f.id}::${[...f.nodeIds].sort().join(",")}` === u.key;
+        });
+      const id = appliedEntry?.findingId ?? u.key;
+      attempted.set(id, (attempted.get(id) ?? 0) + 1);
+    }
+
+    if (repairVerification.verdict === "PASS") {
+      // Verified: the retries have done their job, and another round would
+      // measure the same clean screen for nothing.
+      repairsSubsumed = true;
+      break;
+    }
+    // A FAIL verdict with budget and rounds left goes around again, planning
+    // from the post-repair measurements; the loop's own bounds (rounds,
+    // budget, anti-repeat cap) stop it honestly when those run out.
+    roundFindings = after.findings;
   }
+  trace.repairs.push(...repairs);
 
   /* --- the guard, after the final repair ---------------------------------- */
 
@@ -424,13 +550,18 @@ export async function designPipelineTool(
   if (finalMetrics !== null) {
     try {
       const { memory } = loadMemory(projectKey(session.fileKey ?? undefined, session.fileName ?? undefined));
-      const guarded = runGuard(memory.rules, snapshotFromMetrics(finalMetrics, rootNodeId ?? undefined));
+      const snapshot = snapshotFromMetrics(finalMetrics, rootNodeId ?? undefined);
+      const guarded = runGuard(memory.rules, snapshot);
+      // The capability-truth stage runs beside the design rules: what the
+      // screen claims is checked even when how it behaves checks clean.
+      const capability = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });
       finalGuard = {
-        verdict: guarded.verdict,
+        verdict: capability.verdict === "FAIL" && guarded.verdict !== "FAIL" ? "FAIL" : capability.verdict !== "PASS" && guarded.verdict === "PASS" ? "WARNING" : guarded.verdict,
         rulesChecked: guarded.stats?.rulesChecked ?? 0,
         failures: guarded.stats?.failures ?? 0,
         warnings: guarded.stats?.warnings ?? 0,
         manual: guarded.stats?.manual ?? 0,
+        ...(capability.verdict !== "PASS" ? { capabilityTruth: { verdict: capability.verdict, reason: capability.reason, findings: capability.findings.map((f) => f.id) } } : {}),
       };
     } catch (err) {
       stage(trace, "guard", `The final guard could not run: ${err instanceof Error ? err.message : String(err)}`);
@@ -440,7 +571,7 @@ export async function designPipelineTool(
     const guardCheck = {
       id: "product-guard-final",
       question: "Does the repaired screen pass the product's own rules?",
-      status: (finalGuard.verdict === "PASS" ? "pass" : finalGuard.verdict === "FAIL" ? "fail" : "review") as PipelineCheck["status"],
+      status: (finalGuard.verdict === "PASS" ? "pass" : finalGuard.verdict === "FAIL" ? "fail" : finalGuard.verdict === "INDETERMINATE" ? "indeterminate" : "review") as PipelineCheck["status"],
       detail: `${finalGuard.verdict}: ${finalGuard.rulesChecked} rule(s) checked, ${finalGuard.failures} failure(s), ${finalGuard.manual} needing judgement.`,
       nodeIds: [],
     };
@@ -635,8 +766,19 @@ async function verifyLiveScreen(
     blocked.push({ check: "visual-review", why: "The built frame could not be rendered." });
   }
 
+  /**
+   * The visual verdict is a verdict, not a permanent "review".
+   *
+   * "pass" was unreachable here: any fresh render reported "review" forever,
+   * so buildReport's `verified` status could never be reached even for a clean
+   * run (issue #20). Now: a fresh render with no visual findings of note is a
+   * pass; anything the automated visual checks cannot judge is still "review"
+   * — because a low-detail render has not been *looked at* by a human, and the
+   * report says exactly that in its detail line.
+   */
+  const visualNotable = live.findings.filter((f) => f.stage === "visual" && (f.severity === "critical" || f.severity === "high" || f.severity === "medium"));
   const visualStatus: "pass" | "fail" | "review" | "indeterminate" | "not-run" =
-    render === null ? "indeterminate" : live.findings.some((f) => f.stage === "visual" && (f.severity === "critical" || f.severity === "high")) ? "fail" : "review";
+    render === null ? "indeterminate" : visualNotable.length > 0 ? "fail" : "pass";
 
   return {
     checks,
@@ -648,7 +790,9 @@ async function verifyLiveScreen(
       detail:
         render === null
           ? "The screen was not rendered, so it was never looked at."
-          : "A low-detail render of the built frame was produced and returned with the pipeline result for review.",
+          : visualStatus === "fail"
+            ? `A low-detail render of the built frame was produced, and ${visualNotable.length} visual finding(s) of note were raised against it.`
+            : "A low-detail render of the built frame was produced and returned with the pipeline result for review; the automated visual checks raised nothing above the bar.",
       renderRevision: render?.revisionId ?? null,
     },
     blocked,

@@ -20,7 +20,7 @@
  * - a lifecycle (`open|fixed|adjudicated|accepted-risk`) so an unresolved
  *   finding can never quietly disappear.
  */
-import type { Finding as ProtocolFinding } from "../../../../shared/protocol";
+import type { Finding as ProtocolFinding, FindingEvidenceValue } from "../../../../shared/protocol";
 import type { VisualFinding } from "./visual-findings";
 import type { FindingAdjudication } from "./visual-findings";
 import { EVALUATOR_VERSION } from "./revision";
@@ -381,10 +381,10 @@ export function applyAdjudications(
   return { findings: out, applied, orphaned };
 }
 
-function describeEvidence(evidence: Record<string, string | number | boolean | null>): string {
+function describeEvidence(evidence: Record<string, FindingEvidenceValue>): string {
   const parts = Object.entries(evidence)
     .filter(([, v]) => v !== null && v !== undefined && v !== "")
     .slice(0, 6)
-    .map(([k, v]) => `${k}=${String(v)}`);
+    .map(([k, v]) => `${k}=${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
   return parts.join(" ");
 }

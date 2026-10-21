@@ -5,7 +5,7 @@
   "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
   "issue": "#15",
   "status": "PASS",
-  "detail": "5 workload(s) applied atomically; median apply 13ms, worst 24ms",
+  "detail": "5 workload(s) applied atomically; median apply 8ms, worst 17ms",
   "raw": {
     "measurements": [
       {
@@ -13,7 +13,7 @@
         "operations": 15,
         "createdNodes": 15,
         "applyMs": 8,
-        "totalMs": 13,
+        "totalMs": 12,
         "yields": 1,
         "rollback": null
       },
@@ -21,8 +21,8 @@
         "size": 40,
         "operations": 40,
         "createdNodes": 40,
-        "applyMs": 24,
-        "totalMs": 29,
+        "applyMs": 15,
+        "totalMs": 22,
         "yields": 1,
         "rollback": null
       },
@@ -30,8 +30,8 @@
         "size": 62,
         "operations": 62,
         "createdNodes": 62,
-        "applyMs": 13,
-        "totalMs": 16,
+        "applyMs": 3,
+        "totalMs": 5,
         "yields": 1,
         "rollback": null
       },
@@ -39,8 +39,8 @@
         "size": 100,
         "operations": 100,
         "createdNodes": 100,
-        "applyMs": 8,
-        "totalMs": 12,
+        "applyMs": 17,
+        "totalMs": 20,
         "yields": 1,
         "rollback": null
       },
@@ -48,13 +48,13 @@
         "size": 150,
         "operations": 150,
         "createdNodes": 150,
-        "applyMs": 15,
-        "totalMs": 28,
+        "applyMs": 5,
+        "totalMs": 11,
         "yields": 1,
         "rollback": null
       }
     ],
-    "medianApplyMs": 13,
-    "worstApplyMs": 24
+    "medianApplyMs": 8,
+    "worstApplyMs": 17
   }
 }

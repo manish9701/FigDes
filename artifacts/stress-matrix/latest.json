@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-20T17:58:24.707Z",
+  "generatedAt": "2026-10-21T10:02:29.413Z",
   "totals": {
     "total": 28,
     "pass": 24,
@@ -201,6 +201,7 @@
       "raw": {
         "findings": [
           "text-contrast/critical/accessibility",
+          "overflow/serious/geometry",
           "overflow/serious/geometry",
           "sibling-region-overlap/serious/heuristic",
           "sibling-region-overlap/serious/heuristic",

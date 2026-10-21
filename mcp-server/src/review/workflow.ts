@@ -28,6 +28,7 @@ import { extendCritique } from "../design/quality/visual-critic";
 import { planRepairs } from "../design/quality/repair-planner";
 import { evaluateFinalGate } from "../design/quality/final-gate";
 import { makeFindings, trackFindings } from "../design/quality/visual-findings";
+import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
 import type { Session } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
@@ -657,8 +658,13 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     throw new Error("refine_screen needs a connected Figma plugin: it reviews and fixes the live document.");
   }
 
+  // The plugin's collect_metrics scopes on `target` (a node id string).
+  // Passing { nodeId } is silently ignored, so the refinement loop would
+  // measure the current selection or the whole page instead of the node the
+  // caller named — the same defect final_qa had, fixed twice and missed here.
+  // Normalise to { target } so the loop reviews exactly the request.
   let target: Record<string, unknown> = {};
-  if (args.nodeId) target = { nodeId: args.nodeId };
+  if (args.nodeId) target = { target: args.nodeId };
 
   // Optional build phase: the program lands first, then the loop polishes it.
   if (args.program !== undefined) {
@@ -997,7 +1003,7 @@ export const FinalQaArgs = z
   .strict();
 
 interface ChecklistItem {
-  area: "PRODUCT" | "COMPOSITION" | "SYSTEM" | "VISUAL" | "TECHNICAL";
+  area: "PRODUCT" | "COMPOSITION" | "SYSTEM" | "VISUAL" | "TECHNICAL" | "ACCESSIBILITY";
   check: string;
   pass: boolean | null;
   detail: string;
@@ -1093,15 +1099,18 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     // Treating it as "no violations" is the exact substitution issue #10 caught
     // inside the guard itself, one level up.
     const indeterminate = guarded.verdict === "INDETERMINATE";
+    const capabilityFailures = guarded.verdict === "FAIL" ? (((guarded as { capabilityTruth?: { findings?: Array<{ id?: string; message?: string; severity?: string }> } }).capabilityTruth?.findings ?? []).filter((f) => f.severity === "fail").map((f) => f.id ?? f.message ?? "capability claim")) : [];
     items.push({
       area: "PRODUCT",
       check: "no product-truth violations",
-      pass: indeterminate ? null : failed.length === 0,
+      pass: indeterminate ? null : failed.length === 0 && capabilityFailures.length === 0,
       detail: indeterminate
         ? `guard: INDETERMINATE — the guard measured nothing, so no product rule was evaluated. Re-run it against a resolvable target.`
-        : failed.length === 0
+        : failed.length === 0 && capabilityFailures.length === 0
           ? `guard: ${guarded.verdict ?? "PASS"}`
-          : `failing rules: ${failed.map((f) => f.rule).join(", ")}`,
+          : failed.length > 0
+            ? `failing rules: ${failed.map((f) => f.rule ?? "capability").join(", ")}`
+            : `capability claims presented without backing: ${capabilityFailures.join(", ")}`,
     });
 
     // Final visual-quality gate (§18): eight scored dimensions with the
@@ -1125,6 +1134,42 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     // program's state-bearing args (tones, variants, health, selection,
     // disabled/loading), never guessed.
     const statesDeclared = countStateSignals(runtime.operations as Array<Record<string, unknown>>);
+
+    // Accessibility is part of the release gate, not optional polish (issue #20,
+    // workstream 7). When the live node tree is available it is measured with
+    // the blueprint evaluator; offline, the gate receives an all-"not checked"
+    // input so a clean PASS has to name what was skipped.
+    let accessibility: { findings: number; notChecked: string[] } | null = null;
+    let a11yItems: Array<{ area: ChecklistItem["area"]; check: string; pass: boolean | null; detail: string }> = [];
+    if (session && (args.target !== undefined || args.nodeId !== undefined)) {
+      const targetArg = args.nodeId !== undefined
+        ? { target: args.nodeId }
+        : typeof (args.target as Record<string, unknown> | undefined)?.["nodeId"] === "string"
+          ? { target: (args.target as Record<string, unknown>)["nodeId"] as string }
+          : (args.target as Record<string, unknown>);
+      try {
+        const live = (await session.request("collect_metrics", targetArg)) as MetricsReport;
+        const a11yInput = accessibilityInputFromMetrics(live, live.target ?? "live");
+        const a11yReport = evaluateAccessibility(a11yInput);
+        accessibility = { findings: a11yReport.findings.length, notChecked: [...a11yReport.notChecked, "keyboard/focus behaviour: not verifiable from a static Figma design", "screen-reader semantics: not verifiable from a static Figma design"] };
+        a11yItems = [
+          {
+            area: "ACCESSIBILITY",
+            check: "WCAG contrast/target-size checks",
+            pass: a11yReport.findings.length === 0 ? true : false,
+            detail: a11yReport.summary,
+          },
+        ];
+      } catch (err) {
+        const why = err instanceof Error ? err.message : String(err);
+        accessibility = { findings: 0, notChecked: [`the live measurement failed, so no accessibility check ran: ${why}`] };
+        a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: `could not measure: ${why}` }];
+      }
+    } else {
+      accessibility = { findings: 0, notChecked: ["no live measurement: nothing about accessibility was evaluated"] };
+      a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: "needs the live file: run final_qa against a target" }];
+    }
+
     const finalGate = evaluateFinalGate({
       scores: {
         hierarchy: dimension("Hierarchy") * 10,
@@ -1138,6 +1183,7 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       genericity,
       blockingIssues: [...failed.map((f) => String(f.rule ?? "guard")), ...consistencyBlocking],
       states: { declared: statesDeclared },
+      ...(accessibility !== null ? { accessibility } : {}),
     });
     items.push(
       { area: "SYSTEM", check: "design tokens consistent", pass: consistency.blocking ? false : consistency.score >= 70 ? true : null, detail: `consistency ${consistency.score}/100: ${consistency.evidence.slice(0, 2).join("; ")}` },
@@ -1147,6 +1193,7 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
         pass: statesDeclared > 0 ? true : null,
         detail: statesDeclared > 0 ? `${statesDeclared} state signal(s) in the program` : "no states: add one hover, selected or non-default tone so the screen reads as finished",
       },
+      ...a11yItems,
       {
       area: "VISUAL",
       check: "final visual-quality gate",

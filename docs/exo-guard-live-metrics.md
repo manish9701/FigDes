@@ -72,6 +72,12 @@ metrics, so the topology rules remain manual by construction — and say so
   the two genuinely-manual rules); measured metrics in evidence:
   `unlabeledComponents=0, dominantActions=1`,
   `machineDataInProportionalFace=0, ambiguousSelections=0`.
+  Re-verified on same-commit **`ffff18815f31`** (0.3.2, clean both sides):
+  review PASS (0), audit PASS (0), guard 10 passed / 0 failures /
+  0 warnings with only the three expected INDETERMINATEs, plus a fresh
+  render confirming the layout. Target selection verified on the same
+  builds: blank target returns INDETERMINATE ("No target was named",
+  no throw); "Row" reports "matches at least 80 … first 25".
 
 ## Remaining deliberately-manual checks
 

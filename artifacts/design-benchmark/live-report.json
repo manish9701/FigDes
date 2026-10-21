@@ -1,100 +1,100 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-21T11:14:09.638Z",
+  "generatedAt": "2026-10-21T11:41:39.852Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
   "foundCases": 10,
-  "completeCases": 10,
+  "completeCases": 2,
   "missingCases": [],
-  "liveBenchmarkComplete": true,
-  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes; the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved; and the native path was exercised against the real Plugin API and cleaned up afterwards.",
+  "liveBenchmarkComplete": false,
+  "liveBenchmarkReason": "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and the native-path check, then re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
   "buildDrift": [
     {
       "caseId": "data-heavy-workspace",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "editorial-product-page",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "exo-compute-topology",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "exo-configuration",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "exo-enterprise-workspace",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "exo-model-detail",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "exo-runtime-monitoring",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "generic-saas-dashboard",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     },
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": false,
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": true,
       "serverBuild": "ccc8fd2a0279-dirty",
       "pluginBuild": "ccc8fd2a0279",
       "buildNamed": true,
@@ -102,37 +102,19 @@
     },
     {
       "caseId": "spatial-relationship",
-      "measuredAtCommit": "1b15f1f",
-      "repoHead": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "stale": true,
-      "serverBuild": null,
-      "pluginBuild": null,
-      "buildNamed": false,
-      "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "stale": false,
+      "serverBuild": "ccc8fd2a0279-dirty",
+      "pluginBuild": "ccc8fd2a0279-dirty",
+      "buildNamed": true,
+      "note": null
     }
   ],
   "staleCases": [
-    "data-heavy-workspace",
-    "editorial-product-page",
-    "exo-compute-topology",
-    "exo-configuration",
-    "exo-enterprise-workspace",
-    "exo-model-detail",
-    "exo-runtime-monitoring",
-    "generic-saas-dashboard",
-    "spatial-relationship"
+    "hard-stress-test"
   ],
-  "casesWithoutBuild": [
-    "data-heavy-workspace",
-    "editorial-product-page",
-    "exo-compute-topology",
-    "exo-configuration",
-    "exo-enterprise-workspace",
-    "exo-model-detail",
-    "exo-runtime-monitoring",
-    "generic-saas-dashboard",
-    "spatial-relationship"
-  ],
+  "casesWithoutBuild": [],
   "nativePath": {
     "status": "COMPLETE",
     "reportedStatus": "COMPLETE",
@@ -168,115 +150,106 @@
     "cases": [
       {
         "caseId": "data-heavy-workspace",
-        "verdict": "match",
+        "verdict": "differs",
         "pixels": "match",
-        "structureChanged": false,
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 0.652,
+          "changedPixelShare": 0.0047,
+          "maxDifference": 244
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "editorial-product-page",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 1.382,
+          "changedPixelShare": 0.00819,
+          "maxDifference": 238
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "exo-compute-topology",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 0.477,
+          "changedPixelShare": 0.00601,
+          "maxDifference": 244
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "exo-configuration",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 1.138,
+          "changedPixelShare": 0.00684,
+          "maxDifference": 238
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "exo-enterprise-workspace",
-        "verdict": "match",
+        "verdict": "differs",
         "pixels": "match",
-        "structureChanged": false,
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 0.429,
+          "changedPixelShare": 0.00458,
+          "maxDifference": 244
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "exo-model-detail",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 1.233,
+          "changedPixelShare": 0.00556,
+          "maxDifference": 244
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "exo-runtime-monitoring",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
+        "verdict": "differs",
+        "pixels": "differs",
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 1.556,
+          "changedPixelShare": 0.00713,
+          "maxDifference": 235
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       },
       {
         "caseId": "generic-saas-dashboard",
-        "verdict": "match",
-        "pixels": "match",
-        "structureChanged": false,
-        "measured": {
-          "width": 1024,
-          "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
-        },
-        "reason": null
+        "verdict": "no-render",
+        "reason": "the case has no screenshot to compare"
       },
       {
         "caseId": "hard-stress-test",
@@ -294,23 +267,33 @@
       },
       {
         "caseId": "spatial-relationship",
-        "verdict": "match",
+        "verdict": "differs",
         "pixels": "match",
-        "structureChanged": false,
+        "structureChanged": true,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
-          "changedPixelShare": 0,
-          "maxDifference": 0
+          "meanDifference": 0.332,
+          "changedPixelShare": 0.00302,
+          "maxDifference": 244
         },
-        "reason": null
+        "reason": "the structure changed since the golden was reviewed"
       }
     ],
     "differing": [
-      "hard-stress-test"
+      "data-heavy-workspace",
+      "editorial-product-page",
+      "exo-compute-topology",
+      "exo-configuration",
+      "exo-enterprise-workspace",
+      "exo-model-detail",
+      "exo-runtime-monitoring",
+      "hard-stress-test",
+      "spatial-relationship"
     ],
-    "uncovered": [],
+    "uncovered": [
+      "generic-saas-dashboard"
+    ],
     "note": "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it."
   },
   "stressFrame": {
@@ -366,97 +349,117 @@
     {
       "file": "case-data-heavy-workspace.json",
       "caseId": "data-heavy-workspace",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-editorial-product-page.json",
       "caseId": "editorial-product-page",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-exo-compute-topology.json",
       "caseId": "exo-compute-topology",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-exo-configuration.json",
       "caseId": "exo-configuration",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-exo-enterprise-workspace.json",
       "caseId": "exo-enterprise-workspace",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-exo-model-detail.json",
       "caseId": "exo-model-detail",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-exo-runtime-monitoring.json",
       "caseId": "exo-runtime-monitoring",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
       "file": "case-generic-saas-dashboard.json",
       "caseId": "generic-saas-dashboard",
       "status": "COMPLETE",
-      "missing": [],
+      "outcome": "guard-refused-as-expected",
+      "guardViolations": [
+        {
+          "rule": "product",
+          "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
+        }
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     },
     {
@@ -474,13 +477,15 @@
     {
       "file": "case-spatial-relationship.json",
       "caseId": "spatial-relationship",
-      "status": "COMPLETE",
-      "missing": [],
+      "status": "INCOMPLETE",
+      "missing": [
+        "visualScores"
+      ],
       "build": {
-        "commit": "1b15f1f",
-        "serverBuild": null,
-        "pluginBuild": null,
-        "note": "This case was measured before the build stamps existed, so it cannot be tied to a commit."
+        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+        "serverBuild": "ccc8fd2a0279-dirty",
+        "pluginBuild": "ccc8fd2a0279-dirty",
+        "note": null
       }
     }
   ]

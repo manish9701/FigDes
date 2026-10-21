@@ -54,6 +54,9 @@ const EXPECTED = [
  * can check rather than something a human must be trusted to remember.
  */
 const STRESS_CASE_ID = "hard-stress-test";
+
+/** Cases whose contract is to be refused by the product guard, and why they exist. */
+const NEGATIVE_CONTROLS = new Set(["generic-saas-dashboard"]);
 const STRESS_REQUIRED_EVIDENCE = [
   "canvasWidth",
   "canvasHeight",
@@ -158,6 +161,46 @@ for (const file of files) {
     continue;
   }
   const caseId = typeof parsed.caseId === "string" ? parsed.caseId : null;
+
+  /**
+   * A negative control's contract is the refusal.
+   *
+   * `generic-saas-dashboard` is in the suite to prove the product guard still
+   * catches a generic metric-card dashboard — so its evidence is the recorded
+   * guard violations, not a built frame. A GUARD_BLOCKED record for a case
+   * that is NOT a declared negative control, or one with no violations
+   * recorded, is incomplete (the refusal must carry its reason).
+   */
+  const isNegativeControl = caseId !== null && NEGATIVE_CONTROLS.has(caseId);
+  const guardBlocked = parsed.status === "GUARD_BLOCKED";
+  const guardViolations = Array.isArray(parsed.guardViolations) ? parsed.guardViolations : null;
+  if (guardBlocked && (!isNegativeControl || (guardViolations?.length ?? 0) === 0)) {
+    cases.push({
+      file,
+      caseId,
+      status: "INCOMPLETE",
+      missing: ["guardViolations"],
+      ...(isNegativeControl ? {} : { note: "a guard block is only complete evidence for a declared negative control" }),
+    });
+    continue;
+  }
+  if (guardBlocked && isNegativeControl && (guardViolations?.length ?? 0) > 0) {
+    cases.push({
+      file,
+      caseId,
+      status: "COMPLETE",
+      outcome: "guard-refused-as-expected",
+      guardViolations,
+      build: {
+        commit: parsed.commit ?? null,
+        serverBuild: parsed.serverBuild ?? null,
+        pluginBuild: parsed.pluginBuild ?? null,
+        note: null,
+      },
+    });
+    continue;
+  }
+
   const required = caseId === STRESS_CASE_ID ? [...REQUIRED_EVIDENCE, ...STRESS_REQUIRED_EVIDENCE] : REQUIRED_EVIDENCE;
   const missing = required.filter((key) => {
     const v = parsed[key];
@@ -301,7 +344,14 @@ for (const c of cases) {
     continue;
   }
   const body = JSON.parse(await readFile(casePath, "utf8"));
-  const currentPath = resolve(root, body.screenshotReference ?? "");
+  // A negative control was refused by the guard and has no frame to render:
+  // "no-render" is its honest visual verdict, not a crash.
+  const ref = typeof body.screenshotReference === "string" && body.screenshotReference.length > 0 ? body.screenshotReference : null;
+  if (ref === null) {
+    visualRegression.push({ caseId: c.caseId, verdict: "no-render", reason: "the case has no screenshot to compare" });
+    continue;
+  }
+  const currentPath = resolve(root, ref);
   if (!existsSync(currentPath)) {
     visualRegression.push({ caseId: c.caseId, verdict: "no-render", reason: "the case has no screenshot to compare" });
     continue;

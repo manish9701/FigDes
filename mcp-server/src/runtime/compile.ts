@@ -1143,8 +1143,11 @@ function emitContent(args: {
   const textItems = content.filter((c) => c.kind === "text");
   const graphics = content.filter((c) => c.kind === "shape" || c.kind === "vector");
   const components = content.filter((c) => c.kind === "component");
+  const instances = content.filter((c) => c.kind === "instance");
   const connectors = content.filter((c) => c.kind === "connector");
-  const drawable = [...textItems, ...graphics, ...components];
+  // Instances are fixed-extent members of the flow, placed like components;
+  // they only differ at emission (createInstance against the live file).
+  const drawable = [...textItems, ...graphics, ...components, ...instances];
 
   if (drawable.length === 0) return undefined;
 
@@ -1171,7 +1174,7 @@ function emitContent(args: {
   // `packContent` fills row-major, so one column per item is exactly a row. A
   // hug nav item then draws at its own width inside its own column, which keeps
   // the rhythm even and leaves the rail left-aligned rather than stretched.
-  const flowing = [...textItems, ...components];
+  const flowing = [...textItems, ...components, ...instances];
   // Destinations run across only when they are a *bar*. A region of nav items
   // that is tall is a rail and must stack: the live apply rendered a 220x900
   // side rail with four tabs crammed into the top 36px, the second hidden behind
@@ -1350,7 +1353,7 @@ function emitContent(args: {
   // Devices already placed by a graph algorithm must not flow as well, or every
   // machine would be drawn twice: once on the graph, once in a column.
   const placedIds = new Set(graphDevices.map((c) => c.id));
-  const flow = [...textItems, ...components.filter((c) => !placedIds.has(c.id))];
+  const flow = [...textItems, ...components.filter((c) => !placedIds.has(c.id)), ...instances.filter((c) => !placedIds.has(c.id))];
   if (flow.length > 0) {
     if (requested === "grid") algorithms[region.id] = "grid";
     else if (requested === "masonry") algorithms[region.id] = "masonry";
@@ -1374,6 +1377,7 @@ function emitContent(args: {
         const final = resolvedSize(spec, box, grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
     } else {
@@ -1390,6 +1394,7 @@ function emitContent(args: {
         const final = resolvedSize(spec, devicePlacementBox(box, spec), grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
         if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
     }
@@ -1565,6 +1570,39 @@ function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, r
       ...(spec.dashPattern !== undefined ? { dashPattern: spec.dashPattern } : {}),
     }),
   );
+}
+
+/**
+ * Emits an instance of a component that already exists in the live file.
+ *
+ * The compile is offline, so the component is named, not resolved: the plugin's
+ * `createInstance` executor resolves the id at execution time and fails loudly
+ * if the component is gone — which is the correct failure, because an instance
+ * of nothing is not a design. Variant properties travel as a separate
+ * `setVariant` op (the plugin merges them into the instance's existing
+ * component properties), so a component-set instance lands on its requested
+ * state instead of the default one.
+ */
+function emitInstance(
+  spec: Extract<ContentSpec, { kind: "instance" }>,
+  region: ResolvedRegion,
+  box: ResolvedBox,
+  operations: Operation[],
+): void {
+  operations.push(
+    op({
+      type: "createInstance",
+      id: spec.id,
+      parent: region.id,
+      componentId: spec.componentId,
+      ...(spec.name !== undefined ? { name: spec.name } : {}),
+      x: Math.max(0, Math.round(box.x)),
+      y: Math.max(0, Math.round(box.y)),
+    }),
+  );
+  if (spec.variant && Object.keys(spec.variant).length > 0) {
+    operations.push(op({ type: "setVariant", target: spec.id, variant: spec.variant }));
+  }
 }
 
 function emitComponent(
@@ -3808,6 +3846,11 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
       const fixed = FIXED_COMPONENT_HEIGHT[spec.type];
       return Math.round((fixed ?? 90) * typeScale);
     }
+    if (spec.kind === "instance") {
+      // The caller measured the component and passed its extents explicitly;
+      // the layout reserves exactly that, because the drawn node is that tall.
+      return Math.max(1, Math.round(spec.height));
+    }
     return 32;
   }
 
@@ -3853,6 +3896,12 @@ function resolvedSize(
   if (spec.kind === "component") {
     const hug = hugSize(spec, grid, typeScale, look);
     return hug ? { ...box, ...hug } : box;
+  }
+  if (spec.kind === "instance") {
+    // Explicit extents win over the column cell: the drawn node is the
+    // component's measured size, so the recorded box must be that size, or
+    // the operation trace reports the disagreement.
+    return { ...box, w: Math.max(1, Math.round(spec.width)), h: Math.max(1, Math.round(spec.height)) };
   }
   if (spec.kind === "text" && spec.maxWidth !== undefined && spec.maxWidth > 0) {
     // Never wider than the column it was packed into: a maxWidth larger than the

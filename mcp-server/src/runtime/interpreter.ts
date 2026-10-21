@@ -27,6 +27,7 @@ import {
   ComponentSpecSchema,
   ConnectorSpecSchema,
   DesignIRSchema,
+  InstanceSpecSchema,
   PaintStyleSpecSchema,
   ShapeSpecSchema,
   TextSpecSchema,
@@ -109,6 +110,11 @@ export const RUNTIME_PRIMITIVES = {
   stat: { description: "A large-number stat for slides and infographics.", kind: "content" as const },
   bullets: { description: "A bullet list for slides.", kind: "content" as const },
   template: { description: "An instance of a user-defined template from the program's templates list.", kind: "content" as const },
+  instance: {
+    description:
+      "An instance of a component that already exists in the live file: componentId from find_component or inspect_design_system, plus explicit measured width/height (the offline layout cannot hug what it cannot measure), and optional variant properties for component sets.",
+    kind: "content" as const,
+  },
   connector: { description: "A routed line between two nodes, with an optional label.", kind: "content" as const },
   variable: { description: "A reusable design token (colour, number, string or boolean).", kind: "content" as const },
   textStyle: { description: "A named typography style.", kind: "content" as const },
@@ -246,6 +252,10 @@ const CONTENT_ARGS = new Set([
   "from",
   "to",
   "routing",
+  // Instance args: the component is named, the extents are explicit, and the
+  // variant is a Property=Value record for component sets.
+  "componentId",
+  "variant",
   "arrowStart",
   "arrowEnd",
   "curvature",
@@ -1016,6 +1026,32 @@ case "shape": {
         });
         if (parsed.success) content.push(parsed.data);
         else warnings.push(`Vector '${id}' rejected: ${parsed.error.issues[0]?.message}`);
+        break;
+      }
+
+      case "instance": {
+        const parsed = InstanceSpecSchema.safeParse({
+          id,
+          kind: "instance",
+          componentId: String(args.componentId ?? ""),
+          ...(args.name !== undefined ? { name: String(args.name) } : {}),
+          width: typeof args.width === "number" ? args.width : Number(args.width),
+          height: typeof args.height === "number" ? args.height : Number(args.height),
+          ...(args.variant !== undefined && typeof args.variant === "object" && !Array.isArray(args.variant)
+            ? {
+                variant: Object.fromEntries(
+                  Object.entries(args.variant as Record<string, unknown>)
+                    .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+                    .map(([k, v]) => [k, String(v)]),
+                ),
+              }
+            : {}),
+        });
+        if (parsed.success) content.push(parsed.data);
+        else
+          warnings.push(
+            `Instance '${id}' rejected: ${parsed.error.issues[0]?.message}. It needs componentId (from find_component) and explicit width and height — the component's measured size.`,
+          );
         break;
       }
 

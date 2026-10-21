@@ -523,15 +523,23 @@ export async function placeRootInFreeCanvas(
 
   const dx = placed.x;
   const dy = placed.y;
-  for (const op of operations) {
-    if (typeof op !== "object" || op === null) continue;
-    if (op.parent !== "root" || typeof op.x !== "number" || typeof op.y !== "number") continue;
-    if (op.id === "root") continue;
-    op.x = (op.x as number) - dx;
-    op.y = (op.y as number) - dy;
-  }
+  /**
+   * Children are NOT touched.
+   *
+   * This loop used to subtract dx/dy from every op parented to "root" —
+   * correct only while the compiler emitted page-absolute child coordinates.
+   * Since issue #18's B08 the compiler emits parent-local ops (its documented
+   * contract, enforced by the blocking operation-trace check), so subtracting
+   * the frame's new page position pushed every region 10153px above its own
+   * frame: fresh live builds rendered as blank canvas surfaces with the
+   * content parked off-screen above — and only the review's low-confidence
+   * overflow finding to show for it. Under the parent-local contract the
+   * frame's children follow the frame; placement moves the root op alone.
+   */
   rootOp.x = placed.x;
   rootOp.y = placed.y;
+  void dx;
+  void dy;
   return placed;
 }
 

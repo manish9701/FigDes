@@ -30,6 +30,8 @@
  * Machine-checkable where the text allows it, `manual` elsewhere: the verdict
  * is designed to be *weaker* when evidence is missing, never stronger.
  */
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 
 export type CapabilityStatus = "confirmed" | "proposed" | "estimate";
 
@@ -127,6 +129,85 @@ export interface ExoCapabilitySource {
   note: string;
 }
 
+/* -------------------------------------------------------------------------- */
+/* The pin lives in a manifest file, not in process memory                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The source-of-truth manifest (issue #20, workstream 8).
+ *
+ * A pin that lived only in process memory died with the server, so a deploy
+ * reverted to "unpinned" and every claim was back to untraceable — silently.
+ * The pin is a checked-in file instead: `docs/exo-capabilities.json`, written
+ * by `scripts/pin-exo-capabilities.mjs` (or by `pinCapabilitySource`) *after*
+ * a build has been verified against actual product behaviour, loaded here at
+ * module init. Until that file exists the source stays unpinned and the guard
+ * stays conservative — that is the design, not a gap.
+ *
+ * Path resolution follows the repo's `DESIGN_AGENT_*` env convention; the
+ * deployment can point `DESIGN_AGENT_EXO_CAPABILITIES` at its own copy.
+ */
+export interface ExoCapabilityManifest {
+  version: 1;
+  /** The verified EXO build identifier. */
+  build: string;
+  /** ISO date of the verification. */
+  verifiedAt: string;
+  /** Who verified it (a person, a run, a harness). */
+  verifiedBy: string;
+  /** What was checked: commits, docs, screens, or an evidence link. */
+  evidence: string;
+  notes?: string;
+}
+
+export const EXO_CAPABILITIES_FILE =
+  process.env.DESIGN_AGENT_EXO_CAPABILITIES ?? resolve(process.cwd(), "docs", "exo-capabilities.json");
+
+export function applyCapabilityManifest(manifest: ExoCapabilityManifest): ExoCapabilitySource {
+  if (!manifest || typeof manifest.build !== "string" || manifest.build.trim().length === 0) {
+    throw new Error("The capability manifest names no build — pinning nothing looks like having pinned something.");
+  }
+  EXO_CAPABILITY_SOURCE.pinned = true;
+  EXO_CAPABILITY_SOURCE.build = manifest.build.trim();
+  EXO_CAPABILITY_SOURCE.note =
+    `Source of truth pinned to EXO build ${manifest.build} (verified ${manifest.verifiedAt} by ${manifest.verifiedBy}; evidence: ${manifest.evidence}). ` +
+    "Capability status is assessed against that build; claims beyond it still need visible uncertainty.";
+  return EXO_CAPABILITY_SOURCE;
+}
+
+/** Best-effort manifest load at boot; missing or unreadable file stays unpinned, never a failure. */
+export function autoLoadCapabilityManifest(): ExoCapabilitySource {
+  try {
+    if (!existsSync(EXO_CAPABILITIES_FILE)) return EXO_CAPABILITY_SOURCE;
+    const parsed = JSON.parse(readFileSync(EXO_CAPABILITIES_FILE, "utf8")) as ExoCapabilityManifest;
+    if (parsed?.version !== 1) {
+      console.warn(`exo-capabilities: ${EXO_CAPABILITIES_FILE} has version ${String(parsed?.version)}, expected 1 — ignored; the guard stays unpinned.`);
+      return EXO_CAPABILITY_SOURCE;
+    }
+    return applyCapabilityManifest(parsed);
+  } catch (err) {
+    console.warn(`exo-capabilities: could not load ${EXO_CAPABILITIES_FILE}: ${err instanceof Error ? err.message : String(err)}; the guard stays unpinned.`);
+    return EXO_CAPABILITY_SOURCE;
+  }
+}
+
+/** Writes the manifest atomically (temp + rename, the memory-store pattern). */
+export function saveCapabilityManifest(manifest: ExoCapabilityManifest, file: string = EXO_CAPABILITIES_FILE): string {
+  const validated: ExoCapabilityManifest = {
+    ...manifest,
+    build: manifest.build.trim(),
+    verifiedAt: manifest.verifiedAt || new Date().toISOString(),
+    verifiedBy: manifest.verifiedBy || "unrecorded",
+    evidence: manifest.evidence || "unrecorded",
+  };
+  if (!validated.build) throw new Error("The capability manifest names no build — pinning nothing looks like having pinned something.");
+  mkdirSync(dirname(file), { recursive: true });
+  const temp = `${file}.tmp`;
+  writeFileSync(temp, `${JSON.stringify({ ...validated, version: 1 }, null, 2)}\n`, "utf8");
+  renameSync(temp, file);
+  return file;
+}
+
 /**
  * The source-of-truth pin. NOT pinned in this repo: setting it true requires a
  * real EXO build identifier verified against the product, and the guard is
@@ -139,17 +220,47 @@ export const EXO_CAPABILITY_SOURCE: ExoCapabilitySource = {
   note: "No EXO target build or commit is pinned as the source of truth. Every capability that is not a standing product truth must carry visible uncertainty until one is.",
 };
 
-/** Pins the source of truth after a caller verified a build. Refuses an empty pin. */
-export function pinCapabilitySource(build: string): ExoCapabilitySource {
+/** Pins the source of truth after a caller verified a build, persisting it for restarts. Refuses an empty pin. */
+export function pinCapabilitySource(
+  build: string,
+  evidence?: { verifiedAt?: string; verifiedBy?: string; evidence?: string },
+  /** Explicit manifest path — for tests and callers that do not write to the repo. */
+  file?: string,
+): ExoCapabilitySource {
   const trimmed = build.trim();
   if (trimmed.length === 0) {
     throw new Error("pinCapabilitySource refuses an empty build id: pinning nothing looks like having pinned something.");
   }
-  EXO_CAPABILITY_SOURCE.pinned = true;
-  EXO_CAPABILITY_SOURCE.build = trimmed;
-  EXO_CAPABILITY_SOURCE.note = `Source of truth pinned to EXO build ${trimmed}. Capability status is assessed against that build; claims beyond it still need visible uncertainty.`;
-  return EXO_CAPABILITY_SOURCE;
+  const manifest: ExoCapabilityManifest = {
+    version: 1,
+    build: trimmed,
+    verifiedAt: evidence?.verifiedAt ?? new Date().toISOString(),
+    verifiedBy: evidence?.verifiedBy ?? "unrecorded",
+    evidence: evidence?.evidence ?? "unrecorded",
+  };
+  if (file === null) {
+    // In-memory pin only.
+    EXO_CAPABILITY_SOURCE.pinned = true;
+    EXO_CAPABILITY_SOURCE.build = trimmed;
+    EXO_CAPABILITY_SOURCE.note = `Source of truth pinned to EXO build ${trimmed} IN MEMORY ONLY — no manifest path was given.`;
+    return EXO_CAPABILITY_SOURCE;
+  }
+  try {
+    saveCapabilityManifest(manifest, file ?? EXO_CAPABILITIES_FILE);
+  } catch (err) {
+    // A read-only filesystem must not lose the pin entirely: the in-process
+    // pin still applies, and the report says the manifest could not be saved.
+    console.warn(`exo-capabilities: could not persist the manifest: ${err instanceof Error ? err.message : String(err)}`);
+    EXO_CAPABILITY_SOURCE.note = `Source of truth pinned to EXO build ${trimmed} IN MEMORY ONLY — the manifest could not be written to ${file ?? EXO_CAPABILITIES_FILE}.`;
+    EXO_CAPABILITY_SOURCE.pinned = true;
+    EXO_CAPABILITY_SOURCE.build = trimmed;
+    return EXO_CAPABILITY_SOURCE;
+  }
+  return applyCapabilityManifest(manifest);
 }
+
+// Boot: load a checked-in pin when one exists. Runs once at module import.
+autoLoadCapabilityManifest();
 
 export interface CapabilityFinding {
   id: string;

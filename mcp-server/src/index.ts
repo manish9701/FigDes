@@ -56,6 +56,14 @@ try {
 
 const registry = new SessionRegistry();
 const mcp = createMcpHandler(registry);
+// The job ledger survives a *process* restart only when persistence is
+// configured (DESIGN_AGENT_JOB_DIR); say which mode this boot is in, because
+// "the ledger is in memory" is exactly the assumption a restart breaks.
+if (registry.jobs.persistenceFile) {
+  console.log(`job-ledger: restart persistence ON -> ${registry.jobs.persistenceFile}`);
+} else {
+  console.log("job-ledger: restart persistence OFF (in-memory only; set DESIGN_AGENT_JOB_DIR to enable).");
+}
 
 /* -------------------------------------------------------------------------- */
 /* HTTP                                                                        */

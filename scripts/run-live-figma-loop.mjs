@@ -16,12 +16,23 @@
  * and delete them afterwards. All text content is marked [fixture].
  */
 import { mkdir, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MCP = process.env.FIGDES_MCP_URL ?? "https://figdes.onrender.com/mcp";
 const UA = "opencode/live-loop-phase-a";
-const COMMIT = "1b15f1f";
+/**
+ * The commit under test, computed at run time (issue #20's live-evidence rule).
+ *
+ * This was hardcoded to "1b15f1f" — a stamp from months earlier that survived
+ * many deployments, so the recorded evidence named a build the deployment had
+ * long since replaced. A case record that names a build nobody ran is worse
+ * than one that names none. Env override for reproducing a historical run.
+ */
+const COMMIT =
+  process.env.FIGDES_COMMIT ??
+  execFileSync("git", ["rev-parse", "HEAD"], { cwd: resolve(dirname(fileURLToPath(import.meta.url)), "..") }).toString().trim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(root, "artifacts/design-benchmark/live");
@@ -80,12 +91,16 @@ function programFor(id) {
           { fn: "statusPill", id: "st", parent: "detail", args: { label: `fits ${F}`, tone: "success" } },
         ] };
     case "exo-runtime-monitoring":
+      // Two metric components (the product truth allows instrument readouts
+      // up to the anti-card-wall bar of 2) plus the remaining telemetry as
+      // monospaced technical text — same information, compliant composition.
       return { canvas,
         regions: [{ fn: "frame", id: "board", args: { width: "fill", height: "fill" } }],
         content: [
           { fn: "metric", id: "m1", parent: "board", args: { label: "GPU", value: `92% ${F}`, valueStyle: "technical" } },
           { fn: "metric", id: "m2", parent: "board", args: { label: "Memory pressure", value: `71% ${F}`, valueStyle: "technical" } },
-          { fn: "metric", id: "m3", parent: "board", args: { label: "Error rate", value: `0.4% ${F}`, valueStyle: "technical" } },
+          { fn: "text", id: "t1", parent: "board", args: { text: `Error rate 0.4% ${F}`, family: "JetBrains Mono", fontSize: 14 } },
+          { fn: "text", id: "t2", parent: "board", args: { text: `Latency 240 ms p95 ${F}`, family: "JetBrains Mono", fontSize: 14 } },
           { fn: "statusPill", id: "st", parent: "board", args: { label: `watching ${F}`, tone: "warning" } },
         ] };
     case "exo-configuration":
@@ -200,11 +215,27 @@ console.log("server:", init.serverInfo?.name, init.serverInfo?.version);
 // Note: no notifications/initialized — the stateless server answers it with
 // Method-not-found and the session works fine without it.
 
+/**
+ * Which builds actually produced this evidence.
+ *
+ * The server is hosted and Figma loads the plugin bundle once at panel open,
+ * so either can lag the repository. Every case records what answered — a
+ * live measurement that cannot name its build describes code that may no
+ * longer exist, and the validator reports that instead of a pass.
+ */
+const status = (await tool("figma_status", {})).data ?? {};
+const SERVER_BUILD = status.serverBuild ?? "unknown";
+const PLUGIN_BUILD = status.build ?? status.builds?.plugin ?? "unknown";
+console.log(`server build: ${SERVER_BUILD} | plugin build: ${PLUGIN_BUILD}`);
+if (status.builds?.compatibility && status.builds.compatibility !== "same-commit") {
+  console.log(`WARNING: server/plugin are ${status.builds.compatibility} — the evidence names what ran, but it is not this repository's code as one commit.`);
+}
+
 const summary = [];
 for (const c of CASES) {
   if (only && !only.includes(c.id)) continue;
   const t0 = Date.now();
-  const rec = { caseId: c.id, commit: COMMIT, server: MCP, startedAt: new Date().toISOString(), fixtures: [{ key: "all-text", value: "[fixture]", fixture: true }] };
+  const rec = { caseId: c.id, commit: COMMIT, serverBuild: SERVER_BUILD, pluginBuild: PLUGIN_BUILD, server: MCP, startedAt: new Date().toISOString(), fixtures: [{ key: "all-text", value: "[fixture]", fixture: true }] };
   // Resume: a retry reuses the already-built frame instead of duplicating it.
   let prior = null;
   try {
@@ -263,7 +294,26 @@ for (const c of CASES) {
       rec.operationManifest = [];
       const dry = (await tool("design_runtime", { program, dryRun: true, description: `FigDes live bench ${c.id} (dry run)` })).data;
       rec.dryRun = { operationCount: dry.stats?.operationCount ?? dry.operations?.length ?? 0, violations: dry.violations ?? [], warnings: dry.warnings ?? [] };
-      if ((dry.violations ?? []).length > 0) throw new Error(`dry-run violations: ${JSON.stringify(dry.violations).slice(0, 300)}`);
+      if ((dry.violations ?? []).length > 0) {
+        /**
+         * A guard refusal is evidence, not a crash.
+         *
+         * `generic-saas-dashboard` exists to be refused: its product truth
+         * (exo.no-generic-saas) says exactly that a repeated metric-card
+         * dashboard contradicts the product, and the guard catching it IS
+         * the case's result. Recording the refusal as an exception lost the
+         * result and read as a harness failure — so a refused dry run is
+         * recorded as GUARD_BLOCKED with the violations, and the validator
+         * grades negative-control cases by their refusal, not by a frame.
+         */
+        rec.status = "GUARD_BLOCKED";
+        rec.guardViolations = dry.violations;
+        rec.runtimeMs = Date.now() - t0;
+        console.log(`guard-blocked ${c.id}: ${JSON.stringify(dry.violations).slice(0, 200)}`);
+        summary.push({ caseId: c.id, status: rec.status, frame: null, findings: rec.guardViolations.length });
+        await writeFile(resolve(liveDir, `case-${c.id}.json`), JSON.stringify(rec, null, 2) + "\n", "utf8");
+        continue;
+      }
 
       const build = (await tool("design_runtime", { program, description: `FigDes live bench ${c.id}` })).data;
       const root = pickRoot(build);

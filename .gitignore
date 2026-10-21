@@ -16,3 +16,6 @@ dist-test/
 # Design snapshots are per-user checkpoints with full programs in them.
 # They would bloat the repo and go stale; memory (above) is the shared part.
 .snapshots/
+
+# Job-ledger restart persistence (opt-in via DESIGN_AGENT_JOB_DIR)
+.jobs/

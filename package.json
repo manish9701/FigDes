@@ -73,7 +73,7 @@
     "test:issue16": "node --test tests/issue-16-pipeline.test.mjs",
     "test:issue17": "node --test tests/issue-17-release-gate.test.mjs tests/issue-17-image-regression.test.mjs tests/issue-17-text-measurement.test.mjs",
     "test:issue19": "node --test tests/issue-19-regressions.test.mjs",
-    "test:issue20": "node --test tests/issue-20-regressions.test.mjs",
+    "test:issue20": "node --test tests/issue-20-regressions.test.mjs tests/issue-20-fixtures.test.mjs tests/issue-20-ledger.test.mjs",
     "gate": "node scripts/run-release-gate.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs"
   },

@@ -148,9 +148,15 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
   grid: REGION_COMMON,
 
   /* ---- text + graphics ---- */
+  instance: [
+    text("componentId", "Component id from find_component or inspect_design_system — a COMPONENT or COMPONENT_SET in the live file.", '"C:abc123"'),
+    { ...num("width", "The component's measured width in px. Required: the offline layout cannot hug what it cannot measure."), example: "150" },
+    { ...num("height", "The component's measured height in px. Required."), example: "56" },
+    text("name", "Layer name for the instance."),
+    structured("variant", "object", "Component-set variant properties as Property=Value pairs, applied after creation.", '{ State: "primary" }'),
+  ],
   text: [
-    text("text", "The string to render.", '"Deploy to prod"'),
-    enumArg("role", "Type-scale role.", ROLE_VALUES, '"title"'),
+    text("text", "The string to render.", '"Deploy to prod"'),    enumArg("role", "Type-scale role.", ROLE_VALUES, '"title"'),
     num("size", "Explicit font size in px, overriding the role scale."),
     text("family", "Font family name.", '"Inter"'),
     num("weight", "Font weight 100-900.", "600"),
@@ -546,4 +552,5 @@ export const PRIMITIVE_EXAMPLES: Record<string, string> = {
   vectorPlan: '{ fn: "vectorPlan", id: "logo-path", parent: "hero", args: { steps: [{ op: "silhouette", mark: "hex" }, { op: "cutout" }, { op: "mirror" }], color: "#242521" } }',
   inspector: '{ fn: "inspector", id: "side", args: { width: 320, composition: "split-view" } }',
   variable: '{ fn: "variable", id: "surface-token", args: { name: "surface", type: "COLOR", values: { default: "#FFFFFF" } } }',
+  instance: '{ fn: "instance", id: "primary-cta", parent: "hero", args: { componentId: "C:abc123", width: 150, height: 56, variant: { State: "primary" } } }',
 };

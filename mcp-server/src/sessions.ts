@@ -6,6 +6,8 @@
  * target — the tool call fails and lists the candidates instead.
  */
 import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import type { WebSocket } from "ws";
 import type {
   ClientMessage,
@@ -612,6 +614,128 @@ export class JobLedger {
    */
   private readonly evicted = new Set<string>();
 
+  /**
+   * Restart persistence (issue #20, workstream 9).
+   *
+   * The ledger already survived connection loss; a *process* restart lost
+   * everything, and a same-id retry after a restart could re-execute a
+   * committed mutation with no guard at all. When a file is configured, the
+   * ledger loads on construction and flushes atomically (temp + rename, the
+   * memory-store pattern) on every state transition that matters: record
+   * creation, terminal states, and evictions. Non-terminal progress flushes
+   * debounced. The file is repairable-but-never-blocking: a corrupt or
+   * missing file degrades to an empty ledger, never a boot failure.
+   *
+   * Opt-in via `DESIGN_AGENT_JOB_DIR` (or a direct path passed to the
+   * constructor): the default stays in-memory so test/dev processes never
+   * leave durable state behind, and a deployment that wants restart recovery
+   * turns it on explicitly.
+   */
+  readonly persistenceFile: string | null;
+  private flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(file?: string | null) {
+    this.persistenceFile =
+      file === null
+        ? null
+        : (file ??
+          (process.env.DESIGN_AGENT_JOB_DIR
+            ? resolve(process.env.DESIGN_AGENT_JOB_DIR, "job-ledger.json")
+            : null));
+    if (this.persistenceFile) this.load();
+  }
+
+  /** In-flight states an unclean restart cannot vouch for. */
+  private static readonly IN_FLIGHT: ReadonlySet<JobState> = new Set(["queued", "preflight", "applying", "verifying", "timed-out"]);
+
+  private load(): void {
+    if (!this.persistenceFile) return;
+    let raw: string;
+    try {
+      if (!existsSync(this.persistenceFile)) return;
+      raw = readFileSync(this.persistenceFile, "utf8");
+    } catch (err) {
+      console.warn(`job-ledger: could not read ${this.persistenceFile}: ${err instanceof Error ? err.message : String(err)}; starting empty.`);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as {
+        version?: number;
+        jobs?: JobRecord[];
+        results?: Array<{ transactionId: string; result: unknown }>;
+        evicted?: string[];
+        attempts?: Array<{ transactionId: string; attempt: number }>;
+      };
+      if (parsed.version !== 1) {
+        console.warn(`job-ledger: ${this.persistenceFile} has version ${String(parsed.version)}, expected 1 — ignoring it rather than guessing its shape.`);
+        return;
+      }
+      for (const rec of (parsed.jobs ?? []).slice(-200)) {
+        if (!rec || typeof rec.transactionId !== "string") continue;
+        // A record whose state was in flight when the server died is evidence
+        // of nothing: its "applying" was true a moment before the restart, and
+        // treating it as anything terminal would be a guess. Keep it, say so.
+        const wasInFlight = JobLedger.IN_FLIGHT.has(rec.state);
+        const restored: JobRecord = {
+          ...rec,
+          ...(wasInFlight
+            ? {
+                state: "timed-out" as JobState,
+                label: `${rec.label ?? `${rec.state} when the server restarted`}. The server restarted while this job was in flight, so the last recorded state cannot be trusted as an outcome: inspect the target subtree for partial work before retrying, and reuse the SAME transactionId.`,
+              }
+            : {}),
+        };
+        this.jobs.set(restored.transactionId, restored);
+        this.order.push(restored.transactionId);
+      }
+      for (const { transactionId, result } of (parsed.results ?? []).slice(-200)) {
+        if (typeof transactionId === "string") this.results.set(transactionId, result);
+      }
+      for (const { transactionId, attempt } of (parsed.attempts ?? []).slice(-400)) {
+        if (typeof transactionId === "string" && typeof attempt === "number") this.attempts.set(transactionId, attempt);
+      }
+      for (const id of (parsed.evicted ?? []).slice(-400)) {
+        if (typeof id === "string") this.evicted.add(id);
+      }
+    } catch (err) {
+      console.warn(`job-ledger: could not parse ${this.persistenceFile}: ${err instanceof Error ? err.message : String(err)}; starting empty.`);
+      return;
+    }
+  }
+
+  /** Serialises the whole bounded state. Terminal and eviction flushes call this. */
+  private flush(debounceMs = 0): void {
+    if (!this.persistenceFile) return;
+    if (debounceMs > 0) {
+      if (this.flushTimer !== null) return; // already scheduled
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        this.flush(0);
+      }, debounceMs);
+      return;
+    }
+    if (this.flushTimer !== null) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    try {
+      mkdirSync(dirname(this.persistenceFile), { recursive: true });
+      const snapshot = {
+        version: 1,
+        savedAt: new Date().toISOString(),
+        jobs: [...this.jobs.values()].slice(-200),
+        results: [...this.results.entries()].slice(-200).map(([transactionId, result]) => ({ transactionId, result })),
+        evicted: [...this.evicted].slice(-400),
+        attempts: [...this.attempts.entries()].slice(-400).map(([transactionId, attempt]) => ({ transactionId, attempt })),
+      };
+      const temp = `${this.persistenceFile}.tmp`;
+      writeFileSync(temp, `${JSON.stringify(snapshot)}\n`, "utf8");
+      renameSync(temp, this.persistenceFile);
+    } catch (err) {
+      console.warn(`job-ledger: could not flush to ${this.persistenceFile}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string }): JobRecord {
     // A re-dispatch of the same id is a new attempt. Late results belonging to
     // the previous one must not be able to overwrite this attempt's state, so
@@ -649,6 +773,7 @@ export class JobLedger {
         this.results.delete(id);
       }
     }
+    this.flush();
     return rec;
   }
 
@@ -661,6 +786,9 @@ export class JobLedger {
     const rec = this.jobs.get(transactionId);
     if (!rec) return undefined;
     Object.assign(rec, patch, { updatedAt: Date.now() });
+    // Progress frames arrive per operation; the debounced flush coalesces
+    // them, and terminal writes (complete/completeLate) flush immediately.
+    this.flush(250);
     return rec;
   }
 
@@ -677,6 +805,9 @@ export class JobLedger {
         if (first) this.results.delete(first);
       }
     }
+    // A terminal state is the one thing a restart must not lose: this is
+    // where a same-id retry's duplicate-safety comes from.
+    this.flush();
     return rec;
   }
 
@@ -709,6 +840,7 @@ export class JobLedger {
       const stale = { ...rec, state: rec.state, label: `${rec.label ?? ""} (ignored stale result from attempt ${input.attempt}; current is ${rec.attempt})`.trim() };
       rec.label = stale.label;
       rec.updatedAt = Date.now();
+      this.flush();
       return { applied: false, record: rec, reason: `stale: frame is from attempt ${input.attempt}, record is on attempt ${rec.attempt}` };
     }
     this.complete(input.transactionId, input.state, input.extra, input.result);

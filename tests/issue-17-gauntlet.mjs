@@ -302,10 +302,16 @@ const A03 = {
         const overlaps = placed.x < frame.x + frame.width && frame.x < placed.x + 1440 && placed.y < frame.y + frame.height && frame.y < placed.y + 900;
         if (overlaps) unmet.push(`the screen was placed at (${placed.x}, ${placed.y}), on top of a frame at (${frame.x}, ${frame.y})`);
       }
-      // The regions are emitted in root-relative coordinates, so they have to
-      // move with the root or the whole screen lands somewhere else.
+      // The regions are emitted in root-relative (parent-local) coordinates,
+      // so they follow the root without being touched. Shifting them by
+      // -placed.x was the old page-absolute contract (issue #18's B08 moved
+      // the compiler to parent-local), and under the current contract it put
+      // every region 10153px above its own frame — blank live builds. The
+      // invariant here is that placement moves the root op alone.
       const nav = operations.find((o) => o.id === "nav");
-      if (nav.x !== 0 - placed.x) unmet.push(`the 'nav' region was left at x=${nav.x} while the root moved to x=${placed.x}`);
+      if (nav.x !== 0) unmet.push(`the 'nav' region's root-relative x was shifted to ${nav.x}; parent-local children follow the frame without shifting`);
+      const body = operations.find((o) => o.id === "body");
+      if (body.x !== 272) unmet.push(`the 'body' region's root-relative x was shifted to ${body.x}; placement must not touch parent-local coordinates`);
     }
     return unmet.length === 0
       ? ok(`the screen was placed at (${placed?.x}, ${placed?.y}), clear of ${existing.length} existing frame(s)`)

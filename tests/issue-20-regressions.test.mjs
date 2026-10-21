@@ -22,12 +22,16 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { existsSync, readFileSync, mkdtempSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { reviewVerdict, MIN_REVIEW_NODES, verifyRepairs } from "../mcp-server/dist-test/review/verdict.js";
 import { runRules, evaluatedRuleNames } from "../mcp-server/dist-test/review/rules.js";
 import { defaultRules } from "../mcp-server/dist-test/memory/rules-exo.js";
 import { runGuard, snapshotFromMetrics } from "../mcp-server/dist-test/memory/tools.js";
 import { checkCapabilityTruth, pinCapabilitySource, EXO_CAPABILITIES } from "../mcp-server/dist-test/memory/capability-truth.js";
+import { applyCapabilityManifest } from "../mcp-server/dist-test/memory/capability-truth.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 import { normalizeBrief } from "../mcp-server/dist-test/pipeline/brief.js";
 import { pipelineBriefFromDesignBrief } from "../mcp-server/dist-test/pipeline/adapters.js";
@@ -340,13 +344,22 @@ test("pinning a source without an id is refused, and a real pin raises INDETERMI
   assert.throws(() => pinCapabilitySource("   "), /refuses an empty build id/);
   const before = checkCapabilityTruth({ texts: ["Audit log", "Proposed"] }).verdict;
   assert.equal(before, "INDETERMINATE");
-  const out = pinCapabilitySource("exo-2026.10-r48215");
+  // The pin persists to an explicit path here so the test never writes into
+  // the repository's docs/ directory.
+  const dir = mkdtempSync(path.join(os.tmpdir(), "figdes-pin-"));
+  const file = path.join(dir, "exo-capabilities.json");
+  const out = pinCapabilitySource("exo-2026.10-r48215", { verifiedBy: "test", evidence: "temp manifest" }, file);
   assert.equal(out.pinned, true);
   assert.ok(out.note.includes("exo-2026.10-r48215"));
+  assert.ok(existsSync(file), "the manifest must be written so the pin survives a restart");
   // Same marked claim: still sane, now traceable (verdict degrades no further).
   const after = checkCapabilityTruth({ texts: ["Audit log", "Proposed"] });
   assert.notEqual(after.verdict, "FAIL", after.reason);
   assert.ok(after.source.note.includes("exo-2026.10-r48215"));
+  // A fresh loader over the saved manifest restores the same pin.
+  const restored = JSON.parse(readFileSync(file, "utf8"));
+  assert.equal(restored.build, "exo-2026.10-r48215");
+  assert.equal(restored.version, 1);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -373,6 +386,51 @@ test("build compatibility warns when the builds are not a same-commit pair", () 
   assert.equal(buildScopeWarning({ build: SERVER_BUILD }), null, "same-commit must carry no warning");
   const warned = buildScopeWarning({ build: "deadbeef-other" });
   assert.ok(warned === null || ["different-commit", "unverifiable"].includes(warned.compatibility));
+});
+
+/* -------------------------------------------------------------------------- */
+/* Workstream 1 (remaining) — component instances in the semantic runtime      */
+/* -------------------------------------------------------------------------- */
+
+test("a semantic program can place an instance of the file's own component", () => {
+  const result = executeRuntime({
+    canvas: { name: "Instances", width: 1000, height: 700, grid: 8 },
+    regions: [{ fn: "hero", id: "board", args: { width: "fill", height: "fill", padding: 24, gap: 16 } }],
+    content: [
+      { fn: "sectionHeader", id: "h1", parent: "board", args: { title: "Machines [fixture]", action: "Filter" } },
+      { fn: "instance", id: "cta", parent: "board", args: { componentId: "C:abc123", width: 150, height: 56, name: "Primary CTA [fixture]" } },
+      { fn: "instance", id: "row", parent: "board", args: { componentId: "C:modelrow", width: 800, height: 118, variant: { State: "selected" } } },
+    ],
+  });
+
+  const inst = result.operations.find((o) => o.type === "createInstance" && o.id === "cta");
+  assert.ok(inst, "the instance op is emitted");
+  assert.equal(inst.componentId, "C:abc123");
+  const set = result.operations.find((o) => o.type === "setVariant" && o.target === "row");
+  assert.ok(set, "the variant op is emitted for the variant instance");
+  assert.deepEqual(set.variant, { State: "selected" });
+
+  // The recorded box is the explicit extents, so the trace agrees with the op.
+  const box = result.boxes.get("cta");
+  assert.ok(box && Math.round(box.w) === 150 && Math.round(box.h) === 56, JSON.stringify(box));
+
+  // The whole stream stays within the native allowlist.
+  for (const op of result.operations) {
+    assert.equal(OperationSchema.safeParse(op).success, true, `rejected: ${JSON.stringify(op)}`);
+  }
+});
+
+test("an instance without explicit extents is a naming error, not an invented number", () => {
+  const result = executeRuntime({
+    canvas: { name: "Instances", width: 1000, height: 700, grid: 8 },
+    regions: [{ fn: "hero", id: "board", args: { width: "fill", height: "fill" } }],
+    content: [{ fn: "instance", id: "bad", parent: "board", args: { componentId: "C:abc123" } }],
+  });
+  assert.equal(result.operations.some((o) => o.type === "createInstance"), false, "no op is emitted without extents");
+  assert.ok(
+    result.warnings.some((w) => /Instance 'bad' rejected/.test(w) && /(width|height)/.test(w)),
+    JSON.stringify(result.warnings),
+  );
 });
 
 /* -------------------------------------------------------------------------- */

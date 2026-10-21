@@ -276,8 +276,40 @@ export const ComponentSpecSchema = z
   .strict();
 
 /**
- * A connector between two nodes (spec §16).
+ * An instance of a component that already exists in the live Figma file.
  *
+ * This is the component-reuse half of the runtime (issue #20, workstream 6):
+ * until now a semantic program could only draw its patterns from primitives,
+ * so `design_runtime` screens shipped visually-similar-but-unrelated copies of
+ * buttons, model rows and status pills while the file's own components sat
+ * unused. An instance spec carries the live reference through the offline
+ * compile exactly the way `textStyleId` does: the caller names the component
+ * (an id from `find_component` or `inspect_design_system`), and the plugin
+ * resolves and instantiates it at execution time.
+ *
+ * Extents are required and explicit, because the component's real size lives
+ * in Figma and an offline layout cannot hug what it cannot measure — the
+ * caller passes the measured size, and a missing one is a boundary error
+ * rather than an invented number.
+ */
+export const InstanceSpecSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    kind: z.literal("instance"),
+    /** Component node id (COMPONENT or COMPONENT_SET) from find_component / inspect_design_system. */
+    componentId: z.string().min(1).max(200),
+    name: z.string().max(200).optional(),
+    width: z.number().positive().max(20000),
+    height: z.number().positive().max(20000),
+    /** Component-set variant properties, applied via setVariant after creation. */
+    variant: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+export type InstanceSpec = z.infer<typeof InstanceSpecSchema>;
+
+/**
+ * A connector between two nodes (spec §16).
  * This is the spec's `connector({ from, to, routing, label })`. Stored as data
  * rather than a pre-computed path so the geometry can be solved against the
  * boxes that were actually placed — a path baked by the model would not land on
@@ -371,6 +403,7 @@ export const ContentSchema = z.discriminatedUnion("kind", [
   ShapeSpecSchema,
   VectorSpecSchema,
   ComponentSpecSchema,
+  InstanceSpecSchema,
   ConnectorSpecSchema,
 ]);
 

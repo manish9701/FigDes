@@ -82,6 +82,12 @@ metrics, so the topology rules remain manual by construction — and say so
   sides) after the report push: review PASS, audit PASS, guard 10/0/0
   with the same three INDETERMINATEs, blank-target and capped-window
   behavior unchanged.
+  Re-verified again on same-commit **`7eaf75fb762e`** (0.3.3, clean both
+  sides): the exact reported failure is gone — `design_guard({inspect:
+  true})` with 8 text layers selected now checks enclosing frame
+  `358:1551` (39 nodes, 13 rules, 10 passed / 0 failures, `scopeResolution`
+  names the escalation); review PASS, audit PASS, render confirms the
+  4-instance layout.
 
 ## Remaining deliberately-manual checks
 

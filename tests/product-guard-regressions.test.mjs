@@ -22,7 +22,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runGuard, snapshotFromIR } from "../mcp-server/dist-test/memory/guard.js";
+import { runGuard, snapshotFromIR, metricsFromLiveNodes } from "../mcp-server/dist-test/memory/guard.js";
 import { EXO_RULES } from "../mcp-server/dist-test/memory/rules-exo.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
@@ -194,4 +194,141 @@ test("a clean build is not polluted with standing 'unchecked' noise", () => {
   assert.deepEqual(built.warnings, []);
   assert.equal(built.applicable, true);
   assert.equal(built.productGuard.verdict, "INDETERMINATE", "the fact is still reported");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Live frames: the guard measures instead of shrugging                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A live snapshot previously carried no assert metrics at all, so five rules
+ * reported INDETERMINATE on every live frame — even a fixed one. The metrics
+ * below are measured from the same node facts the reviewer uses.
+ */
+let liveSeq = 0;
+const liveNode = (over = {}) => ({
+  id: over.id ?? `n${++liveSeq}`,
+  parentId: "root",
+  type: "FRAME",
+  name: "layer",
+  depth: 1,
+  x: 0,
+  y: 0,
+  w: 100,
+  h: 40,
+  visible: true,
+  defaultNamed: false,
+  zIndex: 0,
+  ...over,
+});
+const liveText = (content, over = {}) => liveNode({
+  type: "TEXT",
+  name: "label",
+  w: 120,
+  h: 15,
+  text: { content, length: content.length, truncated: false, size: 12, family: "Inter", style: "Regular", color: "#111111", styled: false },
+  ...over,
+});
+
+const liveGuard = (nodes) => {
+  const root = liveNode({ id: "root", parentId: null, type: "FRAME", name: "Screen", depth: 0, x: 0, y: 0, w: 1440, h: 960 });
+  const all = [root, ...nodes];
+  const texts = all.filter((n) => n.type === "TEXT").map((n) => n.text.content);
+  return runGuard(EXO_RULES, {
+    source: "live",
+    resolved: true,
+    nodeNames: all.map((n) => n.name),
+    texts,
+    components: [],
+    metrics: { nodes: all.length, textNodes: texts.length, ...metricsFromLiveNodes(all) },
+    scope: { nodeCount: all.length, textCount: texts.length, screenLevel: true },
+  });
+};
+
+const ruleOf = (result, id) => result.findings.find((f) => f.rule === id);
+
+test("live: a labelled row group and one primary action pass the assert rules", () => {
+  // The shape of the fixed model-library frame: the accent lives in a group
+  // that names its state, and the button carries its caption inside it.
+  const result = liveGuard([
+    liveNode({ id: "row", type: "GROUP", name: "Model row — Qwen2.5 Coder 7B", x: 264, y: 204, w: 1128, h: 118 }),
+    liveNode({ id: "surface", parentId: "row", type: "RECTANGLE", name: "Square row surface", x: 0, y: 0, w: 1128, h: 118 }),
+    liveNode({ id: "accent", parentId: "row", type: "RECTANGLE", name: "Row status accent", x: 0, y: 0, w: 4, h: 118 }),
+    liveText("✓ Qwen2.5 Coder 7B", { id: "title", parentId: "row", x: 12, y: 24, w: 300, h: 19 }),
+    liveText("✓ Installed", { id: "status", parentId: "row", x: 856, y: 43, w: 120, h: 15 }),
+    liveNode({ id: "cta", type: "RECTANGLE", name: "Primary action", x: 1220, y: 46, w: 172, h: 44 }),
+    liveText("Add model", { id: "ctalabel", x: 1235, y: 61, w: 140, h: 15 }),
+  ]);
+
+  assert.equal(ruleOf(result, "exo.critical-states-labeled").verdict, "PASS", "the accent's group names its state and the button carries its caption");
+  assert.equal(ruleOf(result, "exo.technical-typography").verdict, "PASS");
+  assert.equal(ruleOf(result, "exo.primary-action-dominant").verdict, "PASS", "one commit control");
+  assert.equal(ruleOf(result, "exo.selected-unambiguous").verdict, "PASS", "nothing claims selection");
+});
+
+test("live: an anonymous button fails instead of passing by default", () => {
+  const result = liveGuard([
+    liveNode({ id: "side", type: "RECTANGLE", name: "Warm neutral sidebar", x: 0, y: 0, w: 228, h: 960 }),
+    liveNode({ id: "b", type: "RECTANGLE", name: "Submit button", x: 400, y: 40, w: 120, h: 40 }),
+  ]);
+  const rule = ruleOf(result, "exo.critical-states-labeled");
+  assert.equal(rule.verdict, "FAIL", "a button nothing names is anonymous");
+  assert.match(rule.evidence ?? "", /unlabeledComponents=1/);
+});
+
+test("live: dividers and flat panels are not mistaken for controls", () => {
+  // "Action divider" names an action but is a rule; the panel's heading sits
+  // beside it as a sibling label, so neither may count.
+  const result = liveGuard([
+    liveNode({ id: "div", type: "RECTANGLE", name: "Action divider", x: 100, y: 100, w: 330, h: 1 }),
+    liveNode({ id: "panel", type: "RECTANGLE", name: "Quick actions panel", x: 100, y: 200, w: 330, h: 300 }),
+    liveText("QUICK ACTIONS", { id: "heading", x: 120, y: 218, w: 200, h: 12 }),
+  ]);
+  assert.equal(ruleOf(result, "exo.critical-states-labeled").verdict, "PASS");
+  assert.equal(ruleOf(result, "exo.primary-action-dominant").verdict, "PASS", "a divider is not a primary claim");
+});
+
+test("live: two primary claims warn on dominance", () => {
+  const result = liveGuard([
+    liveNode({ id: "side", type: "RECTANGLE", name: "Warm neutral sidebar", x: 0, y: 0, w: 228, h: 960 }),
+    liveNode({ id: "b1", type: "RECTANGLE", name: "Primary action", x: 400, y: 40, w: 172, h: 44 }),
+    liveText("Add model", { id: "l1", x: 415, y: 55, w: 140, h: 15 }),
+    liveNode({ id: "b2", type: "RECTANGLE", name: "Commit changes", x: 400, y: 120, w: 172, h: 44 }),
+    liveText("Commit", { id: "l2", x: 415, y: 135, w: 140, h: 15 }),
+  ]);
+  const rule = ruleOf(result, "exo.primary-action-dominant");
+  assert.equal(rule.verdict, "WARNING", "two equal primaries is not a hierarchy (warn severity)");
+  assert.match(rule.evidence ?? "", /dominantActions=2/);
+});
+
+test("live: machine data in a proportional face fails; mono and display values pass", () => {
+  const side = () => liveNode({ id: `side${++liveSeq}`, type: "RECTANGLE", name: "Warm neutral sidebar", x: 0, y: 0, w: 228, h: 960 });
+  const bad = liveGuard([side(), liveText("p99 latency 240ms", { id: "t" })]);
+  const badRule = ruleOf(bad, "exo.technical-typography");
+  assert.equal(badRule.verdict, "WARNING", "warn severity reports WARNING, never silent");
+  assert.match(badRule.evidence ?? "", /machineDataInProportionalFace=1/);
+
+  const mono = liveGuard([
+    side(),
+    liveText("p99 latency 240ms", { id: "t", text: { content: "p99 latency 240ms", length: 17, truncated: false, size: 12, family: "JetBrains Mono", style: "Regular", color: "#111111", styled: false } }),
+  ]);
+  assert.equal(ruleOf(mono, "exo.technical-typography").verdict, "PASS", "mono is the designer's answer");
+
+  const display = liveGuard([side(), liveText("4.4 GB · GGUF · Q4_K_M", { id: "t" })]);
+  assert.equal(ruleOf(display, "exo.technical-typography").verdict, "PASS", "byte quantities are display values, not identifiers");
+});
+
+test("live: an explicitly active container needs a non-colour signal", () => {
+  const side = () => liveNode({ id: `side${++liveSeq}`, type: "RECTANGLE", name: "Warm neutral sidebar", x: 0, y: 0, w: 228, h: 960 });
+  const bare = liveGuard([
+    side(),
+    liveNode({ id: "card", type: "FRAME", name: "Device card active", x: 400, y: 40, w: 300, h: 120 }),
+  ]);
+  assert.equal(ruleOf(bare, "exo.selected-unambiguous").verdict, "WARNING", "active with nothing but fill (warn severity)");
+
+  const signalled = liveGuard([
+    liveNode({ id: "card", type: "FRAME", name: "Device card active", x: 40, y: 40, w: 300, h: 120 }),
+    liveText("Mac mini", { id: "t", parentId: "card", x: 12, y: 12, w: 200, h: 15, text: { content: "Mac mini", length: 8, truncated: false, size: 13, family: "Inter", style: "Semi Bold", color: "#111111", styled: false } }),
+  ]);
+  assert.equal(ruleOf(signalled, "exo.selected-unambiguous").verdict, "PASS", "a weight change survives greyscale");
 });

@@ -13,7 +13,7 @@ import { z } from "zod";
 import { VerdictSchema } from "../../../shared/memory";
 import type { MetricsReport } from "../../../shared/protocol";
 import { inferComposition } from "../runtime/layout";
-import { runGuard, snapshotFromIR, decideGuardTarget, type GuardSnapshot } from "./guard";
+import { runGuard, snapshotFromIR, decideGuardTarget, metricsFromLiveNodes, type GuardSnapshot } from "./guard";
 import { addNote, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
 import type { Session } from "../sessions";
 
@@ -265,12 +265,24 @@ function snapshotFromMetrics(metrics: MetricsReport, targetId?: string): GuardSn
   const root = nodes[0];
   const screenLevel = nodes.length > 0 && (root?.type === "FRAME" || root?.type === "COMPONENT" || root?.type === "INSTANCE");
 
+  // The assert metrics a live frame can supply. Without these every
+  // assert-based rule reports INDETERMINATE on live frames — even when the
+  // facts are measurable — so the guard could only shrug at real screens.
+  // Links and component props genuinely do not survive measurement, so the
+  // topology rules stay manual by construction, never by default.
+  const live = metricsFromLiveNodes(nodes);
+
   return {
     source: "live",
     resolved: nodes.length > 0,
     nodeNames: names,
     texts,
     components,
+    metrics: {
+      nodes: nodes.length,
+      textNodes: texts.length,
+      ...live,
+    },
     scope: {
       ...(targetId !== undefined ? { id: targetId } : {}),
       ...(root?.name !== undefined ? { name: root.name } : {}),

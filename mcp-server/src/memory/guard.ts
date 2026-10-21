@@ -27,6 +27,7 @@
  * measurement pass, so it costs nothing to run after every build.
  */
 import type { GuardFinding, ProductRule, RuleEvidence, Verdict } from "../../../shared/memory";
+import type { NodeMetrics } from "../../../shared/protocol";
 
 /* -------------------------------------------------------------------------- */
 /* The snapshot                                                                */
@@ -481,6 +482,226 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Shared recognisers (program and live paths must agree)                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Strings the product truth names: identifiers, latencies, hashes, addresses.
+ *
+ * Kept to exactly the four the rule states — see the note inside
+ * `snapshotFromIR` about byte quantities. Both snapshot builders share this
+ * so a value cannot pass on a program and fail on the same screen live.
+ */
+const MACHINE_DATA = [
+  /\b\d{1,3}(?:\.\d{1,3}){3}\b/, //                                   10.0.0.14
+  /\b\d+(?:\.\d+)?\s?(?:ms|µs|us|ns)\b/, //                          240ms
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
+  /\b(?=[0-9a-f]{8,}\b)(?=[a-f0-9]*\d)[a-f0-9]{8,}\b/i,
+];
+
+export function looksLikeMachineData(s: string): boolean {
+  return MACHINE_DATA.some((re) => re.test(s));
+}
+
+/** A face that sets digits and identifiers on a fixed pitch. */
+export function isMonospacedFace(s: string | undefined): boolean {
+  return typeof s === "string" && /mono|menlo|consolas|courier|jetbrains|code/i.test(s);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Live metrics                                                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The `assert` metrics a live frame can actually supply, measured from the
+ * same `NodeMetrics` the reviewer reasons over.
+ *
+ * A live snapshot previously carried no metrics at all, so every assert-based
+ * rule (`critical-states-labeled`, `technical-typography`,
+ * `primary-action-dominant`, `selected-unambiguous`) reported INDETERMINATE
+ * on every live frame — even when the facts were measurable. That made the
+ * guard a second reviewer that could only ever shrug.
+ *
+ * Every heuristic here is precision-first and documented where it can be
+ * wrong. Anything genuinely absent from the measurement (links, component
+ * props, text roles) stays uncollected, and the rule stays manual — a guard
+ * that guesses wrong is worse than one that asks.
+ */
+export interface LiveGuardMetrics {
+  unlabeledComponents: number;
+  dominantActions: number;
+  machineDataInProportionalFace: number;
+  ambiguousSelections: number;
+}
+
+/** Interactive or state-carrying roles by layer name. TEXT is never a candidate. */
+const INTERACTIVE_LIVE = /button|cta|pill|badge|chip|tab|action|indicator|status|state|dot|device/i;
+
+/** Whole-word claims to be the screen's primary action. */
+const PRIMARY_LIVE = /\bprimary\b|\bcta\b|\bcommit\b/i;
+
+/** Explicit selection markers in a layer name. */
+const ACTIVE_LIVE = /\bactive\b|\bselected\b/i;
+
+/** Non-colour selection signals, mirroring the program path. */
+const SELECTION_SIGNAL_LIVE = /indicator|icon|marker|badge|dot|check|caret/i;
+
+const BOLD_LIVE = /bold|semibold|medium|black|heavy/i;
+
+/** A divider, hairline or rule cannot be pressed, labelled or not. */
+function isRuleLikeLive(n: NodeMetrics): boolean {
+  if (!Number.isFinite(n.w) || !Number.isFinite(n.h)) return false;
+  return Math.min(n.w, n.h) <= 6 && Math.max(n.w, n.h) >= 40;
+}
+
+function hasFiniteBounds(n: NodeMetrics): boolean {
+  return Number.isFinite(n.x) && Number.isFinite(n.y) && Number.isFinite(n.w) && Number.isFinite(n.h);
+}
+
+function liveTextOf(n: NodeMetrics): string {
+  return n.type === "TEXT" ? (n.text?.content ?? "") : "";
+}
+
+export function metricsFromLiveNodes(nodes: NodeMetrics[]): LiveGuardMetrics {
+  const visible = nodes.filter((n) => n.visible !== false);
+  const byId = new Map(visible.map((n) => [n.id, n]));
+  const childrenOf = new Map<string, NodeMetrics[]>();
+  for (const n of visible) {
+    if (!n.parentId) continue;
+    const list = childrenOf.get(n.parentId);
+    if (list) list.push(n);
+    else childrenOf.set(n.parentId, [n]);
+  }
+
+  /** Words anywhere in the subtree (through groups, not through regions). */
+  const subtreeHasText = (id: string): boolean => {
+    const stack = [...(childrenOf.get(id) ?? [])];
+    const seen = new Set<string>();
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (seen.has(current.id)) continue;
+      seen.add(current.id);
+      if (liveTextOf(current).trim().length > 0) return true;
+      const kids = childrenOf.get(current.id);
+      if (kids) stack.push(...kids);
+    }
+    return false;
+  };
+
+  /**
+   * A label drawn beside the node rather than inside it — the same geometric
+   * reading the reviewer uses, so the two never disagree about what counts
+   * as "words next to the colour".
+   */
+  const hasSiblingLabel = (n: NodeMetrics): boolean => {
+    if (!hasFiniteBounds(n) || !n.parentId) return false;
+    const siblings = childrenOf.get(n.parentId) ?? [];
+    const centreY = n.y + n.h / 2;
+    for (const s of siblings) {
+      if (s.id === n.id || liveTextOf(s).trim().length === 0 || !hasFiniteBounds(s)) continue;
+      const overlapY = Math.min(n.y + n.h, s.y + s.h) - Math.max(n.y, s.y);
+      if (overlapY <= 0 || overlapY < Math.min(n.h, s.h) * 0.5) continue;
+      const gap = Math.max(0, Math.max(n.x - (s.x + s.w), s.x - (n.x + n.w)));
+      if (gap > 16) continue;
+      if (Math.abs(s.y + s.h / 2 - centreY) > Math.max(n.h, s.h)) continue;
+      return true;
+    }
+    return false;
+  };
+
+  const centreInside = (t: NodeMetrics, o: NodeMetrics): boolean =>
+    hasFiniteBounds(t) &&
+    hasFiniteBounds(o) &&
+    t.x + t.w / 2 >= o.x &&
+    t.x + t.w / 2 <= o.x + o.w &&
+    t.y + t.h / 2 >= o.y &&
+    t.y + t.h / 2 <= o.y + o.h;
+
+  /**
+   * Words carried by the intentional unit the node belongs to. A status
+   * accent inside a row group that names its state is labelled — the group
+   * is the component. The walk stops at frames and pages: a region is not a
+   * component, and distant text elsewhere in it must not excuse an
+   * anonymous control.
+   */
+  const groupCarriesWords = (n: NodeMetrics): boolean => {
+    let parent = n.parentId ? byId.get(n.parentId) : undefined;
+    const seen = new Set<string>();
+    while (parent && !seen.has(parent.id)) {
+      seen.add(parent.id);
+      if (parent.type === "GROUP" || parent.type === "INSTANCE" || parent.type === "COMPONENT" || parent.type === "COMPONENT_SET") {
+        if (subtreeHasText(parent.id)) return true;
+      }
+      if (parent.type === "FRAME" || parent.type === "PAGE") break;
+      parent = parent.parentId ? byId.get(parent.parentId) : undefined;
+    }
+    return false;
+  };
+
+  let unlabeledComponents = 0;
+  for (const n of visible) {
+    if (n.type === "TEXT") continue;
+    if (!INTERACTIVE_LIVE.test(n.name ?? "")) continue;
+    if (isRuleLikeLive(n)) continue;
+    if (subtreeHasText(n.id) || hasSiblingLabel(n) || groupCarriesWords(n)) continue;
+    let contained = false;
+    for (const m of visible) {
+      if (liveTextOf(m).trim().length === 0) continue;
+      if (centreInside(m, n)) {
+        contained = true;
+        break;
+      }
+    }
+    if (!contained) unlabeledComponents += 1;
+  }
+
+  // One commit control leads; text captions are not claims. Dividers named
+  // "… action divider" are rules, not actions.
+  const dominantActions = visible.filter(
+    (n) => n.type !== "TEXT" && PRIMARY_LIVE.test(n.name ?? "") && !isRuleLikeLive(n),
+  ).length;
+
+  // Live text carries no role, so only the face decides. Values already set
+  // in mono are the designer's answer, not a finding.
+  let machineDataInProportionalFace = 0;
+  for (const n of visible) {
+    const content = liveTextOf(n);
+    if (content.length === 0 || !looksLikeMachineData(content)) continue;
+    if (isMonospacedFace(n.text?.family ?? undefined)) continue;
+    machineDataInProportionalFace += 1;
+  }
+
+  // Only an explicitly marked selection is checkable live: component props
+  // do not survive to the measurement, so an unmarked container is absence,
+  // not evidence. Nav items are exempt as on the program path — the emitter
+  // raises their weight, which is a non-colour signal by construction.
+  let ambiguousSelections = 0;
+  for (const n of visible) {
+    if (n.type !== "FRAME" && n.type !== "GROUP" && n.type !== "INSTANCE" && n.type !== "COMPONENT" && n.type !== "COMPONENT_SET") continue;
+    const name = n.name ?? "";
+    if (!ACTIVE_LIVE.test(name) || /nav/i.test(name)) continue;
+    let signal = false;
+    const stack = [...(childrenOf.get(n.id) ?? [])];
+    const seen = new Set<string>();
+    while (stack.length > 0 && !signal) {
+      const current = stack.pop()!;
+      if (seen.has(current.id)) continue;
+      seen.add(current.id);
+      if (current.type === "TEXT" && BOLD_LIVE.test(current.text?.style ?? "")) signal = true;
+      const kids = childrenOf.get(current.id);
+      if (kids) stack.push(...kids);
+    }
+    if (!signal) {
+      const siblings = n.parentId ? (childrenOf.get(n.parentId) ?? []) : [];
+      if (siblings.some((s) => s.id !== n.id && SELECTION_SIGNAL_LIVE.test(s.name ?? ""))) signal = true;
+    }
+    if (!signal) ambiguousSelections += 1;
+  }
+
+  return { unlabeledComponents, dominantActions, machineDataInProportionalFace, ambiguousSelections };
+}
+
 /**
  * Builds a snapshot from a compiled runtime result.
  *
@@ -554,17 +775,10 @@ export function snapshotFromIR(ir: {
    *
    * The hash pattern needs a digit, so ordinary words are not mistaken for hex.
    */
-  const MACHINE_DATA = [
-    /\b\d{1,3}(?:\.\d{1,3}){3}\b/, //                                   10.0.0.14
-    /\b\d+(?:\.\d+)?\s?(?:ms|µs|us|ns)\b/, //                          240ms
-    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i,
-    /\b(?=[0-9a-f]{8,}\b)(?=[a-f0-9]*\d)[a-f0-9]{8,}\b/i,
-  ];
-  const looksMachine = (s: string): boolean => MACHINE_DATA.some((re) => re.test(s));
+  const looksMachine = (s: string): boolean => looksLikeMachineData(s);
 
   /** A face that sets digits and identifiers on a fixed pitch. */
-  const isMonoFace = (s: string | undefined): boolean =>
-    typeof s === "string" && /mono|menlo|consolas|courier|jetbrains|code/i.test(s);
+  const isMonoFace = (s: string | undefined): boolean => isMonospacedFace(s);
 
   let machineDataInProportionalFace = 0;
   for (const node of ir.content) {

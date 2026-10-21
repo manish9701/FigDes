@@ -22,7 +22,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { runGuard, snapshotFromIR, metricsFromLiveNodes } from "../mcp-server/dist-test/memory/guard.js";
+import { runGuard, snapshotFromIR, metricsFromLiveNodes, decideGuardTarget } from "../mcp-server/dist-test/memory/guard.js";
 import { EXO_RULES } from "../mcp-server/dist-test/memory/rules-exo.js";
 import { executeRuntime } from "../mcp-server/dist-test/runtime/interpreter.js";
 
@@ -331,4 +331,47 @@ test("live: an explicitly active container needs a non-colour signal", () => {
     liveText("Mac mini", { id: "t", parentId: "card", x: 12, y: 12, w: 200, h: 15, text: { content: "Mac mini", length: 8, truncated: false, size: 13, family: "Inter", style: "Semi Bold", color: "#111111", styled: false } }),
   ]);
   assert.equal(ruleOf(signalled, "exo.selected-unambiguous").verdict, "PASS", "a weight change survives greyscale");
+});
+
+/* -------------------------------------------------------------------------- */
+/* Target selection: ask, never guess or throw (#18 scope resolution)          */
+/* -------------------------------------------------------------------------- */
+
+test("guard target: a blank name asks instead of throwing", () => {
+  // Live, `design_guard({target: ""})` threw a bare find_node transport
+  // error. A blank target is a miss with the same INDETERMINATE shape as
+  // every other miss — never an exception.
+  for (const blank of ["", "   "]) {
+    const decided = decideGuardTarget(blank, []);
+    assert.equal(decided.kind, "not-found");
+    assert.match(decided.message, /No target was named/);
+  }
+  const byId = decideGuardTarget("415:1487", []);
+  assert.equal(byId.kind, "use-id");
+});
+
+test("guard target: a capped match window says it is capped", () => {
+  // Live, "Row" matched 80 nodes while the guard reported "matches 10
+  // nodes" — the find_node window presented as the exact count.
+  const windowed = Array.from({ length: 10 }, (_, i) => ({ id: `3:${i}`, name: `Device row ${i}` }));
+  const decided = decideGuardTarget("Row", windowed, 80);
+  assert.equal(decided.kind, "ambiguous");
+  assert.match(decided.message, /at least 80/);
+  assert.match(decided.message, /first 10/);
+  assert.equal(decided.candidates.length, 10);
+
+  const exact = decideGuardTarget("Overview", [
+    { id: "1:1", name: "Overview" },
+    { id: "1:2", name: "Overview copy" },
+  ]);
+  assert.equal(exact.kind, "ambiguous");
+  assert.match(exact.message, /matches 2 nodes/);
+});
+
+test("guard target: a match without an id never becomes an empty use-id", () => {
+  // `use-id: ""` would resolve to whatever is selected — precisely the
+  // silently-checked random selection #18 forbids.
+  const decided = decideGuardTarget("Ghost", [{ name: "Ghost" }]);
+  assert.equal(decided.kind, "not-found");
+  assert.match(decided.message, /no usable node id/);
 });

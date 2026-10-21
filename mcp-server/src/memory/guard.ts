@@ -336,20 +336,42 @@ export type GuardTargetDecision =
 export function decideGuardTarget(
   target: string,
   matches: Array<{ id?: string; name?: string; type?: string }>,
+  /**
+   * File-wide match count, when the lookup knows it. `matches` is a bounded
+   * window into that count: presenting a capped window as the exact count
+   * would silently hide candidates from the disambiguation question.
+   */
+  totalCount?: number,
 ): GuardTargetDecision {
   if (/^\d+:\d+$/.test(target)) return { kind: "use-id", id: target };
+  if (target.trim().length === 0) {
+    // A blank target reaches `find_node` as an empty query, which throws —
+    // a bare transport error where #18 requires an explicit indeterminate
+    // result. Refuse it here, with the same shape as every other miss.
+    return { kind: "not-found", message: "No target was named: pass a node id, or a name that matches a frame." };
+  }
   if (matches.length === 0) {
     return { kind: "not-found", message: `No frame in the file matches '${target}'.` };
   }
-  if (matches.length > 1) {
+  const total = totalCount ?? matches.length;
+  const capped = total > matches.length;
+  if (matches.length > 1 || capped) {
     return {
       kind: "ambiguous",
-      message: `'${target}' matches ${matches.length} nodes, so the screen to check is ambiguous.`,
+      message: capped
+        ? `'${target}' matches at least ${total} nodes, so the screen to check is ambiguous. Showing the first ${matches.length} — refine the name or pass a node id.`
+        : `'${target}' matches ${matches.length} nodes, so the screen to check is ambiguous.`,
       candidates: matches.map((m) => `${m.id ?? "?"} "${m.name ?? ""}"`),
     };
   }
   const only = matches[0]!;
-  return { kind: "use-id", id: only.id ?? "" };
+  if (!only.id) {
+    // A match with no usable id must not become `use-id: ""`: the empty
+    // target would resolve to whatever is selected, which is exactly the
+    // "silently checking a random selection" #18 forbids.
+    return { kind: "not-found", message: `The single match for '${target}' has no usable node id, so there is nothing safe to check.` };
+  }
+  return { kind: "use-id", id: only.id };
 }
 
 export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardResult {

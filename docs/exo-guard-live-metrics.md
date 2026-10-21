@@ -80,3 +80,23 @@ metrics, so the topology rules remain manual by construction — and say so
 does not produce. A live verdict therefore stays INDETERMINATE overall —
 that is the honest verdict while judgement calls are open, pinned by the
 existing "never PASS while unevaluated" tests.
+
+## Follow-up: target selection asks instead of guessing (#18 scope)
+
+Probed live against the same file, three defects in how `design_guard`
+resolves its target (`decideGuardTarget` / `resolveGuardTarget`):
+
+- `design_guard({target: ""})` threw a bare `find_node` transport error
+  instead of returning the INDETERMINATE scope finding. A blank target is
+  now a not-found miss with the same shape as every other miss.
+- `design_guard({target: "Row"})` reported "matches 10 nodes" with 10
+  candidates — but `find_node` matches **80**. The lookup window (now 25)
+  is reported against the file-wide total, so a capped list says "at
+  least N, showing first M" and never presents the cap as the count.
+- A single match with no usable id became `use-id: ""`, which would
+  resolve to whatever is selected — the silently-checked random selection
+  #18 forbids. It is now a not-found miss.
+
+Existing H04 wording (exact count, unique-name and missing-name messages)
+is preserved. Covered by three `decideGuardTarget` unit tests in
+`tests/product-guard-regressions.test.mjs`; shipped in **0.3.1**.

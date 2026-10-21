@@ -316,16 +316,30 @@ async function resolveGuardTarget(
     return { snapshot: snapshotFromInspected(inspected) };
   }
 
-  // A node id is unambiguous; a name has to be looked up.
-  const matches = /^\d+:\d+$/.test(target)
-    ? []
-    : (((await session.request("find_node", { name: target, limit: 10 })) as { matches?: Array<{ id?: string; name?: string; type?: string }> }).matches ?? []);
-  const decision = decideGuardTarget(target, matches);
+  // A node id is unambiguous; a name has to be looked up. The window is
+  // deliberately wider than a disambiguation question can show: the count
+  // reported to the caller is the lookup's file-wide total, so a capped
+  // list is never presented as the exact match set.
+  if (/^\d+:\d+$/.test(target)) return snapshotForId(session, target);
+  const found = (await session.request("find_node", { name: target, limit: 25 })) as {
+    matches?: Array<{ id?: string; name?: string; type?: string }>;
+    total?: number;
+  };
+  const matches = found.matches ?? [];
+  const decision = decideGuardTarget(
+    target,
+    matches,
+    typeof found.total === "number" ? found.total : undefined,
+  );
   if (decision.kind === "not-found") return { ambiguity: decision.message, candidates: [] };
   if (decision.kind === "ambiguous") return { ambiguity: decision.message, candidates: decision.candidates };
 
-  const metrics = (await session.request("collect_metrics", { target: decision.id, maxNodes: 2000 })) as MetricsReport;
-  return { snapshot: snapshotFromMetrics(metrics, decision.id) };
+  return snapshotForId(session, decision.id);
+}
+
+async function snapshotForId(session: Session, id: string): Promise<{ snapshot: GuardSnapshot }> {
+  const metrics = (await session.request("collect_metrics", { target: id, maxNodes: 2000 })) as MetricsReport;
+  return { snapshot: snapshotFromMetrics(metrics, id) };
 }
 
 /** Builds a guard snapshot from an `inspect_selection` payload. */function snapshotFromInspected(inspected: Record<string, unknown>): GuardSnapshot {

@@ -2,9 +2,10 @@
 
 Live frame: **`V2 · Consumer · 02 Model library` (`358:1551`)** on page `New Designs `,
 file `Exo Labs`.
-Repo baseline for the code change: **`b051f18bdd30`** (plus the working tree
-described below; the live plugin panel reported `53e49ab44c09-dirty` and the
-server `b051f18bdd30` at the time of the fix — see §6).
+Repo baseline for the code change: **`b051f18bdd30`**; landed as **`69fb17a`**
+(`setTextStyle` + 0.2.0) with report follow-ups in **`5d6c738`**.
+Final end-to-end verification ran with plugin and server on the **same**
+build, **`5d6c73829256`** (`same-commit`, v0.2.0) — see §3 and §6.
 
 ## 1. Before
 
@@ -56,9 +57,11 @@ migrating them to instances with per-model text overrides is open work
 
 - `review_design(358:1551)` → **PASS, 0 findings.** Contrast, colour-only
   state, tap-target and duplicate-sibling findings are all gone.
-- `audit_design(358:1551)` → **REVIEW**, 1 grouped `unstyled-text` finding
-  (23 nodes: 11 chrome + 3×3 grouped-row texts + 3 instance children).
-  Binding them was impossible with the shipped operation set — see §5.
+  Re-verified on matching builds (plugin `5d6c73829256` = server
+  `5d6c73829256`, `same-commit`), so this is a valid end-to-end pass, not
+  a cross-build reading.
+- `audit_design(358:1551)` → **PASS, 0 findings**, re-verified on the same
+  matching builds.
 - `design_guard(inspect, target 358:1551)` → **0 failures** (6 PASS,
   7 INDETERMINATE/manual). No product-truth violation was introduced.
 - `render_design(358:1551, low)` → layout verified by eye: four aligned
@@ -128,11 +131,15 @@ bundles built from the same commit.
    so it was rebound to `EXO/Caption` (Mono 11) in `txn_f1b925c3`.
    Final re-run on the same frame: **`review_design` PASS (0 findings),
    `audit_design` PASS (0 findings)**, `design_guard` 0 failures, and a
-   fresh low-detail render confirms the layout holds after the size changes.
+   fresh low-detail render confirms the layout holds after the size changes
+   — all measured with plugin and server on build `5d6c73829256`
+   (`same-commit`, v0.2.0).
    Two process notes: (a) the interactive session's cached tool catalog
    predates `setTextStyle`, so the batch went through a direct MCP call —
-   restart the agent session to refresh the catalog; (b) both sides now run
-   the fix: server `69fb17a8005c`, plugin `0.2.0`.
+   restart the agent session to refresh the catalog; (b) an intermediate
+   verification ran while the plugin was still on `b051f18bdd30-dirty`
+   against server `5d6c73829256` (`different-commit`) and is **not** counted
+   as the end-to-end pass — only the same-commit re-run above is.
    Recommended semantic mapping against the existing `EXO/*` styles (all Inter unless noted):
    - `1553` wordmark (25 Bold) → **new `EXO/Brand`** (25 Bold) — a logotype
      must not be squeezed into `EXO/Title`; creating the style first keeps

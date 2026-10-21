@@ -1,0 +1,74 @@
+{
+  "phase": "B-vision-review-fresh-build",
+  "reviewer": "opencode-agent (direct PNG inspection)",
+  "commitUnderTest": "40bc6f8",
+  "method": "Each fresh r1 PNG read pixel-for-pixel on the 40bc6f8 build; findings are what is actually visible. Verdicts PASS/WATCH/FAIL per screen; no scores invented.",
+  "observations": {
+    "exo-compute-topology": {
+      "verdict": "WATCH",
+      "findings": [
+        "hub-01/node-01/node-02 render as separate devices with a routed, labelled 8us edge and the amber needs-attention stroke on node-02",
+        "the 1 needs attention pill renders beside the headline, attached to the board",
+        "~70% void around the topology"
+      ]
+    },
+    "exo-model-detail": {
+      "verdict": "WATCH",
+      "findings": [
+        "title, Memory 41 GB and Throughput 88 tok/s metrics and the green fits pill all render inside the frame",
+        "~65% of the canvas below y=280 is void — the inspector has no lower composition"
+      ]
+    },
+    "exo-configuration": {
+      "verdict": "WATCH",
+      "findings": [
+        "Runtime policy title, Thresholds label and the Approve button render top-left",
+        "~80% void; the policy body never arrives on canvas"
+      ]
+    },
+    "exo-enterprise-workspace": {
+      "verdict": "WATCH",
+      "findings": [
+        "Fleet/Models rail with the active Fleet pill, Assigned fleet title, Manage link, edge-04 (amber stroke) and edge-09 all render",
+        "the rail is narrower than its letter-spaced labels: F l e e t tracks past the rail edge",
+        "~65% void below the two device cards"
+      ]
+    },
+    "exo-runtime-monitoring": {
+      "verdict": "WATCH",
+      "findings": [
+        "Error rate 0.4% and Latency 240 ms p95 mono readouts, GPU 92% and Memory pressure 71% metrics, watching pill all render",
+        "~70% void below the readouts"
+      ]
+    },
+    "data-heavy-workspace": {
+      "verdict": "WATCH",
+      "findings": [
+        "Follow-ups title, Open incidents 7 metric and the owner: rios pill render",
+        "~75% void; the incident rows themselves are not on canvas"
+      ]
+    },
+    "spatial-relationship": {
+      "verdict": "WATCH",
+      "findings": [
+        "the dependency graph renders: ingest -feeds-> relay -drains-> store, amber stroke on the weak link, labelled edges",
+        "~65% void around the graph; the nodes sit in a narrow central column"
+      ]
+    },
+    "editorial-product-page": {
+      "verdict": "WATCH",
+      "findings": [
+        "headline, subhead and the Run atlas-7b button render top-left",
+        "~85% void — an editorial page with no body composition"
+      ]
+    },
+    "hard-stress-test": {
+      "verdict": "WATCH",
+      "findings": [
+        "header band, Cluster Routing title, Route model button, device-01 to device-03 topology with open-labelled arrowed edges, cluster health/shard balance, GPU memory/model throughput placeholders, cold start, disk pressure, recent deploys and audit log all render inside the 1600x1100 frame",
+        "the red [fixture] pill on device-01 overlaps the node label text (real, minor collision)",
+        "~60% void between the topology band and the summary band"
+      ]
+    }
+  }
+}

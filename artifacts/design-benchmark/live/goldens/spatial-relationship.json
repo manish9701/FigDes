@@ -1,16 +1,16 @@
 {
   "caseId": "spatial-relationship",
-  "commit": "48a6480dd564e51f9b4fb67c5d894ce2831e16e5",
-  "createdAt": "2026-10-20T07:34:19.500Z",
+  "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+  "createdAt": "2026-10-21T12:51:47.260Z",
   "screenshotReference": "artifacts/design-benchmark/live/goldens/spatial-relationship.png",
   "policy": {
     "maxMeanDifference": 3,
-    "maxChangedPixelShare": 0.02,
+    "maxChangedPixelShare": 0.005,
     "channelThreshold": 24
   },
   "signature": {
     "reviewedNodes": 14,
-    "findingCount": 15,
+    "findingCount": 1,
     "regionNames": []
   },
   "note": "A regression reference, not an approval. The review rules judge the screen; this records what it looked like."

@@ -1,119 +1,117 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-21T11:41:39.852Z",
+  "generatedAt": "2026-10-21T12:52:59.991Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
   "foundCases": 10,
-  "completeCases": 2,
+  "completeCases": 10,
   "missingCases": [],
-  "liveBenchmarkComplete": false,
-  "liveBenchmarkReason": "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and the native-path check, then re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
+  "liveBenchmarkComplete": true,
+  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes; the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved; and the native path was exercised against the real Plugin API and cleaned up afterwards.",
   "buildDrift": [
     {
       "caseId": "data-heavy-workspace",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "editorial-product-page",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-compute-topology",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-configuration",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-enterprise-workspace",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-model-detail",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-runtime-monitoring",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "generic-saas-dashboard",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "hard-stress-test",
-      "measuredAtCommit": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "stale": true,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "stale": false,
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "spatial-relationship",
-      "measuredAtCommit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-      "repoHead": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
+      "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
       "stale": false,
-      "serverBuild": "ccc8fd2a0279-dirty",
-      "pluginBuild": "ccc8fd2a0279-dirty",
+      "serverBuild": "40bc6f893f93-dirty",
+      "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     }
   ],
-  "staleCases": [
-    "hard-stress-test"
-  ],
+  "staleCases": [],
   "casesWithoutBuild": [],
   "nativePath": {
     "status": "COMPLETE",
@@ -150,101 +148,101 @@
     "cases": [
       {
         "caseId": "data-heavy-workspace",
-        "verdict": "differs",
+        "verdict": "match",
         "pixels": "match",
-        "structureChanged": true,
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0.652,
-          "changedPixelShare": 0.0047,
-          "maxDifference": 244
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "editorial-product-page",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 1.382,
-          "changedPixelShare": 0.00819,
-          "maxDifference": 238
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "exo-compute-topology",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0.477,
-          "changedPixelShare": 0.00601,
-          "maxDifference": 244
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "exo-configuration",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 1.138,
-          "changedPixelShare": 0.00684,
-          "maxDifference": 238
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "exo-enterprise-workspace",
-        "verdict": "differs",
+        "verdict": "match",
         "pixels": "match",
-        "structureChanged": true,
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0.429,
-          "changedPixelShare": 0.00458,
-          "maxDifference": 244
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "exo-model-detail",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 1.233,
-          "changedPixelShare": 0.00556,
-          "maxDifference": 244
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "exo-runtime-monitoring",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 1.556,
-          "changedPixelShare": 0.00713,
-          "maxDifference": 235
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "generic-saas-dashboard",
@@ -253,44 +251,34 @@
       },
       {
         "caseId": "hard-stress-test",
-        "verdict": "differs",
-        "pixels": "differs",
-        "structureChanged": true,
+        "verdict": "match",
+        "pixels": "match",
+        "structureChanged": false,
         "measured": {
           "width": 1440,
           "height": 990,
-          "meanDifference": 1.921,
-          "changedPixelShare": 0.01044,
-          "maxDifference": 238
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       },
       {
         "caseId": "spatial-relationship",
-        "verdict": "differs",
+        "verdict": "match",
         "pixels": "match",
-        "structureChanged": true,
+        "structureChanged": false,
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0.332,
-          "changedPixelShare": 0.00302,
-          "maxDifference": 244
+          "meanDifference": 0,
+          "changedPixelShare": 0,
+          "maxDifference": 0
         },
-        "reason": "the structure changed since the golden was reviewed"
+        "reason": null
       }
     ],
-    "differing": [
-      "data-heavy-workspace",
-      "editorial-product-page",
-      "exo-compute-topology",
-      "exo-configuration",
-      "exo-enterprise-workspace",
-      "exo-model-detail",
-      "exo-runtime-monitoring",
-      "hard-stress-test",
-      "spatial-relationship"
-    ],
+    "differing": [],
     "uncovered": [
       "generic-saas-dashboard"
     ],
@@ -349,98 +337,84 @@
     {
       "file": "case-data-heavy-workspace.json",
       "caseId": "data-heavy-workspace",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-editorial-product-page.json",
       "caseId": "editorial-product-page",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-exo-compute-topology.json",
       "caseId": "exo-compute-topology",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-exo-configuration.json",
       "caseId": "exo-configuration",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-exo-enterprise-workspace.json",
       "caseId": "exo-enterprise-workspace",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-exo-model-detail.json",
       "caseId": "exo-model-detail",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-exo-runtime-monitoring.json",
       "caseId": "exo-runtime-monitoring",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
@@ -456,9 +430,9 @@
         }
       ],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
@@ -468,23 +442,21 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "ccc8fd2a0279eb8807d5632ba768b9f1cd62abca",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     },
     {
       "file": "case-spatial-relationship.json",
       "caseId": "spatial-relationship",
-      "status": "INCOMPLETE",
-      "missing": [
-        "visualScores"
-      ],
+      "status": "COMPLETE",
+      "missing": [],
       "build": {
-        "commit": "02c8af33ddb5a71f35b85a92af8a145593d6e72e",
-        "serverBuild": "ccc8fd2a0279-dirty",
-        "pluginBuild": "ccc8fd2a0279-dirty",
+        "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
+        "serverBuild": "40bc6f893f93-dirty",
+        "pluginBuild": "02c8af33ddb5-dirty",
         "note": null
       }
     }

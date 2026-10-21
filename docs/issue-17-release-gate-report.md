@@ -2,19 +2,19 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `ccc8fd2a-2026-10-21T11-12-47-809Z` on commit `ccc8fd2a0279eb8807d5632ba768b9f1cd62abca` (main), 2026-10-21T11:12:47.809Z → 2026-10-21T11:14:10.441Z, 82.6s.
+Run `40bc6f89-2026-10-21T12-51-52-511Z` on commit `40bc6f893f935606140a1ccb710d2d93a88a48c0` (main), 2026-10-21T12:51:52.511Z → 2026-10-21T12:53:00.648Z, 68.1s.
 Node v22.17.0 on win32-x64.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.8s | 26/26 case(s) passed, run twice with identical verdicts |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 26/26 case(s) passed, run twice with identical verdicts |
 | **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.8s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 67.1s | 947/947 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 11.5s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.7s | the live benchmark completed (10/10 case(s) with real renders and reviews); 9 case(s) were measured against an older commit; 9 case(s) cannot name the build that produced them; 1 case(s) differ from their reviewed golden |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 56.2s | 964/964 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.7s | 9/9 benchmark case(s) passed |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.3s | the live benchmark completed (10/10 case(s) with real renders and reviews); 1 case(s) have no golden to compare against |
 
 ## Gauntlet cases (26/26 passed)
 
@@ -38,7 +38,7 @@ Node v22.17.0 on win32-x64.
 | **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 21ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 19ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |

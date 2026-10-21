@@ -89,13 +89,44 @@ metrics, so the topology rules remain manual by construction — and say so
   names the escalation); review PASS, audit PASS, render confirms the
   4-instance layout.
 
-## Remaining deliberately-manual checks
+## Manual-check dispositions for `358:1551` (human answers, recorded)
 
-`developer-apis` and `model-fit-context` are `manual`-kind evidence;
-`topology-explains-relationships` needs links, which live measurement
-does not produce. A live verdict therefore stays INDETERMINATE overall —
-that is the honest verdict while judgement calls are open, pinned by the
-existing "never PASS while unevaluated" tests.
+The machine verdict stays INDETERMINATE while judgement calls are open —
+that is pinned behavior, not a gap. What follows are the operator's
+answers for this screen, each verified against the complete live
+inventory (39 nodes: 1 FRAME, 11 RECTANGLE, 23 TEXT, 4 INSTANCE; 0 VECTOR
+nodes; all 23 text contents enumerated), so the four open checks are
+resolved with evidence rather than dangling:
+
+- **exo.developer-apis** ("Does every integration surface map onto
+  provider / endpoint / model profile?"): scanned all 23 texts. Model
+  profile nouns present in every row (model names, `GGUF · Q4_K_M`,
+  sizes); **zero provider nouns** (no huggingface/ollama/openai/provider
+  naming) and **zero endpoint nouns** (no endpoint/url/port/api naming)
+  anywhere — and no bespoke nouns either. This screen contains no
+  integration surface (no connect/provision flow; "Add model" names no
+  destination), so there is nothing that must map. Disposition: **no
+  violation** (nothing to map, nothing bespoke). Not redesigned: adding
+  provider/endpoint nouns would mean inventing product data.
+- **exo.model-fit-context** ("Does every fit verdict sit beside required
+  memory, available memory and the candidate machines?"): scanned all 23
+  texts for fit-verdict language (fits/doesn't fit/too large/out of
+  memory/requires) — **none present**. Row details state model size only;
+  no required-vs-available judgement is rendered anywhere. Disposition:
+  **not applicable, no violation**. Adding fit verdicts would be new
+  product UI on top of invented cluster math — explicitly out of scope.
+- **exo.topology-explains-relationships** (2 checks — edges drawn and
+  labelled): the frame contains **no topology structures at all** — 0
+  VECTOR nodes, 0 connectors, 0 links, and no topology-named layers
+  (full layer-name inventory: sidebar, wordmark, nav, titles, rows,
+  accents, surfaces, dividers, primary action). The rows are a list, not
+  a graph. With no edges existing, the therefore-clause is vacuous.
+  Disposition: **not applicable, no violation**.
+
+None of these dispositions change the machine verdict — there is no
+mechanism for human answers to override it, deliberately. If such a
+mechanism is ever wanted, it belongs in a new issue, not smuggled into
+this one.
 
 ## Follow-up: target selection asks instead of guessing (#18 scope)
 

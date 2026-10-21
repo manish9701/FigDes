@@ -65,8 +65,13 @@ metrics, so the topology rules remain manual by construction — and say so
 - Full `npm test` chain green (see commit message for the count).
 - Live, after deploy: `design_guard` on `358:1551` must show the four
   assert rules evaluated (PASS on this frame) with only
-  `topology-explains-relationships`, `developer-apis` and
-  `model-fit-context` manual — 3 manuals instead of 8, 0 failures.
+  `topology-explains-relationships` (links never survive measurement),
+  `developer-apis` and `model-fit-context` manual — 0 failures.
+  Verified 21 Oct 2026 on same-commit `055d7459eb6e`: 10 passed,
+  0 failures, 0 warnings, manual count 4 (topology's two link checks plus
+  the two genuinely-manual rules); measured metrics in evidence:
+  `unlabeledComponents=0, dominantActions=1`,
+  `machineDataInProportionalFace=0, ambiguousSelections=0`.
 
 ## Remaining deliberately-manual checks
 

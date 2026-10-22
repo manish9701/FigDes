@@ -6,8 +6,23 @@
  * initial build (1) + major visual review (1) + repair passes (1–3) with a
  * maximum of 4 renders. Past the budget the screen is FAIL/REVIEW with a useful
  * reason — never an infinite loop.
+ *
+ * Issue #23 adds the truthfulness layer this report used to lack:
+ *
+ *  - a `gates` enumeration — every gate the final QA knows about, with its
+ *    actual status (`ran` | `skipped` | `failed` | `notEvaluated`) — so a
+ *    report can no longer present itself as a verdict without saying which
+ *    checks produced it;
+ *  - a three-valued `verdict` (`PASS` | `FAIL` | `BLOCKED`) that can never be
+ *    PASS while a required gate is skipped, errored, or never evaluated:
+ *    FAIL when a gate ran and found a blocker, BLOCKED when it could not run
+ *    for environmental reasons (no plugin session, no live file);
+ *  - a `stamp` binding the verdict to the exact plugin build and transaction
+ *    (`shared/protocol` already bakes the builds; this reuses it instead of
+ *    stamping in parallel). An unstamped verdict cannot PASS.
  */
 import type { GenericityReport } from "./genericity";
+import { SERVER_BUILD } from "../../../../shared/protocol";
 
 export interface FinalScores {
   hierarchy: number;
@@ -33,6 +48,19 @@ export interface FinalQualityReport {
    * WITH a tested rule correction stop blocking; anything else stays.
    */
   adjudicated: string[];
+  /**
+   * The issue-#23 truthful overall verdict. `status` above is the coarse
+   * outcome existing callers consume; this is the one to read for "can the
+   * final QA be called done": PASS, FAIL, or BLOCKED — never PASS while a
+   * required gate is skipped, errored, or never evaluated.
+   */
+  verdict: FinalVerdict;
+  /** Every reason the verdict is not PASS, named per status line and per gate. */
+  verdictReasons: string[];
+  /** Which gates the final QA actually ran, and their status. */
+  gates: GateRecord[];
+  /** The build/session stamp binding this verdict to plugin build + transaction. */
+  stamp: GateStamp;
 }
 
 export interface GateAdjudication {
@@ -43,6 +71,56 @@ export interface GateAdjudication {
   reviewer: string;
   /** Tested rule correction for this class. Required to stop blocking. */
   ruleCorrection?: string;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Truthful final QA (issue #23): gates, verdict, stamp                        */
+/* -------------------------------------------------------------------------- */
+
+export type FinalVerdict = "PASS" | "FAIL" | "BLOCKED";
+
+/**
+ * What actually happened to a named gate: it ran (cleanly or finding nothing
+ * beyond its detail), it could not run for environmental reasons, it ran and
+ * found a blocker, or it was never evaluated at all.
+ */
+export type GateStatus = "ran" | "skipped" | "failed" | "notEvaluated";
+
+export interface GateRecord {
+  name: string;
+  status: GateStatus;
+  /**
+   * A required gate that is `skipped`, `failed` or `notEvaluated` can never
+   * PASS the verdict. Non-required gates report truthfully without holding
+   * the verdict hostage.
+   */
+  required: boolean;
+  /** What actually happened, in one sentence. */
+  detail?: string;
+}
+
+/** The gates that must report `ran` before the verdict may say PASS. */
+export const REQUIRED_GATES: readonly string[] = [
+  "evidence-backed-scores",
+  "render-evidence",
+  "structural-blockers",
+  "genericity",
+  "accessibility",
+  // Issue #23 (c): the verdict must be tied to the exact plugin build and the
+  // transaction that produced the screen, using the stamps the codebase already
+  // bakes (`shared/protocol`'s SERVER_BUILD and the session's build field).
+  "session-stamp",
+];
+
+export interface GateStamp {
+  /** The server build answering — baked by scripts/build-server.mjs. */
+  serverBuild: string;
+  /** The plugin build observed on the session (`StatusResult.build`). */
+  pluginBuild: string | null;
+  /** The transactionId of the build that produced the screen under judgement. */
+  transactionId: string | null;
+  /** The revision the gate is judging. */
+  revision: string | null;
 }
 
 /** Phase 9 thresholds. Calibrate through benchmark tests, not vibes. */
@@ -124,8 +202,25 @@ export function evaluateFinalGate(input: {
    * a tested rule correction and retained rationale. Confirmed, unresolved,
    * or correction-less rulings keep blocking. The moved issues land in
    * `report.adjudicated`, never vanish.
+   * adjudications?: GateAdjudication[];
    */
   adjudications?: GateAdjudication[];
+  /**
+   * Caller-enumerated gate records (issue #23). A stage that belongs to another
+   * module — for example the illustrative/sample disclosure policy landing in
+   * the preflight-quality workstream — reports the gate it ran here; supplied
+   * records replace derived records by name, unknown names are appended, and
+   * the three-valued verdict applies to them exactly as to derived gates.
+   */
+  gates?: GateRecord[];
+  /**
+   * The session/build stamp (issue #23 (c)). The server build is baked into
+   * this bundle by scripts/build-server.mjs; the caller supplies the plugin
+   * build it observed on the session and the transactionId of the build that
+   * produced the screen. A verdict that cannot name both cannot be PASS: it is
+   * describing code and a transaction it cannot tie its claims to.
+   */
+  stamp?: { pluginBuild?: string | null; transactionId?: string | null };
 }): FinalQualityReport {
   const scores: FinalScores = {
     hierarchy: clamp(input.scores.hierarchy ?? 50),
@@ -145,6 +240,9 @@ export function evaluateFinalGate(input: {
   });
   if (missingScores.length > 0) blocking.push(`Missing evidence-backed scores: ${missingScores.join(", ")}.`);
   // Revision binding: PASS requires evidence depicting the judged revision.
+  const staleEvidence =
+    input.expectedRevision !== undefined &&
+    (input.evidenceRevision == null || input.evidenceRevision === "" || input.evidenceRevision !== input.expectedRevision);
   if (input.expectedRevision !== undefined) {
     if (input.evidenceRevision == null || input.evidenceRevision === "") {
       blocking.push(`Stale screenshot: no evidence revision for expected revision "${input.expectedRevision}".`);
@@ -179,8 +277,31 @@ export function evaluateFinalGate(input: {
   });
   const a11yFailures = input.accessibility?.findings ?? 0;
   const a11yBlocking = a11yFailures > 0 ? [`Accessibility: ${a11yFailures} finding(s) below WCAG thresholds.`] : [];
+
+  /* ---- truthfulness layer (issue #23): gates, stamp, verdict -------------- */
+  //
+  // Derived from this function's own inputs — never invented: a gate reports
+  // `ran` only when the argument that measures it was actually supplied, and
+  // the caller may supply records that win by name. `status` below keeps its
+  // existing semantics untouched; `verdict` is the never-PASS-on-skip mapping.
+  const gates = deriveGateRecords(input, {
+    missingScores,
+    staleEvidence,
+    structuralFailures: remaining.length,
+  });
+  const stamp: GateStamp = {
+    serverBuild: SERVER_BUILD,
+    pluginBuild: input.stamp?.pluginBuild ?? null,
+    transactionId: input.stamp?.transactionId ?? null,
+    revision: input.expectedRevision ?? null,
+  };
+  const attachTruth = (report: Omit<FinalQualityReport, "verdict" | "verdictReasons" | "gates" | "stamp">): FinalQualityReport => {
+    const verdict = verdictFor(report.status, gates);
+    return { ...report, gates, stamp, verdict, verdictReasons: reasonsFor(report, gates) };
+  };
+
   if (remaining.length > 0 || a11yBlocking.length > 0) {
-    return {
+    return attachTruth({
       status: "FAIL",
       scores,
       blockingIssues: [...remaining, ...a11yBlocking],
@@ -190,7 +311,7 @@ export function evaluateFinalGate(input: {
         ? "Blocking issues remain, including accessibility findings below WCAG thresholds. Repair and re-render within budget."
         : "Blocking visual-quality issues remain. Repair and re-render within budget.",
       adjudicated,
-    };
+    });
   }
   const a11yNotChecked = input.accessibility?.notChecked ?? [];
   const needsReview =
@@ -199,7 +320,7 @@ export function evaluateFinalGate(input: {
     scores.productFit < FINAL_THRESHOLDS.productFitReviewBelow;
   const stateless = input.states !== undefined && input.states.declared === 0;
   if (needsReview || stateless || a11yNotChecked.length > 0) {
-    return {
+    return attachTruth({
       status: "REVIEW",
       scores,
       blockingIssues: [],
@@ -213,9 +334,9 @@ export function evaluateFinalGate(input: {
             ? "No interaction states declared: add at least one hover, selected or non-default state so the screen reads as finished."
             : "No blocking issues, but hierarchy or product fit needs a human look before done.",
       adjudicated,
-    };
+    });
   }
-  return {
+  return attachTruth({
     status: "PASS",
     scores,
     blockingIssues: [],
@@ -223,5 +344,151 @@ export function evaluateFinalGate(input: {
     renderEvidence: (input.renderNotes ?? []).map((note, i) => ({ render: i + 1, note })),
     reason: "No blocking issues; hierarchy and product fit hold.",
     adjudicated,
-  };
+  });
+}
+
+/**
+ * Enumerates the gates the final QA knows about, from the inputs it was given
+ * (issue #23 (a)). Nothing is reported `ran` that was never supplied, and a
+ * caller-supplied record (for instance the sample-disclosure policy gate
+ * landing in another workstream) replaces the derived record with the same
+ * name — the caller is the one that actually ran its stage.
+ */
+function deriveGateRecords(
+  input: {
+    visualEvidenceVerified?: boolean;
+    expectedRevision?: string;
+    evidenceRevision?: string | null;
+    blockingIssues?: string[];
+    genericity?: GenericityReport | null;
+    accessibility?: { findings: number; notChecked: string[] };
+    states?: { declared: number };
+    stamp?: { pluginBuild?: string | null; transactionId?: string | null };
+    gates?: GateRecord[];
+    scores: Partial<FinalScores>;
+  },
+  measured: { missingScores: string[]; staleEvidence: boolean; structuralFailures: number },
+): GateRecord[] {
+  const records: GateRecord[] = [];
+
+  /* session-stamp --------------------------------------------------------- */
+  const pluginBuild = input.stamp?.pluginBuild ?? null;
+  const transactionId = input.stamp?.transactionId ?? null;
+  const stamped =
+    typeof pluginBuild === "string" && pluginBuild.length > 0 &&
+    typeof transactionId === "string" && transactionId.length > 0;
+  records.push({
+    name: "session-stamp",
+    status: stamped ? "ran" : "notEvaluated",
+    required: true,
+    detail: stamped
+      ? `verdict tied to plugin build '${pluginBuild}', transaction '${transactionId}' (server build ${SERVER_BUILD})`
+      : `the verdict cannot be tied to a plugin build and transaction: no stamp was supplied (server build ${SERVER_BUILD})`,
+  });
+
+  /* render-evidence ------------------------------------------------------- */
+  if (input.visualEvidenceVerified === true) {
+    records.push({
+      name: "render-evidence",
+      status: measured.staleEvidence ? "failed" : "ran",
+      required: true,
+      detail: measured.staleEvidence
+        ? "the screenshot evidence does not depict the revision under judgement"
+        : input.expectedRevision !== undefined
+          ? `rendered evidence was inspected for revision '${input.evidenceRevision}'`
+          : "rendered evidence attested by the caller (no revision binding was supplied to measure it against)",
+    });
+  } else if (input.visualEvidenceVerified === false) {
+    records.push({ name: "render-evidence", status: "failed", required: true, detail: "the caller attested the visual evidence did not verify" });
+  } else {
+    records.push({
+      name: "render-evidence",
+      status: "notEvaluated",
+      required: true,
+      detail: "no rendered screenshot was inspected (program-only or offline run) — the gate cannot claim a render it never saw",
+    });
+  }
+
+  /* structural-blockers --------------------------------------------------- */
+  if (measured.structuralFailures > 0) {
+    records.push({ name: "structural-blockers", status: "failed", required: true, detail: `${measured.structuralFailures} blocker(s) remain after adjudication` });
+  } else if (input.blockingIssues !== undefined) {
+    records.push({ name: "structural-blockers", status: "ran", required: true, detail: "the structural/product blocker list was supplied and stood empty after adjudication" });
+  } else {
+    records.push({ name: "structural-blockers", status: "notEvaluated", required: true, detail: "no structural/product blocker list was supplied — nothing shows the rules ran" });
+  }
+
+  /* genericity ------------------------------------------------------------ */
+  if (input.genericity != null) {
+    records.push({ name: "genericity", status: "ran", required: true, detail: `anti-generic audit ran (score ${input.genericity.score})` });
+  } else if (typeof input.scores?.genericity === "number") {
+    records.push({ name: "genericity", status: "ran", required: true, detail: "genericity supplied as an evidence-backed score" });
+  } else {
+    records.push({ name: "genericity", status: "notEvaluated", required: true, detail: "no genericity audit was supplied" });
+  }
+
+  /* accessibility --------------------------------------------------------- */
+  if (input.accessibility === undefined) {
+    records.push({ name: "accessibility", status: "notEvaluated", required: true, detail: "no accessibility evaluation was supplied — contrast and target size were never measured" });
+  } else if (input.accessibility.findings > 0) {
+    records.push({ name: "accessibility", status: "failed", required: true, detail: `${input.accessibility.findings} finding(s) below WCAG thresholds` });
+  } else if ((input.accessibility.notChecked ?? []).length > 0) {
+    records.push({ name: "accessibility", status: "skipped", required: true, detail: `could not run: ${input.accessibility.notChecked.slice(0, 3).join("; ")}` });
+  } else {
+    records.push({ name: "accessibility", status: "ran", required: true, detail: "every supplied accessibility check ran and passed" });
+  }
+
+  /* evidence-backed-scores ------------------------------------------------ */
+  records.push(
+    measured.missingScores.length === 0
+      ? { name: "evidence-backed-scores", status: "ran", required: true, detail: "all eight evidence-backed scores were supplied" }
+      : { name: "evidence-backed-scores", status: "notEvaluated", required: true, detail: `missing evidence-backed scores: ${measured.missingScores.join(", ")}` },
+  );
+
+  /* interaction-states (opt-in by shape, informational) ------------------- */
+  records.push(
+    input.states !== undefined
+      ? { name: "interaction-states", status: "ran", required: false, detail: input.states.declared === 0 ? "zero interaction states declared" : `${input.states.declared} state signal(s) supplied` }
+      : { name: "interaction-states", status: "notEvaluated", required: false, detail: "no interaction-state evidence was supplied (opt-in by shape)" },
+  );
+
+  /* caller-supplied records win by name; unknown names are appended -------- */
+  for (const supplied of input.gates ?? []) {
+    const at = records.findIndex((record) => record.name === supplied.name);
+    if (at >= 0) records[at] = supplied;
+    else records.push(supplied);
+  }
+  return records;
+}
+
+/**
+ * The verdict mapping (issue #23 (b)): any required gate that is skipped or
+ * never evaluated holds the verdict at BLOCKED — the gate could not run, so
+ * the run is incomplete rather than bad — and any gate that ran and found a
+ * blocker makes the verdict FAIL. REVIEW status (a check ran, the outcome is
+ * withheld for evidence a human or a live session must supply) is also BLOCKED,
+ * with the name of what is outstanding.
+ */
+function verdictFor(status: FinalQualityReport["status"], gates: readonly GateRecord[]): FinalVerdict {
+  if (status === "FAIL" || gates.some((gate) => gate.status === "failed")) return "FAIL";
+  if (
+    status === "PASS" &&
+    !gates.some((gate) => gate.required && (gate.status === "skipped" || gate.status === "notEvaluated"))
+  ) return "PASS";
+  return "BLOCKED";
+}
+
+/** Never-PASS reasons, one per forcing line — the narrative behind the verdict. */
+function reasonsFor(
+  report: { status: FinalQualityReport["status"]; reason: string },
+  gates: readonly GateRecord[],
+): string[] {
+  const reasons: string[] = [];
+  if (report.status === "FAIL") reasons.push(`blocking outcome: ${report.reason}`);
+  if (report.status === "REVIEW") reasons.push(`certification withheld: ${report.reason}`);
+  for (const gate of gates) {
+    if (gate.status === "failed") reasons.push(`${gate.name}: ran and found a blocker — ${gate.detail ?? ""}`);
+    else if (gate.required && (gate.status === "skipped" || gate.status === "notEvaluated")) reasons.push(`${gate.name}: ${gate.status} — ${gate.detail ?? ""}`);
+  }
+  return reasons;
 }

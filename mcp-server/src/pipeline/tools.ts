@@ -42,6 +42,7 @@ import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
 import { measureProgramText, programHasText } from "../runtime/measure";
 import { reuseAdvisory, placeRootInFreeCanvas } from "../runtime/tools";
+import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
 import { BriefInputSchema } from "./contracts";
 import { normalizeBrief } from "./brief";
@@ -483,10 +484,27 @@ export async function designPipelineTool(
   if (placement !== null) stage(trace, "placement", `Placed the screen at (${placement.x}, ${placement.y}).`);
 
   const transactionId = args.transactionId ?? `pipe_${Date.now().toString(36)}`;
+
+  // Issue #23: the transaction edge runs the blocking preflight classes with
+  // the pipeline's own deterministic evidence — resolved geometry, overflow
+  // permissions, text measurements, sizing intents and brief blockers — so a
+  // duplicate id, an out-of-bounds child, unusable text bounds, a drifting
+  // connector or a contradictory brief is refused before any document write.
+  const boxes = Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box]));
+  const preflightContext: PreflightContext = {
+    planBoxes: boxes,
+    overflow: Object.fromEntries(plan.regions.map((r) => [r.id, r.constraints.overflow])),
+    sizing: Object.fromEntries(plan.regions.map((r) => [r.id, { width: r.sizing.width, height: r.sizing.height }])),
+    ...((measured.metrics.size > 0 ? { textMeasurements: Object.fromEntries(measured.metrics) } : {}) as Pick<PreflightContext, "textMeasurements">),
+    briefBlockers: blockers.map((b) => ({ ...(b.id !== undefined ? { id: b.id } : {}), severity: b.severity, message: b.message, ...(b.fix !== undefined ? { fix: b.fix } : {}) })),
+  };
+  stage(trace, "preflight-context", `Blocking preflight evidence gathered: ${Object.keys(boxes).length} resolved box(es), ${blockers.length} brief blocker(s), ${measured.metrics.size} text measurement(s).`);
+
   const transaction = (await dispatchTransaction(registry, session, "create_design", {
     description: args.description ?? `Design pipeline: ${brief.screen}`,
     operations,
     transactionId,
+    preflight: preflightContext,
   })) as TransactionResult;
 
   const createdNodes = transaction.status === "success" ? transaction.createdNodes : [];

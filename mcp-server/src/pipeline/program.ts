@@ -20,8 +20,14 @@
  * 3. **Text is sized, not hoped for.** Every text primitive gets an explicit
  *    wrapping width taken from the region it lives in, so a long model id or an
  *    error message wraps instead of pushing the layout apart.
+ *
+ * The honest number in rule 1 is stated once, not stamped on every value: the
+ * disclosure policy (`disclosure.ts`, issue #23 §4) decides whether the screen
+ * carries ONE concise caption marking the values illustrative — or none, when
+ * the caller asked for a clean concept and the report carries the truth.
  */
 import type { CompositionPlan, ContentSlot, NormalizedBrief, RegionSpec } from "./contracts";
+import { decideDisclosure } from "./disclosure";
 import type { VisualIntent } from "../../../shared/ir";
 
 /** A runtime program call. */
@@ -261,11 +267,27 @@ export function buildProgram(
     if ((visualIntent as Record<string, unknown>)[key] === undefined) delete (visualIntent as Record<string, unknown>)[key];
   }
 
-  if (brief.data.illustrative) {
-    notes.push(
-      "The brief does not say the data is live, so every value on this screen is a placeholder and is marked illustrative. Real numbers were not invented.",
-    );
+  /* --- the one disclosure (issue #23 §4) ----------------------------------- */
+
+  // The note below used to imply the screen itself was "marked illustrative".
+  // Nothing was: no text node ever carried the caveat, and the gap between
+  // that sentence and the screen is what pushed reviewers to demand labels on
+  // every value — a caveat storm that trains the reader to skip the one
+  // sentence that matters. The disclosure policy decides it exactly once:
+  // one concise caption in one region, none when the caller asked for a
+  // clean concept (the report keeps the truth) or the copy already discloses.
+  // The note records the decision either way, so the report stays truthful
+  // without the screen repeating itself.
+  const disclosure = decideDisclosure(brief, plan);
+  if (disclosure.call !== null) {
+    content.push({
+      fn: "text",
+      id: disclosure.call.id,
+      parent: disclosure.call.parent,
+      args: { text: disclosure.call.text, role: "caption" },
+    });
   }
+  if (disclosure.note !== null) notes.push(disclosure.note);
 
   if (intelligence !== undefined && Object.keys(intelligence.intent).length > 0) {
     const fields = Object.keys(intelligence.intent).filter((k) => k !== "visualWeight");

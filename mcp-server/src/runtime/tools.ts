@@ -16,6 +16,7 @@ import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
+import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
 
 /* -------------------------------------------------------------------------- */
@@ -479,11 +480,23 @@ export async function runRuntimeTool(
   // build returns the prior result instead of drawing the screen twice, and a
   // timed-out one leaves a ledger record to reconcile against. Going straight
   // to the socket — which is what this did — meant neither was true.
+  //
+  // Issue #23: the dispatch carries the program's deterministic evidence
+  // (resolved geometry, per-region overflow, sizing intents) so the blocking
+  // preflight classes run with real data instead of silently skipping.
+  const preflightContext: PreflightContext = {
+    planBoxes: Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box])),
+    overflow: Object.fromEntries(compiled.ir.regions.map((r) => [r.id, (r.overflow ?? "forbid") as "allow" | "clip" | "forbid"])),
+    sizing: Object.fromEntries(
+      compiled.ir.regions.map((r) => [r.id, { width: r.width as number | "fill" | "hug", height: r.height as number | "fill" | "hug" }]),
+    ),
+  };
   const transaction = registry
     ? await dispatchTransaction(registry, session, "create_design", {
         description: description ?? "Design runtime execution",
         operations: compiled.operations,
         ...(transactionId !== undefined ? { transactionId } : {}),
+        preflight: preflightContext,
       })
     : await session.request("create_design", {
         description: description ?? "Design runtime execution",

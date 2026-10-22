@@ -178,6 +178,22 @@ export function normalizeBrief(input: BriefInput, id = "brief"): {
     });
   }
 
+  /* --- clean-concept request (issue #23 §4) ------------------------------- */
+
+  // The suppression is real only when the caller states it, so it is recorded
+  // with provenance like every stated fact. A caveat that vanished on its own
+  // would be the pipeline deciding the screen looked better unlabelled — the
+  // exact trade this flag exists to keep out of its own hands.
+  const cleanConcept = input.cleanConcept === true;
+  if (cleanConcept) {
+    assumptions.push({
+      id: "assume-clean-concept",
+      statement: "Clean visual exploration was requested: no on-screen sample-data disclosure. The report alone records that the values are illustrative.",
+      source: "stated",
+      why: "The caller explicitly asked for a clean concept, so the screen carries no caveat copy while the report keeps the truthful data mode. Fabricating live-looking telemetry stays forbidden; an invented capability is still a product-truth failure.",
+    });
+  }
+
   /* --- viewport ---------------------------------------------------------- */
 
   const viewport = input.viewport ?? { ...DEFAULT_VIEWPORT };
@@ -347,6 +363,9 @@ export function normalizeBrief(input: BriefInput, id = "brief"): {
       notes: dataNotes,
       illustrative: dataMode !== "live",
     },
+    // Recorded as an assumption when stated (issue #23 §4), so the report
+    // names who asked for a caveat-free screen.
+    cleanConcept,
     interactions: input.interactions ?? [],
     viewport,
     responsive: input.responsive ?? [],

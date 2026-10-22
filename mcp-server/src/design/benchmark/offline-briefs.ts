@@ -240,6 +240,167 @@ export const OFFLINE_BRIEFS: OfflineCaseBrief[] = [
   },
 ];
 
+/* -------------------------------------------------------------------------- */
+/* Issue #23 EXO regression fixtures — new versioned arrays; frozen lists stay */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The canonical failure classes the EXO regressions pin (issue #23). Fixture
+ * `failureTargets` reference these by exact string, and the regression tests
+ * prove each class is detectable through the mechanism that actually reports
+ * it — the runtime's real violation rules ("identity", "containment",
+ * "operation-trace", "connector"), the type-criteria audit, the accessibility
+ * evaluator, and (for caller-owned policy stages) the final gate's gate
+ * records. The five fixtures together cover all eight; renaming a string here
+ * means moving the tests with it.
+ */
+export const EXO_REGRESSION_FAILURE_CLASSES = [
+  "duplicate-content-or-component-ids",
+  "node-assigned-to-two-parents",
+  "child-outside-overflow-forbidden-region",
+  "connector-endpoints-not-aligned",
+  "text-emitted-width-vs-resolved-bounds",
+  "sub-11px-technical-labels",
+  "sub-wcag-aa-contrast",
+  "repeated-illustrative-sample-disclosures",
+] as const;
+
+export type ExoRegressionFailureClass = (typeof EXO_REGRESSION_FAILURE_CLASSES)[number];
+
+/**
+ * An EXO regression fixture: the brief the pipeline plans from, plus the
+ * failure classes the case exists to catch. This is benchmark data like
+ * `OfflineCaseBrief`, but it lives in its own versioned arrays because
+ * `OFFLINE_BRIEFS`, `BENCHMARKS` and `EXPANDED_BENCHMARKS` are frozen and
+ * length-pinned by test — regression fixtures append here, never there.
+ */
+export interface ExoRegressionFixture {
+  caseId: string;
+  brief: OfflineBrief;
+  /** The failure classes this fixture's programs are expected to surface. */
+  failureTargets: ExoRegressionFailureClass[];
+}
+
+/**
+ * The v1 negative control is referenced by id and its brief reused by
+ * reference — duplicating it would fork the anti-generic measurement.
+ */
+export const EXO_REGRESSION_NEGATIVE_CONTROL_ID = "generic-saas-dashboard";
+
+/** The four new regression briefs (issue #23), one unioned partition each. */
+export const EXO_REGRESSION_BRIEFS: ExoRegressionFixture[] = [
+  {
+    caseId: "exo-regression-topology",
+    brief: {
+      product: "fenek-clusters",
+      screen: "Compute operations",
+      purpose: "watch compute pressure across nodes and act on the node that endangers the fleet",
+      primaryDecision: "which compute node needs attention",
+      primaryAction: "drain the pressured node",
+      requiredInformation: [
+        "compute nodes and their links",
+        "bandwidth per link",
+        "drop rate per path",
+        "node pressure by resource",
+        "route healthy vs struggling",
+        "node traffic share",
+      ],
+      optionalInformation: ["last drained on each node"],
+      viewport: OFFLINE_VIEWPORT,
+      visualDirection: "premium technical control-room",
+      antiGoals: ["no grid of KPI cards", "the node graph is the evidence, not a list"],
+      states: ["degraded node", "recovering node"],
+    },
+    failureTargets: [
+      "duplicate-content-or-component-ids",
+      "connector-endpoints-not-aligned",
+      "child-outside-overflow-forbidden-region",
+    ],
+  },
+  {
+    caseId: "exo-regression-model-selection",
+    brief: {
+      product: "fenek-clusters",
+      screen: "Model selection and configuration",
+      purpose: "pick the model that fits the selected device and confirm the configuration before it runs",
+      primaryDecision: "which model fits the selected device",
+      primaryAction: "assign model to device",
+      requiredInformation: [
+        "model name and family",
+        "context length",
+        "memory footprint",
+        "tokens per second on target device",
+        "devices it runs on",
+        "fit verdict for the selected device",
+      ],
+      optionalInformation: ["model version", "who assigned it last"],
+      viewport: OFFLINE_VIEWPORT,
+      visualDirection: "premium technical spec-sheet",
+    },
+    failureTargets: ["node-assigned-to-two-parents", "sub-11px-technical-labels"],
+  },
+  {
+    caseId: "exo-regression-dense-table",
+    brief: {
+      product: "ops-ledger",
+      screen: "Audit table",
+      purpose: "scan the dense audit rows and route the row that needs follow-up to an owner",
+      primaryDecision: "which audit row needs follow-up first",
+      primaryAction: "assign owner",
+      requiredInformation: [
+        "row captions",
+        "event stream by source",
+        "error category",
+        "open vs escalated",
+        "owner per row",
+        "last activity per row",
+      ],
+      optionalInformation: ["escalation policy per category"],
+      viewport: OFFLINE_VIEWPORT,
+      states: ["open", "escalated", "focused row"],
+    },
+    failureTargets: ["text-emitted-width-vs-resolved-bounds", "duplicate-content-or-component-ids"],
+  },
+  {
+    caseId: "exo-regression-empty-error",
+    brief: {
+      product: "fenek-clusters",
+      screen: "Telemetry recovery",
+      purpose: "show the stream's empty, loading and error states and the way back to telemetry",
+      primaryDecision: "whether telemetry recovered or needs intervention",
+      primaryAction: "retry the stream",
+      requiredInformation: [
+        "empty state before telemetry exists",
+        "loading state while the stream connects",
+        "error state naming the failing source",
+        "recovery action and its result",
+        "stream queue depth",
+        "shard health now",
+      ],
+      optionalInformation: ["recent interventions"],
+      viewport: OFFLINE_VIEWPORT,
+      visualDirection: "premium technical control-room",
+      antiGoals: ["no grid of KPI cards", "states are first-class evidence, not a demo"],
+      states: ["empty", "loading", "error", "recovering"],
+    },
+    failureTargets: ["sub-wcag-aa-contrast", "repeated-illustrative-sample-disclosures"],
+  },
+];
+
+/**
+ * All five fixtures: the four new briefs plus the referenced negative control
+ * (no failure targets — it is the anti-generic control, not a detector case).
+ * Assembling the reference at module load fails loudly if the pinned v1 id
+ * ever drifts out of `OFFLINE_BRIEFS`, rather than silently nulling it.
+ */
+export const EXO_REGRESSION_FIXTURES: ExoRegressionFixture[] = (() => {
+  const control = OFFLINE_BRIEFS.find((entry) => entry.caseId === EXO_REGRESSION_NEGATIVE_CONTROL_ID);
+  if (!control) {
+    throw new Error(`EXO regression negative control '${EXO_REGRESSION_NEGATIVE_CONTROL_ID}' is missing from OFFLINE_BRIEFS — the fixture set cannot be assembled truthfully.`);
+  }
+  return [...EXO_REGRESSION_BRIEFS, { caseId: control.caseId, brief: control.brief, failureTargets: [] }];
+})();
+
 /**
  * The pipeline response → `OfflineCaseEvidence`. One implementation for the
  * runner, the frozen baseline and the gate tests, so they can never measure

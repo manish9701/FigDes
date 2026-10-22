@@ -308,6 +308,30 @@ export const EXPANDED_BENCHMARKS: BenchmarkCase[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
+/* EXO regression suite v1 (issue #23): the failure-class regression cases      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The four issue #23 regression screens plus the referenced negative control,
+ * carried under their own version so runs compare across suites without
+ * touching the frozen lists: `BENCHMARKS` (9) and `EXPANDED_BENCHMARKS` (8)
+ * are length-pinned by test, so regression cases append here instead. The
+ * full briefs and the per-case failure targets live in
+ * `benchmark/offline-briefs.ts` (`EXO_REGRESSION_FIXTURES`, keyed by the same
+ * ids); `scripts/run-design-benchmark.mjs` falls back to these brief strings
+ * for case ids it has no dedicated copy for, so nothing new is scripted.
+ */
+export const EXO_REGRESSION_SUITE_VERSION = "benchmark-exo-regressions-v1";
+
+export const EXO_REGRESSION_CASES: BenchmarkCase[] = [
+  { id: "exo-regression-topology", brief: "EXO regression topology: act on the pressured node", decisionKind: "topology", patternId: "spatial-topology" },
+  { id: "exo-regression-model-selection", brief: "EXO regression model selection: fit and configure", decisionKind: "configure", patternId: "configuration-workbench" },
+  { id: "exo-regression-dense-table", brief: "EXO regression dense table: route the follow-up row", decisionKind: "explore", patternId: "exploration-surface" },
+  { id: "exo-regression-empty-error", brief: "EXO regression states: empty, loading and error recovery", decisionKind: "monitor", patternId: "monitoring-instrument" },
+  { id: "generic-saas-dashboard", brief: "Generic SaaS dashboard (negative control: must NOT look like this)", decisionKind: "monitor", patternId: "monitoring-instrument" },
+];
+
+/* -------------------------------------------------------------------------- */
 /* Three-outcome challenge scoring (Phase 3)                                    */
 /* -------------------------------------------------------------------------- */
 

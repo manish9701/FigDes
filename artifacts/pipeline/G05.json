@@ -25,6 +25,7 @@
       "notes": null,
       "illustrative": true
     },
+    "cleanConcept": false,
     "interactions": [
       {
         "from": "node topology",
@@ -328,7 +329,7 @@
       "x": 0,
       "y": 0,
       "width": 1440,
-      "height": 122
+      "height": 181
     },
     {
       "type": "createFrame",
@@ -336,9 +337,9 @@
       "parent": "root",
       "name": "Map",
       "x": 0,
-      "y": 154,
+      "y": 213,
       "width": 1440,
-      "height": 746
+      "height": 687
     },
     {
       "type": "createText",
@@ -359,11 +360,20 @@
       "width": 262
     },
     {
+      "type": "createText",
+      "id": "data-disclosure",
+      "parent": "rail",
+      "name": "Illustrative values — the screen is not ",
+      "x": 588.8,
+      "y": 16,
+      "width": 262
+    },
+    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "rail",
       "name": "Trace path",
-      "x": 588.8,
+      "x": 875.2,
       "y": 16,
       "width": 105,
       "height": 40,
@@ -379,7 +389,7 @@
       "id": "slot-4-gpu-memory",
       "parent": "rail",
       "name": "GPU memory",
-      "x": 875.2,
+      "x": 1161.6,
       "y": 16,
       "width": 262,
       "height": 90,
@@ -400,8 +410,8 @@
       "id": "slot-5-model-throughput",
       "parent": "rail",
       "name": "model throughput",
-      "x": 1161.6,
-      "y": 16,
+      "x": 588.8,
+      "y": 75,
       "width": 262,
       "height": 90,
       "layoutMode": "VERTICAL"
@@ -437,10 +447,10 @@
       "id": "connector-1",
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-4-gpu-memory",
-      "x": 799.56,
-      "y": 106,
-      "width": 127.28,
-      "height": 72
+      "x": 836.63,
+      "y": 104.93,
+      "width": 339.54,
+      "height": 132.07
     },
     {
       "type": "createVector",
@@ -448,7 +458,7 @@
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-7-latency",
       "x": 715,
-      "y": 268,
+      "y": 327,
       "width": 10,
       "height": 32
     },
@@ -457,7 +467,7 @@
       "id": "connector-1-label",
       "parent": "root",
       "name": "Label connect",
-      "x": 869.2,
+      "x": 1012.4,
       "y": 92
     },
     {
@@ -466,7 +476,7 @@
       "parent": "root",
       "name": "Label connect",
       "x": 726,
-      "y": 270
+      "y": 329
     }
   ],
   "structuralChecks": [
@@ -539,7 +549,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "rail: planned 1440x56, built 1440x122; map: planned 1440x812, built 1440x746",
+      "detail": "rail: planned 1440x56, built 1440x181; map: planned 1440x812, built 1440x687",
       "nodeIds": []
     },
     {
@@ -564,11 +574,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x181.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "rail: planned 1440x56, built 1440x122"
+        "detail": "rail: planned 1440x56, built 1440x181"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -579,11 +589,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x746.",
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x687.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "map: planned 1440x812, built 1440x746"
+        "detail": "map: planned 1440x812, built 1440x687"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

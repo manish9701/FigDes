@@ -318,6 +318,15 @@ export function verifyPlan(
   // the reader to distrust it. A region whose content needed more room than
   // the plan gave it grows in the build; that is a real difference between the
   // two, and it is reported rather than smoothed over.
+  //
+  // Grace is tiered by stage (issue #23): the PRE-MUTATION preflight gate
+  // (preflight-blocking.ts, TRACE_EPS = 1px) BLOCKS dispatch on plan-vs-
+  // emitted deltas beyond 1px on declared axes, and on a fixed override of a
+  // "hug"/"fill" axis, unless the trace records a validated reason for the
+  // difference. This live check stays an advisory band at 4px because by now
+  // the build has landed and measured text re-flow is the expected, honest
+  // origin of small movements; a blocking gate here could only punish the
+  // measurement, not prevent it.
   const drifted: string[] = [];
   for (const region of plan.regions) {
     const box = compiled.boxes.get(region.id);

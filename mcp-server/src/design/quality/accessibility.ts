@@ -24,7 +24,10 @@ export const CONTRAST_MIN_NON_TEXT = 3;
 export const TARGET_MIN_PX = 24;
 export const TARGET_RECOMMENDED_PX = 44;
 export const LINE_LENGTH_MAX_CHARS = 95;
+/** Body text floor (issue #23 §4): below this blocks without a documented exception. */
 export const MIN_BODY_TEXT_PX = 12;
+/** Dense-technical / supporting text floor: the type-and-space skill's 11px label floor. */
+export const MIN_DENSE_TEXT_PX = 11;
 
 export interface AccessibilityText {
   id: string;
@@ -38,6 +41,20 @@ export interface AccessibilityText {
   isBold?: boolean;
   /** True when this text encodes a state the user must notice. */
   encodesState?: boolean;
+  /**
+   * Purpose of the text, which sets its legibility floor (issue #23 §4):
+   * body text holds the 12px floor; dense-technical/supporting text holds
+   * the 11px floor the type-and-space skill declares. Defaults to body.
+   */
+  role?: "body" | "dense-technical" | "supporting";
+  /**
+   * The explicit exception path (issue #23 §4): the ONLY way text below the
+   * floor stops blocking. A missing or empty `reason` is no exception — the
+   * size blocks. A documented reason (e.g. a caption role with its
+   * justification) records the size as an accepted exception instead of a
+   * blocking finding.
+   */
+  exception?: { role?: string; reason: string };
 }
 
 export interface AccessibilityTarget {
@@ -90,11 +107,25 @@ export interface AccessibilityInput {
   reducedMotion?: { requested: boolean; respected: boolean };
 }
 
+/** A documented exception: tiny text that carries a stated justification. */
+export interface AccessibilityException {
+  ruleId: "a11y.text-too-small";
+  nodeId: string;
+  /** The measured size. */
+  size: number;
+  /** The floor the role holds, for the record. */
+  threshold: number;
+  /** The stated justification attached to the text itself. */
+  reason: string;
+}
+
 export interface AccessibilityReport {
   findings: DesignFinding[];
   checked: string[];
   /** Explicitly not verified — reported, never implied. */
   notChecked: string[];
+  /** Sub-threshold text that carries a documented intentional reason. */
+  exceptions: AccessibilityException[];
   summary: string;
 }
 
@@ -110,6 +141,7 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
   const findings: DesignFinding[] = [];
   const checked: string[] = [];
   const notChecked: string[] = [];
+  const exceptions: AccessibilityException[] = [];
   const rev = input.revisionId;
 
   /* -- Text contrast ------------------------------------------------------- */
@@ -125,7 +157,10 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
           makeFinding({
             ruleId: "a11y.text-contrast",
             category: "accessibility",
-            severity: text.contrastRatio < min - 1.5 ? "high" : "medium",
+            // Issue #23 §4: below-WCAG-AA text contrast blocks, it does not
+            // advise. There is no exception path at this layer — the accepted-
+            // risk lifecycle in finding.ts is the formal route for a reviewer.
+            severity: "critical",
             confidence: 0.9,
             summary: `Text contrast ${text.contrastRatio.toFixed(2)}:1 below ${min}:1`,
             rationale: `WCAG AA requires ${min}:1 for this text size. Measured ${text.contrastRatio.toFixed(2)}:1, so the content is hard or impossible to read for low-vision users.`,
@@ -170,21 +205,33 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
   } else {
     checked.push("text-legibility");
     for (const text of input.texts) {
-      if (typeof text.size === "number" && text.size > 0 && text.size < MIN_BODY_TEXT_PX) {
-        findings.push(
-          makeFinding({
-            ruleId: "a11y.text-too-small",
-            category: "accessibility",
-            severity: "medium",
-            confidence: 0.85,
-            summary: `Text at ${text.size}px below the ${MIN_BODY_TEXT_PX}px legibility floor`,
-            rationale: "Below roughly 12px, dense technical screens become unreadable for many users and unreadable for all users on low-density displays.",
-            evidence: ev(rev, text.id, `size=${text.size}px`),
-            affectedNodeIds: [text.id],
-            suggestedFix: "Move the label up the type scale rather than inventing an off-scale size.",
-            verification: "Confirm the rendered font size comes from the type scale.",
-          }),
-        );
+      if (typeof text.size === "number" && text.size > 0) {
+        // Issue #23 §4: two floors by role — body at 12px, dense-technical and
+        // supporting text at the skill's 11px floor. Both block by default;
+        // the only escape is a documented intentional reason attached to the
+        // text itself, which downgrades the size to a recorded exception.
+        const floor = text.role === "dense-technical" || text.role === "supporting" ? MIN_DENSE_TEXT_PX : MIN_BODY_TEXT_PX;
+        const reason = text.exception?.reason?.trim() ?? "";
+        if (text.size < floor) {
+          if (reason.length > 0) {
+            exceptions.push({ ruleId: "a11y.text-too-small", nodeId: text.id, size: text.size, threshold: floor, reason });
+          } else {
+            findings.push(
+              makeFinding({
+                ruleId: "a11y.text-too-small",
+                category: "accessibility",
+                severity: "critical",
+                confidence: 0.85,
+                summary: `Text at ${text.size}px below the ${floor}px ${text.role ?? "body"} floor`,
+                rationale: `Below ${floor}px this text role becomes unreadable for many users and unreadable for all users on low-density displays. It blocks, and it stops blocking only through a documented exception ({ exception: { reason } } on the text) or a reviewer's accepted-risk ruling — neither is present.`,
+                evidence: ev(rev, text.id, `size=${text.size}px floor=${floor} role=${text.role ?? "body"}`),
+                affectedNodeIds: [text.id],
+                suggestedFix: `Move the label up to at least the ${floor}px ${text.role ?? "body"} floor (ramp role) rather than inventing an off-scale size — or attach exception: { reason } naming why this specific text must sit below it.`,
+                verification: "Confirm the rendered font size comes from the type scale, or read the stated exception and judge it.",
+              }),
+            );
+          }
+        }
       }
       if (typeof text.lineLength === "number" && text.lineLength > LINE_LENGTH_MAX_CHARS) {
         findings.push(
@@ -419,10 +466,12 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
   const critical = findings.filter((f) => f.severity === "critical").length;
   const summary =
     findings.length === 0
-      ? `${checked.length} accessibility check(s) passed; ${notChecked.length} could not be verified from a static frame. This is not a conformance claim.`
-      : `${findings.length} accessibility finding(s) (${critical} critical); ${notChecked.length} check(s) could not be verified from a static frame. This is not a conformance claim.`;
+      ? exceptions.length > 0
+        ? `${checked.length} accessibility check(s) passed with ${exceptions.length} documented exception(s); ${notChecked.length} could not be verified from a static frame. This is not a conformance claim.`
+        : `${checked.length} accessibility check(s) passed; ${notChecked.length} could not be verified from a static frame. This is not a conformance claim.`
+      : `${findings.length} accessibility finding(s) (${critical} critical) plus ${exceptions.length} documented exception(s); ${notChecked.length} check(s) could not be verified from a static frame. This is not a conformance claim.`;
 
-  return { findings, checked, notChecked, summary };
+  return { findings, checked, notChecked, exceptions, summary };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -432,6 +481,14 @@ export function evaluateAccessibility(input: AccessibilityInput): AccessibilityR
 /** Interactive-looking node shapes the target-size check applies to. */
 const INTERACTIVE_TYPES = new Set(["FRAME", "INSTANCE", "COMPONENT", "COMPONENT_SET"]);
 const INTERACTIVE_NAME = /\b(button|btn|icon|tab|link|control|toggle|checkbox|radio|input|field|menu|dropdown|select|chip|cta|action)\b/i;
+
+/**
+ * Words that name a state the user must notice (issue #23 §5: disabled,
+ * error, success, selected cues). A text whose content carries one of these
+ * encodes its state textually — the redundant cue the colour-only-state
+ * check looks for.
+ */
+const STATE_WORD = /\b(offline|online|error|fail|pass|ready|queued|connected|disconnected|disabled|selected|success|warning)\b/i;
 
 /**
  * Builds the evaluator's input from the plugin's measured node tree.
@@ -451,6 +508,13 @@ export function accessibilityInputFromMetrics(report: MetricsReport, revisionId:
   const targets: AccessibilityTarget[] = [];
   const controls: AccessibilityControl[] = [];
   const stateIndicators: AccessibilityStateIndicator[] = [];
+  /** One indicator per node, whoever derives it first. */
+  const seenStateIds = new Set<string>();
+  const pushState = (indicator: AccessibilityStateIndicator): void => {
+    if (seenStateIds.has(indicator.id)) return;
+    seenStateIds.add(indicator.id);
+    stateIndicators.push(indicator);
+  };
 
   for (const n of nodes) {
     if (n.type === "TEXT" && n.text) {
@@ -470,18 +534,8 @@ export function accessibilityInputFromMetrics(report: MetricsReport, revisionId:
             lineLength: perLine,
             contrastRatio: measured.ratio,
             isBold: false,
-            encodesState: /\b(offline|online|error|fail|pass|ready|queued|connected|disconnected)\b/i.test(n.text.content),
+            encodesState: STATE_WORD.test(n.text.content),
           });
-        }
-        if (/\b(offline|online|error|fail|pass|ready|queued|connected|disconnected)\b/i.test(n.text.content)) {
-          // Colour-only state cannot be inferable from fill alone when the
-          // content itself carries the word; the rules-level check (colour-
-          // only-state) is authoritative, so the state indicator here only
-          // flags texts whose content names a state with no colour pair
-          // measurable at all — otherwise omitted.
-          if (!("unmeasurable" in measured) && measured.ratio < CONTRAST_MIN_NORMAL) {
-            stateIndicators.push({ id: n.id, label: n.text.content.slice(0, 40), colorOnly: true });
-          }
         }
       }
     } else if (INTERACTIVE_TYPES.has(n.type) && INTERACTIVE_NAME.test(n.name ?? "") && n.w >= 8 && n.h >= 8) {
@@ -495,6 +549,36 @@ export function accessibilityInputFromMetrics(report: MetricsReport, revisionId:
       if (!("unmeasurable" in measured) && (n.background ?? null)) {
         nonText.push({ id: n.id, label: n.name, contrastRatio: measured.ratio });
       }
+    }
+  }
+
+  // Colour-only state, comparative form (issue #23 §5): when identical text
+  // content appears in two or more resolved colours ON THE SAME COMPOSITED
+  // SURFACE, the difference between those elements is carried by colour
+  // alone — the shared content cannot distinguish them. A different surface
+  // per element is decorative tone inversion (nav on dark, footer on light),
+  // not state, so the rule stays silent there. Which side of encodesState
+  // semantics the content lands on decides the verdict: content that names a
+  // state ("Ready") carries a redundant textual cue and passes; neutral
+  // content ("Status") leaves the colour as the only state carrier, which
+  // the evaluator blocks on.
+  const byContent = new Map<string, NodeMetrics[]>();
+  for (const n of nodes) {
+    if (n.type !== "TEXT" || !n.text || typeof n.text.color !== "string") continue;
+    const key = n.text.content.trim();
+    if (key.length === 0) continue;
+    const group = byContent.get(key) ?? [];
+    group.push(n);
+    byContent.set(key, group);
+  }
+  for (const [content, group] of byContent) {
+    if (group.length < 2) continue;
+    const colours = new Set(group.map((n) => (n.text!.color as string).toUpperCase()));
+    const surfaces = new Set(group.map((n) => n.background ?? "").filter(Boolean));
+    if (colours.size < 2 || surfaces.size !== 1) continue;
+    const hasRedundantCue = STATE_WORD.test(content);
+    for (const n of group) {
+      pushState({ id: n.id, label: content.slice(0, 40), colorOnly: true, hasRedundantCue });
     }
   }
 

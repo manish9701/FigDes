@@ -30,6 +30,7 @@
       "notes": null,
       "illustrative": true
     },
+    "cleanConcept": false,
     "interactions": [],
     "viewport": {
       "width": 1440,
@@ -669,11 +670,20 @@
       "y": 32
     },
     {
+      "type": "createText",
+      "id": "data-disclosure",
+      "parent": "support",
+      "name": "Illustrative values — the screen is not ",
+      "x": 24,
+      "y": 24,
+      "width": 218
+    },
+    {
       "type": "createFrame",
       "id": "slot-5-cluster-health",
       "parent": "support",
       "name": "cluster health",
-      "x": 24,
+      "x": 257.6,
       "y": 24,
       "width": 103,
       "height": 22,
@@ -689,7 +699,7 @@
       "id": "slot-6-gpu-memory",
       "parent": "support",
       "name": "GPU memory",
-      "x": 257.6,
+      "x": 491.20000000000005,
       "y": 24,
       "width": 218,
       "height": 90,
@@ -710,7 +720,7 @@
       "id": "slot-7-model-throughput",
       "parent": "support",
       "name": "model throughput",
-      "x": 491.20000000000005,
+      "x": 724.8,
       "y": 24,
       "width": 218,
       "height": 90,
@@ -731,7 +741,7 @@
       "id": "slot-8-recent-deploys",
       "parent": "support",
       "name": "—",
-      "x": 724.8,
+      "x": 958.4000000000001,
       "y": 24,
       "width": 218,
       "height": 90,
@@ -752,8 +762,8 @@
       "id": "slot-9-audit-log",
       "parent": "support",
       "name": "—",
-      "x": 958.4000000000001,
-      "y": 24,
+      "x": 24,
+      "y": 75,
       "width": 218,
       "height": 90,
       "layoutMode": "VERTICAL"

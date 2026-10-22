@@ -40,6 +40,20 @@ function isShouty(token: string): boolean {
   return /^[A-Z0-9&./-]{3,}$/.test(token) && /[A-Z]/.test(token);
 }
 
+/**
+ * Reads a documented exception off a compiled op (issue #23 §4): either
+ * `exception: { reason }` or a bare justification string. Empty/missing is
+ * "no exception" — the size then fails the floor.
+ */
+function readExceptionReason(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    const reason = (value as Record<string, unknown>)["reason"];
+    if (typeof reason === "string") return reason.trim();
+  }
+  return "";
+}
+
 function finding(input: {
   ruleId: string;
   criterion: TypeCriterionResult["criterion"];
@@ -159,28 +173,45 @@ export function auditTypeCriteria(input: {
   /* --- readable-labels (accessibility criterion) ---------------------------- */
 
   if (textOps.length > 0) {
-    const tiny = textOps
-      .map((op) => ({ id: String(readField(op, "id") ?? "?"), size: Number(readField(op, "fontSize") ?? NaN), content: String(readField(op, "content") ?? "") }))
-      .filter((op) => Number.isFinite(op.size) && op.size < MIN_LABEL_PX);
-    if (tiny.length > 0) {
+    const measured = textOps.map((op) => ({
+      id: String(readField(op, "id") ?? "?"),
+      size: Number(readField(op, "fontSize") ?? NaN),
+      content: String(readField(op, "content") ?? ""),
+      /** Documented exception (issue #23 §4): a stated justification on the op itself. */
+      exceptionReason: readExceptionReason(readField(op, "exception")),
+    }));
+    const tiny = measured.filter((op) => Number.isFinite(op.size) && op.size < MIN_LABEL_PX);
+    // Below the floor WITH a non-empty documented reason is an explicit
+    // exception, recorded in the criterion detail — not a failure. Without
+    // one, the size fails the criterion exactly as before.
+    const exemptedExceptions = tiny.filter((op) => op.exceptionReason.length > 0);
+    const failing = tiny.filter((op) => op.exceptionReason.length === 0);
+    if (failing.length > 0) {
       findings.push(
         finding({
           ruleId: "type.space.readable-labels",
           criterion: "readable-labels",
           severity: "high",
           confidence: 0.85,
-          summary: `${tiny.length} text node(s) planned below the ${MIN_LABEL_PX}px floor: ${tiny.slice(0, 3).map((t) => `'${t.content.slice(0, 24)}${t.content.length > 24 ? "…" : ""}'@${t.size}px`).join(", ")}.`,
+          summary: `${failing.length} text node(s) planned below the ${MIN_LABEL_PX}px floor: ${failing.slice(0, 3).map((t) => `'${t.content.slice(0, 24)}${t.content.length > 24 ? "…" : ""}'@${t.size}px`).join(", ")}.`,
           why: `The type-and-space skill declares "no label renders below ${MIN_LABEL_PX}px"; tiny labels are the most common spacing-discipline failure and the cheapest to gate before render.`,
-          detail: `compiled font sizes: ${tiny.map((t) => `${t.id}=${t.size}px`).join(", ")}.`,
-          fix: `Raise the compiled size to the ${MIN_LABEL_PX}px floor (ramp caption role) — a live screenshot re-render must confirm it.`,
-          nodeIds: tiny.map((t) => t.id),
+          detail: `compiled font sizes: ${failing.map((t) => `${t.id}=${t.size}px`).join(", ")}.${exemptedExceptions.length > 0 ? ` ${exemptedExceptions.length} further node(s) below the floor carry documented exceptions and do not block.` : ""}`,
+          fix: `Raise the compiled size to the ${MIN_LABEL_PX}px floor (ramp caption role), or attach exception: { reason } naming why this specific label sits below it — a live screenshot re-render must confirm either.`,
+          nodeIds: failing.map((t) => t.id),
         }),
       );
       criteria.push({
         id: "readable-labels",
         criterion: "readable-labels",
         status: "fail",
-        detail: `${tiny.length} planned text node(s) below ${MIN_LABEL_PX}px.`,
+        detail: `${failing.length} planned text node(s) below ${MIN_LABEL_PX}px without a documented exception${exemptedExceptions.length > 0 ? `, plus ${exemptedExceptions.length} documented exception(s)` : ""}.`,
+      });
+    } else if (exemptedExceptions.length > 0) {
+      criteria.push({
+        id: "readable-labels",
+        criterion: "readable-labels",
+        status: "pass",
+        detail: `${textOps.length} planned text node(s) at >= ${MIN_LABEL_PX}px, or below it with a documented exception: ${exemptedExceptions.map((t) => `${t.id}=${t.size}px "${t.exceptionReason.slice(0, 60)}"`).join("; ")}.`,
       });
     } else {
       criteria.push({

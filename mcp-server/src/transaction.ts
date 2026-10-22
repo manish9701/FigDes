@@ -29,7 +29,8 @@ import {
   type Session,
   type SessionRegistry,
 } from "./sessions";
-import { validateTransaction } from "./preflight";
+import { validateTransaction, preflightCheckTag } from "./preflight";
+import type { PreflightContext } from "./preflight-blocking";
 import { withDocumentLock, DocumentLockBusyError } from "./native/lock";
 import {
   recordDuplicateRetry,
@@ -61,10 +62,32 @@ export async function dispatchTransaction(
   registry: SessionRegistry,
   session: Session,
   tool: "create_design" | "modify_design" | "update_component" | "native_design",
-  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[] },
+  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext },
 ): Promise<TransactionResult> {
   const transactionId = payload.transactionId ?? `txn_${randomUUID().slice(0, 8)}`;
   const ops = payload.operations as unknown[];
+
+  // Issue #23, check 7 — the brief gate at the transaction edge. The pipeline
+  // stops contradictory briefs at stage 1, but it was the only place that did:
+  // any other path (a rerun, a hand-wired caller, a future stage that forgets)
+  // could still dispatch a build whose brief the normalizer refused. So the
+  // refusal lives HERE, server-side, before any socket or document contact —
+  // a brief that contradicts itself must never reach a build, full stop.
+  const blockingBrief = (payload.preflight?.briefBlockers ?? []).filter((b) => b && b.severity === "blocking");
+  if (blockingBrief.length > 0) {
+    const first = blockingBrief[0]!;
+    const summary = blockingBrief.slice(0, 5).map((b) => b.message).join("; ");
+    const label = `blocked: brief carries ${blockingBrief.length} blocking contradiction(s)`;
+    recordPreflightCatch(blockingBrief.length);
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.complete(transactionId, "failed", { error: summary, label });
+    throw new Error(
+      `Refused before dispatch: the brief carries ${blockingBrief.length} blocking contradiction(s), so nothing may be built from it ` +
+        `(ledger: "${label}").\n` +
+        blockingBrief.slice(0, 5).map((b) => `  ${b.message}${b.fix ? ` Fix: ${b.fix}` : ""}`).join("\n") +
+        `\nFirst contradiction: "${first.message}". Resolve it in the brief, then build again.`,
+    );
+  }
 
   const prior = registry.jobs.priorResult(transactionId);
   if (prior && (prior as { status?: string }).status === "success") {
@@ -87,14 +110,21 @@ export async function dispatchTransaction(
     );
   }
 
-  const preflight = validateTransaction(ops);
+  // Issue #23 — program-level blocking checks ride in on the caller's
+  // `preflight` context (plan boxes, overflow permissions, text measurements,
+  // connectors, brief blockers). The context is evidence already gathered
+  // deterministically; passing it never contacts Figma.
+  const preflight = validateTransaction(ops, payload.preflight);
   if (!preflight.ok) {
     recordPreflightCatch(preflight.issues.length);
     registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
-    registry.jobs.complete(transactionId, "failed", { error: preflight.issues[0]?.message ?? "preflight failed" });
     const first = preflight.issues[0]!;
+    // The ledger note names the check that blocked, so a get_job_status after
+    // the refusal answers "why was nothing created" without re-reading the error.
+    const label = `blocked: preflight (${preflightCheckTag(first)}) refused ${preflight.issues.length} issue(s)`;
+    registry.jobs.complete(transactionId, "failed", { error: first.message, label });
     throw new Error(
-      `Preflight rejected the plan before contacting Figma (${preflight.issues.length} issue(s)):\n` +
+      `Preflight rejected the plan before contacting Figma (${preflight.issues.length} issue(s), blocking check: ${preflightCheckTag(first)}); nothing was created and the ledger records it as "${label}":\n` +
         preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
         `\nFirst failure at operation #${first.index} (${first.opType}). Fix every issue and retry with the SAME transactionId.`,
     );

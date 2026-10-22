@@ -370,10 +370,19 @@ export function evaluateProductCritic(input: ProductCriticInput): ProductCriticR
           severity: "critical",
           confidence: 0.8,
           summary: `Screen implies live data (${leaks.join(", ")}) with no connected source`,
-          rationale: "No data source is connected to this design. Labelling placeholder values as live discovery or live telemetry misrepresents what exists.",
+          // The fix used to read as "label the values" — the instruction a
+          // repair loop follows — so labels arrived on the header, every
+          // panel, every data row and the footer at once. A caveat storm is
+          // not honesty; the reader skips it, and honesty is where it was.
+          // One disclosure, placed once, qualifies every value on the screen
+          // (issue #23 §4).
+          rationale:
+            "No data source is connected to this design; presenting placeholder values as live discovery or live telemetry misrepresents what exists. The correction is one honest sentence where the data lives, not a label on every value — repeated caveats are noise, and noise is exactly what hides the truth.",
           evidence: ev(rev, leaks.join(","), `liveDataConnected=false; terms found in rendered labels`),
-          suggestedFix: "Mark illustrative values as sample/demo data, or remove the live-sounding wording.",
-          verification: "Confirm every value that is not live is visibly labelled as such.",
+          suggestedFix:
+            "Add a single concise disclosure (e.g. \"Illustrative values — the screen is not connected to live data.\") in one place beside the data, and remove the live-sounding wording. One disclosure, not per-value labels.",
+          verification:
+            "Confirm the screen carries exactly one concise disclosure qualifying the illustrative values, and that no live-sounding wording remains.",
         }),
       );
     }

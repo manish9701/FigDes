@@ -23,6 +23,7 @@
       "notes": null,
       "illustrative": true
     },
+    "cleanConcept": false,
     "interactions": [],
     "viewport": {
       "width": 390,
@@ -447,7 +448,7 @@
       "x": 0,
       "y": 0,
       "width": 390,
-      "height": 97
+      "height": 153
     },
     {
       "type": "createFrame",
@@ -455,9 +456,9 @@
       "parent": "root",
       "name": "Nav",
       "x": 0,
-      "y": 129,
+      "y": 185,
       "width": 208,
-      "height": 101
+      "height": 45
     },
     {
       "type": "createFrame",
@@ -489,12 +490,21 @@
       "width": 163
     },
     {
+      "type": "createText",
+      "id": "data-disclosure",
+      "parent": "header",
+      "name": "Illustrative values — the screen is not ",
+      "x": 203,
+      "y": 24,
+      "width": 163
+    },
+    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "header",
       "name": "Place model",
-      "x": 203,
-      "y": 24,
+      "x": 24,
+      "y": 89,
       "width": 113,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -611,7 +621,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 390x88, built 390x97; nav: planned 208x132, built 208x101; subject: planned 390x396, built 390x330; context: planned 360x132, built 360x220",
+      "detail": "header: planned 390x88, built 390x153; nav: planned 208x132, built 208x45; subject: planned 390x396, built 390x330; context: planned 360x132, built 360x220",
       "nodeIds": []
     },
     {
@@ -651,11 +661,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: header: planned 390x88, built 390x97.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 390x88, built 390x153.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "header: planned 390x88, built 390x97"
+        "detail": "header: planned 390x88, built 390x153"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -666,11 +676,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: nav: planned 208x132, built 208x101.",
+      "summary": "The build did not produce the geometry the plan promised: nav: planned 208x132, built 208x45.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "nav: planned 208x132, built 208x101"
+        "detail": "nav: planned 208x132, built 208x45"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

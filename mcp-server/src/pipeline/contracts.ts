@@ -66,6 +66,19 @@ export const BriefInputSchema = z
      */
     dataMode: z.enum(["live", "demo", "unknown"]).optional().describe("Are the values real product data, illustrative demo data, or unknown?"),
     dataNotes: z.string().max(400).optional().describe("Anything that qualifies the data: which service, which environment, which time range."),
+    /**
+     * Clean visual exploration, explicitly requested (issue #23 §4).
+     *
+     * True suppresses the on-screen sample-data disclosure — the report keeps
+     * recording that the values are illustrative, so truthfulness moves to
+     * the report rather than disappearing. It never grants an invented
+     * capability or a live-connection claim; those stay with the product
+     * critic and the capability-truth guard.
+     */
+    cleanConcept: z
+      .boolean()
+      .optional()
+      .describe("Request clean visual exploration: suppress the on-screen sample-data disclosure (the report still records the data as illustrative)."),
     /** Navigation and interaction relationships the screen must express. */
     interactions: z
       .array(
@@ -215,6 +228,12 @@ export interface NormalizedBrief {
     /** True when the screen carries values that are not real telemetry. */
     illustrative: boolean;
   };
+  /**
+   * True when the caller explicitly asked for clean visual exploration
+   * (issue #23 §4): the screen carries no sample-data disclosure and the
+   * report alone records that the values are illustrative.
+   */
+  cleanConcept: boolean;
   interactions: NonNullable<BriefInput["interactions"]>;
   viewport: { width: number; height: number };
   responsive: NonNullable<BriefInput["responsive"]>;

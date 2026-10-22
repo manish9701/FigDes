@@ -25,6 +25,7 @@
       "notes": null,
       "illustrative": true
     },
+    "cleanConcept": false,
     "interactions": [],
     "viewport": {
       "width": 1440,
@@ -583,7 +584,7 @@
       "x": 272,
       "y": 0,
       "width": 1168,
-      "height": 102
+      "height": 147
     },
     {
       "type": "createFrame",
@@ -591,9 +592,9 @@
       "parent": "root",
       "name": "Content",
       "x": 272,
-      "y": 134,
+      "y": 179,
       "width": 1168,
-      "height": 249
+      "height": 204
     },
     {
       "type": "createFrame",
@@ -643,12 +644,21 @@
       "width": 357
     },
     {
+      "type": "createText",
+      "id": "data-disclosure",
+      "parent": "header",
+      "name": "Illustrative values — the screen is not ",
+      "x": 786.6700000000001,
+      "y": 24,
+      "width": 357
+    },
+    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "header",
       "name": "Schedule placement",
       "x": 786.6700000000001,
-      "y": 24,
+      "y": 83,
       "width": 164,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -795,7 +805,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1168x72, built 1168x102; content: planned 1168x366, built 1168x249; inspector: planned 360x122, built 360x209",
+      "detail": "header: planned 1168x72, built 1168x147; content: planned 1168x366, built 1168x204; inspector: planned 360x122, built 360x209",
       "nodeIds": []
     },
     {
@@ -820,11 +830,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: header: planned 1168x72, built 1168x102.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1168x72, built 1168x147.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "header: planned 1168x72, built 1168x102"
+        "detail": "header: planned 1168x72, built 1168x147"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -835,11 +845,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x366, built 1168x249.",
+      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x366, built 1168x204.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "content: planned 1168x366, built 1168x249"
+        "detail": "content: planned 1168x366, built 1168x204"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

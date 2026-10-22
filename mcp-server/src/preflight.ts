@@ -1,16 +1,26 @@
 /**
- * Shared-schema preflight validation (P1).
+ * Shared-schema preflight validation (P1), extended with the blocking
+ * program-level checks of issue #23.
  *
  * Runs the SAME OperationSchema the plugin enforces, plus transaction-level
- * checks (temp-id uniqueness, references, parent/child validity, ordering,
- * page targets, type compatibility) BEFORE any WebSocket/document contact.
+ * checks (temp-id uniqueness, duplicate ids, dual parent assignments, stale
+ * references, references, parent/child validity, ordering, page targets, type
+ * compatibility) BEFORE any WebSocket/document contact. The program-level
+ * blockers (outside-bounds children against the plan's overflow permission,
+ * text that cannot contain its measured content, connector endpoints that do
+ * not land on their named nodes, resolved-vs-emitted geometry drift without a
+ * validated reason, and blocking brief contradictions) live in
+ * `preflight-blocking.ts` and run here on the supplied `PreflightContext`.
  * A bad request fails here with every issue at once — operation indices plus
- * minimal fix suggestions — instead of wasting a Figma round trip per error.
+ * minimal fix suggestions — instead of wasting a Figma round trip per error,
+ * and `ok:false` dispatches NOTHING: no mutation anywhere, including under
+ * `dryRun`.
  *
  * The plugin repeats this validation as the trust boundary; preflight is the
  * early, consistent gate, not a replacement.
  */
 import { OperationSchema, type PreflightIssue, type PreflightResult } from "../../shared/protocol";
+import { runBlockingChecks, type PreflightContext } from "./preflight-blocking";
 
 const TEMP_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 const FIGMA_ID_RE = /^\d+:\d+$/;
@@ -85,7 +95,17 @@ function fixFor(code: string): string {
   }
 }
 
-export function validateTransaction(operations: unknown[]): PreflightResult {
+/**
+ * Names the check that produced an issue, for the ledger note: blocking
+ * program checks (preflight-blocking.ts) lead their message with a stable
+ * `tag:` prefix; the older message formats answer with the failing op's type.
+ */
+export function preflightCheckTag(issue: PreflightIssue): string {
+  const match = /^([a-z][a-z0-9-]*):/.exec(issue.message);
+  return match ? match[1]! : issue.opType;
+}
+
+export function validateTransaction(operations: unknown[], context?: PreflightContext): PreflightResult {
   const issues: PreflightIssue[] = [];
   const warnings: PreflightResult["warnings"] = [];
 
@@ -203,6 +223,12 @@ export function validateTransaction(operations: unknown[]): PreflightResult {
     }
     void CREATE_TYPES;
   });
+
+  // Issue #23 — the blocking program checks. Warnings stay warnings; anything
+  // these return as an issue blocks the transaction exactly like a schema
+  // failure. No context, no program checks: the module runs only what the
+  // caller's evidence can support.
+  issues.push(...runBlockingChecks(operations, context));
 
   return { ok: issues.length === 0, issues, warnings, operationCount: operations.length };
 }

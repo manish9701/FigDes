@@ -190,3 +190,39 @@ Full suite green: every existing suite passes after the wiring (43 issue-22 test
 - **The 11px/uppercase/one-rhythm checks are a compile-time gate.** They are structural critiques of pre-render evidence; the rendered-screenshot loop (capture → critique → targeted repair → re-render → resolution ledger) remains the live phase-2 deliverable.
 - **Task-category weights still map `select → explore`** (nearest by task shape), recorded in provenance rather than hidden.
 - **No live-Figma before/after screenshots** for the alternatives loop; the offline equivalents are the steered plan's recorded composition + warnings, reproducible without a live file.
+
+
+---
+
+# Close-out commit: the benchmark becomes a gate, the decision record exists, artifacts persist
+
+The three §-items that were still library-only are now executable, measured, and pinned:
+
+## §6 delivered — the offline pipeline benchmark runner + a committed frozen baseline
+
+`scripts/run-issue22-benchmark.mjs` (`npm run benchmark:issue22`) runs all nine v1 briefs through the **full plan-mode pipeline** — brief normalization, skills, alternatives engine, anti-generic review, type-criteria audit, structure verification — not the bare planner the older `run-design-benchmark.mjs` drives. Differences that matter:
+
+- **The briefs are library data.** `design/benchmark/offline-briefs.ts` carries the nine fixtures in full pipeline-brief form, plus the one shared `evidenceFromResponse` mapper. The runner, the baseline and the tests now measure the same cases the same way; a test-local duplicate mapper was deleted (`tests/issue-22-phase34.test.mjs` imports the shared one). The runner refuses to run when fixture ids and `suite.ts` ids drift apart.
+- **The baseline is frozen, versioned, and committed.** First run writes `artifacts/benchmark/issue22-baseline-v1.json` (`figdes-benchmark-baseline-v1`, strict zod): per case, the reproduced brief, the recorded config (`mode: plan, render: false, repairBudget: 2, maxRounds: 1`), the evidence and the scored result — 9 cases, totals 53–69.5 on the shared 1440×900 v1 viewport. `freezeBaseline` refuses a silent overwrite; `--force` is deliberate. The gateable document round-trips through `loadFrozenBaseline`.
+- **Every later run is gated.** The runner re-runs all nine cases, and `runRegressionGate` compares against the frozen baseline: exit 1 on REGRESSION (any case −≥5), explicit refusal on NOT_EVALUATED (a baseline case the candidate could not reproduce is named, never averaged away), PASS otherwise. Improvements pass — the bar only matters when a case drops.
+- **It is a CI-shaped gate in tests too.** `tests/issue-22-benchmark-gate.test.mjs` runs the nine cases through the pipeline fresh and asserts the gate PASSes against the committed artifact. A future pulse that degrades planning quality fails this test before it fails a user; a broad improvement passes, by design.
+
+Freeze evidence (all deterministic — a second run reproduced every total exactly, 0/9 improved, 0 regressed): `exo-compute-topology` 69.5, `generic-saas-dashboard` 68, `spatial-relationship` 62.5, `exo-model-detail` 62, `exo-runtime-monitoring` 62, `exo-enterprise-workspace` 61.5, `editorial-product-page` 61.5, `data-heavy-workspace` 53.5, `exo-configuration` 53. Honest per-case detail — every dimension score carries the one-sentence mapping that produced it, and `productSpecificity` is named not-evaluated and scored 0 — lands in `artifacts/benchmark/latest.json`.
+
+## §7 delivered — the design decision record, durable and loadable on resume
+
+`design/decision-record.ts` (`figdes-decision-record-v1`, strict zod) freezes what the issue paragraph demands: the original brief and its hard constraints, the selected direction with its rationale (steered composition + provenance), **the skills that ran and why** (each decision quoted), the discoveries surfaced while planning, the rejected alternatives with their reasons, the outstanding findings that still stand, and each repair attempt — attempts are never erased from the record. Serialization refuses a foreign schema; `persistDecisionRecord`/`loadDecisionRecord` write one record per case next to the run (`artifacts/benchmark/decision-records/<caseId>.json`, committed). `resumeDrift` is the resume guard: the recorded style/density manner is compared against whatever a resume recompiles, and any change in manner without a new brief is *named as drift* — be that when it's intentional or when a repair would have quietly redesigned the screen.
+
+## §4 step 11 delivered — run artifacts on disk
+
+`design/benchmark/artifacts.ts` persists a run to `<root>/<runId>/run.json` — brief, config, evidence, scored result, decision record — and decodes any render data URL into a sibling `render.png`/`.jpeg`; an undecodable render is recorded as `render-decode-refused.txt` instead of being silently dropped, so a broken render path stays visible. The live loop (open the plugin, run the runner with `--runs` plus a render source) writes the same schema with the screenshot included.
+
+## Tests
+
+`npm run test:issue22` now runs **55 tests** (27 skills, 16 phase-3/4, 12 gate) plus the committed-baseline gate: fixtures align with the suite one-to-one, the committed baseline is a complete freeze, a fresh nine-case run PASSes without any case dropping, `productSpecificity` is provably named not-evaluated in the register, and the decision record / run artifact / frozen-baseline persistence round-trips strictly (foreign schemas and garbage refused, silent overwrite refused, absence is `null` — never a fabricated record or a fabricated baseline).
+
+`tsc --noEmit` clean; `design-intelligence` (53) and `pipeline` (24) suites still green.
+
+## Closing status of the issue's remaining item
+
+- **The rendered-screenshot critique/repair loop (§4 steps 5–10) on real fixtures** is the one open item: it requires a connected Design Agent plugin session (`figma_status: connected` was false when this work was committed, and commit pins do not require a live file). The deterministic half of that loop — ranked pre-render critique, bounded repair, re-verification, resolution ledger, persisted before/after artifacts — is in place (`type-criteria.ts`, `repair-history.ts`, `artifacts.ts`); the live half executes the same steps with a render when the session connects.

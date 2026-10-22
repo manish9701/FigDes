@@ -1,0 +1,121 @@
+{
+  "schema": "figdes-decision-record-v1",
+  "caseId": "exo-runtime-monitoring",
+  "recordedAt": "2026-10-22T04:44:32.725Z",
+  "brief": {
+    "screen": "Runtime monitor",
+    "product": "fenek-clusters",
+    "purpose": "watch a live inference run and intervene when one node endangers the stream",
+    "primaryDecision": "intervene or let the run continue",
+    "primaryAction": "drain the pressured node",
+    "requiredInformation": [
+      "throughput now",
+      "latency p99 now",
+      "error rate trend",
+      "per-node pressure by resource",
+      "stream queue depth",
+      "shard health now"
+    ],
+    "optionalInformation": [
+      "recent interventions"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "visualDirection": "premium technical control-room"
+  },
+  "constraints": [
+    "no grid of KPI cards",
+    "per-node detail leads; summary follows"
+  ],
+  "direction": {
+    "composition": "instrument",
+    "rationale": "7 composition hypotheses proposed across 7 families — each pair differs on at least one structural axis of §4.1 (audited: distinct). | Task-category weights from the shared table, keyed directly by the decision class. | Selected 'instrument' (6.48/100) over 6 alternative(s); Chose \"instrument\" over \"timeline\" (6.48 vs 6.12). Gains: taskFit. Gives up: none.. | Steering: the planner receives 'instrument' as its desiredComposition hint, under its own viability rules — the planner may still conclude the roles in play cannot support it.",
+    "intentStyle": "generous,restrained,open,tabular,calm-technical",
+    "intentDensity": null
+  },
+  "skills": [
+    {
+      "id": "brief-art-direction",
+      "why": "anti-goal: no grid of KPI cards: Stated as an anti-goal; treated as a hard constraint, not a preference.; anti-goal: per-node detail leads; summary follows: Stated as an anti-goal; treated as a hard constraint, not a preference.; state: degraded node: The brief declares this state should be expressed on the screen.; state: recovering node: The brief declares this state should be expressed on the screen.; state: saturated stream: The brief declares this state should be expressed on the screen.; rhythm: 'premium' in the visual direction maps to this; direction: 'premium technical control-room'.; accents: 'premium' in the visual direction maps to this; direction: 'premium technical control-room'.; surfaces: 'premium' in the visual direction maps to this; direction: 'premium technical control-room'.; numbers: 'technical' in the visual direction maps to this; direction: 'premium technical control-room'.; grid: 'technical' in the visual direction maps to this; direction: 'premium technical control-room'.; visual-intent.style: Compiled from direction 'premium technical control-room'; resolved cleanly by the runtime's style resolver.; visual-intent.rhythm: 'premium' commits to rhythm 'generous' in the canonical visual intent.; visual-intent.contrast: 'premium' commits to contrast 'restrained' in the canonical visual intent.; visual-intent.depth: 'premium' commits to depth 'subtle' in the canonical visual intent.; visual-intent.depth: 'technical' commits to depth 'subtle' in the canonical visual intent.; visual-intent.rhythm overridden: The compiler applied brief-art-direction's value ('premium' commits to rhythm 'generous' in the canonical visual intent.). The overridden decision stays here for audit.; visual-intent.depth overridden: The compiler applied brief-art-direction's value ('premium' commits to depth 'subtle' in the canonical visual intent.). The overridden decision stays here for audit."
+    },
+    {
+      "id": "type-and-space",
+      "why": "visual-intent.numerals: 4 information item(s) name numeric readouts; tabular numerals keep updating and compared values aligned.; visual-intent.alignment: 4 numeric readout(s) and the 'monitor' task want a strict grid so values compare down the column.; visual-intent.alignment overridden: The compiler applied type-and-space's value (4 numeric readout(s) and the 'monitor' task want a strict grid so values compare down the column.). The overridden decision stays here for audit."
+    },
+    {
+      "id": "composition-strategy",
+      "why": "archetype: Monitoring is a live instrument over a working area; a status rail next to an instrument field keeps state glanceable. Content shape: 7 information item(s), numeric readouts present, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; rejected:editorial-focus: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Numeric scanning rewards strict grid alignment; tune up alignment when values update in place."
+    }
+  ],
+  "discoveries": [
+    "Untranslated manner word(s): control, room. They map to no decisions in the direction vocabulary, so they were recorded rather than guessed at.",
+    "Runtime resolution: Calm technical: generous whitespace, quiet labels, tabular numerals for telemetry. Telemetry rewards calm scanning over shouting; restraint here is functional, not decorative.",
+    "Readable-numeral decision: tabular numerals for the 4 numeric readout item(s).",
+    "Type-role contract: the screen name takes the title role, the decision context takes the subtitle, each information item takes its natural role (eyebrow for metadata, label for chrome-ish captions, body for prose, code for identifiers), and status states take the label role at legible size.",
+    "Acceptance criteria declared: no label below 11px; uppercase reserved for eyebrows; one spacing rhythm step between sibling regions; body columns around 75 characters. Measured on rendered evidence when screenshot critique runs (issue #22 phase 2).",
+    "Composition archetype contract: workspace (planner runs after this and derives regions; the plan is reviewed against this contract).",
+    "Field conflict on 'visual-intent.rhythm': 'visual-intent.rhythm'='even' from composition-strategy overridden by brief-art-direction's decision; overridden decision kept in the trail.",
+    "Self-tension inside 'brief-art-direction': two manner words claimed 'visual-intent.depth' ('subtle', then 'subtle'). The earlier word's claim was overridden; the tension is also in the direction skill's own notes.",
+    "Field conflict on 'visual-intent.alignment': 'visual-intent.alignment'='strong' from composition-strategy overridden by type-and-space's decision; overridden decision kept in the trail.",
+    "Density 'balanced' not compiled: the style tokens ([generous,restrained,open,tabular,calm-technical]) already imply 'calm', and the runtime resolves density from the manner itself. The archetype default is recorded here for audit.",
+    "Compiled visual intent (style 'generous,restrained,open,tabular,calm-technical', rhythm 'generous', alignment 'strong', contrast 'restrained', depth 'subtle')  validated against the runtime's schema.",
+    "Values on this screen are illustrative, not live telemetry."
+  ],
+  "rejectedAlternatives": [
+    {
+      "family": "timeline",
+      "reason": "Outranked on the weighted total (6.12 vs 6.48). a story over time must keep its order visible; a grid erases exactly what the brief is about (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 7 — ranked affinity for the 'monitor' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 6.12
+    },
+    {
+      "family": "topology",
+      "reason": "Outranked on the weighted total (6 vs 6.48). when how things connect is the decision, the connections must be drawn, not described in rows (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 6 — ranked affinity for the 'monitor' decision class, plus the brief's stated relationships that this family draws. relationshipClarity: 9 — 2 stated relationship item(s): 'latency p99 now', 'per-node pressure by resource' — drawn, not listed. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 6
+    },
+    {
+      "family": "spatial",
+      "reason": "Outranked on the weighted total (6 vs 6.48). arranging or locating things is itself the task, so the composition has to be a place rather than a list (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 6 — ranked affinity for the 'monitor' decision class, plus the brief's stated relationships that this family draws. relationshipClarity: 9 — 2 stated relationship item(s): 'latency p99 now', 'per-node pressure by resource' — drawn, not listed. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 6
+    },
+    {
+      "family": "table",
+      "reason": "Outranked on the weighted total (5.76 vs 6.48). an inventory of comparable things reads fastest as rows, which is the shape a listing already has (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 5 — ranked affinity for the 'monitor' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.76
+    },
+    {
+      "family": "split-view",
+      "reason": "Outranked on the weighted total (5.5 vs 6.48). comparing needs both things on screen at once and aligned, or the comparison collapses into memory (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 5 — ranked affinity for the 'monitor' decision class. informationHierarchy: 8 — 7 information item(s) against a family that aligns fewer, taller columns. densityScanability: 6 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.5
+    },
+    {
+      "family": "editorial",
+      "reason": "Disqualified: taskFit scored 3/10, at or below the 3/10 floor. when the brief has one thing to say, the composition must say it first — air, scale and a single focal region (monitor decision, throughput now,latency p99 now,error rate trend,per-node pressure by resource,stream queue depth,shard health now,recent interventions item(s)). taskFit: 3 — ranked affinity for the 'monitor' decision class. informationHierarchy: 4 — 7 information item(s) against a single-focus read: past a handful, the focus is a claim, not a fact. densityScanability: 6 — how 7 item(s) sit in this family: a focused read needs few items to stay a read.",
+      "total": 4.66
+    }
+  ],
+  "outstandingIssues": [
+    {
+      "rule": "plan-geometry-drift-01",
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x64, built 1440x137.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-02",
+      "summary": "The build did not produce the geometry the plan promised: primary-visual: planned 1440x300, built 1440x252.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-03",
+      "summary": "The build did not produce the geometry the plan promised: support: planned 1440x200, built 1440x147.",
+      "severity": "medium"
+    },
+    {
+      "rule": "type.space.one-rhythm",
+      "summary": "Two sibling-region gaps on one screen: 16px and 24px. 2 region(s) ('rail', 'primary-visual') break the first gap's rhythm.",
+      "severity": "medium"
+    }
+  ],
+  "repairAttempts": []
+}

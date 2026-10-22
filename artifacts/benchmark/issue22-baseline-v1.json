@@ -1,0 +1,874 @@
+{
+  "schema": "figdes-benchmark-baseline-v1",
+  "suite": "v1-offline-pipeline",
+  "recordedAt": "2026-10-22T04:39:07.472Z",
+  "cases": [
+    {
+      "caseId": "exo-compute-topology",
+      "brief": {
+        "screen": "Cluster routing",
+        "product": "fenek-clusters",
+        "purpose": "see how traffic moves between shards and clusters, and act on the pressured link",
+        "primaryDecision": "which pressured resource needs attention",
+        "primaryAction": "rebalance the shard",
+        "requiredInformation": [
+          "shard links between clusters",
+          "bandwidth per link",
+          "drop rate per path",
+          "node pressure by resource",
+          "route healthy vs struggling",
+          "cluster traffic share"
+        ],
+        "optionalInformation": [
+          "last rebalance on each cluster"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "exo-compute-topology",
+        "decisionKind": "topology",
+        "primaryDecision": "which pressured resource needs attention",
+        "requiredInformation": [
+          "shard links between clusters",
+          "bandwidth per link",
+          "drop rate per path",
+          "node pressure by resource",
+          "route healthy vs struggling",
+          "cluster traffic share"
+        ],
+        "optionalInformation": [
+          "last rebalance on each cluster"
+        ],
+        "focalRegionId": "map",
+        "focalShare": 0.9022222222222223,
+        "coverage": 0.9644444444444444,
+        "largestEmptyBand": 0.035555555555555556,
+        "compiledIntentFields": [
+          "style",
+          "rhythm",
+          "contrast",
+          "depth",
+          "alignment"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "topology"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 0
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 2,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "exo-compute-topology",
+        "total": 69.5,
+        "dimensions": {
+          "hierarchy": 7,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 9,
+          "spacingRhythm": 9,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 7
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "exo-model-detail",
+      "brief": {
+        "screen": "Model detail",
+        "product": "fenek-clusters",
+        "purpose": "understand this model and decide whether it fits the selected local hardware",
+        "primaryDecision": "does this model fit the device",
+        "primaryAction": "assign model to device",
+        "requiredInformation": [
+          "model name and family",
+          "context length",
+          "memory footprint",
+          "tokens per second on target device",
+          "devices it runs on",
+          "fit verdict for the selected device"
+        ],
+        "optionalInformation": [
+          "model version",
+          "who assigned it last"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "exo-model-detail",
+        "decisionKind": "inspect",
+        "primaryDecision": "does this model fit the device",
+        "requiredInformation": [
+          "model name and family",
+          "context length",
+          "memory footprint",
+          "tokens per second on target device",
+          "devices it runs on",
+          "fit verdict for the selected device"
+        ],
+        "optionalInformation": [
+          "model version",
+          "who assigned it last"
+        ],
+        "focalRegionId": "subject",
+        "focalShare": 0.5194444444444445,
+        "coverage": 0.7973148148148148,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "style",
+          "rhythm",
+          "contrast",
+          "depth",
+          "alignment"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "topology"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 3,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "exo-model-detail",
+        "total": 62,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 6
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "exo-runtime-monitoring",
+      "brief": {
+        "screen": "Runtime monitor",
+        "product": "fenek-clusters",
+        "purpose": "watch a live inference run and intervene when one node endangers the stream",
+        "primaryDecision": "intervene or let the run continue",
+        "primaryAction": "drain the pressured node",
+        "requiredInformation": [
+          "throughput now",
+          "latency p99 now",
+          "error rate trend",
+          "per-node pressure by resource",
+          "stream queue depth",
+          "shard health now"
+        ],
+        "optionalInformation": [
+          "recent interventions"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "exo-runtime-monitoring",
+        "decisionKind": "monitor",
+        "primaryDecision": "intervene or let the run continue",
+        "requiredInformation": [
+          "throughput now",
+          "latency p99 now",
+          "error rate trend",
+          "per-node pressure by resource",
+          "stream queue depth",
+          "shard health now"
+        ],
+        "optionalInformation": [
+          "recent interventions"
+        ],
+        "focalRegionId": "primary-visual",
+        "focalShare": 0.3333333333333333,
+        "coverage": 0.8933333333333333,
+        "largestEmptyBand": 0.035555555555555556,
+        "compiledIntentFields": [
+          "style",
+          "rhythm",
+          "contrast",
+          "depth",
+          "alignment"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "instrument"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 3,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "exo-runtime-monitoring",
+        "total": 62,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 6
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "exo-configuration",
+      "brief": {
+        "screen": "Policy approval",
+        "product": "fenek-clusters",
+        "purpose": "approve the runtime policy and its thresholds before the cluster runs it",
+        "primaryDecision": "approve this policy",
+        "primaryAction": "approve policy",
+        "requiredInformation": [
+          "settings the policy changes",
+          "approval thresholds",
+          "rebalance schedule",
+          "provider and model covered",
+          "who approved the last change",
+          "approval state"
+        ],
+        "optionalInformation": [
+          "change history"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "exo-configuration",
+        "decisionKind": "inspect",
+        "primaryDecision": "approve this policy",
+        "requiredInformation": [
+          "settings the policy changes",
+          "approval thresholds",
+          "rebalance schedule",
+          "provider and model covered",
+          "who approved the last change",
+          "approval state"
+        ],
+        "optionalInformation": [
+          "change history"
+        ],
+        "focalRegionId": "subject",
+        "focalShare": 0.5194444444444445,
+        "coverage": 0.7973148148148148,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "alignment",
+          "density",
+          "rhythm"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "timeline"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 3,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "exo-configuration",
+        "total": 53,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 0,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 6
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: relationshipClarity, productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "exo-enterprise-workspace",
+      "brief": {
+        "screen": "Enterprise workspace",
+        "product": "fenek-fleet",
+        "purpose": "explore the enterprise device fleet and act on a chosen subset of devices",
+        "primaryDecision": "act on this subset of devices",
+        "primaryAction": "assign devices to deployment",
+        "requiredInformation": [
+          "devices with model and serial",
+          "device state",
+          "team each device is assigned to",
+          "deployments running on each",
+          "device health",
+          "access policy per team"
+        ],
+        "optionalInformation": [
+          "recent activity per device"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "exo-enterprise-workspace",
+        "decisionKind": "inspect",
+        "primaryDecision": "act on this subset of devices",
+        "requiredInformation": [
+          "devices with model and serial",
+          "device state",
+          "team each device is assigned to",
+          "deployments running on each",
+          "device health",
+          "access policy per team"
+        ],
+        "optionalInformation": [
+          "recent activity per device"
+        ],
+        "focalRegionId": "subject",
+        "focalShare": 0.3314814814814815,
+        "coverage": 0.8117592592592593,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "alignment",
+          "density",
+          "rhythm"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "topology"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 4,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "exo-enterprise-workspace",
+        "total": 61.5,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 5
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "generic-saas-dashboard",
+      "brief": {
+        "screen": "Dashboard",
+        "product": "generic-saas",
+        "purpose": "review this generic dashboard as a negative control and its templates",
+        "primaryDecision": "which metric needs attention",
+        "primaryAction": "open report",
+        "requiredInformation": [
+          "total users",
+          "monthly revenue",
+          "growth percentage",
+          "conversion rate",
+          "active sessions",
+          "quick settings links"
+        ],
+        "optionalInformation": [
+          "changelog feed"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "generic-saas-dashboard",
+        "decisionKind": "topology",
+        "primaryDecision": "which metric needs attention",
+        "requiredInformation": [
+          "total users",
+          "monthly revenue",
+          "growth percentage",
+          "conversion rate",
+          "active sessions",
+          "quick settings links"
+        ],
+        "optionalInformation": [
+          "changelog feed"
+        ],
+        "focalRegionId": "map",
+        "focalShare": 0.9022222222222223,
+        "coverage": 0.9644444444444444,
+        "largestEmptyBand": 0.035555555555555556,
+        "compiledIntentFields": [
+          "alignment",
+          "density",
+          "rhythm"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "topology"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 0
+        },
+        "structureStatus": "fail",
+        "overflowFindings": 0,
+        "geometryFindings": 2,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "generic-saas-dashboard",
+        "total": 68,
+        "dimensions": {
+          "hierarchy": 7,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 9,
+          "spacingRhythm": 9,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 2,
+          "distinctiveness": 9,
+          "readability": 7
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "data-heavy-workspace",
+      "brief": {
+        "screen": "Follow-up queue",
+        "product": "ops-ledger",
+        "purpose": "find the events and incidents that need follow-up and move them to an owner",
+        "primaryDecision": "which incident needs follow-up first",
+        "primaryAction": "assign owner",
+        "requiredInformation": [
+          "incident captions",
+          "event stream by source",
+          "error category",
+          "open vs escalated",
+          "owner per incident",
+          "last activity per incident"
+        ],
+        "optionalInformation": [
+          "escalation policy per category"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "data-heavy-workspace",
+        "decisionKind": "select",
+        "primaryDecision": "which incident needs follow-up first",
+        "requiredInformation": [
+          "incident captions",
+          "event stream by source",
+          "error category",
+          "open vs escalated",
+          "owner per incident",
+          "last activity per incident"
+        ],
+        "optionalInformation": [
+          "escalation policy per category"
+        ],
+        "focalRegionId": "content",
+        "focalShare": 0.41276543209876543,
+        "coverage": 0.729320987654321,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "alignment",
+          "density",
+          "rhythm"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "table"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 2,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "data-heavy-workspace",
+        "total": 53.5,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 0,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 7
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: relationshipClarity, productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "spatial-relationship",
+      "brief": {
+        "screen": "Dependency graph",
+        "product": "graph-controller",
+        "purpose": "find the weak link in this dependency graph and trace the relationships around it",
+        "primaryDecision": "find the failing dependency",
+        "primaryAction": "open failing service",
+        "requiredInformation": [
+          "service links",
+          "replication status per node",
+          "dependency depth",
+          "downtime",
+          "requests per hour",
+          "load balance quota"
+        ],
+        "optionalInformation": [
+          "history of the last failure"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "spatial-relationship",
+        "decisionKind": "explore",
+        "primaryDecision": "find the failing dependency",
+        "requiredInformation": [
+          "service links",
+          "replication status per node",
+          "dependency depth",
+          "downtime",
+          "requests per hour",
+          "load balance quota"
+        ],
+        "optionalInformation": [
+          "history of the last failure"
+        ],
+        "focalRegionId": "results",
+        "focalShare": 0.4172716049382716,
+        "coverage": 0.9200987654320988,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "alignment",
+          "density",
+          "rhythm",
+          "style"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "spatial"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 2,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "spatial-relationship",
+        "total": 62.5,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 7
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    },
+    {
+      "caseId": "editorial-product-page",
+      "brief": {
+        "screen": "Run versus change",
+        "product": "fenek-models",
+        "purpose": "compare the model's run cost, latency, quality and fit before choosing what to run",
+        "primaryDecision": "run this model or change models",
+        "primaryAction": "run model",
+        "requiredInformation": [
+          "model name and publisher",
+          "run cost per task",
+          "latency p99",
+          "quality verdict",
+          "fit state on target device",
+          "recommended last mile"
+        ],
+        "optionalInformation": [
+          "alternative models ranked"
+        ],
+        "desiredComposition": null,
+        "viewport": {
+          "width": 1440,
+          "height": 900
+        }
+      },
+      "config": {
+        "mode": "plan",
+        "render": false,
+        "repairBudget": 2,
+        "maxRounds": 1
+      },
+      "evidence": {
+        "caseId": "editorial-product-page",
+        "decisionKind": "inspect",
+        "primaryDecision": "run this model or change models",
+        "requiredInformation": [
+          "model name and publisher",
+          "run cost per task",
+          "latency p99",
+          "quality verdict",
+          "fit state on target device",
+          "recommended last mile"
+        ],
+        "optionalInformation": [
+          "alternative models ranked"
+        ],
+        "focalRegionId": "subject",
+        "focalShare": 0.3314814814814815,
+        "coverage": 0.8117592592592593,
+        "largestEmptyBand": 0,
+        "compiledIntentFields": [
+          "style",
+          "rhythm",
+          "contrast",
+          "depth",
+          "alignment",
+          "density"
+        ],
+        "alternatives": {
+          "candidateCount": 7,
+          "distinct": true,
+          "selectedFamily": "topology"
+        },
+        "reviewFindings": 0,
+        "typeCriteria": {
+          "run": true,
+          "findings": 1
+        },
+        "structureStatus": "review",
+        "overflowFindings": 0,
+        "geometryFindings": 4,
+        "nativeApplied": false
+      },
+      "result": {
+        "caseId": "editorial-product-page",
+        "total": 61.5,
+        "dimensions": {
+          "hierarchy": 9,
+          "composition": 9,
+          "productSpecificity": 0,
+          "typography": 4,
+          "spacingRhythm": 4,
+          "relationshipClarity": 9,
+          "density": 8,
+          "nativeQuality": 5,
+          "distinctiveness": 9,
+          "readability": 5
+        },
+        "genericity": 0,
+        "repairs": 0,
+        "renders": 0,
+        "discoveryCalls": 0,
+        "notes": [
+          "offline score: plan-mode run — no native nodes were applied to Figma",
+          "not evaluated offline, scored 0: productSpecificity"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "schema": "figdes-decision-record-v1",
+  "caseId": "exo-enterprise-workspace",
+  "recordedAt": "2026-10-22T04:44:32.739Z",
+  "brief": {
+    "screen": "Enterprise workspace",
+    "product": "fenek-fleet",
+    "purpose": "explore the enterprise device fleet and act on a chosen subset of devices",
+    "primaryDecision": "act on this subset of devices",
+    "primaryAction": "assign devices to deployment",
+    "requiredInformation": [
+      "devices with model and serial",
+      "device state",
+      "team each device is assigned to",
+      "deployments running on each",
+      "device health",
+      "access policy per team"
+    ],
+    "optionalInformation": [
+      "recent activity per device"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "visualDirection": null
+  },
+  "constraints": [],
+  "direction": {
+    "composition": "topology",
+    "rationale": "7 composition hypotheses proposed across 7 families — each pair differs on at least one structural axis of §4.1 (audited: distinct). | Task-category weights from the shared table, keyed directly by the decision class. | Selected 'topology' (6.72/100) over 6 alternative(s); Chose \"topology\" over \"timeline\" (6.72 vs 6.3). Gains: taskFit, relationshipClarity. Gives up: informationHierarchy, densityScanability.. | Steering: the planner receives 'topology' as its desiredComposition hint, under its own viability rules — the planner may still conclude the roles in play cannot support it.",
+    "intentStyle": null,
+    "intentDensity": "calm"
+  },
+  "skills": [
+    {
+      "id": "type-and-space",
+      "why": "visual-intent.alignment: No readout-dense task; alignment stays loose so the editorial rhythm carries.; visual-intent.alignment overridden: The compiler applied type-and-space's value (No readout-dense task; alignment stays loose so the editorial rhythm carries.). The overridden decision stays here for audit."
+    },
+    {
+      "id": "composition-strategy",
+      "why": "archetype: Understanding one thing thoroughly wants a focused readout with supporting context in a dense column, not air. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:editorial-focus: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Numeric scanning rewards strict grid alignment; tune up alignment when values update in place."
+    }
+  ],
+  "discoveries": [
+    "Type-role contract: the screen name takes the title role, the decision context takes the subtitle, each information item takes its natural role (eyebrow for metadata, label for chrome-ish captions, body for prose, code for identifiers), and status states take the label role at legible size.",
+    "Acceptance criteria declared: no label below 11px; uppercase reserved for eyebrows; one spacing rhythm step between sibling regions; body columns around 75 characters. Measured on rendered evidence when screenshot critique runs (issue #22 phase 2).",
+    "Composition archetype contract: data-dense (planner runs after this and derives regions; the plan is reviewed against this contract).",
+    "Field conflict on 'visual-intent.alignment': 'visual-intent.alignment'='strong' from composition-strategy overridden by type-and-space's decision; overridden decision kept in the trail.",
+    "Compiled visual intent (density 'calm', rhythm 'even', alignment 'loose')  validated against the runtime's schema.",
+    "Values on this screen are illustrative, not live telemetry.",
+    "The screen avoids generic SaaS card walls and equal-weight panels."
+  ],
+  "rejectedAlternatives": [
+    {
+      "family": "timeline",
+      "reason": "Outranked on the weighted total (6.3 vs 6.72). a story over time must keep its order visible; a grid erases exactly what the brief is about (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 8 — ranked affinity for the 'inspect' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 6.3
+    },
+    {
+      "family": "spatial",
+      "reason": "Outranked on the weighted total (6.18 vs 6.72). arranging or locating things is itself the task, so the composition has to be a place rather than a list (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 6 — ranked affinity for the 'inspect' decision class, plus the brief's stated relationships that this family draws. relationshipClarity: 9 — 1 stated relationship item(s): 'team each device is assigned to' — drawn, not listed. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 6.18
+    },
+    {
+      "family": "instrument",
+      "reason": "Outranked on the weighted total (6.12 vs 6.72). an instrument keeps the state of the whole at eye level and the object under it, so intervention happens where the evidence is (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 7 — ranked affinity for the 'inspect' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 6.12
+    },
+    {
+      "family": "table",
+      "reason": "Outranked on the weighted total (6.12 vs 6.72). an inventory of comparable things reads fastest as rows, which is the shape a listing already has (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 7 — ranked affinity for the 'inspect' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 6.12
+    },
+    {
+      "family": "split-view",
+      "reason": "Outranked on the weighted total (6.06 vs 6.72). comparing needs both things on screen at once and aligned, or the comparison collapses into memory (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 8 — ranked affinity for the 'inspect' decision class. informationHierarchy: 8 — 7 information item(s) against a family that aligns fewer, taller columns. densityScanability: 6 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 6.06
+    },
+    {
+      "family": "editorial",
+      "reason": "Outranked on the weighted total (5.32 vs 6.72). when the brief has one thing to say, the composition must say it first — air, scale and a single focal region (inspect decision, devices with model and serial,device state,team each device is assigned to,deployments running on each,device health,access policy per team,recent activity per device item(s)). taskFit: 7 — ranked affinity for the 'inspect' decision class. informationHierarchy: 4 — 7 information item(s) against a single-focus read: past a handful, the focus is a claim, not a fact. densityScanability: 6 — how 7 item(s) sit in this family: a focused read needs few items to stay a read.",
+      "total": 5.32
+    }
+  ],
+  "outstandingIssues": [
+    {
+      "rule": "plan-geometry-drift-01",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1192x102.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-02",
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x358, built 1192x288.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-03",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x119, built 360x192.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-04",
+      "summary": "The build did not produce the geometry the plan promised: support: planned 1200x239, built 1192x198.",
+      "severity": "medium"
+    },
+    {
+      "rule": "type.space.one-rhythm",
+      "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'subject', 'context') break the first gap's rhythm.",
+      "severity": "medium"
+    }
+  ],
+  "repairAttempts": []
+}

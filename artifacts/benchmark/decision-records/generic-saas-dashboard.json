@@ -1,0 +1,109 @@
+{
+  "schema": "figdes-decision-record-v1",
+  "caseId": "generic-saas-dashboard",
+  "recordedAt": "2026-10-22T04:44:32.745Z",
+  "brief": {
+    "screen": "Dashboard",
+    "product": "generic-saas",
+    "purpose": "review this generic dashboard as a negative control and its templates",
+    "primaryDecision": "which metric needs attention",
+    "primaryAction": "open report",
+    "requiredInformation": [
+      "total users",
+      "monthly revenue",
+      "growth percentage",
+      "conversion rate",
+      "active sessions",
+      "quick settings links"
+    ],
+    "optionalInformation": [
+      "changelog feed"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "visualDirection": null
+  },
+  "constraints": [],
+  "direction": {
+    "composition": "topology",
+    "rationale": "7 composition hypotheses proposed across 7 families — each pair differs on at least one structural axis of §4.1 (audited: distinct). | Task-category weights from the shared table, keyed directly by the decision class. | Selected 'topology' (7.24/100) over 6 alternative(s); Chose \"topology\" over \"spatial\" (7.24 vs 7.04). Gains: taskFit. Gives up: none.. | Steering: the planner receives 'topology' as its desiredComposition hint, under its own viability rules — the planner may still conclude the roles in play cannot support it.",
+    "intentStyle": null,
+    "intentDensity": "airy"
+  },
+  "skills": [
+    {
+      "id": "type-and-space",
+      "why": "visual-intent.alignment: No readout-dense task; alignment stays loose so the editorial rhythm carries.; visual-intent.alignment overridden: The compiler applied type-and-space's value (No readout-dense task; alignment stays loose so the editorial rhythm carries.). The overridden decision stays here for audit."
+    },
+    {
+      "id": "composition-strategy",
+      "why": "archetype: Connections are the point; a spatial canvas with routed connectors shows them honestly. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
+    }
+  ],
+  "discoveries": [
+    "Type-role contract: the screen name takes the title role, the decision context takes the subtitle, each information item takes its natural role (eyebrow for metadata, label for chrome-ish captions, body for prose, code for identifiers), and status states take the label role at legible size.",
+    "Acceptance criteria declared: no label below 11px; uppercase reserved for eyebrows; one spacing rhythm step between sibling regions; body columns around 75 characters. Measured on rendered evidence when screenshot critique runs (issue #22 phase 2).",
+    "Composition archetype contract: canvas (planner runs after this and derives regions; the plan is reviewed against this contract).",
+    "Field conflict on 'visual-intent.alignment': 'visual-intent.alignment'='loose' from composition-strategy overridden by type-and-space's decision; overridden decision kept in the trail.",
+    "Compiled visual intent (density 'airy', rhythm 'generous', alignment 'loose')  validated against the runtime's schema.",
+    "Values on this screen are illustrative, not live telemetry.",
+    "The screen avoids generic SaaS card walls and equal-weight panels."
+  ],
+  "rejectedAlternatives": [
+    {
+      "family": "spatial",
+      "reason": "Outranked on the weighted total (7.04 vs 7.24). arranging or locating things is itself the task, so the composition has to be a place rather than a list (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 9 — ranked affinity for the 'topology' decision class, plus the brief's stated relationships that this family draws. relationshipClarity: 9 — 1 stated relationship item(s): 'quick settings links' — drawn, not listed. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 7.04
+    },
+    {
+      "family": "instrument",
+      "reason": "Outranked on the weighted total (5.72 vs 7.24). an instrument keeps the state of the whole at eye level and the object under it, so intervention happens where the evidence is (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 6 — ranked affinity for the 'topology' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.72
+    },
+    {
+      "family": "table",
+      "reason": "Outranked on the weighted total (5.52 vs 7.24). an inventory of comparable things reads fastest as rows, which is the shape a listing already has (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 5 — ranked affinity for the 'topology' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.52
+    },
+    {
+      "family": "timeline",
+      "reason": "Outranked on the weighted total (5.52 vs 7.24). a story over time must keep its order visible; a grid erases exactly what the brief is about (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 5 — ranked affinity for the 'topology' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.52
+    },
+    {
+      "family": "split-view",
+      "reason": "Outranked on the weighted total (5.36 vs 7.24). comparing needs both things on screen at once and aligned, or the comparison collapses into memory (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 5 — ranked affinity for the 'topology' decision class. informationHierarchy: 8 — 7 information item(s) against a family that aligns fewer, taller columns. densityScanability: 6 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.36
+    },
+    {
+      "family": "editorial",
+      "reason": "Disqualified: taskFit scored 3/10, at or below the 3/10 floor. when the brief has one thing to say, the composition must say it first — air, scale and a single focal region (topology decision, total users,monthly revenue,growth percentage,conversion rate,active sessions,quick settings links,changelog feed item(s)). taskFit: 3 — ranked affinity for the 'topology' decision class. informationHierarchy: 4 — 7 information item(s) against a single-focus read: past a handful, the focus is a claim, not a fact. densityScanability: 6 — how 7 item(s) sit in this family: a focused read needs few items to stay a read.",
+      "total": 4.56
+    }
+  ],
+  "outstandingIssues": [
+    {
+      "rule": "violation-geometry-01",
+      "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x748 at (0, 170).",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-01",
+      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-02",
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x748.",
+      "severity": "medium"
+    },
+    {
+      "rule": "not-applicable",
+      "summary": "The program does not resolve to a buildable screen.",
+      "severity": "critical"
+    }
+  ],
+  "repairAttempts": []
+}

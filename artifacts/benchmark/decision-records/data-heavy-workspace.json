@@ -1,0 +1,104 @@
+{
+  "schema": "figdes-decision-record-v1",
+  "caseId": "data-heavy-workspace",
+  "recordedAt": "2026-10-22T04:44:32.750Z",
+  "brief": {
+    "screen": "Follow-up queue",
+    "product": "ops-ledger",
+    "purpose": "find the events and incidents that need follow-up and move them to an owner",
+    "primaryDecision": "which incident needs follow-up first",
+    "primaryAction": "assign owner",
+    "requiredInformation": [
+      "incident captions",
+      "event stream by source",
+      "error category",
+      "open vs escalated",
+      "owner per incident",
+      "last activity per incident"
+    ],
+    "optionalInformation": [
+      "escalation policy per category"
+    ],
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "visualDirection": null
+  },
+  "constraints": [],
+  "direction": {
+    "composition": "table",
+    "rationale": "7 composition hypotheses proposed across 7 families — each pair differs on at least one structural axis of §4.1 (audited: distinct). | The 'select' decision class has no weight table of its own; the 'explore' table is the nearest by task shape (nearest-neighbour mapping, recorded so the scores are auditable). | Selected 'table' (6.28/100) over 6 alternative(s); Chose \"table\" over \"split-view\" (6.28 vs 5.84). Gains: taskFit, informationHierarchy, densityScanability. Gives up: none.. | Steering: the planner receives 'table' as its desiredComposition hint, under its own viability rules — the planner may still conclude the roles in play cannot support it.",
+    "intentStyle": null,
+    "intentDensity": "balanced"
+  },
+  "skills": [
+    {
+      "id": "type-and-space",
+      "why": "visual-intent.alignment: No readout-dense task; alignment stays loose so the editorial rhythm carries.; visual-intent.alignment overridden: The compiler applied type-and-space's value (No readout-dense task; alignment stays loose so the editorial rhythm carries.). The overridden decision stays here for audit."
+    },
+    {
+      "id": "composition-strategy",
+      "why": "archetype: Choosing between options needs the options beside enough detail to choose well. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
+    }
+  ],
+  "discoveries": [
+    "Type-role contract: the screen name takes the title role, the decision context takes the subtitle, each information item takes its natural role (eyebrow for metadata, label for chrome-ish captions, body for prose, code for identifiers), and status states take the label role at legible size.",
+    "Acceptance criteria declared: no label below 11px; uppercase reserved for eyebrows; one spacing rhythm step between sibling regions; body columns around 75 characters. Measured on rendered evidence when screenshot critique runs (issue #22 phase 2).",
+    "Composition archetype contract: list-detail (planner runs after this and derives regions; the plan is reviewed against this contract).",
+    "Field conflict on 'visual-intent.alignment': 'visual-intent.alignment'='loose' from composition-strategy overridden by type-and-space's decision; overridden decision kept in the trail.",
+    "Compiled visual intent (density 'balanced', rhythm 'even', alignment 'loose')  validated against the runtime's schema.",
+    "Values on this screen are illustrative, not live telemetry.",
+    "The screen avoids generic SaaS card walls and equal-weight panels."
+  ],
+  "rejectedAlternatives": [
+    {
+      "family": "split-view",
+      "reason": "Outranked on the weighted total (5.84 vs 6.28). comparing needs both things on screen at once and aligned, or the comparison collapses into memory (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 7 — ranked affinity for the 'select' decision class. informationHierarchy: 8 — 7 information item(s) against a family that aligns fewer, taller columns. densityScanability: 6 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.84
+    },
+    {
+      "family": "instrument",
+      "reason": "Outranked on the weighted total (5.8 vs 6.28). an instrument keeps the state of the whole at eye level and the object under it, so intervention happens where the evidence is (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 5 — ranked affinity for the 'select' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.8
+    },
+    {
+      "family": "timeline",
+      "reason": "Outranked on the weighted total (5.8 vs 6.28). a story over time must keep its order visible; a grid erases exactly what the brief is about (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 5 — ranked affinity for the 'select' decision class. informationHierarchy: 9 — 7 information item(s) against a family that packs them into comparable columns and rows. densityScanability: 7 — how 7 item(s) sit in this family: rows/columns absorb inventory.",
+      "total": 5.8
+    },
+    {
+      "family": "topology",
+      "reason": "Outranked on the weighted total (5.44 vs 6.28). when how things connect is the decision, the connections must be drawn, not described in rows (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 5 — ranked affinity for the 'select' decision class. relationshipClarity: 4 — a relational field with nothing relational stated to put in it: the field becomes decoration. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 5.44
+    },
+    {
+      "family": "spatial",
+      "reason": "Outranked on the weighted total (5.44 vs 6.28). arranging or locating things is itself the task, so the composition has to be a place rather than a list (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 5 — ranked affinity for the 'select' decision class. relationshipClarity: 4 — a relational field with nothing relational stated to put in it: the field becomes decoration. informationHierarchy: 8 — 7 information item(s) against a spatial field: dense past ~8 nodes, individual labels stop being readable in place. densityScanability: 6 — how 7 item(s) sit in this family: spaced nodes need room per label.",
+      "total": 5.44
+    },
+    {
+      "family": "editorial",
+      "reason": "Outranked on the weighted total (5.2 vs 6.28). when the brief has one thing to say, the composition must say it first — air, scale and a single focal region (select decision, incident captions,event stream by source,error category,open vs escalated,owner per incident,last activity per incident,escalation policy per category item(s)). taskFit: 6 — ranked affinity for the 'select' decision class. informationHierarchy: 4 — 7 information item(s) against a single-focus read: past a handful, the focus is a claim, not a fact. densityScanability: 6 — how 7 item(s) sit in this family: a focused read needs few items to stay a read.",
+      "total": 5.2
+    }
+  ],
+  "outstandingIssues": [
+    {
+      "rule": "plan-geometry-drift-01",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1168x72, built 1168x128.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-02",
+      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x402.",
+      "severity": "medium"
+    },
+    {
+      "rule": "type.space.one-rhythm",
+      "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'header', 'inspector') break the first gap's rhythm.",
+      "severity": "medium"
+    }
+  ],
+  "repairAttempts": []
+}

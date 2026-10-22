@@ -1,0 +1,519 @@
+{
+  "recordedAt": "2026-10-22T04:44:32.765Z",
+  "suite": "v1-offline-pipeline",
+  "gate": {
+    "verdict": "PASS",
+    "reasons": [
+      "0/9 improved, 0 regressed."
+    ],
+    "threshold": 5
+  },
+  "baselinePath": "artifacts\\benchmark\\issue22-baseline-v1.json",
+  "cases": [
+    {
+      "caseId": "exo-compute-topology",
+      "total": 69.5,
+      "dimensions": {
+        "hierarchy": 7,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 9,
+        "spacingRhythm": 9,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 7
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'map' at 90% dominates instead of leading",
+        "composition": "coverage 96%; alternatives audited distinct and one selected (+1)",
+        "typography": "declared type criteria audited clean offline (labels ≥11px, uppercase budget)",
+        "spacingRhythm": "one spacing rhythm across sibling regions, audited offline",
+        "relationshipClarity": "4 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [style, rhythm, contrast, depth, alignment]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
+        "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x86.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x774.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "exo-model-detail",
+      "total": 62,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 6
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'subject' leads at 52% of the canvas",
+        "composition": "coverage 80%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "1 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [style, rhythm, contrast, depth, alignment]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
+        "readability": "0 overflow finding(s), 3 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1182x128.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x561, built 1182x496.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x196.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'subject', 'context') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "exo-runtime-monitoring",
+      "total": 62,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 6
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'primary-visual' leads at 33% of the canvas",
+        "composition": "coverage 89%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "2 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [style, rhythm, contrast, depth, alignment]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'instrument'",
+        "readability": "0 overflow finding(s), 3 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x64, built 1440x137.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: primary-visual: planned 1440x300, built 1440x252.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: support: planned 1440x200, built 1440x147.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 2 region(s) ('rail', 'primary-visual') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "exo-configuration",
+      "total": 53,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 0,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 6
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: relationshipClarity, productSpecificity"
+      ],
+      "notEvaluated": [
+        "relationshipClarity",
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'subject' leads at 52% of the canvas",
+        "composition": "coverage 80%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "no relationships named in the brief",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [alignment, density, rhythm]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'timeline'",
+        "readability": "0 overflow finding(s), 3 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1192x102.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x561, built 1192x425.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x293.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'subject', 'context') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "exo-enterprise-workspace",
+      "total": 61.5,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 5
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'subject' leads at 33% of the canvas",
+        "composition": "coverage 81%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "1 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [alignment, density, rhythm]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
+        "readability": "0 overflow finding(s), 4 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1192x102.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x358, built 1192x288.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x119, built 360x192.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-04",
+          "summary": "The build did not produce the geometry the plan promised: support: planned 1200x239, built 1192x198.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'subject', 'context') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "generic-saas-dashboard",
+      "total": 68,
+      "dimensions": {
+        "hierarchy": 7,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 9,
+        "spacingRhythm": 9,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 2,
+        "distinctiveness": 9,
+        "readability": 7
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'map' at 90% dominates instead of leading",
+        "composition": "coverage 96%; alternatives audited distinct and one selected (+1)",
+        "typography": "declared type criteria audited clean offline (labels ≥11px, uppercase budget)",
+        "spacingRhythm": "one spacing rhythm across sibling regions, audited offline",
+        "relationshipClarity": "1 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [alignment, density, rhythm]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure verdict: fail",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
+        "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "violation-geometry-01",
+          "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x748 at (0, 170).",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x748.",
+          "severity": "medium"
+        },
+        {
+          "rule": "not-applicable",
+          "summary": "The program does not resolve to a buildable screen.",
+          "severity": "critical"
+        }
+      ]
+    },
+    {
+      "caseId": "data-heavy-workspace",
+      "total": 53.5,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 0,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 7
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: relationshipClarity, productSpecificity"
+      ],
+      "notEvaluated": [
+        "relationshipClarity",
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'content' leads at 41% of the canvas",
+        "composition": "coverage 73%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "no relationships named in the brief",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [alignment, density, rhythm]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'table'",
+        "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: header: planned 1168x72, built 1168x128.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x402.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'header', 'inspector') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "spatial-relationship",
+      "total": 62.5,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 7
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'results' leads at 42% of the canvas",
+        "composition": "coverage 92%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "3 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [alignment, density, rhythm, style]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'spatial'",
+        "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: filters: planned 1168x64, built 1168x112.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: results: planned 1168x463, built 1168x415.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 12px and 16px. 1 region(s) ('support') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    },
+    {
+      "caseId": "editorial-product-page",
+      "total": 61.5,
+      "dimensions": {
+        "hierarchy": 9,
+        "composition": 9,
+        "productSpecificity": 0,
+        "typography": 4,
+        "spacingRhythm": 4,
+        "relationshipClarity": 9,
+        "density": 8,
+        "nativeQuality": 5,
+        "distinctiveness": 9,
+        "readability": 5
+      },
+      "notes": [
+        "offline score: plan-mode run — no native nodes were applied to Figma",
+        "not evaluated offline, scored 0: productSpecificity"
+      ],
+      "notEvaluated": [
+        "productSpecificity"
+      ],
+      "dimensionEvidence": {
+        "hierarchy": "focal 'subject' leads at 33% of the canvas",
+        "composition": "coverage 81%; alternatives audited distinct and one selected (+1)",
+        "typography": "1 declared type criterion/criteria failed at compile time",
+        "spacingRhythm": "1 declared criterion/criteria failed at compile time",
+        "relationshipClarity": "1 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
+        "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
+        "density": "compiled intent carries [style, rhythm, contrast, depth, alignment, density]; density decisions are consumed downstream (program/report)",
+        "nativeQuality": "structure is in review",
+        "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
+        "readability": "0 overflow finding(s), 4 geometry finding(s) in the resolved layout"
+      },
+      "outstandingIssues": [
+        {
+          "rule": "plan-geometry-drift-01",
+          "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1182x128.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-02",
+          "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x358, built 1182x288.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x119, built 360x175.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-04",
+          "summary": "The build did not produce the geometry the plan promised: support: planned 1200x239, built 1182x189.",
+          "severity": "medium"
+        },
+        {
+          "rule": "type.space.one-rhythm",
+          "summary": "Two sibling-region gaps on one screen: 16px and 24px. 3 region(s) ('nav', 'subject', 'context') break the first gap's rhythm.",
+          "severity": "medium"
+        }
+      ]
+    }
+  ]
+}

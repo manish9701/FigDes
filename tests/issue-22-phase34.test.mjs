@@ -30,6 +30,7 @@ import {
   BASELINE_SCHEMA,
 } from "../mcp-server/dist-test/design/benchmark/regression.js";
 import { designPipelineTool } from "../mcp-server/dist-test/pipeline/tools.js";
+import { evidenceFromResponse } from "../mcp-server/dist-test/design/benchmark/offline-briefs.js";
 
 /* -------------------------------------------------------------------------- */
 /* Brief fixtures                                                              */
@@ -58,40 +59,10 @@ const TOPOLOGY_BRIEF = {
   audience: "operator",
 };
 
-/** The pipeline's offline plan-mode evidence, narrowed to what the gate eats. */
-function evidenceFromResponse(resp, caseId, overrides = {}) {
-  const intentFields = Object.keys(resp?.visualIntelligence?.intent ?? {});
-  const alternatives = resp?.visualIntelligence?.alternatives ?? null;
-  const structureFindings = resp?.structure?.findings ?? [];
-  const typeFindings = resp?.typeCriteria?.findings ?? [];
-  return {
-    caseId,
-    decisionKind: alternatives?.taskKind ?? "inspect",
-    primaryDecision: resp?.brief?.primaryDecision ?? "see how traffic moves between shards",
-    requiredInformation: resp?.brief?.requiredInformation ?? [],
-    optionalInformation: resp?.brief?.optionalInformation ?? [],
-    focalRegionId: resp?.plan?.focal?.id ?? null,
-    focalShare: resp?.plan?.usage?.focalShare ?? 0,
-    coverage: resp?.plan?.usage?.coverage ?? 0,
-    largestEmptyBand: resp?.plan?.usage?.largestEmptyBand ?? 0,
-    compiledIntentFields: intentFields,
-    alternatives:
-      alternatives === null
-        ? null
-        : {
-            candidateCount: alternatives.candidateCount,
-            distinct: alternatives.distinct,
-            selectedFamily: alternatives.selectedFamily,
-          },
-    reviewFindings: (resp?.visualIntelligence?.review?.findings ?? []).length,
-    typeCriteria: { run: true, findings: typeFindings.length },
-    structureStatus: resp?.structure?.status ?? "indeterminate",
-    overflowFindings: structureFindings.filter((f) => /overflow/i.test(f.summary)).length,
-    geometryFindings: structureFindings.filter((f) => /geometry|size/i.test(f.summary ?? f.rule ?? "")).length,
-    nativeApplied: false,
-    ...overrides,
-  };
-}
+/**
+ * `evidenceFromResponse` is the shared library implementation now (issue #22):
+ * the runner, the frozen baseline and these tests all measure the same way.
+ */
 
 /* -------------------------------------------------------------------------- */
 /* 1. The alternatives engine                                                  */
@@ -364,7 +335,9 @@ test("the gate is three-valued: PASS on parity, REGRESSION on a real drop, NOT_E
           requiredInformation: [], optionalInformation: [], desiredComposition: null, viewport: { width: 1440, height: 900 },
         },
         config: { mode: "plan", render: false, repairBudget: 2, maxRounds: 1 },
-        evidence: evidenceFromResponse(null, "exo-compute-topology"),
+        evidence: evidenceFromResponse(null, "exo-compute-topology", {
+          primaryDecision: "which pressured resource needs attention",
+        }),
         result: caseResult("exo-compute-topology", 76, dims),
       },
       {
@@ -374,7 +347,9 @@ test("the gate is three-valued: PASS on parity, REGRESSION on a real drop, NOT_E
           requiredInformation: [], optionalInformation: [], desiredComposition: null, viewport: { width: 1440, height: 900 },
         },
         config: { mode: "plan", render: false, repairBudget: 2, maxRounds: 1 },
-        evidence: evidenceFromResponse(null, "exo-runtime-monitoring"),
+        evidence: evidenceFromResponse(null, "exo-runtime-monitoring", {
+          primaryDecision: "intervene or let the run continue",
+        }),
         result: caseResult("exo-runtime-monitoring", 64, dims),
       },
     ],

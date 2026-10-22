@@ -226,3 +226,47 @@ Freeze evidence (all deterministic — a second run reproduced every total exact
 ## Closing status of the issue's remaining item
 
 - **The rendered-screenshot critique/repair loop (§4 steps 5–10) on real fixtures** is the one open item: it requires a connected Design Agent plugin session (`figma_status: connected` was false when this work was committed, and commit pins do not require a live file). The deterministic half of that loop — ranked pre-render critique, bounded repair, re-verification, resolution ledger, persisted before/after artifacts — is in place (`type-criteria.ts`, `repair-history.ts`, `artifacts.ts`); the live half executes the same steps with a render when the session connects.
+
+---
+
+# Live phase executed: §4 steps 5–10 ran on the open file (2026-10-22)
+
+With a connected plugin session the live half ran end to end: all nine benchmark fixtures were **built, rendered (low-detail screenshots), critiqued, repaired through bounded `modify_design` transactions, and re-gated in the open EXO file**. This section supersedes the "one open item" note above. Evidence lives in `artifacts/benchmark/issue22-live/live-report.json` plus nine per-case artifacts beside it; every verdict, ledger id and transaction id traces to a real tool response or a render that was reviewed. The frozen offline baseline stays the regression reference — **not re-scored here, and live totals are not comparable 1:1**: live briefs carried file-real extensions (case 8 replaced its information set with a file-real cluster-placement brief, the weakest comparability, recorded in its artifact).
+
+## Per-case outcomes after the loop
+
+| Case | Frame | Final critique | Capability guard | final_qa |
+| --- | --- | --- | --- | --- |
+| exo-compute-topology | 539:391 Cluster routing | WATCH / REVIEW / 0 blocking; 3 resolved, 1 minor proposed | INDETERMINATE — no claim tripped | PASS · live checks pending |
+| exo-model-detail | 542:437 Model detail | WATCH / REVIEW / 0 blocking; 4 resolved, 2 minor proposed | INDETERMINATE | PASS · live checks pending |
+| exo-runtime-monitoring | 543:480 Runtime monitor | WATCH / REVIEW / 0 blocking; 3 resolved, 1 minor proposed | INDETERMINATE | PASS · live checks pending |
+| exo-configuration | 544:520 Policy approval | WATCH / REVIEW / 0 blocking | FAIL → "proposed" marker → INDETERMINATE/manual | PASS · live checks pending |
+| exo-enterprise-workspace | 544:560 Enterprise workspace | WATCH / REVIEW / 0 blocking; 4 resolved, 1 minor | FAIL → marker → INDETERMINATE/manual | FAIL (sibling-region overlap) → PASS |
+| generic-saas-dashboard *negative control* | 545:607 Dashboard | FAIL / FAIL — valueless KPI skeleton realized; **verdicts only, no repairs by protocol** | WARNING — the genericity signature itself | not repaired by protocol |
+| data-heavy-workspace | 545:631 Usage ledger | FAIL / FAIL with **zero** blocking, all dimensions PASS (gate oddity, recorded verbatim); 1 resolved, 1 minor | FAIL → metering marker → INDETERMINATE/manual | PASS · live checks pending |
+| spatial-relationship | 545:666 Cluster map | WATCH / REVIEW / 0 blocking; 4 resolved (incl. my own id-fault damage), 1 minor | INDETERMINATE — capability truth PASS | FAIL twice (11px text floor, overflow) → PASS |
+| editorial-product-page | 545:744 Run versus change | WATCH / REVIEW / 0 blocking; 4 resolved, 1 minor | FAIL → marker + fit verdict anchored to `orion-01` → WARNING | PASS · live checks pending |
+
+Totals: **38 committed repair transactions** (plus 4 zero-commit preflight/at-op rejections and 1 deliberate needs-approval pause); final resolution ledgers across all critiques: **25 resolved / 0 persisting / 9 introduced** — every introduced finding a minor restraint or judgement call, proposed but not applied; every case closed with **zero blocking issues**. `final_qa` caught real defects the review-side renders missed (100%-overlap siblings in the enterprise workspace; sub-floor technical text + label overflow in the cluster map).
+
+## The capability-truth pattern — the loop's most valuable product finding
+
+On four screens (policy approval, enterprise workspace, usage ledger, run/change) the guard's capability-truth layer failed the same way: an EXO ability that is only *proposed in this library* was presented as shipped while `EXO_CAPABILITY_SOURCE` was unpinned. The interim repair — a visible `proposed · no pinned build` marker — is the agreed state (verdict INDETERMINATE / manual until a build is pinned). One adjacent catch: the fit verdict had to be anchored to its device (`fits orion-01 · 6.9/24.0 GB`) before it passed `product.fit-claim-without-context`.
+
+## Gate oddities recorded verbatim
+
+- Case 7's critique emitted FAIL + FAIL with **zero blocking issues** and all dimensions PASS — recorded, no repair applied on empty evidence.
+- `final_qa`'s "render succeeds" check stays pending even in a session with successful renders; satisfaction is recorded manually per artifact.
+- `design_runtime` dry-run reported a program *applicable* that the apply gate then refused (a 4px support spill) — dry-run and apply are not the same check.
+- The negative control was **not refused at intake** — a frame was committed for the contradictory generic brief (the offline machinery flags this class; the live pipeline did not) — a live-only refusal-gate gap, captured alongside the expected visual verdicts.
+
+## Harness findings (what the live runs taught about the tool path)
+
+- `figdes_use_figma` mutating scripts degraded mid-session (`proxy: inconsistent get`, `cannot convert to object`); all 38 mutations therefore ran through the allowlisted `modify_design` op path, which committed clean 38/38.
+- One large multi-op transaction silently parented its created rows to the canvas **page** instead of the addressed frame (enterprise case) — created-node parents must be verified after transactions of ~10 ops.
+- Never write to an id that was not captured from a response's applied list: unmatched guesses reject cleanly (zero commit), but wrong-but-existing ids silently edit the wrong node — the case-8 cluster-map header/mem clobber, fully restored in-file and double-recorded as a process fault.
+- The `setSize` `set_minWidth: 0` fault is **fixture-scoped**: it reproduces on autolayout chip frames but worked on the case-9 hero (free composition), where resizing was the structural fix for a hero the runtime compile had clipped to 289px.
+- `design_pipeline` **self-refused three times** on a deterministic 4px spill instead of committing a broken layout — a working fail-safe; the frame completed via `design_runtime` with the support band pinned 189→181.
+- Autolayout hug chips grow when values are appended (the reliable value-filling path); `appendChild` rejects TEXT children (order fixes go through content+typography swaps).
+- The plugin never reported a **build stamp**, so no live verdict can be tied to a client build — rebuild and reopen the plugin before the next live run.
+- Proposed, not applied (bounded-repair policy): the case-9 off-grid compile positions (28 nodes, medium severity), and the per-case restraint-whitespace minors. The negative control stays unrepaired by protocol — repairing it would erase its evidence.

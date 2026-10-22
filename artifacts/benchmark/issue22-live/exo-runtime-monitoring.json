@@ -1,0 +1,67 @@
+{
+  "case": "exo-runtime-monitoring",
+  "generatedAt": "2026-10-22T06:20:00Z",
+  "protocol": "issue-22 §4 live loop: build (design_pipeline) → render → critique (vision findings) → targeted repair (modify_design op path) → re-render → re-critique with priorFindings (resolution ledger) → design_guard + final_qa",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "planId": "plan_mvj395i8",
+    "status": "built (clean response, no timeout)",
+    "nodeCount": 23,
+    "evidence": {
+      "decisionKind": "monitor",
+      "alternatives": { "candidateCount": 7, "distinct": true, "selectedFamily": "instrument" },
+      "reviewFindings": 0,
+      "typeCriteriaFindings": 1,
+      "structureStatus": "review",
+      "structureFindings": 3,
+      "usage": { "coverage": 0.893, "largestEmptyBand": 0.036, "focalShare": 0.333 }
+    },
+    "briefExtensionsOverFrozenBaseline": { "reason": "file-real constraints added for the open EXO file; live scores NOT comparable 1:1 to frozen offline totals", "added": ["dataMode demo", "designSystemConstraints", "existingPatterns: team-wide event feed alongside charts, quiet metric readouts"] },
+    "frame": { "root": "543:480", "name": "Runtime monitor", "size": "1440x900", "regions": ["543:481 Rail (title/purpose/button/3 readout chips)", "543:482 Primary visual (latency + per-node pressure)", "543:483 Detail (two strips)", "543:484 Support (empty at build)"] }
+  },
+  "renders": [
+    { "stage": "initial", "result": "image", "judgement": "dash placeholders for throughput/error; latency and pressure bare labels; strips value-less; 'shard health now' a cramped 111x22 stub; Support region empty (bottom 27% dead); the decision's evidence (per-node pressure) absent — anti-goal 'per-node detail leads' unrealized" },
+    { "stage": "post-repair r1b", "result": "image", "judgement": "values filled everywhere, amber DEGRADED 'drain candidate' + green RECOVERING rows drawn under the pressure label, strips carry values, Support gets a nominal-shards footnote; one collision: shard-health chip (horizontal autolayout) ran label+value together past the canvas edge" },
+    { "stage": "post-repair r3 final", "result": "image", "judgement": "chip reads 'shard health  6 ok · 1 recov' with spacing, inside the canvas; complete instrument panel; decision evidence present (drain candidate named, saturation risk flagged, recovering node timed)" }
+  ],
+  "critiqueRound1": {
+    "verdict": "FAIL",
+    "qualityGate": { "status": "FAIL" },
+    "findings": [
+      { "id": "vf-rm-vals", "severity": "critical", "area": "rail chips + strips", "defect": "dash placeholders instead of values (throughput, error trend, queue, interventions, clipped health stub)" },
+      { "id": "vf-rm-nodes", "severity": "critical", "area": "per-node pressure region", "defect": "no node pressure rows drawn; the anti-goal (per-node detail leads; summary follows) unrealized" },
+      { "id": "vf-rm-dead", "severity": "major", "area": "Support region + bottom band", "defect": "region 543:484 shipped with zero children; bottom band dead" }
+    ]
+  },
+  "repairs": [
+    { "round": "r1 (aborted)", "transactionId": "none", "ops": 12, "detail": "REJECTED at plan: same 'set_minWidth: minWidth cannot be set to 0' — confirmed setSize is structurally unusable against these autolayout frames; rolls back cleanly (dash restorations verified)" },
+    { "round": "r1b", "transactionId": "txn_de5efcca", "tool": "modify_design", "ops": 11,
+      "detail": "setTypography+setTextContent on both rail dash placeholders (543:491 '1,284 tok/s', 543:494 '0.2% (was 1.1%)'); shard-health value appended INTO the hug-autolayout stub (proven: hug frames grow to fit); latency value beside label; two state rows under the pressure label (tesseract-02 DEGRADED amber #8A6D1C 'drain candidate', quasar-03 RECOVERING green #356B49); queue + interventions strip values appended; nominal-shards footnote created in the empty Support region" },
+    { "round": "r2", "transactionId": "txn_0d3d329f", "ops": 2, "detail": "chip label 'shard health' + value '6 ok · 1 recov' shortened after render showed the horizontal chip overflowing the canvas edge" },
+    { "round": "r3", "transactionId": "txn_5dd2e4e6", "ops": 1, "detail": "setGap 8 on the horizontal chip so label and value read as two tokens" }
+  ],
+  "critiqueRound2": {
+    "verdict": "WATCH",
+    "qualityGate": { "status": "REVIEW", "blockingIssues": 0, "watchItems": ["Surface hierarchy WATCH: two near-identical pale Detail strips"] },
+    "resolutionLedger": { "resolved": ["vf-rm-vals", "vf-rm-nodes", "vf-rm-dead"], "persisting": [], "introduced": ["vf-b1eebd6d (minor: health chip wording abbreviated '6 ok · 1 recov' to fit the rail's 220px remainder — bounded-acceptance, full wording shown elsewhere is not critical for the decision)"], "summary": "3 resolved, 0 persisting, 1 introduced (minor)" },
+    "dimensionVerdicts": { "allExceptSurfaceHierarchy": "PASS", "Surface hierarchy": "WATCH (uniform pale strips = the file's quiet-instrument pattern; judgement call not applied)" }
+  },
+  "designGuard": {
+    "verdict": "INDETERMINATE",
+    "pass": ["exo.auto-discovery", "exo.topology-detection", "exo.automatic-placement", "exo.no-generic-saas", "exo.no-chat-as-primary", "exo.no-excessive-cards", "exo.technical-typography", "exo.critical-states-labeled", "exo.primary-action-dominant", "exo.selected-unambiguous"],
+    "indeterminateWithJudgement": [
+      { "rule": "exo.developer-apis", "judgement": "N/A for scope — runtime monitor has no integration surface" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "N/A for scope — no topology drawing; relationships carried by per-node rows naming drain candidate/recovery" },
+      { "rule": "exo.model-fit-context", "judgement": "N/A for scope — runtime monitoring, not model sizing" }
+    ]
+  },
+  "finalQa": {
+    "verdict": "PASS WITH LIVE CHECKS PENDING",
+    "failed": [],
+    "pendingLiveChecks": ["TECHNICAL: render succeeds — satisfied: four successful low-detail render_design calls this session"],
+    "checklist": [{ "area": "TECHNICAL", "check": "no overflow or broken structure", "pass": true }, { "area": "COMPOSITION", "check": "no accidental card wall", "pass": true }]
+  },
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp; setSize op structurally broken for autolayout frames (set_minWidth 0); hug-autolayout growth used instead — verified working" },
+  "scoreComparability": "not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json (file-real brief extensions between baseline and live runs)"
+}

@@ -1,0 +1,74 @@
+{
+  "case": "editorial-product-page",
+  "generatedAt": "2026-10-22T09:05:00Z",
+  "protocol": "issue-22 §4 live loop; the build path hit the live harness's compile self-refusal loop and completed through design_runtime with a recorded 4px geometry pin",
+  "briefSource": "frozen offline brief (mcp-server/src/design/benchmark/offline-briefs.ts, editorial-product-page) passed VERBATIM (product, screen, purpose, decision, action, all six required items, optional alternatives, viewport, visualDirection 'premium editorial') plus file-real extensions: dataMode demo + illustrative-data note, designSystemConstraints, existingPatterns",
+  "build": {
+    "tool": "design_pipeline(mode build) then design_runtime",
+    "pipelineBuildAttempts": [
+      { "briefId": "brief_mvj4o3qt", "status": "blocked", "note": "plan usage computed but nothing committed; clarifications posed (scope-unstated, no-reference), blockers []" },
+      { "briefId": "brief_mvj4oga6", "status": "blocked", "note": "same" },
+      { "briefId": "brief_mvj4onbs", "status": "blocked", "problems": ["Region 'support' spills past the bottom edge of the 1440x900 canvas: 1182x189 at (258, 715)"], "note": "note verbatim: 'Nothing was created: the resolved geometry is not what the program asked for'" }
+    ],
+    "honestFindingPipeline": "the pipeline's own compile gate refuses a layout that spills its canvas by 4px instead of committing it — a live fail-safe behavior worth having; three deterministic retries could not resolve the spill",
+    "runtimePath": [
+      { "step": "plan mode program (plan_mvj4pg2m family; five regions: header/nav/subject(hero topology)/context(inspector)/support(frame grid 4))", "result": "program returned with full content" },
+      { "step": "design_runtime dryRun", "result": "completed + applicable, 25 ops — BUT the real apply of the SAME program refused: inapplicableReasons = the same 4px support spill. dryRun's applicability is NOT the same check as the apply gate (gate asymmetry, recorded verbatim)" },
+      { "step": "support pinned height 185 grow 0", "result": "refused again — the resolver moved the band's own y to 717 (717+185=902)" },
+      { "step": "support pinned height 181 grow 0", "result": "committed", "frame": "545:744 'Run versus change' 1440x900", "deviation": "the only manual edit to the compiled program: support 189→181 (resolved bottom 904→898)" }
+    ],
+    "runtimeBuildQuality": "the weakest commit of the nine cases: the hero compiled at 1182x289 (clipping everything below local y=289) leaving a 300px hole before the support band; two content units collided on one chip (model-name AND latency labels at the same spot, the latency unit parented to the Subject not the chip); no values anywhere"
+  },
+  "renders": [
+    { "stage": "runtime commit, first render", "result": "image", "judgement": "two labels stacked on one spot; giant dead middle; five bare chips; one bordered chip clipped its labels" },
+    { "stage": "post r1-r3", "result": "image", "judgement": "values in every chip and beside the lead; run/change comparison added; quote present but its second sentence rendered only inconsistently across moves" },
+    { "stage": "post r4-r6", "result": "image", "judgement": "quote split into single-line nodes; Subject resized to 1182x573 — the clip hole and the dead middle became one organized band; both quote lines render" },
+    { "stage": "post r7-r9 final", "result": "image", "judgement": "comparison vertically centered; fit verdict anchored to orion-01 with memory basis; capability marker top-right; nine information units all carry values" }
+  ],
+  "myFindingsRound1": [
+    { "id": "vf-ed-collision", "severity": "major", "defect": "runtime compose put the model-name and latency labels on the same spot in one chip; the latency unit was parented to the Subject, not the chip" },
+    { "id": "vf-ed-missing", "severity": "critical", "defect": "no values anywhere: identity, cost, latency, quality, fit, last mile and alternatives were bare labels" },
+    { "id": "vf-ed-deadhero", "severity": "critical", "defect": "hero compiled at 1182x289: over half the screen was a clipped hole between hero and metric band" },
+    { "id": "vf-ed-quote", "severity": "major", "defect": "the pull-quote lost its second sentence across positional moves" }
+  ],
+  "repairs": [
+    { "round": "r1", "transactionId": "txn_444da6e5", "ops": 9, "detail": "values into every chip (cost, quality, last mile, alternatives, fit), lead value + first latency value into the collision card, italic pull-quote in the hero" },
+    { "round": "r2 (attempt 1)", "transactionId": "needs-approval pause", "ops": 0, "detail": "the removal of my own one-round-old clipped value required the approval flag — re-sent with approved+reason" },
+    { "round": "r2", "transactionId": "txn_5efccab9", "ops": 11, "approved": true, "detail": "lead label dropped to the 11px readable floor to fit the 160px chip; lead value shortened; publisher line added; latency instrument moved OUT of the card to the Subject beside the lead (parent Subject, verified by where it rendered); fit value split value+slack; quality value trimmed into its chip; quote lowered" },
+    { "round": "r3", "transactionId": "txn_9477953b", "ops": 3, "detail": "two-line run-versus-change comparison added to the hero's empty right half — the decision the screen exists for, as content" },
+    { "round": "r4 (attempt)", "transactionId": "rejected at op#3 — full rollback", "ops": 0, "detail": "referenced runline/chgline by GUESSED adjacent ids (545:776/777) without capture — 'Node not found', zero commit; real ids 546:779/780 by find_node (the case-8 fault class again; recorded)" },
+    { "round": "r4", "transactionId": "txn_cf4a2b8a", "ops": 5, "detail": "quote split into two single-line texts after its multiline node misrendered post-move; emphasis shifted to the run line (primary decision) over the change line" },
+    { "round": "r5", "transactionId": "txn_c6b54b86", "ops": 2, "approved": true, "detail": "retired the persistently misrendering multiline quote node (its content was mine, restored as a fresh single-line text)" },
+    { "round": "r6", "transactionId": "txn_b4c676d5", "ops": 1, "detail": "setSize Subject 1182x573 — THE structural fix: the runtime compile clipped the hero at 289px; note: setSize worked here (the set_minWidth:0 fault recorded on earlier fixtures did not reproduce — fixture-specific)" },
+    { "round": "r7", "transactionId": "txn_ec384240", "ops": 2, "detail": "comparison block moved to the hero's vertical middle to balance the columns" },
+    { "round": "r8", "transactionId": "txn_71c07917", "ops": 4, "detail": "capability marker 'fleet run/change controls: proposed · no pinned build' (guard had FAILed: fleet-controls presented as shipped) after the fit verdict was anchored in context — 'fits orion-01' green + '6.9/24.0 · slack 17.1' basis line — after the guard's product.fit-claim-without-context warning" },
+    { "round": "arg mistakes", "transactionId": "two clean args rejections", "ops": 0, "detail": "one placeholder op type and one invented op type were caught by args validation before any state changed — re-sent corrected; recorded for honesty" },
+    { "round": "r9", "transactionId": "txn_28d5ef17", "ops": 1, "detail": "fit basis line shortened two glyphs to clear its 160px chip (final_qa overflow finding)" }
+  ],
+  "critiqueFinal": {
+    "verdict": "WATCH",
+    "qualityGate": { "status": "REVIEW", "blockingIssues": 0 },
+    "resolutionLedger": { "resolved": ["vf-ed-collision", "vf-ed-missing", "vf-ed-deadhero", "vf-ed-quote"], "persisting": [], "introduced": ["vf-ef026d93 (minor: hero's lower quarter stays quiet by restraint — proposed, not applied)"] },
+    "dimensions": { "Repetition": "WATCH" }
+  },
+  "designGuard": {
+    "initialVerdict": "FAIL (capability-truth: fleet-controls presented-as-shipped + warn product.fit-claim-without-context)",
+    "finalVerdict": "WARNING",
+    "capabilityTruth": "INDETERMINATE — 'marked-uncertain manual': the marker is visible; a pinned build would upgrade from manual to confirmed",
+    "indeterminateWithJudgement": [
+      { "rule": "exo.technical-typography (WARNING)", "judgement": "intended editorial mix: Inter display + labels, Roboto Mono instruments; the warning is the rule's surface read, manual confirmation reasonable" },
+      { "rule": "exo.developer-apis", "judgement": "N/A — no integration surface" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "N/A — comparison page, no topology" },
+      { "rule": "exo.model-fit-context", "judgement": "the fit verdict names the device and its memory basis after r8 — manual pass in principle, pending pinned build" }
+    ]
+  },
+  "finalQa": {
+    "verdict": "PASS WITH LIVE CHECKS PENDING",
+    "path": "run 1 FAIL (overflow: fit basis line 3px past its 160px chip — my own shortening; fixed r9); run 2 PASS (38 nodes, no high-confidence findings); render-succeeds satisfied by nine successful low-detail renders this session"
+  },
+  "proposedNotApplied": [
+    "off-grid-geometry (medium): 28 nodes incl. the Header at x=258 sit off the 10px grid — the runtime compile's own values; a gridding pass across 28 nodes exceeds the bounded repair scope. Proposed."
+  ],
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp" },
+  "scoreComparability": "frozen brief verbatim + file-real extensions — closer to the offline case than case 8, but live totals still not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json"
+}

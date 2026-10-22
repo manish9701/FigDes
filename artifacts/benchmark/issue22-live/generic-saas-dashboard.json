@@ -1,0 +1,42 @@
+{
+  "case": "generic-saas-dashboard",
+  "kind": "negative control",
+  "generatedAt": "2026-10-22T07:25:00Z",
+  "protocolNote": "the offline suite treats this brief as the anti-goal the motion lives for (§: genericity). The live pass therefore runs verdicts only — NO repairs are applied (repairing the negative control would erase it); this is a recorded protocol adjustment for the live loop",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "planId": "unknown (response timed out; frame committed and verified at 545:607, 1440x900)",
+    "noFileRealExtensions": "the generic brief was passed WITHOUT the EXO design-system constraints used for the other cases — the file's own system was applied by the builder, not by the brief",
+    "result": "the live pipeline DID NOT refuse the contradictory brief at intake — a 'Dashboard' frame was committed. Offline, the alternatives/genericity machinery flags this class of brief; no refusal gate fired in the live run (recorded as a live-only observation)",
+    "frame": { "root": "545:607", "name": "Dashboard", "size": "1440x900" }
+  },
+  "renders": [
+    { "stage": "single render", "result": "image", "judgement": "six undifferentiated full-width pale strips (labels only, one bare dash for conversion rate), dead top third and bottom band; NO gradient hero cards, NO KPI card grid — the generic direction was neither refused nor visually executed" }
+  ],
+  "critique": {
+    "verdict": "FAIL",
+    "qualityGate": { "status": "FAIL" },
+    "findings": [
+      { "id": "vf-ac4653c2", "severity": "critical", "defect": "required metric slots carry no values" },
+      { "id": "vf-9f65a1e2", "severity": "major", "defect": "build realized the generic KPI-slot skeleton the brief's anti-goal bans instead of refusing the brief" }
+    ],
+    "dimensions": { "Focal clarity": "FAIL (no object carries focus across six equal strips)", "Repetition": "WATCH" }
+  },
+  "designGuard": {
+    "verdict": "WARNING",
+    "productTruthContradictions": ["exo.selected-unambiguous — contradicts: The focused node, row or nav item must read as selected at a glance"],
+    "capabilityTruth": "PASS (no fleet claims in the generic skeleton)",
+    "indeterminate": ["exo.developer-apis", "exo.topology-explains-relationships", "exo.model-fit-context"],
+    "reading": "the WARNING + the critic FAIL make the negative control behave exactly as the offline suite expects a generic brief to behave once built — while also recording that the live intake let it through"
+  },
+  "finalQa": { "verdict": "measured but intentionally NOT repaired", "failed": [] },
+  "repairs": "none (by offline negative-control protocol)",
+  "liveRead": {
+    "refusalGateMissing": true,
+    "visualGenericityResisted": true,
+    "verdict": "the negative control catches two live facts: (1) contradictory-brief refusal did not fire at intake in the live harness; (2) the file-system constraints held the visual genericity down even for a generic brief — the skeleton stayed label-strips on warm-neutral, far from the gradient KPI wall the brief demanded"
+  },
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp" },
+  "scoreComparability": "not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json totals (live harness differences + no file-real extensions)"
+}

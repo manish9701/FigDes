@@ -1,0 +1,68 @@
+{
+  "case": "exo-model-detail",
+  "generatedAt": "2026-10-22T05:55:00Z",
+  "protocol": "issue-22 §4 live loop: build (design_pipeline) → render → critique (vision findings) → targeted repair (modify_design op path) → re-render → re-critique with priorFindings (resolution ledger) → design_guard + final_qa",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "status": "built (response timed out; frame committed in the file — verified on canvas at 542:437, 1440x900, and the server kept applying after the timeout: two label/value siblings 543:459/460/461 and 543:462/463/464 appeared between the first render and the critique render)",
+    "planEvidence": {
+      "recovery": "brief re-planned via a separate read-only plan-mode pass after the build response timed out; identical brief input, but this plan id may differ from the plan the timed-out build consumed",
+      "planId": "plan_mvj2yqjt",
+      "decisionKind": "inspect",
+      "alternatives": { "candidateCount": 7, "distinct": true, "selectedFamily": "topology" },
+      "reviewFindings": 0,
+      "typeCriteriaFindings": 1,
+      "structureStatus": "review",
+      "structureFindings": 3,
+      "usage": { "coverage": 0.797, "largestEmptyBand": 0, "focalShare": 0.519 }
+    },
+    "briefExtensionsOverFrozenBaseline": { "reason": "file-real constraints added for the open EXO file; live scores NOT comparable 1:1 to frozen offline totals", "added": ["dataMode demo", "dataNotes", "designSystemConstraints (warm-neutral canvas, open surfaces, restrained accents, mono identifiers, no KPI wall)", "existingPatterns: spec-sheet rows with mono values, quiet metric readouts"] },
+    "frame": { "root": "542:437", "name": "Model detail", "size": "1440x900", "regions": ["542:438 Nav", "542:439 Header", "542:440 Subject (6 slots)", "542:441 Context chip"] }
+  },
+  "renders": [
+    { "stage": "initial (low)", "result": "image", "judgement": "six bordered label boxes, five bare, bottom ~55% empty; the fit verdict — the decision — styled identically to every other label; 'memory footprint' not yet visible (server still applying post-timeout)" },
+    { "stage": "critique (higher fidelity)", "result": "image", "judgement": "late-arriving build output revealed: 'model version —' pair and a 'memory footprint —' chip inside the bare Context region — required item placed outside the spec grid with placeholder dashes" },
+    { "stage": "post-repair r1b (low)", "result": "image", "judgement": "all six slots filled (autolayout reflowed appended values under labels), green FITS verdict reads, dashes replaced; one defect: Context chip mono value truncates at chip edge; R2 value flush to its bottom border" },
+    { "stage": "post-repair r2 (low)", "result": "image", "judgement": "Context chip value fits ('24.0 GB VRAM · 61.4 tok/s · you, 2d ago'); no clipping; spec-sheet complete" }
+  ],
+  "critiqueRound1": {
+    "verdict": "FAIL",
+    "qualityGate": { "status": "FAIL", "blockingIssues": 3 },
+    "findings": [
+      { "id": "vf-dc06e29c", "severity": "critical", "area": "all six slots", "defect": "required information as bare label strings inside bordered boxes; no values" },
+      { "id": "vf-a4fcf908", "severity": "critical", "area": "slot row 3 left", "defect": "the decision answer (fit verdict) has no value and no visual rank" },
+      { "id": "vf-319dedc1", "severity": "critical", "area": "required inventory", "defect": "required 'memory footprint' absent from the built composition (judged on the stale first render; later evidence showed it arriving late outside the grid with placeholder dashes — the correction is recorded in repair r1b)" },
+      { "id": "vf-fe82a05d", "severity": "major", "area": "Context region + Subject lower band", "defect": "region 542:441 shipped with zero content; drawn empty band contradicted plan usage emptyBand=0" }
+    ]
+  },
+  "repairs": [
+    { "round": "r1 (aborted)", "transactionId": "none", "ops": 15, "detail": "REJECTED at plan: 'set_minWidth: minWidth cannot be set to 0' — the setSize path is unusable on these slots; Figma rolled back 7/7 created nodes; slots re-verified h49 afterwards" },
+    { "round": "r1b", "transactionId": "txn_f817e0ac", "tool": "modify_design", "ops": 12,
+      "detail": "no size changes: values styled as same-row/under-label spec readouts handled by each slot's autolayout; 542:458 retitled from optional 'who assigned it last' to required 'memory footprint' (provenance folded into the Context chip value); 543:463 retitled 'selected device: orion-01'; both fs32 dash placeholders set to real values at 12px (543:461 'v3.1 (2026-08)', 543:464 VRAM/tok-s/provenance); green FITS verdict value created in 542:455" },
+    { "round": "r2", "transactionId": "txn_dfc73ea6", "tool": "modify_design", "ops": 1, "detail": "Context chip value shortened to '24.0 GB VRAM · 61.4 tok/s · you, 2d ago' after render showed truncation at the 360px chip edge" }
+  ],
+  "critiqueRound2": {
+    "verdict": "WATCH",
+    "qualityGate": { "status": "REVIEW", "blockingIssues": 0, "watchItems": ["Repetition WATCH: uniform slot rhythm"] },
+    "resolutionLedger": { "resolved": ["vf-dc06e29c", "vf-a4fcf908", "vf-319dedc1", "vf-fe82a05d"], "persisting": [], "introduced": ["vf-deba5857 (minor: devices value flush to slot bottom border — proposed not applied)", "vf-e9253959 (minor: right-bottom band left empty as spec-sheet restraint — proposed not applied)"], "summary": "4 resolved, 0 persisting, 2 introduced (both minor judgement calls)" },
+    "dimensionVerdicts": { "allExceptRepetition": "PASS", "Repetition": "WATCH" }
+  },
+  "designGuard": {
+    "verdict": "INDETERMINATE",
+    "pass": ["exo.auto-discovery", "exo.topology-detection", "exo.automatic-placement", "exo.no-generic-saas", "exo.no-chat-as-primary", "exo.no-excessive-cards", "exo.technical-typography", "exo.critical-states-labeled", "exo.primary-action-dominant", "exo.selected-unambiguous"],
+    "indeterminateWithJudgement": [
+      { "rule": "exo.developer-apis", "judgement": "N/A for scope — no provider/endpoint surface exists on a model detail sheet; the model family name is the only provider-adjacent noun and it is correct" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "N/A for scope — no topology drawing on this screen; relationships live in 'devices it runs on' and the selected-device chip" },
+      { "rule": "exo.model-fit-context", "judgement": "PASS by design intent — the sheet's whole question is fit: memory values, selected device VRAM, tok/s and the green FITS verdict directly connect the model to the device" }
+    ]
+  },
+  "finalQa": {
+    "verdict": "PASS WITH LIVE CHECKS PENDING",
+    "failed": [],
+    "pendingLiveChecks": ["TECHNICAL: render succeeds — satisfied: four successful low-detail render_design calls this session"],
+    "checklist": [{ "area": "TECHNICAL", "check": "no overflow or broken structure", "pass": true }, { "area": "COMPOSITION", "check": "no accidental card wall", "pass": true }]
+  },
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp; figdes_use_figma mutating scripts fail with 'proxy: inconsistent get', readonly children-traversal also degrades ('cannot convert to object') — single-node findOne reads still work; all mutations went through the modify_design op path" },
+  "scoreComparability": "not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json (briefs extended with the file-real design system between baseline and live runs)"
+}

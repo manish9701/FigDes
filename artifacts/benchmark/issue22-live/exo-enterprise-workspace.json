@@ -1,0 +1,59 @@
+{
+  "case": "exo-enterprise-workspace",
+  "generatedAt": "2026-10-22T07:10:00Z",
+  "protocol": "issue-22 §4 live loop with two recorded deviations: no critic-minted round-1 ids (repairs came from my render judgement, ledger supplied honestly as priorFindings at the final critique — accepted by the tool's resolution mechanic), and a mid-loop tool fault (documented below)",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "planId": "unknown (response timed out; frame committed and verified at 544:560, 1440x900)",
+    "lateArrivalNote": "post-timeout continuation surfaced stubs after the first render (a third activity chip appeared mid-repair)",
+    "frame": { "root": "544:560", "name": "Enterprise workspace", "size": "1440x900", "regions": ["544:561 Nav", "544:562 Header", "544:563 Subject (manual-coordinate region!) 1192x296", "544:564 Context", "544:565 Support"] }
+  },
+  "renders": [
+    { "stage": "initial", "result": "image", "judgement": "two labels colliding at the same canvas point; required slots as fragmentary 160px stubs; deployment value = blue link-dash above its label; bottom/right mostly empty — the fleet decision had no evidence" },
+    { "stage": "post-repair r1", "result": "image", "judgement": "chip values landed (autolayout chips grew), but the five fleet-table rows and (as later found) one team value silently stranded on the canvas PAGE due to a parent-targeting fault; deployment value still blue; late activity chip appeared with value above label" },
+    { "stage": "post-repair r2/r3", "result": "image", "judgement": "fleet table renders inside Subject (5 rows: name · model · serial · team · deployment · health; DRAINING amber, RECOVERING green), two-column summaries right, chips pale with label-above-value order, health pill with gap" },
+    { "stage": "final + r4/r5", "result": "images", "judgement": "activity chip leads with label; duplicate team value removed after final_qa caught 100% sibling overlap; capability marker 'assignment controls: proposed · no pinned build' added" }
+  ],
+  "myFindingsRound1": [
+    { "id": "vf-ew-chaos", "severity": "critical", "defect": "two labels overlapped at (32,32); fragmentary 160px stub slots" },
+    { "id": "vf-ew-norows", "severity": "critical", "defect": "no device rows anywhere; fleet decision (act on this subset) had no evidence" },
+    { "id": "vf-ew-blue", "severity": "major", "defect": "deployment value = blue placeholder floating above its label" },
+    { "id": "vf-ew-empty", "severity": "major", "defect": "Support/Context shipped as bare dashes/labels; bottom band dead" }
+  ],
+  "repairs": [
+    { "round": "r1", "transactionId": "txn_067e0d8f", "ops": 17, "detail": "positions untangled (devices chip 24,24 / state 720,24 / team label 720,140), chip values appended, deployment dash setTypography+content, health pill gap+value, access-policy value, recent-activity footnote — BUT the five table-row createTexts silently parented to a PAGE node instead of Subject (see tool fault), and r1 duplicated the team value because the stale one had actually landed" },
+    { "round": "r2", "transactionId": "txn_d1b42bbb", "ops": 27, "approved": true, "detail": "removed 5 page-stranded rows + probe + superseded footnote (all my own); rebuilt 5 fleet rows inside Subject; team value recreated (duplicate — caught by QA later); devices chip label shortened to 'devices' (fixed-width 160 chip clips long labels); deployment chip pale+padding with label/value role exchange (appendChild rejects TEXT children — swap via setTypography+setTextContent+setFill); activity chip pale+padded, blue recolored" },
+    { "round": "r3", "transactionId": "txn_38153a5a", "ops": 6, "detail": "activity chip label/value role exchange (label leads, like every other chip)" },
+    { "round": "r4", "transactionId": "txn_4a920fb9", "ops": 1, "detail": "capability marker 'assignment controls: proposed · no pinned build' after capability-truth FAIL (fleet controls presented as shipped; EXO_CAPABILITY_SOURCE unpinned)" },
+    { "round": "r5", "transactionId": "txn_ae43e344", "ops": 1, "approved": true, "detail": "removed duplicate team-summary 544:588 (final_qa: sibling-region-overlap 100% covered)" }
+  ],
+  "toolFaultPageFallback": {
+    "what": "a modify_design tx whose createText ops declared parent 544:563 landed those texts on a PAGE node (findOne showed parent 322:756 with NaN geometry), so rows at (24,y) rendered on the canvas far outside the frame; a single-op probe tx right after landed correctly",
+    "source": "transient plugin proxy fault (same family as 'proxy: inconsistent get')",
+    "detection": "final render — visible absence of applied nodes was not enough (silent!), found by re-find of created names and one-level parent reads",
+    "lesson": "after any large multi-op tx, verify created-node parents, not just applied counts"
+  },
+  "critiqueFinal": {
+    "verdict": "WATCH",
+    "qualityGate": { "status": "REVIEW", "blockingIssues": 0 },
+    "resolutionLedger": { "resolved": ["vf-ew-chaos", "vf-ew-norows", "vf-ew-blue", "vf-ew-empty"], "persisting": [], "introduced": ["vf-7fff2587 (minor: restraint whitespace right of the summary column — proposed not applied)"] },
+    "dimensionVerdicts": { "allExceptSurfaceHierarchy": "PASS", "Surface hierarchy": "WATCH (three uniform pale chips — the file's quiet-instrument pattern)" }
+  },
+  "designGuard": {
+    "initialVerdict": "FAIL (capability-truth: fleet controls presented as shipped)",
+    "afterRepairVerdict": "INDETERMINATE (claim visibly marked 'proposed'; manual confirmation pending pinned build)",
+    "indeterminateWithJudgement": [
+      { "rule": "exo.developer-apis", "judgement": "N/A for scope" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "N/A for scope — device rows carry per-device facts; no topology drawing" },
+      { "rule": "exo.model-fit-context", "judgement": "N/A for scope — fleet assignment screen; no model sizing verdict" },
+      { "rule": "capability.enterprise.fleet-controls.marked-uncertain", "judgement": "PASS — marker present; a pinned build would upgrade from manual to confirmed" }
+    ]
+  },
+  "finalQa": {
+    "verdict": "PASS WITH LIVE CHECKS PENDING",
+    "path": "first run FAILed on sibling-region-overlap (my duplicate); fixed in r5; second run PASS with no failed items; render-succeeds satisfied by four successful low-detail renders this session"
+  },
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp" },
+  "scoreComparability": "not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json (file-real brief extensions between baseline and live runs)"
+}

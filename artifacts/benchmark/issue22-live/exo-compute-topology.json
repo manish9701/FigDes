@@ -1,0 +1,86 @@
+{
+  "case": "exo-compute-topology",
+  "generatedAt": "2026-10-22T05:30:00Z",
+  "protocol": "issue-22 §4 live loop: build (design_pipeline) → render (render_design, low) → critique (critique_visual with vision findings) → targeted repair (modify_design op path) → re-render → re-critique with priorFindings (resolution ledger) → design_guard + final_qa",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "planId": "plan_mvj2caa4",
+    "status": "built",
+    "structureStatus": "review",
+    "autoRepairs": 0,
+    "briefExtensionsOverFrozenBaseline": {
+      "reason": "live builds include file-real constraints so screens match the open EXO file; NOT comparable 1:1 to the frozen offline totals, which pin the unconstrained plans",
+      "added": {
+        "dataMode": "demo",
+        "dataNotes": "illustrative cluster metrics; not live data (benchmark fixture, issue #22)",
+        "designSystemConstraints": [
+          "warm-neutral #FFFDF9 canvas, open surfaces, hairline #DADADA borders only where needed",
+          "accent restrained: one action yellow, one health green #356B49; nothing neon",
+          "identifiers and latencies in a monospaced face",
+          "metrics are quiet instrument readouts, never a KPI wall"
+        ],
+        "existingPatterns": ["topology as hero visualization", "quiet metric readouts"]
+      }
+    },
+    "frame": { "root": "539:391", "name": "Cluster routing", "size": "1440x900", "header": "539:392", "content": "539:393" }
+  },
+  "renders": [
+    { "stage": "initial", "detail": "low", "maxWidth": 1024, "result": "image", "judgement": "two-column label list with pale placeholder strips; right half empty; the anti-goal (list instead of topology) realized" },
+    { "stage": "post-repair-r1+r2", "detail": "low", "maxWidth": 1024, "result": "image", "judgement": "values filled, chip readouts complete, ROUTE MAP lane drawn; four defects spotted: stray 539:408 'ROUTE MAP' mini-eyebrow above bandwidth column, cluster-p1 text collides with shard-04 readout, cluster-p2 clipped at lane edge ('recoveri…'), pressure dot detached 42px from shard-07" },
+    { "stage": "post-repair-r3", "detail": "low", "maxWidth": 1024, "result": "image", "judgement": "all four defects resolved; amber DEGRADED route line is sole saturated element; eye lands there then on shard-07 'rebalance target'; no collisions, no clipping" }
+  ],
+  "critiqueRound1": {
+    "verdict": "FAIL",
+    "qualityGate": { "status": "FAIL", "blockingIssues": 3, "repairPlan": "empty (critic emitted none; findings drove the repairs)" },
+    "findings": [
+      { "id": "vf-d70c37de", "severity": "critical", "area": "right half of canvas", "defect": "evidence region the brief demands (route/shard topology) absent entirely; empty band instead of drawn routes" },
+      { "id": "vf-48bf8c95", "severity": "critical", "area": "left column rows", "defect": "required information rendered as bare label strings with three half-height placeholder strips — no values, no instrument readouts" },
+      { "id": "vf-922fdb48", "severity": "critical", "area": "canvas", "defect": "composition failed the brief's anti-goal: list/grid, not a topology where the pressured link is findable" },
+      { "severity": "major", "area": "top-right action", "defect": "'rebalance the shard' floats without an object to act on (4th finding, recorded from my render judgement; id not minted by critic)" }
+    ]
+  },
+  "repairs": [
+    { "round": "r1", "transactionId": "txn_3dfe46e4", "tool": "modify_design", "ops": 7,
+      "detail": "7 Roboto Mono value texts under the four column labels (540:409..412) + right-aligned values in the three chip panels (540:413..415); chip-value x/y anchored on mistaken offsets — corrected in r2" },
+    { "round": "r2", "transactionId": "unknown (request timed out; server retried applying)", "tool": "modify_design", "ops": 22,
+      "detail": "createFrame 'i22 route topology' 1400x280 at content (24,500) + 15 children: tracked eyebrow, cluster-p1/p2 text blocks, 4 straight route lines (thin rects 1.25px healthy #9AA096, 2px degraded #8A6D1C) with latency/bandwidth/drop labels above each, shard pressure row (04/07/12), amber 8px pressure dot, 'rebalance target — pressured resource' caption",
+      "outcome": "lane committed with 15 children (540:417) but a duplicate empty phantom frame 540:416 also appeared and the three chip-value setPositions did not land (timeout mid-apply, server retry applied the lane twice to different parents); route lines drawn as straight thin rects because the modify_design allowlist has no vector path op — honest instrument-line topology, not curved" },
+    { "round": "r2-cleanup", "transactionId": "txn_34324da5", "tool": "modify_design", "ops": 4, "approved": true,
+      "detail": "removed phantom 540:416 (empty, 0 children, created by the timed-out tx itself — tooling artifact, not user content) and re-applied the three chip value anchors (494,172)/(1206,296)/(494,418)" },
+    { "round": "r3", "transactionId": "txn_38e613ff", "tool": "modify_design", "ops": 4, "approved": true,
+      "detail": "removed 539:408 (the build's leftover 'ROUTE MAP' mini-eyebrow above the bandwidth column; superseded by the drawn lane's eyebrow), unclipped cluster-p2 (lane x1276→1230, was 19px past lane width), moved shard-04 readout out of the cluster-p1 collision (x0→160, aligned with route lines), seated pressure dot beside shard-07 text (x592→558, y212)" }
+  ],
+  "critiqueRound2": {
+    "verdict": "WATCH",
+    "qualityGate": { "status": "REVIEW", "blockingIssues": 0, "watchItems": ["Repetition WATCH: 4 boxes share one size bucket"] },
+    "resolutionLedger": {
+      "resolved": ["vf-d70c37de", "vf-48bf8c95", "vf-922fdb48"],
+      "persisting": [],
+      "introduced": ["vf-74923eed (minor: three chip readouts repeat identical 680x77 geometry — deliberate quiet-instrument rhythm per project memory; judgement call PROPOSED NOT APPLIED)"],
+      "summary": "3 resolved, 0 persisting, 1 introduced"
+    },
+    "dimensionVerdicts": { "Focal clarity": "PASS", "Hierarchy": "PASS", "Composition": "PASS", "Whitespace": "PASS", "Density": "PASS", "Repetition": "WATCH", "Card-wall tendency": "PASS", "Visual balance": "PASS", "Template feel": "PASS" }
+  },
+  "designGuard": {
+    "verdict": "INDETERMINATE",
+    "pass": ["exo.auto-discovery", "exo.topology-detection", "exo.automatic-placement", "exo.no-generic-saas", "exo.no-chat-as-primary", "exo.no-excessive-cards", "exo.technical-typography", "exo.critical-states-labeled", "exo.primary-action-dominant", "exo.selected-unambiguous"],
+    "indeterminateWithJudgement": [
+      { "rule": "exo.developer-apis", "judgement": "N/A for scope — no integration/provider surface exists on a cluster-routing screen; nothing to map onto provider/endpoint/model profile" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "PASS by design intent — each route line carries latency, bandwidth and drop rate; the degraded route terminates at shard-07 and the 'rebalance target' caption binds the action to it; traffic share ties clusters to routes" },
+      { "rule": "exo.model-fit-context", "judgement": "N/A for scope — screen decision is 'which pressured resource needs attention', not model sizing; fit context belongs to the model-detail case" }
+    ]
+  },
+  "finalQa": {
+    "verdict": "PASS WITH LIVE CHECKS PENDING",
+    "failed": [],
+    "pendingLiveChecks": ["TECHNICAL: render succeeds — satisfied: three successful low-detail render_design calls this session (see renders[]); the final render shows the repaired state"],
+    "checklist": [{ "area": "TECHNICAL", "check": "no overflow or broken structure", "pass": true }, { "area": "COMPOSITION", "check": "no accidental card wall", "pass": true }]
+  },
+  "buildCompatibility": {
+    "compatibility": "unverifiable",
+    "note": "the connected plugin never reported a build stamp, so no live verdict here can be tied to a commit; the tool's own recommendation (rebuild + reopen plugin) stands",
+    "scriptProxyStatus": "figdes_use_figma mutating scripts fail with 'proxy: inconsistent get' even on minimal probes (readonly one-liners work); all structured mutations therefore ran through the modify_design allowlisted op path, which committed cleanly (txn_3dfe46e4, txn_34324da5, txn_38e613ff)"
+  },
+  "scoreComparability": "live plan/build/repair scores are NOT comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json totals: briefs were extended with the file-real design system between baseline and live runs"
+}

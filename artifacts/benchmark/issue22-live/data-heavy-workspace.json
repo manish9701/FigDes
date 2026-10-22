@@ -1,0 +1,47 @@
+{
+  "case": "data-heavy-workspace",
+  "generatedAt": "2026-10-22T07:45:00Z",
+  "protocol": "issue-22 §4 live loop with the case-4/5 deviation (no critic-minted round-1 ids; repairs from my render judgement, ledger supplied as honest priorFindings at the final critique)",
+  "build": {
+    "tool": "design_pipeline",
+    "mode": "build",
+    "status": "built (clean response)",
+    "planId": "brief_mvj45nyx carried in request; returned plan object had no id field",
+    "root": "545:631",
+    "nodes": 23,
+    "usage": { "coverage": 0.797, "largestEmptyBand": 0, "focalShare": 0.519 },
+    "briefExtensionsOverFrozenBaseline": { "reason": "file-real constraints for the open EXO file; live scores NOT comparable 1:1 to frozen offline totals", "added": ["dataMode demo", "designSystemConstraints", "existingPatterns: dense mono rows, quiet metric readouts"] },
+    "frame": { "root": "545:631", "name": "Usage ledger", "size": "1440x900", "regions": ["545:632 Nav", "545:633 Header", "545:634 Subject (5 chips)", "545:635 Context (billing-events chip)"] }
+  },
+  "renders": [
+    { "stage": "initial", "result": "image", "judgement": "five label chips (three white-bordered, two pale) plus the 'all billing events for the month' pair in the Context region with a blue dash above its label; no values; bottom 40% empty" },
+    { "stage": "post-repair r1", "result": "image", "judgement": "all six chips carry values; anomalies amber ('2 anomalies flagged', spike/double-tick detail); device-day table realized as three per-device rows with flagged/verified row states; unexplained delta $93.20 called out; billing-events chip label-first" }
+  ],
+  "myFindingsRound1": [
+    { "id": "vf-ul-empty", "severity": "critical", "defect": "labels only, one blue dash; no values anywhere; billing-events chip value above label" }
+  ],
+  "repairs": [
+    { "round": "r1", "transactionId": "txn_f6dd132d", "ops": 14, "detail": "values in all six chips (cost per device; spot anomalies amber ×2; reported vs actual with Δ; daily usage trend with spike; device-day table as three flagged/verified rows; billing-events chip label/value role exchange + content)" },
+    { "round": "r2", "transactionId": "txn_54f18b6f", "ops": 1, "detail": "capability marker 'usage metering: proposed · no pinned build' after capability-truth FAIL (metering presented as shipped)" }
+  ],
+  "critiqueFinal": {
+    "verdict": "FAIL",
+    "qualityGate": { "status": "FAIL", "blockingIssues": 0 },
+    "anomalyRecorded": "gate emitted FAIL verdict and FAIL gate status with ZERO blocking issues and all nine dimensions PASS; resolution ledger shows 1 resolved / 0 persisting / 1 introduced-minor (vf-46f8964b, the restraint whitespace right of the billing chip). No repair was justified on empty blocking evidence — the contradiction is recorded verbatim as a live-harness gate oddity",
+    "resolutionLedger": { "resolved": ["vf-ul-empty"], "persisting": [], "introduced": ["vf-46f8964b (minor)"] }
+  },
+  "designGuard": {
+    "initialVerdict": "FAIL (capability-truth: metering presented as shipped)",
+    "afterRepairVerdict": "INDETERMINATE",
+    "finalStats": "manual 4; indeterminate: exo.developer-apis, exo.topology-explains-relationships, exo.model-fit-context (+ metering claim manual)",
+    "indeterminateWithJudgement": [
+      { "rule": "exo.developer-apis", "judgement": "N/A for scope — ledger has no integration surface" },
+      { "rule": "exo.topology-explains-relationships", "judgement": "N/A for scope — tabular reconciliation, no topology drawing" },
+      { "rule": "exo.model-fit-context", "judgement": "N/A for scope — billing screen" },
+      { "rule": "capability.enterprise.metering.marked-uncertain", "judgement": "PASS — marker present; pending pinned build" }
+    ]
+  },
+  "finalQa": { "verdict": "PASS WITH LIVE CHECKS PENDING", "checklist": [{ "area": "TECHNICAL", "check": "no overflow or broken structure", "pass": true }, { "area": "COMPOSITION", "check": "no accidental card wall", "pass": true }] },
+  "buildCompatibility": { "compatibility": "unverifiable", "note": "plugin never reported a build stamp" },
+  "scoreComparability": "not comparable 1:1 to artifacts/benchmark/issue22-baseline-v1.json (file-real brief extensions between baseline and live runs)"
+}

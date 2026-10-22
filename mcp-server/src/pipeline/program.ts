@@ -22,6 +22,7 @@
  *    error message wraps instead of pushing the layout apart.
  */
 import type { CompositionPlan, ContentSlot, NormalizedBrief, RegionSpec } from "./contracts";
+import type { VisualIntent } from "../../../shared/ir";
 
 /** A runtime program call. */
 export interface ProgramCall {
@@ -120,7 +121,11 @@ export function applyMeasuredWidths(
   return { program: { ...program, content }, measured };
 }
 
-export function buildProgram(brief: NormalizedBrief, plan: CompositionPlan): BuiltProgram {
+export function buildProgram(
+  brief: NormalizedBrief,
+  plan: CompositionPlan,
+  intelligence?: { intent: VisualIntent; notes: string[] },
+): BuiltProgram {
   const notes: string[] = [];
   const slotsByRegion = new Map<string, ContentSlot[]>();
   for (const slot of plan.content) {
@@ -230,16 +235,47 @@ export function buildProgram(brief: NormalizedBrief, plan: CompositionPlan): Bui
     weights[h.id] = chrome ? 0.15 : h.rank === 1 ? 0.9 : h.rank === 2 ? 0.6 : 0.35;
   }
 
+  /**
+   * Visual intent merge order (issue #22):
+   * 1. the planner's own focal and per-region weights (composer of record);
+   * 2. the skill layer's compiled intent — but only its density/manner fields
+   *    that the runtime consumes (`shared/ir.ts` VisualIntentSchema). Style
+   *    tokens (compiled, validated) replace the free-worded direction string
+   *    when they exist: a resolved manner outranks the words it was derived
+   *    from. When the compiled intent has no style, the brief's words ride
+   *    along exactly as they did before this layer existed.
+   * 3. focal/weights from the compiled intent never override the planner's —
+   *    the compiler notes a discrepancy instead (see intelligence notes).
+   */
+  const compiled = intelligence?.intent;
   const visualIntent: Record<string, unknown> = {
     ...(plan.focal !== null ? { focal: plan.focal.id } : {}),
     visualWeight: weights,
-    ...(brief.visualDirection !== null ? { style: brief.visualDirection } : {}),
+    ...((compiled !== undefined && Object.keys(compiled).length > 0)
+      ? { style: compiled.style ?? brief.visualDirection ?? undefined, density: compiled.density, rhythm: compiled.rhythm, alignment: compiled.alignment, depth: compiled.depth, contrast: compiled.contrast }
+      : { ...(brief.visualDirection !== null ? { style: brief.visualDirection } : {}) }),
   };
+  // Drop keys the compiled intent legitimately left unset, so the record never
+  // carries explicit undefined values (strict intent parsing rejects those).
+  for (const key of Object.keys(visualIntent)) {
+    if ((visualIntent as Record<string, unknown>)[key] === undefined) delete (visualIntent as Record<string, unknown>)[key];
+  }
 
   if (brief.data.illustrative) {
     notes.push(
       "The brief does not say the data is live, so every value on this screen is a placeholder and is marked illustrative. Real numbers were not invented.",
     );
+  }
+
+  if (intelligence !== undefined && Object.keys(intelligence.intent).length > 0) {
+    const fields = Object.keys(intelligence.intent).filter((k) => k !== "visualWeight");
+    if (fields.length > 0) {
+      notes.push(
+        `The skill layer's compiled visual intent carried the build: ${fields.join(", ")}. ${intelligence.notes.length} compile note(s) name how each field was decided.`,
+      );
+    }
+  } else if (intelligence !== undefined && intelligence.notes.length > 0) {
+    notes.push(`The skill layer ran but compiled no canonical intent fields; the build uses default taste or the planner's own derivation. First note: ${intelligence.notes[0]}`);
   }
 
   return {

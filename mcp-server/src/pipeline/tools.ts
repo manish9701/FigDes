@@ -48,6 +48,7 @@ import { normalizeBrief } from "./brief";
 import { buildCompositionPlan } from "./plan";
 import { buildProgram, applyMeasuredWidths } from "./program";
 import { verifyLive, verifyPlan, type CompiledProgram, type LiveEvidence } from "./verify";
+import { compileVisualIntent, reviewVisualIntelligence, toPipelineFinding } from "../design/skills/intent-compiler";
 import { planRepairs, deduplicateOperations } from "./repair";
 import { buildReport } from "./report";
 import type { PipelineCheck, PipelineFinding, PipelineTrace } from "./contracts";
@@ -149,9 +150,30 @@ export async function designPipelineTool(
     };
   }
 
+  /* --- stage 1.5: the skill layer (issue #22) ------------------------------ */
+
+  /**
+   * The skill layer runs after the brief is normalized and before the plan:
+   * brief signals select the applicable skills, the skills decide, and the
+   * compiler merges their canonical fields into one visual intent the runtime
+   * already parses. Every selection skip carries its reason, so "no skills
+   * ran" is a documented decision, never a silent default.
+   */
+  const intelligence = compileVisualIntent(brief, {
+    statedInformation: args.brief.availableInformation,
+  });
+  stage(
+    trace,
+    "skills",
+    intelligence.selection.selected.length > 0
+      ? `Skills: ${intelligence.selection.selected.join(", ")} applied (${intelligence.decisions.length} decision(s), ${intelligence.notes.length} note(s)); ${intelligence.selection.skipped.length} skipped with reasons.`
+      : `No skills selected for these brief signals (${intelligence.signals.join(", ") || "none"}); ${intelligence.selection.skipped.length} skipped with reasons.`,
+    intelligence.selection.selected,
+  );
+
   /* --- stage 2: the plan ------------------------------------------------- */
 
-  const plan = buildCompositionPlan(brief, trace.planId);
+  const plan = buildCompositionPlan(brief, trace.planId, intelligence);
   stage(
     trace,
     "plan",
@@ -159,9 +181,36 @@ export async function designPipelineTool(
     plan.regions.map((r) => r.id),
   );
 
+  /* --- stage 2.5: review-phase skills (issue #22) -------------------------- */
+
+  /**
+   * The anti-generic review examines the plan — template tells are cheapest to
+   * fix before a node exists. Findings ride the existing findings flow; they
+   * are recorded with evidence and never auto-applied as repairs.
+   */
+  const visualReview = reviewVisualIntelligence(plan, brief);
+  if (visualReview.findings.length > 0) {
+    trace.findings.push(
+      ...visualReview.findings.map((f) =>
+        toPipelineFinding(
+          f.rule,
+          f,
+          plan.regions.filter((r) => f.summary.includes(`'${r.id}'`) || f.evidence.includes(`'${r.id}'`)).map((r) => r.id),
+        ),
+      ),
+    );
+    stage(
+      trace,
+      "visual-review",
+      `Anti-generic review: ${visualReview.findings.length} finding(s) — ${visualReview.findings.map((f) => f.rule).join(", ")}. Findings are recorded for the caller, not auto-repaired.`,
+    );
+  } else {
+    stage(trace, "visual-review", `Anti-generic review passed: no template-driving patterns. ${visualReview.notes.join(" ")}`);
+  }
+
   /* --- stage 3 + 4: the program and the offline verification -------------- */
 
-  const built = buildProgram(brief, plan);
+  const built = buildProgram(brief, plan, intelligence);
   // Two passes, and the first one is for the *widths*: the column a text lands
   // in depends on the region's size, and the region's size depends on the
   // content's heights. So the first compile resolves the widths, the plugin
@@ -206,6 +255,15 @@ export async function designPipelineTool(
     plan,
     program,
     programNotes: built.notes,
+    /** The skill layer's full output: selection, decisions, compiled intent and the anti-generic review (issue #22). */
+    visualIntelligence: {
+      signals: intelligence.signals,
+      selection: intelligence.selection,
+      decisions: intelligence.decisions,
+      intent: intelligence.intent,
+      notes: intelligence.notes,
+      review: visualReview,
+    },
     ...(reuse.length > 0 ? { reuse } : {}),
     assumptions,
     clarifications,

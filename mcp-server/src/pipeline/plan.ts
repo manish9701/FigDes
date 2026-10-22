@@ -26,6 +26,7 @@ import { planScreen, type ScreenIntent } from "../plan/planner";
 import { defaultGutter, layoutRegions } from "../runtime/layout";
 import { classifyInformation, classifyInfoItem, type InfoKind } from "../design/composition/derive";
 import type { Composition } from "../runtime/layout";
+import type { VisualIntent } from "../../../shared/ir";
 import type { ContentSlot, CompositionPlan, NormalizedBrief, RegionSpec } from "./contracts";
 
 /** Grid unit used when the brief does not name one. */
@@ -219,8 +220,19 @@ function largestEmptyBand(boxes: Array<{ x: number; y: number; w: number; h: num
  * The planner does the classification and the geometry; this module turns the
  * result into a reviewable tree and adds the content slots, the canvas usage
  * analysis and the per-region contract.
+ *
+ * `intelligence` (issue #22) is the skill layer's compiled output. The plan is
+ * the handoff point: the compiled intent rides on the plan to the report (so a
+ * reviewer reads the manner next to the composition it produced), and when the
+ * planner left no focal region and the plan has content regions, the
+ * highest-rank payload region is named focal — an anti-generic skill's
+ * acceptance criterion, filled where the planner's own derivation is silent.
  */
-export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): CompositionPlan {
+export function buildCompositionPlan(
+  brief: NormalizedBrief,
+  planId = "plan",
+  intelligence?: { intent: VisualIntent; notes: string[] },
+): CompositionPlan {
   const canvas = { width: brief.viewport.width, height: brief.viewport.height, grid: GRID, name: brief.screen };
 
   const intent: ScreenIntent = {
@@ -510,7 +522,30 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
   const coveredArea = regions.reduce((sum, r) => sum + r.bounds.w * r.bounds.h, 0);
   const coverage = canvasArea === 0 ? 0 : coveredArea / canvasArea;
   const empty = largestEmptyBand(regions.map((r) => r.bounds), canvas.width, canvas.height);
-  const focal = regions.find((r) => r.id === focalId);
+  /* --- the compiled intent and its focal gap-fill (issue #22) -------------- */
+
+  let compiledFocal = plan.artDirection.focal;
+  let focalFilledNote: string | null = null;
+  if (compiledFocal === null && intelligence !== undefined && regions.length >= 3) {
+    const payload = [...hierarchy]
+      .sort((a, b) => a.rank - b.rank)
+      .map((h) => regions.find((r) => r.id === h.id))
+      .find((r) => r !== undefined && r.role !== "navigation" && r.role !== "header" && r.role !== "footer" && r.role !== "status-rail");
+    if (payload !== undefined) {
+      compiledFocal = { id: payload.id, why: `Named focal by the skill layer's gap-fill: the plan had no focal among ${regions.length} regions, so the highest-rank payload region takes it (issue #22 anti-generic criterion).` };
+      focalFilledNote = `The plan had no focal region; the skill layer named '${payload.id}' (rank ${hierarchy.find((h) => h.id === payload.id)?.rank ?? "?"}) so the screen has a first thing to look at.`;
+      warnings.push(focalFilledNote);
+    }
+  }
+
+  const intentFields = Object.keys(intelligence?.intent ?? {}) as Array<keyof VisualIntent>;
+  if (intelligence !== undefined && intentFields.length > 0) {
+    warnings.push(
+      `Compiled visual intent attached to the plan: ${intentFields.map((f) => `${f}`).join(", ")} — see the response payload's visualIntelligence.decisions for the why.`,
+    );
+  }
+
+  const focal = regions.find((r) => r.id === (compiledFocal?.id ?? focalId ?? null));
   const focalShare = focal && canvasArea > 0 ? (focal.bounds.w * focal.bounds.h) / canvasArea : 0;
 
   const usageNotes: string[] = [];
@@ -539,7 +574,7 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
     composition: plan.composition,
     regions,
     content,
-    focal: plan.artDirection.focal,
+    focal: compiledFocal,
     hierarchy,
     usage: {
       canvasArea,
@@ -552,6 +587,7 @@ export function buildCompositionPlan(brief: NormalizedBrief, planId = "plan"): C
     notPlaced,
     derivation: plan.derivation,
     artDirection: plan.artDirection,
+    ...(intelligence !== undefined && intentFields.length > 0 ? { visualIntent: intelligence.intent } : {}),
     execution: plan.execution,
     warnings,
   };

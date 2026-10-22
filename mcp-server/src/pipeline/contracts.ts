@@ -26,6 +26,7 @@
  */
 import { z } from "zod";
 import type { Composition } from "../runtime/layout";
+import type { VisualIntent } from "../../../shared/ir";
 
 /* -------------------------------------------------------------------------- */
 /* Stage 1 — the brief                                                          */
@@ -364,6 +365,12 @@ export interface CompositionPlan {
   /** The decisions behind the plan, in the planner's words. */
   derivation: unknown;
   artDirection: unknown;
+  /**
+   * The compiled visual intent, when the skill layer produced one (issue #22).
+   * Same schema the interpreter parses programs with, so the plan states
+   * exactly the manner the build will carry.
+   */
+  visualIntent?: VisualIntent;
   execution: unknown;
   warnings: string[];
 }

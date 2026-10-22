@@ -453,6 +453,11 @@ async function bootstrapAndRegister(): Promise<void> {
     pageName: status.pageName ?? "",
     selection: status.selection ?? [],
     pluginVersion: config?.pluginVersion ?? "0.0.0",
+    // Which build this panel is running. Figma loads the bundle once, when the
+    // panel opens, so a rebuild does not reach an open session; without this
+    // the server cannot tell which code a live measurement actually exercised.
+    // (parity with ui/transport.ts — the panel build leaked the field)
+    ...(status.build ? { build: status.build } : {}),
     secret: config?.secret || undefined,
   };
   lastStatus = status;
@@ -492,6 +497,10 @@ function startHeartbeat(): void {
         pageName: cached.pageName ?? "",
         selection: cached.selection ?? [],
         editorType: "figma",
+        // Keep the build stamp on the wire even between status refreshes: the
+        // server records it from state frames, and a frame that drops the
+        // field leaves a fresh session reading "unknown".
+        ...(cached.build ? { build: cached.build } : {}),
         at: Date.now(),
       });
       return;
@@ -506,6 +515,7 @@ function startHeartbeat(): void {
           pageName: s.pageName ?? "",
           selection: s.selection ?? [],
           editorType: "figma",
+          ...(s.build ? { build: s.build } : {}),
           at: Date.now(),
         };
         send(state);

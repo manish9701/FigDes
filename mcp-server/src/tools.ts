@@ -742,6 +742,17 @@ export const TOOLS: ToolDefinition[] = [
           liveBuild = null;
         }
         const build = liveBuild ?? status.build;
+        /**
+         * Reconcile the probed stamp into the session.
+         *
+         * The per-transaction build-compatibility annotation reads only
+         * `session.build`, which frames fill — and a panel whose frames carry
+         * no stamp (or registered before a reload) left every per-tx
+         * annotation "unverifiable" while figma_status itself, via this probe,
+         * showed same-commit. Recording the probed value heals the record with
+         * no extra round trip; a later state frame overwrites it again.
+         */
+        if (liveBuild && session.build !== liveBuild) session.build = liveBuild;
         return {
           ...status,
           ...(liveBuild !== null ? { build: liveBuild } : {}),

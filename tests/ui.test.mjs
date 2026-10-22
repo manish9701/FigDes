@@ -76,3 +76,29 @@ test("the live stream is wired: activity line plus preview thumbnail", () => {
   assert.equal(uiTs.includes("renderNotify"), true, "notifications need a dedicated renderer");
   assert.equal(uiTs.includes("textContent = msg.text"), true, "activity text must be assigned, not interpolated");
 });
+
+test("the build stamp travels in the panel's handshake frames", () => {
+  // The server records the plugin build from register/state frames
+  // (sessions.ts). figma_status probes the stamp live for its own display,
+  // but the per-transaction build-compatibility annotation reads only the
+  // session record — a register without `build` left every per-tx response
+  // "unverifiable" while figma_status showed same-commit (measured live on
+  // the issue-22 loop). ui/transport.ts already did this; the panel must
+  // match it in all three frames: register, cached heartbeat state, fresh
+  // state.
+  assert.equal(
+    uiTs.includes("...(status.build ? { build: status.build } : {})"),
+    true,
+    "register must carry the build stamp",
+  );
+  assert.equal(
+    uiTs.includes("...(cached.build ? { build: cached.build } : {})"),
+    true,
+    "the cached heartbeat state must carry the stamp",
+  );
+  assert.equal(
+    uiTs.includes("...(s.build ? { build: s.build } : {})"),
+    true,
+    "the fresh state frame must carry the stamp",
+  );
+});

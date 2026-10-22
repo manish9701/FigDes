@@ -19,13 +19,7 @@ import type { Session } from "./sessions";
 
 /** The session a tool call targeted, from its args — the same lookup targetOf does. */
 function sessionOf(args: unknown, registry: SessionRegistry): Session | null {
-  try {
-    const sessionId = (args as { sessionId?: unknown } | null)?.sessionId;
-    if (typeof sessionId !== "string" || !sessionId) return null;
-    return registry.get(sessionId) ?? null;
-  } catch {
-    return null;
-  }
+  return registry.resolveForAnnotation(args as { sessionId?: unknown } | undefined);
 }
 
 export interface McpHandle {

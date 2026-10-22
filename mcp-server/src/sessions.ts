@@ -1000,6 +1000,29 @@ export class SessionRegistry {
     );
   }
 
+  /**
+   * The session a successful tool call's build-compatibility annotation should
+   * attribute — resolve()'s policy, but never throwing.
+   *
+   * The annotation runs after a handler succeeded, so a resolution failure
+   * there is an attribution gap, not a tool error: null falls back to the
+   * conservative "unverifiable" warning. The omission default matters in
+   * practice: every documented call that omits sessionId dispatched to the
+   * single live session, and annotation must follow the same default or a
+   * verified same-commit pair reports "unverifiable" forever (measured live on
+   * the issue-22 loop). Zero or multiple live sessions stay genuinely
+   * ambiguous — null, never a guess (SPEC §33).
+   */
+  resolveForAnnotation(args?: { sessionId?: unknown } | null): Session | null {
+    try {
+      const sessionId = args?.sessionId;
+      if (typeof sessionId === "string" && sessionId) return this.resolve(sessionId);
+      return this.resolve(undefined);
+    } catch {
+      return null;
+    }
+  }
+
   shutdown(): void {
     for (const s of this.sessions.values()) {
       s.send({ type: "disconnect", reason: "The Design Agent server is shutting down." });

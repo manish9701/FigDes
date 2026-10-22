@@ -243,6 +243,37 @@ test("the 'Unknown file' default never links generations", async () => {
   assert.deepEqual(registry.linkGeneration(s2), {}, "no identity, no lineage");
 });
 
+/**
+ * The build-compatibility annotation followed only the explicit sessionId: a
+ * call that omitted it ("optional when only one is connected") attributed
+ * nothing, so a verified same-commit pair reported "unverifiable" on every
+ * per-transaction response while figma_status said same-commit — measured live
+ * on the issue-22 loop after a plugin rebuild.
+ */
+test("resolveForAnnotation follows the same omission default as dispatch", async () => {
+  const { SessionRegistry: Registry } = await import("../mcp-server/dist-test/reliability/sessions.js");
+  const registry = new Registry();
+
+  // No session at all: an attribution gap, not an error.
+  assert.equal(registry.resolveForAnnotation({}), null);
+
+  // One live session, sessionId omitted — the standard workflow's default.
+  const only = registry.add(fakeSocket());
+  Object.assign(only, { fileKey: "k1", fileName: "F", build: "56c1cd6d4ed2" });
+  assert.equal(registry.resolveForAnnotation({}), only, "omitted sessionId resolves the single live session");
+  assert.equal(registry.resolveForAnnotation(undefined), only);
+  assert.equal(registry.resolveForAnnotation({ sessionId: only.id }), only);
+
+  // Unknown id: null, never a throw into a success path.
+  assert.equal(registry.resolveForAnnotation({ sessionId: "session_nope" }), null);
+
+  // Multiple live sessions: ambiguous, never guessed (SPEC §33).
+  const second = registry.add(fakeSocket());
+  Object.assign(second, { fileKey: "k2", fileName: "G" });
+  assert.equal(registry.resolveForAnnotation({}), null, "two live files stay unattributed");
+  assert.equal(registry.resolveForAnnotation({ sessionId: only.id }), only, "explicit id still resolves under ambiguity");
+});
+
 test("lineage stays bounded across many reconnects", async () => {
   const { SessionRegistry: Registry } = await import("../mcp-server/dist-test/reliability/sessions.js");
   const registry = new Registry();

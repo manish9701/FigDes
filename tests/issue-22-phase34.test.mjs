@@ -389,3 +389,153 @@ test("benchmark briefs score and gate end-to-end from pipeline plan-mode runs", 
   // The offline result is a BenchmarkResult the suite's own runner consumes.
   assert.ok("dimensions" in scored.result && "genericity" in scored.result);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Issue-22 live-loop gate defects, fixed and pinned                           */
+/* -------------------------------------------------------------------------- */
+
+test("the genericity intake gate refuses a contradictory brief before anything is created", async () => {
+  const { OFFLINE_BRIEFS } = await import("../mcp-server/dist-test/design/benchmark/offline-briefs.js");
+  const negative = OFFLINE_BRIEFS.find((c) => c.caseId === "generic-saas-dashboard");
+  assert.ok(negative, "the negative-control brief exists");
+
+  // Only measure_text may touch the session stub (it fails closed into
+  // estimates); any other contact means the build escaped the gate.
+  const touched = [];
+  const session = {
+    async request(tool) {
+      touched.push(tool);
+      return {};
+    },
+  };
+  const result = await designPipelineTool(session, null, {
+    brief: negative.brief,
+    approved: true,
+    reason: "benchmark negative control",
+  });
+  assert.equal(result.status, "refused", `expected a refusal, got ${result.status}`);
+  assert.equal(result.stage, "genericity");
+  assert.ok(result.genericity?.blocking === true, "the refusal names the blocking genericity");
+  assert.ok(
+    touched.every((t) => t === "measure_text"),
+    `the gate must refuse before any Figma contact beyond measuring, got: ${touched.join(", ")}`,
+  );
+});
+
+test("a measure-cache miss is honest: the runtime labels an estimates-based applicability", async () => {
+  const { runRuntimeTool } = await import("../mcp-server/dist-test/runtime/tools.js");
+  // measure_text fails closed (the busy-plugin case), so the compile runs on
+  // estimates and the payload must say so instead of implying a guarantee.
+  const session = { async request() { throw new Error("measure_text: plugin busy"); } };
+  const program = {
+    canvas: { name: "Basis", width: 1440, height: 900 },
+    regions: [{ id: "body", fn: "inspector", args: { width: 360, height: "fill" } }],
+    content: [{ fn: "text", id: "t1", args: { text: "throughput now", role: "label" } }],
+    visualIntent: {},
+  };
+  const result = await runRuntimeTool(session, { program, dryRun: true });
+  assert.equal(result.applicabilityBasis, "estimates");
+  assert.match(String(result.applicabilityWarning ?? ""), /ESTIMATES/);
+});
+
+test("the per-session measurement cache makes repeated compiles deterministic", async () => {
+  const { measureProgramText } = await import("../mcp-server/dist-test/runtime/measure.js");
+  let calls = 0;
+  const session = {
+    async request(tool, payload) {
+      assert.equal(tool, "measure_text");
+      calls += 1;
+      return {
+        measurements: (payload.specs ?? []).map((s) => ({ key: s.key, width: 120, height: s.size * 1.4 })),
+      };
+    },
+  };
+  const program = {
+    content: [
+      { fn: "text", id: "t1", args: { text: "throughput now", role: "label" } },
+      { fn: "text", id: "t2", args: { text: "intervene or let the run continue", role: "body" } },
+    ],
+  };
+  const widths = new Map([["t1", 200], ["t2", 480]]);
+  const first = await measureProgramText(session, program, widths);
+  assert.equal(first.measured, 2);
+  assert.equal(calls, 1, "the first pass measures through the plugin");
+  const second = await measureProgramText(session, program, widths);
+  assert.equal(second.measured, 2);
+  assert.equal(calls, 1, "the second pass serves from the session cache — no second round trip, so a dry run and the apply that follows compile identically");
+  // A different width is a different measurement: it must re-measure.
+  const third = await measureProgramText(session, program, new Map([["t1", 300], ["t2", 480]]));
+  assert.equal(third.measured, 2);
+  assert.equal(calls, 2, "a changed box width is a new measurement");
+});
+
+test("an observation that PRAISES the absence of defects is not a FAIL", async () => {
+  const { observationFails } = await import("../mcp-server/dist-test/review/workflow.js");
+  // The exact praise shape that produced the case-7 oddity: FAIL + FAIL with
+  // zero blocking issues and every dimension PASS.
+  assert.equal(
+    observationFails({
+      templateFeel: "device blocks with proportional memory slabs — a real placement map, not a generic card wall",
+      balance: "nothing overlaps and nothing clips",
+      focalPoint: "the amber-outlined focal block",
+    }),
+    false,
+    "praise stating the absence of defects must not fail the gate",
+  );
+  assert.equal(observationFails({ balance: "the footer chips run into the next band" }), false, "no defect word, no fail");
+  assert.equal(
+    observationFails({ balance: "the support band reads as a wall of equal chips" }),
+    true,
+    "a real defect word survives the negation stripping",
+  );
+  assert.equal(
+    observationFails({ balance: "nothing broken here, but the hero clips its headline" }),
+    true,
+    "a real defect later in the sentence survives a negated prefix",
+  );
+  assert.equal(observationFails(null), false);
+  assert.equal(observationFails({}), false);
+});
+
+test("final_qa runs the render check for real instead of leaving it pending forever", async () => {
+  const { finalQaTool } = await import("../mcp-server/dist-test/review/workflow.js");
+  const node = {
+    id: "screen", name: "Screen", type: "FRAME", visible: true, depth: 0, x: 0, y: 0, w: 1440, h: 900,
+    parentId: null, fill: null, stroke: null, radius: 0, text: null,
+  };
+  const session = {
+    async request(tool) {
+      if (tool === "collect_metrics") return { target: "screen", scope: "screen", nodeCount: 1, nodes: [node] };
+      if (tool === "render_node") return { data: "aGVsbG8=", width: 1024, height: 640 };
+      throw new Error(`unexpected request ${tool}`);
+    },
+  };
+  const result = await finalQaTool(session, { nodeId: "screen" });
+  const renderCheck = result.checklist.find((i) => i.check === "render succeeds");
+  assert.ok(renderCheck, "the render check exists");
+  assert.equal(renderCheck.pass, true, "a successful render is recorded as a pass, not left pending");
+  assert.match(renderCheck.detail, /render completed/);
+  // No failed items and no pending ones: the verdict may finally say PASS.
+  assert.equal(result.failed.length, 0);
+  assert.equal(result.pendingLiveChecks.length, 0, "no check stays pending when it actually ran");
+  assert.equal(result.verdict, "PASS", "with every check run and passed, the verdict is PASS");
+});
+
+test("final_qa reports a failed render as a FAIL, not a pending check", async () => {
+  const { finalQaTool } = await import("../mcp-server/dist-test/review/workflow.js");
+  const node = {
+    id: "screen", name: "Screen", type: "FRAME", visible: true, depth: 0, x: 0, y: 0, w: 1440, h: 900,
+    parentId: null, fill: null, stroke: null, radius: 0, text: null,
+  };
+  const session = {
+    async request(tool) {
+      if (tool === "collect_metrics") return { target: "screen", scope: "screen", nodeCount: 1, nodes: [node] };
+      throw new Error("render_node: the plugin wedged");
+    },
+  };
+  const result = await finalQaTool(session, { nodeId: "screen" });
+  const renderCheck = result.checklist.find((i) => i.check === "render succeeds");
+  assert.equal(renderCheck.pass, false, "a failed render is a failed check");
+  assert.match(renderCheck.detail, /render failed/);
+  assert.equal(result.verdict, "FAIL");
+});

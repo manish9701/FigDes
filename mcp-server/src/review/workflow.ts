@@ -239,6 +239,30 @@ export const CritiqueArgs = z
 
 type VisionVerdict = "PASS" | "WATCH" | "FAIL";
 
+/**
+ * Whether the model's own visual observations report a defect.
+ *
+ * The naive version scanned the raw text for defect words, and turned praise
+ * into a FAIL: "not a generic card wall", "nothing broken", "no overlap" all
+ * NAME the absence of a defect — measured live on the issue-22 loop, a
+ * critique returned FAIL + FAIL with zero blocking issues and every dimension
+ * PASS because its observations praised the screen in exactly that shape.
+ * Negated spans are stripped before the scan (a bounded window, so a real
+ * defect later in the sentence survives), and whole words are matched so
+ * "badging" or "standard" cannot trigger.
+ */
+const NEGATED_SPAN = /\b(?:no|not|never|without|isn'?t|aren'?t|wasn'?t|weren'?t|doesn'?t|don'?t|didn'?t|can'?t|cannot|zero|none|nothing|free of|lacks?|absent)\b[^,;.!?]*/gi;
+const DEFECT_WORD = /\b(?:fails?|failed|failing|broken|broke|wrong|generic|templated|template-y|clip\w*|cut off|overflow\w*|overlapping?|spill\w*|unreadable|crowded|cramped|wall)\b/gi;
+
+export function observationFails(observation: Record<string, unknown> | null | undefined): boolean {
+  if (!observation || typeof observation !== "object") return false;
+  const text = Object.values(observation)
+    .filter((v): v is string => typeof v === "string")
+    .join(" ");
+  if (text.trim().length === 0) return false;
+  return text.replace(NEGATED_SPAN, " ").match(DEFECT_WORD) !== null;
+}
+
 function visionVerdictFor(text: string | undefined): VisionVerdict {
   // Strip negated defect mentions ("no card wall", "no template markers")
   // before keyword matching, or every clean render would FAIL itself.
@@ -419,9 +443,7 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
     });
 
     const observation = args.visionCriticObservations;
-    const observationFail =
-      !!observation &&
-      Object.values(observation).some((value) => /fail|bad|weak|poor|generic|wrong|broken/i.test(value));
+    const observationFail = observationFails(observation);
 
     // Genericity on live nodes: the same first-class gate as on programs, so a
     // native card wall cannot pass by skipping the program path.
@@ -1216,10 +1238,32 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     const findings = runRules(raw, "review");
     const high = findings.filter((f) => f.confidence === "high");
     const cardWall = findings.some((f) => f.rule === "card-wall");
+    /**
+     * The render check runs for real. It used to be hardcoded `pass: null`, so
+     * final_qa's own closing check stayed "pending" forever and the verdict
+     * never rose past PASS WITH LIVE CHECKS PENDING even in a session full of
+     * successful renders (recorded verbatim on the issue-22 loop). A low-detail
+     * render is one round trip, and it is the exact check the item names.
+     */
+    let renderOk = false;
+    let renderDetail: string;
+    try {
+      const rendered = (await session.request(
+        "render_node",
+        { nodeId: targetArg.target, maxWidth: 1024, detail: "low" },
+        120_000,
+      )) as { data?: string; width?: number; height?: number };
+      renderOk = Boolean(rendered?.data);
+      renderDetail = renderOk
+        ? `render completed at ${rendered.width}x${rendered.height}`
+        : "the render returned no image";
+    } catch (err) {
+      renderDetail = `render failed: ${err instanceof Error ? err.message : String(err)}`;
+    }
     items.push(
       { area: "TECHNICAL", check: "no overflow or broken structure", pass: high.length === 0, detail: high.length === 0 ? `no high-confidence findings in ${raw.scope} (${raw.nodeCount} nodes)` : `${high.length} high-confidence in ${raw.scope}: ${high.map((f) => f.rule).join(", ")}` },
       { area: "COMPOSITION", check: "no accidental card wall", pass: !cardWall, detail: cardWall ? "card-wall rule fired" : "no card wall detected" },
-      { area: "TECHNICAL", check: "render succeeds", pass: null, detail: "render the selection at low detail to confirm" },
+      { area: "TECHNICAL", check: "render succeeds", pass: renderOk, detail: renderDetail },
     );
   } else {
     items.push(
@@ -1233,14 +1277,16 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
 
   return {
     status: "ok",
-    verdict: failed.length > 0 ? "FAIL" : "PASS WITH LIVE CHECKS PENDING",
+    verdict: failed.length > 0 ? "FAIL" : pending.length > 0 ? "PASS WITH LIVE CHECKS PENDING" : "PASS",
     checklist: items,
     failed: failed.map((i) => `${i.area}: ${i.check} — ${i.detail}`),
     pendingLiveChecks: pending.map((i) => `${i.area}: ${i.check} — ${i.detail}`),
     howToProceed:
       failed.length > 0
         ? "Fix every failed item, then re-run. A screen that misses critical criteria is not finished."
-        : "Clear the pending live checks (review_design, one low-detail render, design_guard with inspect:true), then call it done.",
+        : pending.length > 0
+          ? "Clear the pending live checks (review_design, one low-detail render, design_guard with inspect:true), then call it done."
+          : "Every check ran and passed. Call it done.",
   };
 }
 

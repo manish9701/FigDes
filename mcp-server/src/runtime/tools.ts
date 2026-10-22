@@ -9,7 +9,7 @@ import { z } from "zod";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
 import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
-import { measureProgramText } from "./measure";
+import { measureProgramText, programHasText } from "./measure";
 import { placeRootFrame } from "./placement";
 import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
@@ -340,12 +340,27 @@ export async function runRuntimeTool(
   }
 
   const advisories = reuseAdvisory(compiled.operations as Array<Record<string, unknown>>);
+  /**
+   * What the applicability verdict stands on.
+   *
+   * When the plugin could not be asked (or answered empty) but the program has
+   * text, the layout stands on character-count estimates — the SAME program
+   * can compile to different geometry once real text heights arrive, which is
+   * exactly how a dry run said "applicable" and the apply that followed
+   * refused the same program for a spill the estimates could not see
+   * (measured live on the issue-22 loop). Name the basis so a dry run never
+   * reads as a guarantee it does not have.
+   */
+  const hasText = programHasText(program);
+  const applicabilityBasis = !hasText ? "none-needed" : measuredCount > 0 ? "measured" : "estimates";
   const payload = {
     // A plan whose geometry is not what was asked for is not "completed", and
     // it is emphatically not "applied". Three distinct states, because issue #11
     // found geometry landing off-canvas while the tool reported success.
     status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
     applicable: compiled.applicable,
+    applicabilityBasis,
+    ...(applicabilityBasis === "estimates" ? { applicabilityWarning: "Layout resolved from text ESTIMATES (the measure_text round trip answered empty or failed). The apply path measures against the live plugin and may resolve different geometry — re-run with a responsive plugin before trusting this verdict, and expect the refusal reasons to change." } : {}),
     ...(compiled.applicable ? {} : { inapplicableReasons: compiled.inapplicableReasons }),
     dryRun: dryRun ?? false,
     stats: compiled.stats,

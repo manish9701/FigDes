@@ -44,6 +44,25 @@ export interface MeasureOutcome {
   changed: boolean;
 }
 
+/**
+ * Per-session measurement cache.
+ *
+ * The measurement is a pure function of (text, family, style, size, box
+ * width), but it costs a plugin round trip — and when that round trip fails
+ * or is skipped on one call and succeeds on the next, the same program
+ * compiles to DIFFERENT geometry: measured live on the issue-22 loop, where a
+ * dry run validated against estimates (applicable) and the apply that
+ * followed validated against real text heights (refused for a spill the dry
+ * run could not see). Caching per session makes back-to-back compiles of the
+ * same program agree, which is what makes a dry run predictive.
+ */
+const measureCache = new WeakMap<object, Map<string, TextMeasurement>>();
+const MEASURE_CACHE_CAP = 512;
+
+function cacheKey(spec: { text: string; family: string; style: string; size: number; width?: number }): string {
+  return `${spec.text}\u0000${spec.family}\u0000${spec.style}\u0000${spec.size}\u0000${spec.width ?? "*"}`;
+}
+
 /** The text calls in a program, with the arguments the plugin needs. */
 function textCalls(program: unknown): Array<{ id: string; text: string; role: string; size?: number; family?: string; style?: string; weight?: number; maxWidth?: number }> {
   const content = (program as { content?: unknown })?.content;
@@ -117,14 +136,41 @@ export async function measureProgramText(
     ...(widths.get(c.id) !== undefined ? { width: Math.max(40, Math.round(widths.get(c.id)!)) } : {}),
   }));
 
+  /** Serve hits from the session cache; only misses cost a round trip. */
+  let cache = measureCache.get(session);
+  if (cache === undefined) {
+    cache = new Map();
+    measureCache.set(session, cache);
+  }
+  const misses = specs.filter((s) => {
+    const hit = cache.get(cacheKey(s));
+    if (hit !== undefined) metrics.set(s.key, hit);
+    return hit === undefined;
+  });
+
+  if (misses.length === 0) {
+    return { metrics, measured: metrics.size, failed, changed: false };
+  }
+
   try {
-    const reply = (await session.request("measure_text", { specs })) as {
+    const reply = (await session.request("measure_text", { specs: misses })) as {
       measurements?: Array<{ key: string; width: number; height: number }>;
       failed?: Array<{ key: string; reason: string }>;
     };
     for (const m of reply?.measurements ?? []) {
       if (typeof m.key !== "string" || !(m.height > 0)) continue;
-      metrics.set(m.key, { width: m.width, height: m.height });
+      const spec = misses.find((s) => s.key === m.key);
+      if (spec) {
+        const value = { width: m.width, height: m.height };
+        metrics.set(m.key, value);
+        cache.set(cacheKey(spec), value);
+        // Bounded: drop the oldest entry (Map preserves insertion order) once
+        // the cache would otherwise grow with every new screen.
+        if (cache.size > MEASURE_CACHE_CAP) {
+          const oldest = cache.keys().next().value;
+          if (oldest !== undefined) cache.delete(oldest);
+        }
+      }
     }
     for (const f of reply?.failed ?? []) failed.push({ id: f.key, reason: f.reason });
   } catch (err) {
@@ -132,4 +178,9 @@ export async function measureProgramText(
   }
 
   return { metrics, measured: metrics.size, failed, changed: false };
+}
+
+/** Whether the program's content includes text calls at all (no session needed). */
+export function programHasText(program: unknown): boolean {
+  return textCalls(program).length > 0;
 }

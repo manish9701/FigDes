@@ -40,7 +40,7 @@ import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
-import { measureProgramText } from "../runtime/measure";
+import { measureProgramText, programHasText } from "../runtime/measure";
 import { reuseAdvisory, placeRootInFreeCanvas } from "../runtime/tools";
 import type { Session, SessionRegistry } from "../sessions";
 import { BriefInputSchema } from "./contracts";
@@ -51,6 +51,7 @@ import { verifyLive, verifyPlan, type CompiledProgram, type LiveEvidence } from 
 import { compileVisualIntent, reviewVisualIntelligence, toPipelineFinding } from "../design/skills/intent-compiler";
 import { resolveCompositionAlternatives } from "../design/skills/alternatives";
 import { auditTypeCriteria } from "../design/quality/type-criteria";
+import { evaluateGenericity } from "../design/quality/genericity";
 import { planRepairs, deduplicateOperations } from "./repair";
 import { buildReport } from "./report";
 import type { PipelineCheck, PipelineFinding, PipelineTrace } from "./contracts";
@@ -386,6 +387,56 @@ export async function designPipelineTool(
     );
   }
 
+  /* --- stage 4.6: the genericity intake gate (issue #22 live gap) --------- */
+
+  /**
+   * The anti-generic review (stage 2.5) records findings for the caller, and
+   * the offline benchmark scores genericity after the fact — but the live
+   * apply path consulted neither, so a contradictory brief (the negative
+   * control: a generic SaaS dashboard for a specific product) was committed
+   * as a screen instead of being refused. Two signatures refuse here, before
+   * anything is created:
+   *
+   * 1. The compiled screen scores past the blocking genericity threshold —
+   *    the full card-wall shape the product truths forbid.
+   * 2. The brief's inventory is entirely template metric furniture (every
+   *    required item is a metric, stat or settings link) AND the genericity
+   *    pass found any template signature (e.g. repeated-metric bands). A
+   *    metric wall is the one shape the anti-generic contract names
+   *    ("must NOT look like this"), and stacking the same metrics as rows
+   *    instead of cards does not stop it being that shape.
+   */
+  const intakeGenericity = evaluateGenericity({
+    boxes: compiled.boxes,
+    operations: operations as Array<Record<string, unknown>>,
+    regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+  });
+  const METRICISH_ITEM = /\b(metric|metrics|total|count|percentage|percent|growth|rate|average|avg|revenue|sessions|users|kpi|stats?|stat\b|usage|latency|p\d+|trend|sparkline|settings|changelog|feed)\b/i;
+  const required = brief.requiredInformation ?? [];
+  const allMetricInventory = required.length >= 4 && required.every((item) => METRICISH_ITEM.test(item));
+  const genericityRefusal =
+    intakeGenericity.blocking || (allMetricInventory && intakeGenericity.findings.length > 0);
+  if (genericityRefusal) {
+    const reasons = allMetricInventory && !intakeGenericity.blocking
+      ? [`every required item is template metric furniture (${required.join(", ")}) and the compiled screen repeats it (${intakeGenericity.findings.map((f) => f.id).join(", ")})`]
+      : intakeGenericity.findings.map((f) => `${f.id}: ${f.evidence}`);
+    stage(
+      trace,
+      "genericity-refused",
+      `The compiled screen is a generic template; nothing was created. ${reasons.join("; ")}`,
+      intakeGenericity.findings.map((f) => f.id),
+    );
+    return {
+      ...common,
+      status: "refused",
+      stage: "genericity",
+      genericity: { score: intakeGenericity.score, blocking: true, findings: intakeGenericity.findings },
+      problems: reasons,
+      note: "Nothing was created: the compiled screen is a generic template (the anti-generic gate). Rework the brief — name the product's own decision, inventory and visual direction — rather than asking for a metric wall.",
+      trace,
+    };
+  }
+
   /* --- stage 5: apply ---------------------------------------------------- */
 
   const existing = await resolveExistingResources(session, operations);
@@ -403,10 +454,13 @@ export async function designPipelineTool(
 
   if (!compiled.applicable) {
     stage(trace, "apply-refused", "The program does not resolve to a buildable screen; nothing was created.");
+    const applicabilityBasis = measured.metrics.size > 0 ? "measured" : programHasText(built.program) ? "estimates" : "none-needed";
     return {
       ...common,
       status: "blocked",
       problems: compiled.inapplicableReasons,
+      applicabilityBasis,
+      ...(applicabilityBasis === "estimates" ? { applicabilityWarning: "The geometry was resolved from text ESTIMATES (the measure_text round trip answered empty or failed), so these refusal reasons can move once real text heights arrive — fix the named causes and re-run rather than compensating for exact numbers." } : {}),
       note: "Nothing was created: the resolved geometry is not what the program asked for.",
       trace,
     };

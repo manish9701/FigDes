@@ -15,6 +15,7 @@ import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
+import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import type { Session, SessionRegistry } from "../sessions";
 
 /* -------------------------------------------------------------------------- */
@@ -321,7 +322,12 @@ export async function runRuntimeTool(
   // resolves the widths; the plugin measures at those widths; the second
   // compile uses the measurements. Without a plugin the estimates stand, and
   // the result says so.
-  const firstPass = executeRuntime(program);
+  // Checklist #14: a build is guarded against the merged rule set — built-in
+  // EXO truths plus every rule recorded for this project via project_memory —
+  // so a recorded rule is enforced during generation, not only at final review.
+  const { memory: projectMemory } = loadMemory(projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined));
+  const rules = effectiveRules(projectMemory);
+  const firstPass = executeRuntime(program, { rules });
   let compiled = firstPass;
   let measuredCount = 0;
   if (session !== null) {
@@ -330,7 +336,7 @@ export async function runRuntimeTool(
     const measured = await measureProgramText(session, program, widths);
     if (measured.metrics.size > 0) {
       measuredCount = measured.metrics.size;
-      compiled = executeRuntime(program, { textMetrics: measured.metrics });
+      compiled = executeRuntime(program, { textMetrics: measured.metrics, rules });
     }
   }
 

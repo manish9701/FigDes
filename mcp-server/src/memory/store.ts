@@ -19,8 +19,11 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { MemoryNoteSchema, ProjectMemorySchema, type MemoryNote, type ProjectMemory } from "../../../shared/memory";
+import { MemoryNoteSchema, ProjectMemorySchema, type MemoryNote, type ProductRule, type ProjectMemory } from "../../../shared/memory";
 import { defaultRules } from "./rules-exo";
+
+/** Re-exported for callers that read the built-in set through the store module. */
+export { defaultRules };
 
 /**
  * Memory lives beside the project, not inside the user's home directory.
@@ -206,7 +209,10 @@ export function notesForPrompt(memory: ProjectMemory, opts: { screen?: string; c
 
 /** Renders the rules that carry machine-checkable evidence. */
 export function rulesForPrompt(memory: ProjectMemory): string {
-  const checkable = memory.rules.filter((r) => r.evidence.some((e) => e.kind !== "manual"));
+  // What design_guard actually enforces after the merge (checklist #14): the
+  // built-ins plus the stored rules, not the stored file alone — otherwise a
+  // rule recorded via project_memory is described but never applied.
+  const checkable = effectiveRules(memory).filter((r) => r.evidence.some((e) => e.kind !== "manual"));
   if (checkable.length === 0) return "";
 
   const lines = checkable.map((r) => {
@@ -215,4 +221,81 @@ export function rulesForPrompt(memory: ProjectMemory): string {
   });
 
   return ["Product rules enforced by design_guard:", ...lines].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Stored rules: validated load, built-in merge                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Degrades a stored rule that cannot be *evaluated* into one that can be
+ * *surfaced*.
+ *
+ * Rules recorded through `project_memory` for a project must apply during
+ * generation, not only at final review — but a stored rule is user input, and
+ * user input must never be able to take the guard down or hard-fail a screen
+ * on a guess. Two degradations, both honest:
+ *
+ * - a pattern that does not compile is demoted to a `manual` question (a bad
+ *   regex would otherwise throw mid-guard and abort the whole run; an
+ *   unevaluated rule is INDETERMINATE machinery, not a failure);
+ * - a rule carrying no evidence at all gets one `manual` question derived from
+ *   its own `therefore`, so it surfaces as guidance the way built-in manual
+ *   rules do, never as an automatic FAIL.
+ *
+ * The declared severity is untouched: the guard still reads it, and a
+ * manual-only rule is INDETERMINATE regardless of severity — exactly the
+ * "PENDING, not guessed" treatment recorded rules deserve.
+ */
+export function normalizeStoredRule(rule: ProductRule): ProductRule {
+  const out: ProductRule = { ...rule, evidence: [...rule.evidence], passesWhen: [...(rule.passesWhen ?? [])] };
+  const compileFails = (pattern: string): boolean => {
+    try {
+      new RegExp(pattern);
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  out.evidence = out.evidence.map((e) => {
+    const pattern = e.kind === "forbiddenText" || e.kind === "maxTexts" ? e.pattern : e.kind === "maxNodes" ? e.namePattern : null;
+    if (pattern !== null && compileFails(pattern)) {
+      return { kind: "manual" as const, question: `The stored rule '${out.id}' carries a pattern that does not compile; a human must check it: ${out.therefore}` };
+    }
+    return e;
+  });
+  if (out.evidence.length === 0) {
+    out.evidence = [{ kind: "manual", question: `Recorded rule '${out.id}' states no measurable evidence; check by hand: ${out.therefore}` }];
+  }
+  return out;
+}
+
+/**
+ * The rule set a guard run should actually apply: the built-in EXO truths plus
+ * every rule recorded in the project's memory, merged at use time.
+ *
+ * A stored rule cannot *shadow* a built-in: a stored copy of an EXO rule id
+ * would freeze an old version of a product truth this build maintains in code —
+ * the drift the guard exists to catch. Stored rules with fresh ids are
+ * additive, which is the whole point: a truth recorded via `project_memory`
+ * must be checked during generation (the pipeline's runGuard path), not only
+ * at final review. EXO_RULES remains the default when the project has recorded
+ * nothing of its own.
+ */
+export function effectiveRules(memory: ProjectMemory): ProductRule[] {
+  // Last recording of an id wins within the stored set (same replace-by-id
+  // semantics as notes); the built-ins fill the space around them.
+  const stored = new Map<string, ProductRule>();
+  for (const rule of memory.rules ?? []) {
+    if (typeof rule?.id !== "string" || rule.id.length === 0) continue;
+    stored.set(rule.id, normalizeStoredRule(rule));
+  }
+  const builtIn = defaultRules();
+  // A stored rule may not shadow a built-in: a stored copy of an EXO rule id
+  // would freeze an old version of a product truth this build maintains in
+  // code — the drift the guard exists to catch. Built-in wins the id; stored
+  // rules with fresh ids are additive.
+  const builtInIds = new Set(builtIn.map((r) => r.id));
+  const storedValues = [...stored.values()].filter((r) => !builtInIds.has(r.id));
+  return [...builtIn, ...storedValues];
 }

@@ -22,7 +22,7 @@
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { type Session } from "../sessions";
-import { withSessionLock } from "./lock";
+import { withSessionLock, withDocumentLock } from "./lock";
 
 const MAX_SCRIPT_SIZE = 160_000;
 /** Native builds can legitimately take minutes when fonts, components and many nodes are involved. */
@@ -185,7 +185,11 @@ export async function figdesUseFigmaHandler(session: Session, args: unknown): Pr
   const parsed = UseFigmaArgs.parse(args ?? {});
   const timeoutMs = parsed.timeoutMs ?? scriptTimeoutMs();
   if (parsed.readonly === true) return runNativeScript(session, parsed.script, { readonly: true, timeoutMs });
-  const result = await withSessionLock(session.id, () => runNativeScript(session, parsed.script, { timeoutMs }));
+  // Session lock serialises this session's own scripts (spec §36); the
+  // document lock above it refuses a *different* session already mutating the
+  // same Figma document, which the session lock cannot see (checklist #21).
+  // Readonly scripts skipped both from the start and still do.
+  const result = await withSessionLock(session.id, () => withDocumentLock(session, () => runNativeScript(session, parsed.script, { timeoutMs })));
   if (result.status === "failed") return result;
   return renderNativeResult(session, result, parsed.renderAfter ?? "none", parsed.renderNodeId, parsed.renderMaxWidth ?? 1024, parsed.renderDetail ?? "low");
 }

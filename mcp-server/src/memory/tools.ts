@@ -10,12 +10,12 @@
  *   FAIL. Read-only, and free — it works on a snapshot the server already has.
  */
 import { z } from "zod";
-import { VerdictSchema } from "../../../shared/memory";
+import { VerdictSchema, ProductRuleSchema, type ProductRule } from "../../../shared/memory";
 import type { MetricsReport } from "../../../shared/protocol";
 import { inferComposition } from "../runtime/layout";
 import { runGuard, snapshotFromIR, decideGuardTarget, metricsFromLiveNodes, type GuardSnapshot } from "./guard";
 import { checkCapabilityTruth } from "./capability-truth";
-import { addNote, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
+import { addNote, defaultRules, effectiveRules, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
 import type { Session } from "../sessions";
 
 /* -------------------------------------------------------------------------- */
@@ -42,6 +42,17 @@ export const ProjectMemoryArgs = z
       .optional(),
     /** The note to drop, for `forget`. */
     id: z.string().max(120).optional(),
+    /**
+     * A product rule to record alongside the note (checklist #14).
+     *
+     * Validated against the shared `ProductRuleSchema` (a rule + expected
+     * evidence, same shape as the built-ins), then stored on the project so
+     * every guard run — including the pipeline's — checks it during
+     * generation. A rule without machine-checkable evidence is stored as-is
+     * and degraded to a guidance/observation (INDETERMINATE, never a hard
+     * FAIL) at guard time by the store's normalisation.
+     */
+    rule: z.unknown().optional(),
     /** Screen and composition filter for reading relevant notes. */
     screen: z.string().max(120).optional(),
     composition: z.string().max(60).optional(),
@@ -96,27 +107,82 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
   }
 
   if (args.action === "record") {
-    if (!args.note) throw new Error("project_memory(action:'record') needs a 'note' object with at least an id and a note string.");
+    if (!args.note && !args.rule) {
+      throw new Error("project_memory(action:'record') needs a 'note' object with at least an id and a note string, or a 'rule' object (id, rule, therefore).");
+    }
+
+    // Validate the rule on record, against the same shape the built-ins carry
+    // (a rule + expected evidence). Evidence is optional at record time — a
+    // rule the agent cannot yet measure is stored and later degraded to
+    // guidance (INDETERMINATE, never a guessed FAIL) by the store's
+    // normalisation.
+    let recordedRule: ProductRule | null = null;
+    if (args.rule) {
+      const parsed = ProductRuleSchema.safeParse(args.rule);
+      if (!parsed.success) {
+        throw new Error(
+          `project_memory(action:'record') rejected the rule: ${parsed.error.issues
+            .slice(0, 3)
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ")}. A rule needs an id, a \`rule\` statement, a \`therefore\` consequence, and evidence naming what would be measured.`,
+        );
+      }
+      recordedRule = parsed.data;
+      // A stored rule may not shadow a built-in EXO truth: the built-in keeps
+      // the id, so a fresh record under a built-in id would be silently
+      // ineffective. Refuse here, before anything is saved. (Re-recording the
+      // identical truth is allowed — an idempotent no-op; and a file that
+      // already holds a stale copy under a built-in id may still be
+      // re-recorded, replacing the stale copy.)
+      const currentForCheck = loadMemory(key);
+      const storedCopy = currentForCheck.memory.rules.find((r) => r.id === recordedRule!.id);
+      const reRecordsIdentical =
+        storedCopy !== undefined && storedCopy.rule === recordedRule!.rule && storedCopy.therefore === recordedRule!.therefore;
+      if (defaultRules().some((r) => r.id === recordedRule!.id) && !reRecordsIdentical) {
+        throw new Error(
+          `project_memory(action:'record') refused rule '${recordedRule.id}': a built-in EXO rule owns that id, so the stored copy would never apply (the built-in truth wins over a stored copy). Record it under a distinct id.`,
+        );
+      }
+    }
 
     const current = loadMemory(key);
-    const result = addNote(current.memory, {
-      id: args.note.id,
-      note: args.note.note,
-      scope: args.note.scope ?? "project",
-      ...(args.note.screen !== undefined ? { screen: args.note.screen } : {}),
-      ...(args.note.composition !== undefined ? { composition: args.note.composition } : {}),
-      tags: args.note.tags ?? [],
-      recordedAt: "",
-    });
+    let action: "added" | "updated" = "added";
 
-    const file = saveMemory(key, result.memory);
+    if (recordedRule) {
+      const rules = [...current.memory.rules];
+      const idx = rules.findIndex((r) => r.id === recordedRule!.id);
+      if (idx >= 0) {
+        rules[idx] = recordedRule;
+        action = "updated";
+      } else {
+        rules.push(recordedRule);
+      }
+      current.memory = { ...current.memory, rules };
+    }
+
+    if (args.note) {
+      const result = addNote(current.memory, {
+        id: args.note.id,
+        note: args.note.note,
+        scope: args.note.scope ?? "project",
+        ...(args.note.screen !== undefined ? { screen: args.note.screen } : {}),
+        ...(args.note.composition !== undefined ? { composition: args.note.composition } : {}),
+        tags: args.note.tags ?? [],
+        recordedAt: "",
+      });
+      current.memory = result.memory;
+      action = result.action;
+    }
+
+    const file = saveMemory(key, current.memory);
     return {
       status: "ok",
-      action: result.action,
+      action,
       project: key,
       file,
-      notes: result.memory.notes.length,
-      recorded: args.note,
+      notes: current.memory.notes.length,
+      ...(args.note ? { recorded: args.note } : {}),
+      ...(recordedRule ? { ruleRecorded: recordedRule, rules: current.memory.rules.length } : {}),
       ...(current.problem ? { warning: current.problem } : {}),
     };
   }
@@ -224,7 +290,9 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     }
   } else if (args.program !== undefined) {
     const { executeRuntime } = await import("../runtime/interpreter");
-    const result = executeRuntime(args.program);
+    // Checklist #14: a program guarded here is checked against the merged rule
+    // set, so the pre-build check and the post-build review agree on the rules.
+    const result = executeRuntime(args.program, { rules: effectiveRules(memory) });
     // The composition the shell layout actually resolved, not the one the model
     // asked for. A screen can request 'spatial' and end up 'canvas', and only the
     // resolved value is what the guard can judge.
@@ -234,7 +302,11 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     throw new Error("design_guard needs either inspect:true (checks the current selection) or a program (checks a design before building it).");
   }
 
-  const result = runGuard(memory.rules, snapshot);
+  // The guard applies the merged set (checklist #14): built-in EXO truths plus
+  // every rule recorded for this project via project_memory — normalized so a
+  // stored rule without checkable evidence degrades to guidance, never FAIL.
+  const rules = effectiveRules(memory);
+  const result = runGuard(rules, snapshot);
 
   /**
    * The capability-truth stage: what the screen *claims*, checked separately
@@ -259,6 +331,11 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     verdict,
     findings: result.findings,
     stats: result.stats,
+    /** Provenance of the checked set: built-ins and stored rules merged at run time. */
+    rulesSource: {
+      builtIn: defaultRules().filter((r) => rules.some((x) => x.id === r.id)).length,
+      stored: memory.rules.length,
+    },
     /** What the screen claims, and whether the product can back it. */
     capabilityTruth: {
       verdict: capability.verdict,

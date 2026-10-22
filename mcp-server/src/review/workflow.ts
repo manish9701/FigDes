@@ -28,6 +28,7 @@ import { extendCritique } from "../design/quality/visual-critic";
 import { planRepairs } from "../design/quality/repair-planner";
 import { evaluateFinalGate } from "../design/quality/final-gate";
 import { makeFindings, trackFindings } from "../design/quality/visual-findings";
+import { contentRevision } from "../design/quality/revision";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
 import type { Session } from "../sessions";
@@ -476,6 +477,33 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
       ? "Prior findings were supplied but the current image was not re-reported: pass visualFindings from what you see now to verify resolution."
       : null;
 
+    /**
+     * Render-revision binding on the emitted findings (checklist #23b).
+     *
+     * These findings exist only because of the screenshot; their proof is the
+     * image. Binding each one to the content revision this run measured (and
+     * marked stale:false at emit time) means a later reader can tell whether
+     * an old screenshot is being used to certify work done after it — the
+     * failure mode where a stale image silently vouches for a newer revision.
+     * Unlocalized findings (no measured nodes under the area) state that
+     * explicitly rather than shipping an empty nodeIds array that reads as
+     * "affects nothing".
+     */
+    const renderRevision = contentRevision({ nodes: nodes.map((n) => [n.id, n.x, n.y, n.w, n.h, n.fill, n.name]) }, "render");
+    const emittedFindings = findings.map((f) => ({
+      ...f,
+      renderRevision,
+      stale: false as const,
+      ...(f.nodeIds.length === 0 ? { targetsHint: "targets: unknown, re-inspect" } : {}),
+      nextStep: {
+        tool: "modify_design",
+        needs: "nodeIds",
+        ...(f.nodeIds.length > 0
+          ? { detail: `Repair from the finding's nodeIds (${f.nodeIds.slice(0, 4).join(", ")}), then re-render.` }
+          : { detail: "No measured nodes under this area — inspect first, do not guess." }),
+      },
+    }));
+
     const structuralBlocking = [...visual.qualityGate.blockingIssues];
     if (liveGenericity.blocking) {
       structuralBlocking.push(`Genericity: ${liveGenericity.score}/100 exceeds 70 — ${liveGenericity.findings.map((f) => f.id).join(", ")}. ${liveGenericity.repairs[0] ?? ""}`);
@@ -503,7 +531,7 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
         dimensions: visual.dimensions,
         watchList: visual.watchList,
         genericity: { score: liveGenericity.score, blocking: liveGenericity.blocking, findings: liveGenericity.findings },
-        findings,
+        findings: emittedFindings,
         resolution,
         ...(resolutionNote ? { resolutionNote } : {}),
         liveEvidence: {

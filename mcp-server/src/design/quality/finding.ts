@@ -60,6 +60,38 @@ export interface DesignFinding {
   verification: string;
   status: FindingStatus;
   evaluatorVersion?: string;
+  /* --- actionable-diagnostics upgrade (checklist #23; all optional, so every
+         existing producer and consumer keeps working unchanged) ----------- */
+
+  /** Executable repair operations the producer already validated, when it has them. */
+  suggestedOperations?: Array<Record<string, unknown>>;
+  /**
+   * The concrete repair step for findings that carry only prose advice. Names
+   * the tool that can act and what that tool needs first, so "this looks off"
+   * never dead-ends.
+   */
+  nextStep?: FindingNextStep;
+  /** The render revision a screenshot-only finding is bound to (blueprint §9). */
+  renderRevision?: string;
+  /**
+   * True when the screenshot's bound revision does not match the revision the
+   * caller is certifying. A stale screenshot must never silently certify a
+   * newer revision; absent `stale` means no current revision was supplied to
+   * compare against — which is an unknown, not a pass.
+   */
+  stale?: boolean;
+  /** Set when the finding names no affected node: an explicit unknown, never a silent empty. */
+  targetsHint?: string;
+}
+
+/** The concrete verb-set a finding proposes as its next action. */
+export interface FindingNextStep {
+  /** The MCP tool that can perform the repair, e.g. `modify_design`. */
+  tool: string;
+  /** The input the tool needs before it can act, e.g. `nodeIds`. */
+  needs: string;
+  /** Concrete detail the acting tool or agent should read first. */
+  detail?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -150,6 +182,10 @@ export interface FindingInput {
   /** Overrides the derived id. */
   id?: string;
   status?: FindingStatus;
+  /** Validated operations the producer already has (checklist #23). */
+  suggestedOperations?: Array<Record<string, unknown>>;
+  /** Overrides the derived nextStep, when the producer knows a better one. */
+  nextStep?: FindingNextStep;
 }
 
 /** The single construction path, so normalisation can never be skipped. */
@@ -170,7 +206,89 @@ export function makeFinding(input: FindingInput): DesignFinding {
     evaluatorVersion: EVALUATOR_VERSION,
   };
   if (input.suggestedFix !== undefined) finding.suggestedFix = input.suggestedFix;
-  return finding;
+  if (input.suggestedOperations !== undefined) finding.suggestedOperations = input.suggestedOperations;
+  if (input.nextStep !== undefined) finding.nextStep = input.nextStep;
+  // A finding is fresh relative to the render it was just measured against, so
+  // that render revision is both its binding and the "current" revision at
+  // construction time. A later caller re-certifying a newer revision must run
+  // `normalizeFinding` again — an old binding silently passing as current is
+  // exactly what `stale` exists to prevent.
+  const screenshotRevision = input.evidence.find((e) => e.type === "screenshot-region")?.revisionId;
+  return normalizeFinding(finding, screenshotRevision !== undefined && screenshotRevision.length > 0 ? { currentRevisionId: screenshotRevision } : {});
+}
+
+/* -------------------------------------------------------------------------- */
+/* Actionable diagnostics normalisation (checklist #23)                        */
+/* -------------------------------------------------------------------------- */
+
+export interface NormalizeFindingOptions {
+  /**
+   * The revision the caller is certifying *now*. When given, screenshot-bound
+   * evidence that names a different revision is marked `stale:true` — the
+   * marker that stops an old screenshot from certifying work done after it.
+   */
+  currentRevisionId?: string;
+  /** Validated operations the producer already has; attached when present. */
+  suggestedOperations?: Array<Record<string, unknown>>;
+}
+
+/**
+ * Brings any finding — however it was produced — up to the actionable
+ * diagnostics shape. Backward compatible: every pre-existing field is left
+ * exactly as it was, only the optional diagnostic fields are added.
+ *
+ * Guarantees after the call:
+ * - `severity` is from the canonical vocabulary and `confidence` is a finite 0–1;
+ * - `evidence` is an array, and every element carries its typed source;
+ * - `affectedNodeIds` is an array; when it is empty, `targetsHint` states the
+ *   unknown explicitly ("targets: unknown, re-inspect") instead of an empty
+ *   list that reads as "no nodes affected";
+ * - the finding proposes either validated `suggestedOperations` or a structured
+ *   `nextStep` ({tool, needs, detail}) derived from its own repair advice —
+ *   prose-only findings still end in a concrete verb-set;
+ * - for findings whose only evidence is the screenshot, `renderRevision`
+ *   carries the render revision binding and `stale` says truthfully whether
+ *   that binding still matches the revision being certified.
+ */
+export function normalizeFinding(finding: DesignFinding, opts: NormalizeFindingOptions = {}): DesignFinding {
+  const out: DesignFinding = { ...finding };
+  out.severity = normalizeSeverity(String(out.severity ?? "info"));
+  out.confidence = Number.isFinite(out.confidence) ? clamp01(out.confidence) : 0.5;
+  out.evidence = Array.isArray(out.evidence) ? out.evidence : [];
+  out.affectedNodeIds = Array.isArray(out.affectedNodeIds) ? out.affectedNodeIds : [];
+  if (out.affectedNodeIds.length === 0) out.targetsHint = "targets: unknown, re-inspect";
+
+  // Only-screenshot evidence: bind the render revision and mark staleness.
+  const screenshots = out.evidence.filter((e) => e.type === "screenshot-region");
+  if (screenshots.length > 0 && screenshots.length === out.evidence.length) {
+    const bound = screenshots.find((e) => e.revisionId && e.revisionId.length > 0);
+    if (bound) {
+      out.renderRevision = bound.revisionId;
+      out.stale = opts.currentRevisionId !== undefined ? opts.currentRevisionId !== out.renderRevision : undefined;
+    }
+  }
+
+  if (opts.suggestedOperations !== undefined && opts.suggestedOperations.length > 0) {
+    out.suggestedOperations = opts.suggestedOperations;
+    // Real validated operations supersede a derived nextStep; an explicit
+    // nextStep naming a different tool is kept (the producer knew better).
+    if (out.nextStep && out.nextStep.tool === "modify_design" && out.nextStep.needs.startsWith("nodeIds")) {
+      delete out.nextStep;
+    }
+  }
+  if (out.nextStep === undefined && !(out.suggestedOperations !== undefined && out.suggestedOperations.length > 0)) {
+    out.nextStep = {
+      tool: "modify_design",
+      needs:
+        out.affectedNodeIds.length > 0
+          ? "nodeIds"
+          : "nodeIds — none recorded; re-inspect the target first (targets unknown)",
+      ...(out.suggestedFix !== undefined || out.verification !== undefined
+        ? { detail: out.suggestedFix ?? out.verification }
+        : {}),
+    };
+  }
+  return out;
 }
 
 function clamp01(n: number): number {

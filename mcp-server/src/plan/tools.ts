@@ -18,6 +18,7 @@ import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, SCREEN_A
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import { bestPattern } from "../design/grammar/matcher";
 import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
+import { compositionHintFor, detectCompositionDescriptors } from "../design/skills/composition";
 import { buildDesignContext, contextBrief } from "../design/context/design-context";
 import { toKnowledge } from "../design/system/component-intelligence";
 import type { Composition } from "../runtime/layout";
@@ -276,6 +277,15 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(args.audience !== undefined ? { audience: [args.audience] } : {}),
     ...(args.visualDirection !== undefined ? { visualDirection: directionFor(args.visualDirection) } : {}),
   });
+  // The composition descriptor the direction states (issue #24, item 3) is
+  // compiled into a plan-level hint and applied to the composition plan with
+  // named provenance. A caller-stated composition is untouched: that shell is
+  // the planner's constraint and the hint only shapes the manner inside it.
+  const compositionDescriptors = args.visualDirection !== undefined ? detectCompositionDescriptors(args.visualDirection) : { applied: [], excluded: [] };
+  const compositionHint = compositionDescriptors.applied.length > 0
+    ? compositionHintFor(compositionDescriptors.applied, `Stated in the direction: '${args.visualDirection}'.`).hint
+    : undefined;
+
   const compositionPlan = buildCompositionPlan({
     pattern,
     focalId: plan.artDirection.focal?.id ?? null,
@@ -283,6 +293,7 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     hierarchy: plan.artDirection.hierarchy.map((h) => h.id),
     regions: plan.regions.map((r) => ({ id: r.id, role: r.role, why: r.because })),
     ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
+    ...(compositionHint !== undefined ? { compositionHint } : {}),
   });
   const holds = compositionHolds(compositionPlan);
 

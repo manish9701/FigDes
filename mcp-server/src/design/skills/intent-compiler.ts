@@ -17,9 +17,12 @@
  *
  * - **No second generator.** The output is the same schema the interpreter
  *   parses today; nothing here invents coordinates, nodes or a parallel IR.
- * - **No dead fields.** `composition` (and only what the runtime does not
- *   read) is explicitly marked unsupported in `INTENT_FIELD_CONSUMERS`; the
- *   contract test walks `VisualIntentSchema.shape` against that ledger.
+ * - **No dead fields.** Every `VisualIntent` field the runtime *or* the
+ *   composition planner does not read is explicitly marked unsupported in
+ *   `INTENT_FIELD_CONSUMERS`; the contract test walks `VisualIntentSchema.shape`
+ *   against that ledger. `composition` (issue #24, item 3) is consumed at plan
+ *   level: the composition skill compiles closed-vocabulary descriptors and the
+ *   composition planner applies the compiled hint with provenance.
  * - **Manner is specific.** When two skills claim the same intent field, the
  *   per-field priority table (KEY_PRIORITY) decides, and the overridden
  *   decision stays in the trail with a note. Ties are deterministic.
@@ -44,7 +47,7 @@ import {
 } from "./contracts";
 import { SkillRegistry, createSkillRegistry } from "./registry";
 import { briefArtDirection } from "./direction";
-import { compositionStrategy } from "./composition";
+import { compositionStrategy, detectCompositionDescriptors, COMPOSITION_VOCABULARY } from "./composition";
 import { typeAndSpace } from "./type-space";
 import { antiGenericReview, reviewPlan } from "./anti-generic";
 
@@ -108,6 +111,13 @@ export function computeSignals(brief: NormalizedBrief): SignalFacts {
   if (brief.desiredComposition !== undefined && ["canvas", "topology", "spatial", "diagram"].includes(brief.desiredComposition)) {
     signals.push("spatial-request");
     why["spatial-request"] = `The caller insists on '${brief.desiredComposition}'.`;
+  }
+  if (brief.visualDirection !== undefined && brief.visualDirection !== null) {
+    const descriptors = detectCompositionDescriptors(brief.visualDirection).applied;
+    if (descriptors.length > 0) {
+      signals.push("composition-request");
+      why["composition-request"] = `The direction names the composition descriptor(s) '${descriptors.join("', '")}' — closed-vocabulary composition word(s).`;
+    }
   }
   if (classifyDecision(brief.primaryDecision) === "configure") {
     signals.push("form-task");
@@ -177,6 +187,7 @@ const KEY_PRIORITY: Record<string, string[]> = {
 /** Canonical fields the skills may write, and their runtime value types. */
 const FIELD_TYPES: Record<string, string[]> = {
   "visual-intent.style": ["string"],
+  "visual-intent.composition": [...COMPOSITION_VOCABULARY],
   "visual-intent.density": ["airy", "calm", "balanced", "dense"],
   "visual-intent.rhythm": ["generous", "tight", "even"],
   "visual-intent.alignment": ["loose", "strong"],
@@ -369,6 +380,7 @@ export function compileVisualIntent(
 function describeIntent(intent: VisualIntent): string {
   const parts: string[] = [];
   if (intent.style !== undefined) parts.push(`style '${intent.style}'`);
+  if (intent.composition !== undefined) parts.push(`composition '${intent.composition}'`);
   if (intent.density !== undefined) parts.push(`density '${intent.density}'`);
   if (intent.rhythm !== undefined) parts.push(`rhythm '${intent.rhythm}'`);
   if (intent.alignment !== undefined) parts.push(`alignment '${intent.alignment}'`);

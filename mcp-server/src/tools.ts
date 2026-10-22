@@ -222,7 +222,7 @@ const FindNodeArgs = z
       .string()
       .max(60)
       .optional()
-      .describe("Semantic role: primaryAction, activeNavigation, navigation, heroTitle, topologyMap, statusBadge, searchField."),
+      .describe("Semantic role: primaryAction, secondaryAction, activeNavigation, navigation, footerNavigation, heroTitle, sectionHeading, metaLabel, topologyMap, statusBadge, searchField, textInput, toggle, dropdownSelector, dataRow, metric, avatar, iconButton, emptyState, errorState, successState, loadingIndicator, tableHeader, chipTag, breadcrumb, paginationControl, cardContainer."),
     name: z.string().max(200).optional().describe("Substring of the layer name."),
     text: z.string().max(500).optional().describe("Substring of text content."),
     limit: z.number().int().min(1).max(50).optional(),
@@ -919,7 +919,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "find_node",
     title: "Find a node by what it is, not its id",
     description:
-      "Resolve a node from intent: a screen name, a semantic role (primaryAction, activeNavigation, navigation, heroTitle, topologyMap, statusBadge, searchField), a layer-name substring, or a text-content substring. Returns real Figma ids with the reason each matched, so a surprising result is inspectable. Use this before modify_design instead of reusing ids from older transactions - stale ids are how the wrong subtree gets edited.",
+      "Resolve a node from intent: a screen name, a semantic role (primaryAction, secondaryAction, activeNavigation, navigation, footerNavigation, heroTitle, sectionHeading, metaLabel, topologyMap, statusBadge, searchField, textInput, toggle, dropdownSelector, dataRow, metric, avatar, iconButton, emptyState, errorState, successState, loadingIndicator, tableHeader, chipTag, breadcrumb, paginationControl, cardContainer), a layer-name substring, or a text-content substring. Returns real Figma ids with the reason each matched, so a surprising result is inspectable. Use this before modify_design instead of reusing ids from older transactions - stale ids are how the wrong subtree gets edited.",
     inputSchema: FindNodeArgs,
     handler: async (args, registry) => {
       const parsed = FindNodeArgs.parse(args ?? {});

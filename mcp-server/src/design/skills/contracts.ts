@@ -72,6 +72,8 @@ export const SKILL_SIGNALS = [
   "form-task",
   /** The brief declares design-system constraints the output must honour. */
   "design-system-context",
+  /** The direction names a closed-vocabulary composition descriptor (issue #24, item 3). */
+  "composition-request",
 ] as const;
 
 export type SkillSignal = (typeof SKILL_SIGNALS)[number];
@@ -308,11 +310,16 @@ export const INTENT_FIELD_CONSUMERS: Record<string, IntentFieldConsumer> = {
     effect: "Layered/subtle lift chrome and panel regions one elevation level (soft shadow); flat stays flat.",
   },
   composition: {
-    status: "unsupported",
-    reason:
-      "The interpreter never reads it and feeding a manner string here would bypass the planner's composition solver (" +
-      "mcp-server/src/plan/planner.ts planScreen inferComposition), which chooses composition from the task and derived regions. " +
-      "The compiled composition travels as skill decisions on the plan instead, where it is auditable; a runtime writer may state it only to mirror the planner's choice.",
+    status: "consumed",
+    consumer:
+      "mcp-server/src/design/skills/composition.ts apply (closed-vocabulary descriptor → composition decisions) + " +
+      "mcp-server/src/design/composition/planner.ts buildCompositionPlan / applyCompositionHint (hint → density, geometry, negative space)",
+    effect:
+      "A descriptor word in the direction ('asymmetric | split | centered | radial | dense-editorial | topology-over-inspector') " +
+      "is compiled by the composition-strategy skill into concrete density/rhythm/alignment overrides plus a composition hint. " +
+      "The composition planner applies that hint to the plan's density, geometry and negative-space plans, naming the descriptor " +
+      "as provenance. The runtime interpreter still never reads the field directly: the effect is plan-level, and a caller-supplied " +
+      "desiredComposition remains the hard shell constraint the descriptor can never replace.",
   },
 };
 

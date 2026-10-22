@@ -20,6 +20,7 @@
 import type { SkillDecision, SkillEntry, SkillOutput, SkillSpec } from "./contracts";
 import type { NormalizedBrief } from "../../pipeline/contracts";
 import { resolveStyleTokens } from "../../runtime/visual-presets";
+import { detectCompositionDescriptors, type CompositionDescriptor } from "./composition";
 
 interface AdjectiveMapping {
   /** Style tokens: named presets, accordion words or bare directives. */
@@ -139,6 +140,28 @@ function directionWords(direction: string): string[] {
     .filter((w) => w.length > 1);
 }
 
+/**
+ * Composition descriptors (issue #24, item 3) belong to the composition
+ * strategy skill's closed vocabulary, not to manner tokens. This removes them
+ * from the word stream so their hyphenated fragments never surface as
+ * untranslated manner words, and returns what it found so the hand-off is
+ * named instead of a silent drop. A negated descriptor ('not asymmetric') is
+ * returned as excluded rather than handed over.
+ */
+function stripCompositionDescriptors(direction: string): {
+  text: string;
+  handed: CompositionDescriptor[];
+  excluded: CompositionDescriptor[];
+} {
+  const facts = detectCompositionDescriptors(direction);
+  let text = direction;
+  for (const descriptor of [...facts.applied, ...facts.excluded]) {
+    const phrase = descriptor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    text = text.replace(new RegExp(`(?<![a-zA-Z\\-])${phrase}(?![a-zA-Z\\-])`, "gi"), " ");
+  }
+  return { text, handed: facts.applied, excluded: facts.excluded };
+}
+
 /** Pairs of direction *words* (not tokens) that pull against each other. */
 const TENSION_WORDS: Array<{ left: string[]; right: string[] }> = [
   { left: ["premium", "generous"], right: ["dense", "crowded"] },
@@ -148,7 +171,7 @@ const TENSION_WORDS: Array<{ left: string[]; right: string[] }> = [
 
 const SPEC: SkillSpec = {
   id: "brief-art-direction",
-  version: "v1",
+  version: "v2",
   name: "Brief interpretation and art direction",
   purpose:
     "Turns the brief's manner words into observable style decisions, separates hard constraints from preferences, and carries one direction through generation so the critique can check against it later.",
@@ -292,7 +315,22 @@ export const briefArtDirection: SkillEntry = {
       };
     }
 
-    const words = directionWords(direction);
+    const stripped = stripCompositionDescriptors(direction);
+    for (const descriptor of stripped.handed) {
+      notes.push(`'${descriptor}' is a composition descriptor: the composition strategy skill's closed vocabulary owns it and compiles it into composition decisions; no manner tokens here.`);
+    }
+    for (const descriptor of stripped.excluded) {
+      decisions.push({
+        skill: SPEC.id,
+        dimension: "composition",
+        key: `direction-exclusion: ${descriptor}`,
+        value: "avoided",
+        why: `The direction bars '${descriptor}' ('${direction}'); the composition strategy skill will not apply it either.`,
+        hard: true,
+      });
+      notes.push(`Composition descriptor '${descriptor}' excluded by negation; recorded as a hard exclusion, not an unapplied manner word.`);
+    }
+    const words = directionWords(stripped.text);
     const tokensByWord = new Map<string, string[]>();
     const untranslated: string[] = [];
 

@@ -30,6 +30,7 @@ import {
   type SessionRegistry,
 } from "./sessions";
 import { validateTransaction } from "./preflight";
+import { withDocumentLock, DocumentLockBusyError } from "./native/lock";
 import {
   recordDuplicateRetry,
   recordPreflightCatch,
@@ -106,13 +107,33 @@ export async function dispatchTransaction(
   const t0 = Date.now();
   let result: TransactionResult;
   try {
-    // The wire request id is bound synchronously by `request`, so the ledger can
-    // record it here. Without that binding a late plugin result has no key to
-    // rebind to and the `byRequestId` fallback can never match anything.
-    const inFlight = session.request(tool, { ...payload, transactionId });
-    registry.jobs.update(transactionId, { requestId: session.requestIdFor(transactionId) ?? undefined });
-    result = (await inFlight) as TransactionResult;
+    // Cross-session coordination (checklist #21): two plugin sessions bound to
+    // the same Figma document must not dispatch mutations concurrently. The
+    // ledger refuses same-transaction duplicates; nothing refused *different*
+    // transactions over the same document — exactly the clobber the session
+    // lock cannot see. `dryRun` mutates nothing, so it bypasses the document
+    // lock exactly as a read does. The lock releases in a finally, so a
+    // timeout or mid-apply disconnect frees the document instead of blocking
+    // the other session after the holder is already dead.
+    const dispatch = async (): Promise<TransactionResult> => {
+      // The wire request id is bound synchronously by `request`, so the ledger
+      // can record it here. Without that binding a late plugin result has no
+      // key to rebind to and the `byRequestId` fallback can never match
+      // anything.
+      const inFlight = session.request(tool, { ...payload, transactionId });
+      registry.jobs.update(transactionId, { requestId: session.requestIdFor(transactionId) ?? undefined });
+      return (await inFlight) as TransactionResult;
+    };
+    result = ((payload.dryRun === true ? await dispatch() : await withDocumentLock(session, dispatch))) as TransactionResult;
   } catch (err) {
+    if (err instanceof DocumentLockBusyError) {
+      // Nothing was dispatched, so this is a refusal, not a Figma failure.
+      // Recorded as a clean searchable failure; the error names the holder
+      // session and document verbatim.
+      registry.jobs.complete(transactionId, "failed", { error: err.message, label: "blocked: another session is writing this document" });
+      recordToolCall(tool, Date.now() - t0, { ops: ops.length });
+      throw err;
+    }
     const unknownOutcome =
       err instanceof TransactionTimeoutError ||
       err instanceof SessionDisconnectedError ||

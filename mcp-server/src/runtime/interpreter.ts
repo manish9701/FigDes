@@ -22,6 +22,7 @@
 import { z } from "zod";
 import { runGuard, snapshotFromIR } from "../memory/guard";
 import { defaultRules } from "../memory/rules-exo";
+import type { ProductRule } from "../../../shared/memory";
 import {
   canvasSize,
   ComponentSpecSchema,
@@ -559,6 +560,13 @@ warnings: string[];
 export interface RuntimeOptions {
   /** Measured text heights, keyed by the text node's id. */
   textMetrics?: Map<string, { width: number; height: number }>;
+  /**
+   * Product rules the build-time guard checks against. Defaults to the
+   * built-in rule set; callers that have project memory loaded pass the
+   * merged set (`effectiveRules`) so rules recorded for this project via
+   * project_memory are enforced during generation, not only at final review.
+   */
+  rules?: ProductRule[];
 }
 
 export function executeRuntime(input: unknown, options: RuntimeOptions = {}): RuntimeResult {
@@ -1190,7 +1198,7 @@ case "shape": {
   // truth does not silently ship. An INDETERMINATE — anything left to a human
   // judgement — is surfaced as a warning rather than swallowed, because "nobody
   // checked" and "nothing was wrong" are different sentences.
-  const guard = runGuard(defaultRules(), snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
+  const guard = runGuard(options.rules ?? defaultRules(), snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
   const violations = [...compiled.violations];
   for (const f of guard.findings) {
     if (f.verdict === "FAIL") {

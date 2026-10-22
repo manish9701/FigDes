@@ -20,7 +20,165 @@
  */
 import type { SkillDecision, SkillEntry, SkillOutput, SkillSpec } from "./contracts";
 import type { NormalizedBrief } from "../../pipeline/contracts";
+import type { CompositionHint } from "../composition/planner";
 import { classifyDecision } from "../../plan/planner";
+
+/* -------------------------------------------------------------------------- */
+/* Composition descriptor vocabulary (issue #24, item 3)                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The closed vocabulary of composition descriptors the skill can translate.
+ * A descriptor is a *composition* word, not a manner word: it says how the
+ * canvas is arranged, not how it feels. Keeping the set closed is what makes
+ * the ledger honest — a word outside it is recorded untranslated rather than
+ * guessed at.
+ */
+export const COMPOSITION_VOCABULARY = [
+  "asymmetric",
+  "split",
+  "centered",
+  "radial",
+  "dense-editorial",
+  "topology-over-inspector",
+] as const;
+
+export type CompositionDescriptor = (typeof COMPOSITION_VOCABULARY)[number];
+
+/** The arrangement family: two arrangements contradict each other. */
+const ARRANGEMENT_FAMILY: CompositionDescriptor[] = ["asymmetric", "split", "centered", "radial"];
+
+/**
+ * What each descriptor commits to, in terms the planner consumes. `density`,
+ * `rhythm` and `alignment` override the archetype's defaults *with provenance*
+ * (the archetype's value stays in the decision trail); `geometry`,
+ * `negativeSpace` and `focalPosture` are plan-level commitments that ride the
+ * hint into `design/composition/planner.ts`.
+ */
+const DESCRIPTOR_SPECS: Record<CompositionDescriptor, Omit<CompositionHint, "descriptor" | "why">> = {
+  asymmetric: {
+    geometryStrategy: "asymmetric two-column weight: one tall dominant column beside a narrow one",
+    geometryRules: ["left-to-right weight bias; the dominant column holds the focal content"],
+    negativeSpaceStrategy: "negative space gathers on the light side so the weight difference reads as intent",
+    focalPosture: "the dominant column carries the focal region",
+  },
+  split: {
+    geometryStrategy: "equal split: two columns of equal width with a hard boundary",
+    geometryRules: ["equal column widths; the boundary between the halves is a structural line, not a gradient"],
+    negativeSpaceStrategy: "negative space sits inside each half; the halves themselves stay fully weighted",
+    focalPosture: "the focal region anchors one half; the other half answers it",
+  },
+  centered: {
+    geometryStrategy: "single centered axis: the focal content sits on the vertical centre line",
+    geometryRules: ["content symmetric around the centre axis; nothing breaks the axis without a reason"],
+    negativeSpaceStrategy: "generous symmetric margins; whitespace frames the axis",
+    focalPosture: "the focal region sits at centre, first on the axis",
+  },
+  radial: {
+    geometryStrategy: "radial arrangement: content placed around a centre point, focal at the centre",
+    geometryRules: ["even angular spacing where content allows; the centre holds the focal"],
+    negativeSpaceStrategy: "negative space is the ring between spokes; the centre keeps breathing room",
+    focalPosture: "the focal region occupies the centre of the arrangement",
+  },
+  "dense-editorial": {
+    geometryStrategy: "dense readouts over an editorial grid: data columns inside an editorial column rhythm",
+    geometryRules: ["readouts pack into aligned data columns; headlines keep editorial scale above them"],
+    negativeSpaceStrategy: "editorial rhythm is generous between sections even though readouts pack tight",
+    density: "dense",
+    rhythm: "generous",
+    focalPosture: "the largest readout cluster is the visual, the headline is the entry",
+  },
+  "topology-over-inspector": {
+    geometryStrategy: "topology canvas with a subordinate inspector rail beside it",
+    geometryRules: ["the canvas owns the width; the inspection column is a fixed subordinate width"],
+    negativeSpaceStrategy: "whitespace lives in the canvas; the inspector column stays compact",
+    focalPosture: "the canvas is the focal; the inspector never competes with it",
+  },
+};
+
+/** Escapes a vocabulary phrase for exact text search. */
+function escapePhrase(phrase: string): string {
+  return phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+const NEGATOR_WORDS = ["not", "no", "without", "never", "anti", "non"];
+
+/** True when `text` ends with a negator immediately before the phrase match. */
+function precededByNegator(text: string, matchIndex: number): boolean {
+  const before = text.slice(0, matchIndex).trimEnd().toLowerCase();
+  for (const negator of NEGATOR_WORDS) {
+    if (before.endsWith(`${negator} `)) return true;
+    const bare = before.slice(Math.max(0, before.length - negator.length));
+    if (before !== "" && bare === negator) return true;
+  }
+  return false;
+}
+
+export interface CompositionDescriptorFacts {
+  /** Descriptors the direction states affirmatively, in order of appearance. */
+  applied: CompositionDescriptor[];
+  /** Descriptors the direction negates ('not asymmetric'), recorded by the direction skill. */
+  excluded: CompositionDescriptor[];
+}
+
+/**
+ * Reads the composition descriptors out of a direction string.
+ * Phrases are matched on word boundaries so 'split' never matches 'split-view'
+ * mid-word, and a preceding negator excludes rather than applies — the same
+ * negation rule the direction skill applies to manner words.
+ */
+export function detectCompositionDescriptors(direction: string): CompositionDescriptorFacts {
+  const applied: CompositionDescriptor[] = [];
+  const excluded: CompositionDescriptor[] = [];
+  for (const descriptor of COMPOSITION_VOCABULARY) {
+    const re = new RegExp(`(?<![a-zA-Z\\-])${escapePhrase(descriptor)}(?![a-zA-Z\\-])`, "gi");
+    const match = re.exec(direction);
+    if (match === null) continue;
+    if (precededByNegator(direction, match.index)) excluded.push(descriptor);
+    else applied.push(descriptor);
+  }
+  return { applied, excluded };
+}
+
+/** True when the word is (part of) this skill's descriptor vocabulary. */
+export function isCompositionDescriptor(word: string): boolean {
+  return (COMPOSITION_VOCABULARY as readonly string[]).includes(word.toLowerCase());
+}
+
+/**
+ * Builds the planner hint for applied descriptors. Arrangement descriptors are
+ * exclusive — the first one wins and later ones are returned as `superseded`
+ * so the caller can record them — while role overlays ('dense-editorial',
+ * 'topology-over-inspector') stack on any arrangement.
+ */
+export function compositionHintFor(
+  descriptors: readonly CompositionDescriptor[],
+  why: string,
+): { hint: CompositionHint; superseded: CompositionDescriptor[] } {
+  const hint: CompositionHint = { descriptor: "", why };
+  const superseded: CompositionDescriptor[] = [];
+  let arrangementUsed = false;
+  for (const descriptor of descriptors) {
+    const spec = DESCRIPTOR_SPECS[descriptor];
+    if (spec === undefined) continue;
+    const isArrangement = ARRANGEMENT_FAMILY.includes(descriptor);
+    if (isArrangement && arrangementUsed) {
+      superseded.push(descriptor);
+      continue;
+    }
+    if (isArrangement) arrangementUsed = true;
+    if (hint.descriptor.length === 0) hint.descriptor = descriptor;
+    else hint.descriptor = `${hint.descriptor}+${descriptor}`;
+    if (spec.density !== undefined) hint.density = spec.density;
+    if (spec.rhythm !== undefined) hint.rhythm = spec.rhythm;
+    if (spec.alignment !== undefined) hint.alignment = spec.alignment;
+    if (spec.geometryStrategy !== undefined) hint.geometryStrategy = spec.geometryStrategy;
+    if (spec.geometryRules !== undefined) hint.geometryRules = spec.geometryRules;
+    if (spec.negativeSpaceStrategy !== undefined) hint.negativeSpaceStrategy = spec.negativeSpaceStrategy;
+    if (spec.focalPosture !== undefined) hint.focalPosture = spec.focalPosture;
+  }
+  return { hint, superseded };
+}
 
 /** The archetype vocabulary of this skill (issue B's list). */
 const ARCHETYPES = [
@@ -191,11 +349,11 @@ function chooseArchetype(shape: ContentShape, brief: NormalizedBrief): Archetype
 
 const SPEC: SkillSpec = {
   id: "composition-strategy",
-  version: "v1",
+  version: "v2",
   name: "Visual hierarchy and composition strategy",
   purpose:
     "Selects a composition archetype from the decision the screen supports and the content shape the brief supplies, with density, whitespace, focal role and rejected alternatives stated for review.",
-  signals: ["content-inventory", "spatial-request", "form-task", "many-regions", "card-grid-risk"],
+  signals: ["content-inventory", "spatial-request", "form-task", "many-regions", "card-grid-risk", "composition-request"],
   whenToUse: "A brief with any inventory of information, or an explicit composition request.",
   whenNotToUse:
     "A bare brief with only a primary decision: the planner's shells already cover a one-line brief and this skill would add vocabulary to a plan there is nothing to constrain.",
@@ -215,6 +373,13 @@ const SPEC: SkillSpec = {
       dimension: "composition",
       rule: "An explicit desiredComposition is a hard constraint and wins, recorded as such.",
       why: "The caller overrides; the skill records its recommendation lost to the override instead of silently winning.",
+    },
+    {
+      id: "descriptor-vocabulary-closed",
+      dimension: "composition",
+      rule:
+        "Composition descriptor words in the direction (asymmetric, split, centered, radial, dense-editorial, topology-over-inspector) compile to concrete density/geometry/negative-space commitments and a planner hint; at most one arrangement descriptor survives (the first), role overlays stack on it, and words outside the vocabulary are never guessed at.",
+      why: "A composition word that silently changed layout would be an unexplained difference between what the caller asked for and what the plan shows.",
     },
     {
       id: "density-from-evidence",
@@ -249,6 +414,16 @@ const SPEC: SkillSpec = {
       field: "intent-alignment",
       description: "Compiled alignment logic decision.",
       consumedBy: ["shared/ir.ts VisualIntentSchema.alignment", "mcp-server/src/runtime/compile.ts alignGrid"],
+    },
+    {
+      field: "intent-composition",
+      description:
+        "Closed-vocabulary composition descriptor compiled to visualIntent.composition, plus the plan-level composition hint.",
+      consumedBy: [
+        "shared/ir.ts VisualIntentSchema.composition",
+        "design/composition/planner.ts buildCompositionPlan / applyCompositionHint",
+        "design/skills/intent-compiler.ts (ledger)",
+      ],
     },
   ],
   qualityChecks: [
@@ -290,6 +465,9 @@ export const compositionStrategy: SkillEntry = {
     const shape = contentShape(brief);
     const choice = chooseArchetype(shape, brief);
     const hard = brief.desiredComposition !== undefined;
+    const notes: string[] = [
+      `Composition archetype contract: ${choice.archetype} (planner runs after this and derives regions; the plan is reviewed against this contract).`,
+    ];
     const decisions: SkillDecision[] = [
       {
         skill: SPEC.id,
@@ -319,37 +497,111 @@ export const compositionStrategy: SkillEntry = {
       });
     }
     const density = shape.decision === "inspect" && shape.hasNumericReadouts ? ("dense" as const) : choice.density;
+    let rhythm = choice.whitespace;
+    let alignment = choice.alignment;
+
+    /* --- composition descriptors from the direction (issue #24, item 3) ------ */
+
+    let recordedDensity = density;
+    if (brief.visualDirection !== null) {
+      const facts = detectCompositionDescriptors(brief.visualDirection);
+      if (facts.applied.length > 0) {
+        const { hint, superseded } = compositionHintFor(facts.applied, `Stated in the direction: '${brief.visualDirection}'.`);
+        const shellOverride = brief.desiredComposition !== undefined
+          ? ` The brief's stated composition ('${brief.desiredComposition}') remains the hard shell constraint; the descriptor shapes the arrangement manner inside it.`
+          : "";
+        for (const rejected of superseded) {
+          notes.push(
+            `Composition descriptor '${rejected}' contradicts the arrangement '${facts.applied[0]}', which appeared first in the direction; the descriptor is recorded but not applied.`,
+          );
+        }
+        decisions.push({
+          skill: SPEC.id,
+          dimension: "composition",
+          key: "visual-intent.composition",
+          value: hint.descriptor,
+          why: `Compiled from the direction '${brief.visualDirection}': closed-vocabulary descriptors resolve to concrete density/geometry/negative-space commitments (` +
+            [hint.geometryStrategy, hint.negativeSpaceStrategy, hint.density !== undefined ? `density ${hint.density}` : undefined, hint.focalPosture].filter(Boolean).join("; ") +
+            `).${shellOverride}`,
+          hard: false,
+        });
+        decisions.push({
+          skill: SPEC.id,
+          dimension: "composition",
+          key: "composition-hint",
+          value: hint.descriptor,
+          why: `Plan-level hint consumed by design/composition/planner.ts (applyCompositionHint): geometry strategy '${hint.geometryStrategy ?? "unchanged"}', negative space '${hint.negativeSpaceStrategy ?? "unchanged"}'.${shellOverride}`,
+          hard: false,
+        });
+        /* The descriptor overrides the archetype's manner where it commits to
+           one — with the overridden value kept visible in the why. */
+        if (hint.density !== undefined && hint.density !== recordedDensity) {
+          decisions.push({
+            skill: SPEC.id,
+            dimension: "density",
+            key: "density overridden",
+            value: recordedDensity,
+            why: `The descriptor '${hint.descriptor}' commits density ${hint.density}; the archetype's '${recordedDensity}' stays here for audit.`,
+            hard: false,
+          });
+          recordedDensity = hint.density;
+        }
+        if (hint.rhythm !== undefined && hint.rhythm !== rhythm) {
+          decisions.push({
+            skill: SPEC.id,
+            dimension: "spacing",
+            key: "rhythm overridden",
+            value: rhythm,
+            why: `The descriptor '${hint.descriptor}' commits rhythm ${hint.rhythm}; the archetype's '${rhythm}' stays here for audit.`,
+            hard: false,
+          });
+          rhythm = hint.rhythm;
+        }
+        if (hint.alignment !== undefined && hint.alignment !== alignment) {
+          decisions.push({
+            skill: SPEC.id,
+            dimension: "typography",
+            key: "alignment overridden",
+            value: alignment,
+            why: `The descriptor '${hint.descriptor}' commits alignment ${hint.alignment}; the archetype's '${alignment}' stays here for audit.`,
+            hard: false,
+          });
+          alignment = hint.alignment;
+        }
+        notes.push(
+          `Composition descriptors [${facts.applied.join(", ")}] compiled into the composition plan hint with the overridden manner values recorded in the trail.`,
+        );
+      }
+      if (facts.excluded.length > 0) {
+        notes.push(`Composition descriptor(s) excluded by negation in the direction: ${facts.excluded.join(", ")}.`);
+      }
+    }
+
     decisions.push({
       skill: SPEC.id,
       dimension: "density",
       key: "visual-intent.density",
-      value: density,
-      why: "From the archetype's density rule for this decision figure and content shape.",
+      value: recordedDensity,
+      why: "From the archetype's density rule for this decision figure and content shape; overridden by a composition descriptor when the direction states one.",
       hard: false,
     });
     decisions.push({
       skill: SPEC.id,
       dimension: "spacing",
       key: "visual-intent.rhythm",
-      value: choice.whitespace,
-      why: "The archetype's whitespace contract.",
+      value: rhythm,
+      why: "The archetype's whitespace contract; overridden by a composition descriptor when the direction states one.",
       hard: false,
     });
     decisions.push({
       skill: SPEC.id,
       dimension: "typography",
       key: "visual-intent.alignment",
-      value: choice.alignment,
-      why: alignmentWhy(choice.alignment),
+      value: alignment,
+      why: alignmentWhy(alignment),
       hard: false,
     });
-    return {
-      skill: SPEC.id,
-      decisions,
-      notes: [
-        `Composition archetype contract: ${choice.archetype} (planner runs after this and derives regions; the plan is reviewed against this contract).`,
-      ],
-    };
+    return { skill: SPEC.id, decisions, notes };
   },
 };
 

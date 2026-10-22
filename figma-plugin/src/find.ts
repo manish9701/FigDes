@@ -18,6 +18,14 @@
  * match the model did not expect is inspectable rather than silently acted on.
  * When nothing matches, the result is empty with the roles that were tried —
  * never a guess.
+ *
+ * The vocabulary covers whole screens' worth of surfaces: actions (primary and
+ * secondary), inputs, structural containers, data cells, and the five states
+ * (empty, error, success, loading, plus the badges that carry state). Two
+ * discipline rules keep it honest: every predicate is confident-or-silent — a
+ * weak hint returns no match rather than a lucky one — and a restored weak
+ * signal (typography above/below a size band, a circle in a small square)
+ * scores 0.5 and says in its reason exactly which evidence it used.
  */
 import { allPages } from "./cache";
 
@@ -155,6 +163,231 @@ const ROLES: Record<string, { description: string; match: Predicate }> = {
     match: (ctx) => {
       if (/search|filter|query/.test(ctx.lower)) {
         return { score: 0.8, reason: `role searchField: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  secondaryAction: {
+    description: "A subordinate commit: cancel, back, skip, dismiss or reset.",
+    match: (ctx) => {
+      if (/secondary|cancel|later|skip\b|dismiss|reset|\bback\b|secondary action/.test(ctx.lower)) {
+        return {
+          score: 0.8,
+          reason: ctx.type === "INSTANCE" || ctx.type === "COMPONENT"
+            ? `role secondaryAction: ${ctx.type.toLowerCase()} named "${ctx.name}"`
+            : `role secondaryAction: layer named "${ctx.name}"`,
+        };
+      }
+      return null;
+    },
+  },
+  textInput: {
+    description: "A text entry field: input, field, placeholder-carrying box, email/password.",
+    match: (ctx) => {
+      if (/input|text ?field|\bfield\b|placeholder|email|password|username|\bphone\b/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role textInput: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  toggle: {
+    description: "An on/off control: toggle, switch, checkbox or radio.",
+    match: (ctx) => {
+      if (/toggle|switch|check ?box|radio/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role toggle: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  dropdownSelector: {
+    description: "A choose-one control: dropdown, select, picker or combobox.",
+    match: (ctx) => {
+      if (/dropdown|\bpicker\b|combobox|combo box|\bselect\b|select field/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role dropdownSelector: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  sectionHeading: {
+    description: "A sub-headline: between body copy and the page title, or named heading/subtitle.",
+    match: (ctx) => {
+      if (/heading|section title|section header|subtitle|sub-?header/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role sectionHeading: "${ctx.name}"` };
+      }
+      // Top of the sub-headline band (below heroTitle's 24px floor): small
+      // enough to be honest as a guess, so the score says so.
+      if (ctx.type === "TEXT" && ctx.fontSize !== null && ctx.fontSize >= 20 && ctx.fontSize < 24) {
+        return { score: 0.5, reason: `role sectionHeading: ${ctx.fontSize}px text "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  metaLabel: {
+    description: "A caption or meta label: small supporting text such as timestamps or field labels.",
+    match: (ctx) => {
+      if (/caption|\blabel\b|meta\b|timestamp|annotation|small print/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role metaLabel: "${ctx.name}"` };
+      }
+      if (ctx.type === "TEXT" && ctx.fontSize !== null && ctx.fontSize >= 8 && ctx.fontSize <= 11) {
+        return { score: 0.5, reason: `role metaLabel: ${ctx.fontSize}px text "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  dataRow: {
+    description: "One row of structured data: row, list item, entry or record.",
+    match: (ctx) => {
+      if (/\brow\b|list item|entry\b|\brecord\b|line item|table row/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role dataRow: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  metric: {
+    description: "A statistic on screen: metric, stat, KPI, usage figure or a large bare number.",
+    match: (ctx) => {
+      if (/metric|\bstat\b|\bkpi\b|usage|throughput|count\b|percentage|uptime/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role metric: "${ctx.name}"` };
+      }
+      // A text holding nothing but a formatted number is the classic stat
+      // figure; still a size-independent visual guess, so it scores lower.
+      if (ctx.type === "TEXT" && ctx.fontSize !== null && ctx.fontSize >= 16) {
+        const own = ctx.texts.filter((t) => /^\s*[-+]?[\d.,]+\s*[%MBKGT]?\b/i.test(t));
+        if (own.length > 0) {
+          return { score: 0.5, reason: `role metric: ${ctx.fontSize}px numeric text "${own[0]}"` };
+        }
+      }
+      return null;
+    },
+  },
+  avatar: {
+    description: "A portrait or profile image: avatar, thumbnail or user photo.",
+    match: (ctx) => {
+      if (/avatar|thumbnail|portrait|profile ?(image|photo|pic)?|user image|\bpfp\b/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role avatar: "${ctx.name}"` };
+      }
+      // A small square container with an ellipse is the usual avatar shape;
+      // a guess, scored like one.
+      if (
+        (ctx.type === "FRAME" || ctx.type === "INSTANCE") &&
+        ctx.width > 0 &&
+        ctx.width === ctx.height &&
+        ctx.width >= 16 &&
+        ctx.width <= 64 &&
+        ctx.childTypes.includes("ELLIPSE")
+      ) {
+        return { score: 0.5, reason: `role avatar: ${ctx.width}px circle-containing square "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  iconButton: {
+    description: "A button that carries only an icon, not a label.",
+    match: (ctx) => {
+      if (/icon ?[- ]?button|button ?[- ]?icon|\bicon action\b/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role iconButton: "${ctx.name}"` };
+      }
+      // A small instance named after an icon is very likely an icon-only
+      // button on this product's surfaces; without the size check a decorative
+      // 96px hero icon would match, so it must not.
+      if (
+        (ctx.type === "INSTANCE" || ctx.type === "COMPONENT") &&
+        /\bicon\b|\bglyph\b|\bcross\b|\bclose\b|\bcog\b|\bgear\b|\bplus\b|\bminus\b/.test(ctx.lower) &&
+        ctx.width > 0 &&
+        ctx.width <= 48 &&
+        ctx.height <= 48
+      ) {
+        return { score: 0.6, reason: `role iconButton: ${ctx.width}x${ctx.height} ${ctx.type.toLowerCase()} "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  emptyState: {
+    description: "The no-content presentation: empty state, no results, nothing here.",
+    match: (ctx) => {
+      if (/empty|(no|zero) (results?|data|items?|devices?|models?|history)|nothing here|\bdraft\b|blank state/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role emptyState: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  errorState: {
+    description: "The error presentation: error, failed, critical, danger or alert.",
+    match: (ctx) => {
+      if (/error|failed|failure|critical|danger|alert|crash|unreachable|degraded/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role errorState: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  successState: {
+    description: "The success presentation: success, completed, healthy, passed.",
+    match: (ctx) => {
+      if (/success|succeeded|completed|passed|healthy|all good|done\b/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role successState: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  loadingIndicator: {
+    description: "The in-flight presentation: loading, spinner, skeleton or shimmer.",
+    match: (ctx) => {
+      if (/loading|spinner|skeleton|shimmer|in progress|fetching|working/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role loadingIndicator: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  tableHeader: {
+    description: "A header row or heading cells of a tabular list.",
+    match: (ctx) => {
+      if (/table header|column header|header row|thead|columns?/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role tableHeader: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  chipTag: {
+    description: "A chip or tag: small labelled pill for a filter or attribute.",
+    match: (ctx) => {
+      if (/\bchip\b|\btag\b|\bpill\b|\bbadge filter\b|\bfilter chip\b/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role chipTag: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  breadcrumb: {
+    description: "A breadcrumb trail of ancestor locations.",
+    match: (ctx) => {
+      if (/breadcrumb|crumbs|location path|path nav/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role breadcrumb: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  paginationControl: {
+    description: "Paging controls: pagination, next/previous page arrows or a pager.",
+    match: (ctx) => {
+      if (/pagination|pager|next page|prev(ious)? page|page nav/.test(ctx.lower)) {
+        return { score: 0.9, reason: `role paginationControl: "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  cardContainer: {
+    description: "A card: the boxed container holding grouped content (panel, tile, card).",
+    match: (ctx) => {
+      if (/\bcard\b|\bpanel\b|\btile\b|\bgroup box\b|\bblock\b/.test(ctx.lower) && (ctx.type === "FRAME" || ctx.type === "COMPONENT" || ctx.type === "INSTANCE" || ctx.type === "GROUP")) {
+        return { score: 0.8, reason: `role cardContainer: ${ctx.type.toLowerCase()} named "${ctx.name}"` };
+      }
+      return null;
+    },
+  },
+  footerNavigation: {
+    description: "The footer: bottom-of-screen links or a footer navigation bar.",
+    match: (ctx) => {
+      if (/footer|foot nav|\bcopyright\b|\blegal\b/.test(ctx.lower)) {
+        return { score: 0.8, reason: `role footerNavigation: "${ctx.name}"` };
       }
       return null;
     },

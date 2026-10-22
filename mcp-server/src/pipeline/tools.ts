@@ -33,7 +33,7 @@ import { z } from "zod";
 import type { MetricsReport, TransactionResult } from "../../../shared/protocol";
 import { runRules } from "../review/rules";
 import { verifyRepairs } from "../review/verdict";
-import { loadMemory, projectKey } from "../memory/store";
+import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromMetrics } from "../memory/tools";
 import { checkCapabilityTruth } from "../memory/capability-truth";
 import { contentRevision } from "../design/quality/revision";
@@ -135,6 +135,12 @@ export async function designPipelineTool(
   stage(trace, "brief", `Normalized the brief: ${brief.screen}.`, [briefId]);
 
   const blocking = blockers.filter((b) => b.severity === "blocking");
+
+  // Product rules are loaded once, before any build stage: the runtime guard at
+  // build time and the final guard both check against the merged set — built-in
+  // EXO truths plus every rule recorded for this project via project_memory —
+  // so a recorded rule is enforced during generation, not only at final review.
+  const { memory } = loadMemory(projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined));
   if (blocking.length > 0) {
     // Nothing is created. The brief is contradictory, and a screen built from
     // a contradictory brief is a screen that is wrong in a way nobody can
@@ -256,13 +262,15 @@ export async function designPipelineTool(
   // content's heights. So the first compile resolves the widths, the plugin
   // measures the text at them, and the second compile lays the screen out with
   // the heights Figma will really produce.
-  const firstPass = executeRuntime(built.program) as unknown as CompiledProgram;
+  const firstPass = executeRuntime(built.program, { rules: effectiveRules(memory) }) as unknown as CompiledProgram;
   const widths = new Map<string, number>();
   for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
   const measured = await measureProgramText(session, built.program, widths);
   const refined = applyMeasuredWidths(built.program, firstPass.boxes);
   const compiled = (
-    measured.metrics.size > 0 ? executeRuntime(refined.program, { textMetrics: measured.metrics }) : executeRuntime(refined.program)
+    measured.metrics.size > 0
+      ? executeRuntime(refined.program, { textMetrics: measured.metrics, rules: effectiveRules(memory) })
+      : executeRuntime(refined.program, { rules: effectiveRules(memory) })
   ) as unknown as CompiledProgram;
   const program = refined.measured > 0 ? refined.program : built.program;
   const operations = compiled.operations as Array<Record<string, unknown>>;
@@ -741,9 +749,11 @@ export async function designPipelineTool(
   const finalMetrics = live.metrics ?? null;
   if (finalMetrics !== null) {
     try {
-      const { memory } = loadMemory(projectKey(session.fileKey ?? undefined, session.fileName ?? undefined));
       const snapshot = snapshotFromMetrics(finalMetrics, rootNodeId ?? undefined);
-      const guarded = runGuard(memory.rules, snapshot);
+      // Checklist #14: the applied set is the merge — built-in EXO truths plus
+      // the rules recorded for THIS project via project_memory — so a rule the
+      // user recorded is enforced during generation, not only at final review.
+      const guarded = runGuard(effectiveRules(memory), snapshot);
       // The capability-truth stage runs beside the design rules: what the
       // screen claims is checked even when how it behaves checks clean.
       const capability = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });

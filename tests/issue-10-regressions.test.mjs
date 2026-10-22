@@ -639,7 +639,7 @@ test("P1-6: the iteration summary counts iterations that actually ran", async ()
   const { refineScreenTool } = await import("../mcp-server/dist-test/review/workflow.js");
 
   const panel = () => ({ id: "panel", name: "Device Panel", type: "FRAME", visible: true, depth: 0, x: 0, y: 0, w: 400, h: 200 });
-  const withLabel = (colour) => [panel(), textNode("t1", "Label", colour, "#FFFFFF")];
+  const withLabel = (colour) => [panel(), textNode("12:34", "Label", colour, "#FFFFFF")];
 
   const calls = { collect: 0, modify: 0 };
   const session = {
@@ -668,7 +668,7 @@ test("P1-6: refine_screen actually applies the contrast repair", async () => {
   const { refineScreenTool } = await import("../mcp-server/dist-test/review/workflow.js");
 
   const panel = () => ({ id: "panel", name: "Device Panel", type: "FRAME", visible: true, depth: 0, x: 0, y: 0, w: 400, h: 200 });
-  const withLabel = (colour) => [panel(), textNode("t1", "Label", colour, "#FFFFFF")];
+  const withLabel = (colour) => [panel(), textNode("12:34", "Label", colour, "#FFFFFF")];
 
   const sent = [];
   const session = {
@@ -688,7 +688,7 @@ test("P1-6: refine_screen actually applies the contrast repair", async () => {
   const result = await refineScreenTool(session, { maxIterations: 3 });
   assert.equal(sent.length, 1, `exactly one fix should have been applied, got ${JSON.stringify(sent)}`);
   assert.equal(sent[0].type, "setFill");
-  assert.equal(sent[0].target, "t1");
+  assert.equal(sent[0].target, "12:34");
   assert.ok(contrastRatio(sent[0].fill, "#FFFFFF") >= 4.5, "the applied patch must actually pass the check");
   assert.equal(result.status, "converged");
 });

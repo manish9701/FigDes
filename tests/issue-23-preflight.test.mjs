@@ -578,3 +578,207 @@ test("preflightCheckTag names the blocking check a message came from", () => {
   });
   assert.equal(legacy, "createFrame");
 });
+
+/* -------------------------------------------------------------------------- */
+/* 11. chunked builds: the whole-list preflight, and ledger-parity dispatch    */
+/*                                                                            */
+/* The compile keeps duplicate content ids out of an applicable result (its   */
+/* identity rule is compile-blocking), so the cross-chunk duplicate a         */
+/* chunked build must refuse is exercised at the seam that actually faces it  */
+/* — the exported runChunked, called with the same compiled-shaped op list    */
+/* and the same assembled PreflightContext the tool threads into it. That is  */
+/* the tiny harness the exported tool-function path sanctions, and it is      */
+/* where a >120-op compiled list with a duplicate id can exist offline.       */
+/* -------------------------------------------------------------------------- */
+
+const { runChunked, CHUNK_SIZE } = await import("../mcp-server/dist-test/runtime/tools.js");
+
+/** One region child text, parent-local, like the compiler emits. */
+const regionText = (region, j) => text(`t_${region}_${j}`, region, 10, 6 + j * 8, 300, `row ${region}.${j}`);
+
+/**
+ * A compiled-shaped op list: root, six declared regions, 180 region children —
+ * 187 ops, so a chunked build splits into 60/60/60/7 (chunking above 120 ops).
+ * Regions are inside the root's declared box and are the ids the plan
+ * evidence is keyed by, so the only blocker a doctored copy can add is the
+ * collision it carries.
+ */
+const compiledShapedOps = () => {
+  const ops = [frame("root", undefined, undefined, undefined, 1200, 1800)];
+  for (let i = 0; i < 6; i++) ops.push(frame(`r${i}`, "root", 0, i * 300, 1200, 280));
+  for (let i = 0; i < 6; i++) for (let j = 0; j < 30; j++) ops.push(regionText(`r${i}`, j));
+  return ops;
+};
+
+/** The plan evidence the runtime tool assembles once, above its chunk branch. */
+const planEvidenceFor = (ops) => {
+  const planBoxes = {};
+  for (const op of ops) {
+    if (op.type === "createFrame" && op.parent === "root") {
+      planBoxes[op.id] = { x: op.x, y: op.y, w: op.width, h: op.height };
+    }
+  }
+  const overflow = {};
+  const sizing = {};
+  for (const id of Object.keys(planBoxes)) {
+    overflow[id] = "forbid";
+    sizing[id] = { width: planBoxes[id].w, height: planBoxes[id].h };
+  }
+  return { planBoxes, overflow, sizing };
+};
+
+/** A fake registry that records every dispatcher call it is asked to make. */
+function recordingRegistry() {
+  const records = new Map();
+  const dispatcherCalls = [];
+  const jobs = {
+    records,
+    dispatcherCalls,
+    begin(input) {
+      dispatcherCalls.push({ kind: "begin", transactionId: input.transactionId, tool: input.tool, operationCount: input.operationCount });
+      const rec = { transactionId: input.transactionId, state: "queued", tool: input.tool, done: 0, updatedAt: Date.now() };
+      records.set(input.transactionId, rec);
+      return rec;
+    },
+    update(id, patch) {
+      dispatcherCalls.push({ kind: "update", transactionId: id });
+      const rec = records.get(id);
+      if (rec) Object.assign(rec, patch, { updatedAt: Date.now() });
+      return rec;
+    },
+    complete(id, state, extra) {
+      dispatcherCalls.push({ kind: "complete", transactionId: id, state });
+      const rec = records.get(id);
+      if (rec) Object.assign(rec, { state, ...extra }, { updatedAt: Date.now() });
+      return rec;
+    },
+    get(id) {
+      dispatcherCalls.push({ kind: "get", transactionId: id });
+      return records.get(id);
+    },
+    priorResult(id) {
+      dispatcherCalls.push({ kind: "priorResult", transactionId: id });
+      return undefined;
+    },
+  };
+  return { jobs, dispatcherCalls };
+}
+
+/** A fake plugin session: records every request and mints real-looking ids. */
+function chunkedSession() {
+  const requestCalls = [];
+  let figmaSeq = 900;
+  return {
+    requestCalls,
+    id: "s_chunked",
+    fileKey: null,
+    fileName: "Fixture file",
+    notify() {},
+    requestIdFor: () => "req_chunked",
+    request(tool, payload) {
+      if (tool === "inspect_file") return { topLevelFrames: [] };
+      if (tool === "measure_text") return {};
+      if (tool !== "create_design") throw new Error(`unexpected tool ${tool}`);
+      const createdNodes = (payload.operations ?? [])
+        .filter((op) => String(op.type).startsWith("create"))
+        .map((op) => ({ temporaryId: op.id, figmaNodeId: `24:${++figmaSeq}`, type: "FRAME", name: op.name ?? "n" }));
+      const response = {
+        status: "success",
+        transactionId: payload.transactionId,
+        dryRun: false,
+        createdNodes,
+        applied: payload.operations.map((op) => op.type),
+      };
+      requestCalls.push({ tool, payload, response });
+      return response;
+    },
+  };
+}
+
+test("a >120-op compiled list with a cross-chunk duplicate id is refused before ANY chunk is sent", async () => {
+  const ops = compiledShapedOps();
+  // Per-chunk validation can never see this collision: each slice carries its
+  // copy exactly once. Only the whole-list pass reads them together — which is
+  // why the refusal belongs above the first chunk, not inside one.
+  const early = 20; // chunk 1 window (0..59)
+  const late = ops.length - 5; // last chunk window (180..186)
+  ops.splice(early, 0, text("dupe", "r0", 10, 10, 300, "dupe early"));
+  ops.splice(late, 0, text("dupe", "r5", 10, 10, 300, "dupe late"));
+  assert.ok(early < CHUNK_SIZE && late >= 3 * CHUNK_SIZE, "fixture: the two copies must live in different chunk windows");
+
+  const session = chunkedSession();
+  const registry = recordingRegistry();
+  const built = await runChunked(session, registry, ops, "issue 23 chunked dup", planEvidenceFor(ops));
+
+  assert.equal(built.chunks.length, 0, "the refusal is whole-list: nothing was chunked");
+  assert.equal(built.completed, false);
+  assert.notEqual(built.refusal, undefined, "a blocking verdict surfaces as a structured refusal");
+  assert.equal(built.refusal.status, "refused");
+  const problems = built.refusal.problems.join("\n");
+  assert.match(problems, /Duplicate temporary id "dupe"/);
+  assert.ok(problems.includes(`first at #${early}`), `the refusal names the duplicate id and its first declaration: ${problems}`);
+
+  assert.equal(
+    session.requestCalls.filter((c) => c.tool === "create_design").length,
+    0,
+    "zero sends: every blocking verdict holds before any plugin contact",
+  );
+  assert.equal(registry.dispatcherCalls.length, 0, "the dispatcher was never contacted, so the ledger holds no transaction");
+});
+
+test("a valid >120-op chunked build dispatches per-chunk transactionIds and validates the whole list exactly once", async () => {
+  const ops = compiledShapedOps(); // 187 clean ops
+  const session = chunkedSession();
+  const registry = recordingRegistry();
+  const built = await runChunked(session, registry, ops, "issue 23 chunks", planEvidenceFor(ops));
+
+  const totalChunks = Math.ceil(ops.length / CHUNK_SIZE); // 4
+  const expectedSizes = Array.from({ length: totalChunks }, (_, c) => Math.min(CHUNK_SIZE, ops.length - c * CHUNK_SIZE));
+  assert.equal(built.completed, true);
+  assert.equal(built.refusal, undefined);
+  assert.deepEqual(
+    built.chunks.map((c) => c.operations),
+    expectedSizes,
+    "per-chunk op counts follow the existing slicing scheme exactly",
+  );
+  assert.ok(built.chunks.every((c) => c.status === "success" && c.createdNodes.length > 0), "every chunk commits progressively with its own result");
+
+  const sends = session.requestCalls.filter((c) => c.tool === "create_design");
+  const sentSizes = sends.map((s) => s.payload.operations.length);
+  assert.equal(sends.length, totalChunks, "one dispatch per chunk, and nothing else");
+  assert.deepEqual(sentSizes, built.chunks.map((c) => c.operations));
+  assert.ok(sentSizes.every((n) => n <= CHUNK_SIZE));
+  assert.equal(sentSizes.reduce((a, b) => a + b, 0), ops.length, "every compiled op is dispatched exactly once");
+
+  // Issue #14 parity: each chunk carries its own transactionId, derived from
+  // the whole-program fingerprint and the slice number, and the ledger and the
+  // wire agree on it because both go through dispatchTransaction.
+  const wireIds = sends.map((s) => s.payload.transactionId);
+  wireIds.forEach((id, i) => assert.match(id, new RegExp(`_c${i + 1}of${totalChunks}$`)));
+  assert.equal(new Set(wireIds).size, totalChunks, "per-chunk ids are stable and distinct");
+  const begins = registry.dispatcherCalls.filter((c) => c.kind === "begin");
+  assert.deepEqual(
+    begins.map((b) => b.transactionId),
+    wireIds,
+    "every chunk landed in the ledger under the id the dispatcher sent",
+  );
+  assert.ok(
+    begins.every((b) => b.operationCount <= CHUNK_SIZE),
+    "no ledger record ever carried the whole list — per (a), the whole-list pass ran once at the gate, before chunk 1",
+  );
+
+  // The one program-level pass is the whole-list gate; chunks carry only the
+  // evidence a chunk can re-check offline.
+  assert.ok(
+    sends.every((s) => s.payload.preflight !== undefined && s.payload.preflight.planBoxes === undefined),
+    "page-absolute plan evidence is not re-sent per chunk: exactly one full-list validate, at the gate",
+  );
+
+  // Progressive commit and the cross-chunk remap are unchanged: chunk 2+ ops
+  // referencing chunk 1 ids go out as the real figma ids chunk 1 minted.
+  const chunk1Response = sends[0].response;
+  const r2RealId = chunk1Response.createdNodes.find((n) => n.temporaryId === "r2")?.figmaNodeId;
+  assert.ok(r2RealId, "chunk 1 minted the regions");
+  const chunk2TextParent = sends[1].payload.operations.find((op) => op.id === "t_r2_0")?.parent;
+  assert.equal(chunk2TextParent, r2RealId, `cross-chunk parent refs remap to the committed id: ${chunk2TextParent}`);
+});

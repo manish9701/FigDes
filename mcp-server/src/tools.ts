@@ -1115,7 +1115,7 @@ export const TOOLS: ToolDefinition[] = [
     inputSchema: RefineArgs,
     handler: async (args, registry) => {
       const parsed = RefineArgs.parse(args ?? {});
-      return refineScreenTool(registry.resolve(parsed.sessionId), parsed);
+      return refineScreenTool(registry.resolve(parsed.sessionId), parsed, registry);
     },
   },
 
@@ -1726,12 +1726,17 @@ inputSchema: CompileArgs,
         });
       }
 
-      const result = (await session.request("create_design", {
+      // Issue #23 close-out: the slide build goes through the same tracked
+      // dispatcher every mutating tool uses — validateTransaction (the template
+      // ops still need the duplicate-id / dual-parent / stale-target checks),
+      // the job ledger and the document lock. Going straight to the socket
+      // skipped all three.
+      const result = await dispatchTransaction(registry, session, "create_design", {
         description: parsed.description ?? `Slide: ${parsed.title ?? parsed.name ?? "untitled"}`,
         operations,
         dryRun: parsed.dryRun ?? false,
-        transactionId: parsed.transactionId,
-      })) as TransactionResult;
+        ...(parsed.transactionId !== undefined ? { transactionId: parsed.transactionId } : {}),
+      });
       return assertTransaction(result);
     },
   },

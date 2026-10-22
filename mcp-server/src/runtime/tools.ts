@@ -6,6 +6,7 @@
  * path anywhere in this system.
  */
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
 import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
@@ -13,8 +14,10 @@ import { measureProgramText, programHasText } from "./measure";
 import { placeRootFrame } from "./placement";
 import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
+import type { PreflightResult } from "../../../shared/protocol";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
+import { preflightCheckTag, validateTransaction } from "../preflight";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
@@ -459,12 +462,32 @@ export async function runRuntimeTool(
   });
   if (gate) return { ...payload, ...gate };
 
+  // Issue #23: the program's deterministic evidence (resolved geometry,
+  // per-region overflow, sizing intents) is assembled ONCE, above the chunk
+  // branch, and threaded to both dispatch paths — the chunked one, which runs
+  // the blocking preflight over the WHOLE list before its first chunk, and the
+  // single-transaction dispatcher, which runs it at the transaction edge.
+  const preflightContext: PreflightContext = {
+    planBoxes: Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box])),
+    overflow: Object.fromEntries(compiled.ir.regions.map((r) => [r.id, (r.overflow ?? "forbid") as "allow" | "clip" | "forbid"])),
+    sizing: Object.fromEntries(
+      compiled.ir.regions.map((r) => [r.id, { width: r.width as number | "fill" | "hug", height: r.height as number | "fill" | "hug" }]),
+    ),
+  };
+
   if (chunked === true || (chunked !== false && compiled.operations.length > CHUNK_SIZE * 2)) {
     // Auto-chunk large programs: a single 300-op transaction holds the socket
     // silent for a minute+ and risks losing everything to one bad op. Chunked
     // builds commit progressively (visible in the canvas as they land) with
     // per-chunk rollback. Explicit chunked:false still forces one transaction.
-    const built = await runChunked(session, compiled.operations, description);
+    // Issue #14 parity: each chunk now dispatches through the tracked
+    // transaction dispatcher under its own stable per-chunk transactionId.
+    const built = await runChunked(session, registry ?? null, compiled.operations, description, preflightContext);
+    // A blocking preflight verdict comes back as a structured refusal: nothing
+    // built, no chunk sent, plan inspectable for repair.
+    if (built.refusal !== undefined) {
+      return { ...payload, ...built.refusal, ...(placement !== null ? { placement } : {}) };
+    }
     return {
       ...payload,
       ...(placement !== null ? { placement } : {}),
@@ -473,6 +496,18 @@ export async function runRuntimeTool(
       status: built.completed ? payload.status : "completed-with-failed-chunks",
       chunks: built.chunks,
     };
+  }
+
+  // The registry-less fallback has no tracked dispatcher to enforce the
+  // blocking preflight at the transaction edge, so it runs here — offline is
+  // the point (validateTransaction contacts nothing) — before a byte is sent.
+  // With a registry the dispatcher runs the same validation and records the
+  // ledger record a same-id retry reconciles against.
+  if (!registry) {
+    const offline = validateTransaction(compiled.operations, preflightContext);
+    if (!offline.ok) {
+      return { ...payload, ...preflightRefusal(offline), ...(placement !== null ? { placement } : {}) };
+    }
   }
 
   session.notify({ type: "notify", kind: "activity", text: `Building ${compiled.operations.length} ops…`, at: Date.now() });
@@ -484,13 +519,6 @@ export async function runRuntimeTool(
   // Issue #23: the dispatch carries the program's deterministic evidence
   // (resolved geometry, per-region overflow, sizing intents) so the blocking
   // preflight classes run with real data instead of silently skipping.
-  const preflightContext: PreflightContext = {
-    planBoxes: Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box])),
-    overflow: Object.fromEntries(compiled.ir.regions.map((r) => [r.id, (r.overflow ?? "forbid") as "allow" | "clip" | "forbid"])),
-    sizing: Object.fromEntries(
-      compiled.ir.regions.map((r) => [r.id, { width: r.width as number | "fill" | "hug", height: r.height as number | "fill" | "hug" }]),
-    ),
-  };
   const transaction = registry
     ? await dispatchTransaction(registry, session, "create_design", {
         description: description ?? "Design runtime execution",
@@ -583,6 +611,47 @@ export const CHUNK_SIZE = 60;
 /** Operation fields that can hold node references needing cross-chunk remap. */
 const REF_KEYS = new Set(["parent", "target", "child"]);
 
+/** The slice of the create_design result a chunk's bookkeeping needs. */
+interface ChunkResult {
+  status?: string;
+  createdNodes?: Array<{ temporaryId?: string; figmaNodeId?: string }>;
+  error?: { message?: string };
+}
+
+/**
+ * The structured refusal a blocking preflight verdict becomes: a returned
+ * result rather than an error, mirroring the not-applicable path — nothing was
+ * created, and the problems say why (issue #23).
+ */
+export interface PreflightRefusal {
+  status: "refused";
+  /** The blocking check that spoke first, so the ledger/readout names it. */
+  refusedBy: string;
+  howToProceed: string;
+  problems: string[];
+}
+
+function preflightRefusal(verdict: PreflightResult): PreflightRefusal {
+  const first = verdict.issues[0]!;
+  const tag = preflightCheckTag(first);
+  return {
+    status: "refused",
+    refusedBy: tag,
+    howToProceed:
+      `Preflight rejected the plan before anything was built (${verdict.issues.length} issue(s), first check: ${tag}). ` +
+      `Fix the problems and rebuild — the refusal holds for chunked and single-transaction builds alike.`,
+    problems: verdict.issues.map((i) => `#${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`),
+  };
+}
+
+/** A chunk result: per-chunk status, or the whole-list refusal built nothing. */
+export type ChunkedBuild = {
+  chunks: Array<{ index: number; operations: number; status: string; createdNodes: unknown[]; error?: string }>;
+  completed: boolean;
+  /** Present exactly when the blocking preflight refused the whole list; chunks stays empty. */
+  refusal?: PreflightRefusal;
+};
+
 /**
  * Builds a program chunk by chunk, remapping ids across chunk boundaries.
  *
@@ -591,14 +660,46 @@ const REF_KEYS = new Set(["parent", "target", "child"]);
  * nodes to one bad operation. Temp ids are stable within a program run, which
  * makes retries idempotent in the only sense that matters here: re-running the
  * same program rebuilds the same structure rather than a different one.
+ *
+ * Issue #23 — before the first chunk is sent, the blocking preflight runs over
+ * the WHOLE compiled list with the caller's `preflight` evidence. Cross-chunk
+ * duplicate ids and multi-parent assignments only exist once the lists are
+ * read together, and refusing after three chunks committed is a partial
+ * rollback by another name. This is the one program-level pass; the
+ * per-chunk validation re-checks chunk-local structure only (see below), so a
+ * refusal surfaces as `{refusal}` with zero dispatches rather than a rollback.
+ *
+ * Issue #14 parity — chunks dispatch through the tracked transaction
+ * dispatcher, not the bare socket, so each chunk lands in the ledger.
+ * The per-chunk transactionId is derived from a fingerprint of the whole
+ * compiled list plus the chunk's slice number (`txn_<fp>_c2of4`): the same
+ * program retried mints the same ids (so a settled chunk returns its prior
+ * result instead of re-creating it), and a different program hashes
+ * differently, so it can never inherit another build's chunks.
+ *
+ * The per-chunk preflight carries only the evidence a chunk can re-check
+ * offline: brief blockers. The plan-geometry classes are page-absolute while a
+ * chunk slice replays parent-locally, so handing them per chunk would refuse
+ * valid chunks for drift they did not commit — those classes, and every
+ * cross-chunk structural fact, were validated ONCE over the whole list above.
  */
 export async function runChunked(
   session: Session,
+  registry: SessionRegistry | null,
   operations: unknown[],
   description: string | undefined,
-): Promise<{ chunks: Array<{ index: number; operations: number; status: string; createdNodes: unknown[]; error?: string }>; completed: boolean }> {
-  const chunks: Array<{ index: number; operations: number; status: string; createdNodes: unknown[]; error?: string }> = [];
+  preflight?: PreflightContext,
+): Promise<ChunkedBuild> {
+  const chunks: ChunkedBuild["chunks"] = [];
+
+  const wholeList = validateTransaction(operations, preflight);
+  if (!wholeList.ok) {
+    return { chunks, completed: false, refusal: preflightRefusal(wholeList) };
+  }
+
   const remap = new Map<string, string>();
+  const runFingerprint = createHash("sha256").update(JSON.stringify(operations)).digest("hex").slice(0, 8);
+  const chunkPreflight: PreflightContext = { briefBlockers: preflight?.briefBlockers };
 
   const rewrite = (value: unknown): unknown => {
     if (typeof value === "string" && remap.has(value)) return remap.get(value)!;
@@ -619,11 +720,36 @@ export async function runChunked(
     );
     const chunkNo = chunks.length + 1;
     const chunkTotal = Math.ceil(operations.length / CHUNK_SIZE);
+    const transactionId = `txn_${runFingerprint}_c${chunkNo}of${chunkTotal}`;
     session.notify({ type: "notify", kind: "activity", text: `Building chunk ${chunkNo}/${chunkTotal} (${slice.length} ops)…`, at: Date.now() });
-    const result = (await session.request("create_design", {
-      description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
-      operations: slice,
-    })) as { status?: string; createdNodes?: Array<{ temporaryId?: string; figmaNodeId?: string }>; error?: { message?: string } };
+
+    let result: ChunkResult;
+    try {
+      result = registry
+        ? await dispatchTransaction(registry, session, "create_design", {
+            description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
+            operations: slice,
+            transactionId,
+            preflight: chunkPreflight,
+          })
+        : ((await session.request("create_design", {
+            description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
+            operations: slice,
+          })) as ChunkResult);
+    } catch (err) {
+      // The dispatcher refuses failed chunks by throwing; the chunked contract
+      // records them instead. The build stops, the failing chunk carries the
+      // message (a Figma rejection names its document state; a client-side
+      // refusal names the check), chunks before it stay committed.
+      chunks.push({
+        index: chunks.length,
+        operations: slice.length,
+        status: "failed",
+        createdNodes: [],
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return { chunks, completed: false };
+    }
 
     if (result.status === "success") {
       for (const created of result.createdNodes ?? []) {

@@ -27,7 +27,14 @@ Deterministic, no-async, dry-run-safe program-level checks appended to `validate
 
 ### 2. Mandatory pipeline, integrated not duplicated
 
-The pre-flight layer is threaded through the *existing* dispatcher every mutating tool shares; `create_design`/`modify_design`/`design_runtime`/`figdes_use_figma` all inherit it. The pipeline's `applicability` refusal ("resolved geometry is not what the program asked for") stays the gate before any build; draft briefs with blockers cannot pass the transaction edge. No alternative code path bypasses the checks.
+The pre-flight layer rides on the *existing* tracked dispatcher (`transaction.ts#dispatchTransaction`) rather than a new gate. Every op-list build path dispatches through it: the low-level `create_design`/`modify_design`, `design_runtime` (single **and** chunked — the whole op list is validated before the first chunk, each chunk carrying its own transactionId), `design_pipeline` (apply + repair), `create_slide`, `edit_screen` (main patch and repair pass dispatch as `${tid}:apply` / `${tid}:repair` sub-transactions while `tid` stays the tool's orchestration record), `refine_screen` (each iteration's fix transaction is dispatched; without a threaded registry the same preflight still hard-refuses before the plain send), `seed_exo_system`, `prototype_flow`, `migrate_to_tokens` and `resume_job`.
+
+Two paths intentionally do not route op lists through the dispatcher and are documented rather than glossed over:
+
+- **`figdes_use_figma`** executes arbitrary native scripts. Scripts are not an operation list, so transaction-level op preflight cannot apply to them; they are bound to the session and document locks, but this is an inherent limit of the native path, not inherited coverage.
+- **`update_component`** keeps its op preflight (schema + blocking checks before contact) but mutates via the component API with a payload that is not an op-list payload, so it dispatches outside the tracked dispatcher — a residual documented for follow-up.
+
+The pipeline's `applicability` refusal ("resolved geometry is not what the program asked for") stays the gate before any build; a brief with blocking contradictions is refused at pipeline stage 1 *and* again at the transaction edge when the pipeline's brief evidence rides along, so no reachable op-list build path bypasses the checks.
 
 ### 3. Composition reasoning
 

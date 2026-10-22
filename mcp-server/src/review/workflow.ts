@@ -31,7 +31,9 @@ import { makeFindings, trackFindings } from "../design/quality/visual-findings";
 import { contentRevision } from "../design/quality/revision";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
-import type { Session } from "../sessions";
+import { dispatchTransaction } from "../transaction";
+import { validateTransaction } from "../preflight";
+import type { Session, SessionRegistry } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
 
 /* -------------------------------------------------------------------------- */
@@ -697,7 +699,7 @@ interface RefineIteration {
   verified: number;
 }
 
-export async function refineScreenTool(session: Session | null, rawArgs: unknown): Promise<unknown> {
+export async function refineScreenTool(session: Session | null, rawArgs: unknown, registry?: SessionRegistry): Promise<unknown> {
   const args = RefineArgs.parse(rawArgs);
   const goals = args.visualGoals ?? [];
   const preserve = new Set(args.preserve);
@@ -814,10 +816,42 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       };
     }
 
-    const applied = (await session.request("modify_design", {
-      description: `refine_screen iteration ${i}: ${actionable.map((f) => f.rule).join(", ")}`,
-      operations,
-    })) as { status?: string; error?: { message?: string } };
+    let applied: { status?: string; error?: { message?: string } };
+    // Issue #23 close-out: the loop's fix transactions mutate the document, so
+    // they go through the tracked dispatcher (blocking preflight, job ledger,
+    // document lock, transaction-call idempotency) like every other mutating
+    // path. When no registry is threaded (direct callers in tests), the same
+    // blocking preflight still hard-refuses before the plain send. The
+    // failure dispositions below are unchanged in both cases.
+    const fixDescription = `refine_screen iteration ${i}: ${actionable.map((f) => f.rule).join(", ")}`;
+    if (registry) {
+      try {
+        applied = await dispatchTransaction(registry, session, "modify_design", {
+          description: fixDescription,
+          operations: operations as unknown[],
+        });
+      } catch (err) {
+        // The dispatcher throws on refusals and unknown outcomes instead of
+        // returning a failed payload; funnel that into the same failed shape
+        // the loop already reports, naming the obstacle verbatim.
+        applied = { status: "failed", error: { message: err instanceof Error ? err.message : String(err) } };
+      }
+    } else {
+      const fixPreflight = validateTransaction(operations as unknown[]);
+      if (!fixPreflight.ok) {
+        applied = {
+          status: "failed",
+          error: {
+            message: `Preflight rejected the refinement fix before contacting Figma: ${fixPreflight.issues[0]?.message ?? "invalid"}. Fix: ${fixPreflight.issues[0]?.fix ?? ""}`,
+          },
+        };
+      } else {
+        applied = (await session.request("modify_design", {
+          description: fixDescription,
+          operations: operations as Array<Record<string, unknown>>,
+        })) as { status?: string; error?: { message?: string } };
+      }
+    }
 
     if (applied.status !== "success") {
       for (const key of actionable.map(findingKey)) {

@@ -15,6 +15,7 @@
 import { z } from "zod";
 import type { SessionRegistry, Session } from "../sessions";
 import { validateTransaction } from "../preflight";
+import { dispatchTransaction } from "../transaction";
 import { guardMutation } from "../plan/gate";
 import { runRules } from "../review/rules";
 import { evaluateConsistency } from "../design/quality/consistency";
@@ -183,8 +184,18 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
 
   registry.jobs.update(tid, { state: "applying", done: 0, label: "dispatching to Figma" });
   let result: TransactionResult;
+  // Issue #23 close-out — the plugin call goes through the tracked dispatcher
+  // (blocking preflight, ledger, document lock, transaction-call idempotency)
+  // like every other mutating path. The plugin transaction's ledger record
+  // lives under `${tid}:apply`; `tid` stays this tool's orchestration record,
+  // so the retry/reconcile contract below is unchanged.
+  const applyTid = `${tid}:apply`;
   try {
-    result = (await session.request("modify_design", { description: args.description ?? `edit_screen: ${args.goals.join("; ")}`, operations: ops, transactionId: tid })) as TransactionResult;
+    result = await dispatchTransaction(registry, session, "modify_design", {
+      description: args.description ?? `edit_screen: ${args.goals.join("; ")}`,
+      operations: ops,
+      transactionId: applyTid,
+    });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     const unknownOutcome = /outcome unknown|did not respond|disconnected while executing|stalled on/i.test(msg);
@@ -193,6 +204,19 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
       throw new Error(
         `edit_screen transaction ${tid} timed out with an UNKNOWN outcome (Figma may still commit late; a cancel was requested). Reconcile with get_job_status {transactionId:${tid}} before retrying with the SAME id. Original: ${msg}`,
       );
+    }
+    // The dispatcher throws — instead of returning a failed payload — after
+    // parking the rejected transaction against `${tid}:apply`; keep the
+    // structured `transaction-failed` response and the orchestration ledger
+    // state this tool has always reported.
+    const failed = registry.jobs.priorResult(applyTid) as TransactionResult | undefined;
+    if (failed && failed.status === "failed") {
+      registry.jobs.complete(
+        tid,
+        failed.rollbackStatus === "full" ? "rolled-back" : failed.rollbackStatus === "partial" ? "partial-rollback" : "failed",
+        { error: failed.error.message, createdIds: failed.removedIds ?? [] },
+      );
+      return { status: "transaction-failed", transactionId: tid, timeline: marks.log, result: failed, howToProceed: failed.error.hint };
     }
     registry.jobs.complete(tid, "failed", { error: msg });
     throw err;
@@ -282,11 +306,11 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
       const repairGate = guardMutation({ operations: repairOps as Array<Record<string, unknown>>, approved: args.approved, reason: args.reason });
       if (!repairGate) {
         try {
-          const repairResult = (await session.request("modify_design", {
+          const repairResult = await dispatchTransaction(registry, session, "modify_design", {
             description: `edit_screen repair: ${high.map((f) => f.rule).join(", ")}`,
             operations: repairOps,
             transactionId: `${tid}:repair`,
-          })) as TransactionResult;
+          });
           if (repairResult.status === "success") {
             // Whole-screen consistency re-run after the local fix (P1).
             const recheck = await collect(session, args.target);

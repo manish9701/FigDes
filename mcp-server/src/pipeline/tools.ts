@@ -49,6 +49,8 @@ import { buildCompositionPlan } from "./plan";
 import { buildProgram, applyMeasuredWidths } from "./program";
 import { verifyLive, verifyPlan, type CompiledProgram, type LiveEvidence } from "./verify";
 import { compileVisualIntent, reviewVisualIntelligence, toPipelineFinding } from "../design/skills/intent-compiler";
+import { resolveCompositionAlternatives } from "../design/skills/alternatives";
+import { auditTypeCriteria } from "../design/quality/type-criteria";
 import { planRepairs, deduplicateOperations } from "./repair";
 import { buildReport } from "./report";
 import type { PipelineCheck, PipelineFinding, PipelineTrace } from "./contracts";
@@ -171,9 +173,46 @@ export async function designPipelineTool(
     intelligence.selection.selected,
   );
 
+  /* --- stage 1.6: composition alternatives (issue #22 §3) ------------------ */
+
+  /**
+   * At least three genuinely different composition hypotheses are proposed,
+   * scored on the dimensions the brief's own content can measure, and
+   * selected by the shared `selectComposition` engine — before the plan
+   * commits to one. Selection steers the plan only when it is legitimate:
+   * no caller-stated composition (a stated composition is a hard constraint
+   * the engine may rank against but never replace), no disqualified winner,
+   * and an audited-distinct set. The planner keeps every viability rule.
+   */
+  const alternatives = resolveCompositionAlternatives({
+    primaryDecision: brief.primaryDecision,
+    requiredInformation: brief.requiredInformation,
+    optionalInformation: brief.optionalInformation,
+    ...(brief.desiredComposition !== undefined ? { desiredComposition: brief.desiredComposition } : {}),
+    ...(brief.existingPatterns.length > 0 ? { existingPatterns: brief.existingPatterns } : {}),
+  });
+  stage(
+    trace,
+    "alternatives",
+    `Composition alternatives: ${alternatives.selection.considered.length} candidate(s), audited ${alternatives.selection.audit.distinct ? "pairwise-distinct" : `NON-distinct (${alternatives.selection.audit.warnings.join("; ")})`}; ${alternatives.selectedFamily !== null ? `selected '${alternatives.selectedFamily}' (${alternatives.selection.selected?.total ?? "?"}/100)` : "nothing cleared the dimension floors"}; steering ${alternatives.steeredComposition !== null ? `the plan to '${alternatives.steeredComposition}'` : "none (planner composes freely)"}.`,
+    alternatives.considered.map((c) => c.candidate.id),
+  );
+
   /* --- stage 2: the plan ------------------------------------------------- */
 
-  const plan = buildCompositionPlan(brief, trace.planId, intelligence);
+  const plan = buildCompositionPlan(
+    brief,
+    trace.planId,
+    intelligence,
+    alternatives.steeredComposition !== null
+      ? {
+          selectedComposition: alternatives.steeredComposition,
+          provenance:
+            alternatives.provenance.find((p) => p.startsWith("Selected ")) ??
+            `Selected composition '${alternatives.steeredComposition}' is the alternatives engine's choice (issue #22 §3); the planner kept its viability rules.`,
+        }
+      : undefined,
+  );
   stage(
     trace,
     "plan",
@@ -250,12 +289,37 @@ export async function designPipelineTool(
   trace.findings.push(...structure.findings);
   stage(trace, "verify-structure", `Structure verified: ${structure.status} (${structure.checks.length} check(s)).`);
 
+  /* --- stage 4.5: the declared type/spacing criteria, on compiled evidence --- */
+
+  /**
+   * Phase 2 (issue #22 §4), deterministic half: the `type-and-space` skill's
+   * declared criteria are checked against the *compiled* program and the
+   * resolved plan before a node exists — an 11px label compiles before it
+   * ever renders. Criterion failures ride the findings flow for the caller;
+   * line-length stays with the rendered half of the loop, as the skill's own
+   * output records.
+   */
+  const typeCriteria = auditTypeCriteria({
+    ops: operations as Array<Record<string, unknown>>,
+    regions: plan.regions.map((r) => ({ id: r.id, gap: r.gap })),
+  });
+  if (typeCriteria.findings.length > 0) {
+    trace.findings.push(...typeCriteria.findings);
+    stage(
+      trace,
+      "type-criteria",
+      `Declared type/spacing criteria on compiled evidence: ${typeCriteria.findings.length} finding(s) — ${[...new Set(typeCriteria.findings.map((f) => f.rule ?? f.id))].join(", ")}. Recorded for the caller, not auto-repaired.`,
+    );
+  } else {
+    stage(trace, "type-criteria", `Declared type/spacing criteria audited on compiled evidence (pre-render): all clear.`);
+  }
+
   const common = {
     brief,
     plan,
     program,
     programNotes: built.notes,
-    /** The skill layer's full output: selection, decisions, compiled intent and the anti-generic review (issue #22). */
+    /** The skill layer's full output: selection, decisions, compiled intent, the anti-generic review, and the composition alternatives (issue #22). */
     visualIntelligence: {
       signals: intelligence.signals,
       selection: intelligence.selection,
@@ -263,7 +327,23 @@ export async function designPipelineTool(
       intent: intelligence.intent,
       notes: intelligence.notes,
       review: visualReview,
+      alternatives: {
+        taskKind: alternatives.taskKind,
+        taskCategoryForWeights: alternatives.taskCategoryForWeights,
+        candidateCount: alternatives.selection.considered.length,
+        distinct: alternatives.selection.audit.distinct,
+        selectedFamily: alternatives.selectedFamily,
+        userOverride: alternatives.userOverride,
+        steeredComposition: alternatives.steeredComposition,
+        ranked: alternatives.considered.map((s) => ({ family: s.candidate.family, total: s.total, disqualifiedBy: s.disqualifiedBy })),
+        rejected: alternatives.selection.rejected.map((r) => ({ id: r.id, family: r.family, total: r.total, reason: r.reason })),
+        tradeoffs: alternatives.selection.tradeoffs,
+        auditWarnings: alternatives.selection.audit.warnings,
+        provenance: alternatives.provenance,
+      },
     },
+    /** The declared type/spacing criteria audit, on compiled evidence (issue #22 phase 2). */
+    typeCriteria: { criteria: typeCriteria.criteria, findings: typeCriteria.findings },
     ...(reuse.length > 0 ? { reuse } : {}),
     assumptions,
     clarifications,

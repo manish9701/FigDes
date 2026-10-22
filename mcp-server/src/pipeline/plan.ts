@@ -227,14 +227,23 @@ function largestEmptyBand(boxes: Array<{ x: number; y: number; w: number; h: num
  * planner left no focal region and the plan has content regions, the
  * highest-rank payload region is named focal — an anti-generic skill's
  * acceptance criterion, filled where the planner's own derivation is silent.
+ *
+ * `steering` (issue #22 §3) is the alternatives engine's selection: a
+ * composition the engine scored best across ≥3 materially different
+ * hypotheses. It is applied only as the planner's own `desiredComposition`
+ * hint — the planner keeps its viability rules — and only when the brief
+ * itself did not state a composition, because a stated composition is a hard
+ * constraint the engine may rank against but never replace.
  */
 export function buildCompositionPlan(
   brief: NormalizedBrief,
   planId = "plan",
   intelligence?: { intent: VisualIntent; notes: string[] },
+  steering?: { selectedComposition: Composition; provenance: string },
 ): CompositionPlan {
   const canvas = { width: brief.viewport.width, height: brief.viewport.height, grid: GRID, name: brief.screen };
 
+  const steered = brief.desiredComposition === undefined ? steering?.selectedComposition : undefined;
   const intent: ScreenIntent = {
     primaryDecision: brief.primaryDecision,
     goal: brief.purpose,
@@ -242,13 +251,20 @@ export function buildCompositionPlan(
     availableInformation: [...brief.requiredInformation, ...brief.optionalInformation],
     existingPatterns: brief.existingPatterns,
     ...(brief.visualDirection !== null ? { visualDirection: brief.visualDirection } : {}),
-    ...(brief.desiredComposition !== undefined ? { desiredComposition: brief.desiredComposition } : {}),
+    ...(brief.desiredComposition !== undefined
+      ? { desiredComposition: brief.desiredComposition }
+      : steered !== undefined
+        ? { desiredComposition: steered }
+        : {}),
     canvas: { width: canvas.width, height: canvas.height, grid: canvas.grid },
     name: canvas.name,
   };
 
   const plan = planScreen(intent);
   const warnings: string[] = [...plan.warnings];
+  if (steered !== undefined && steering !== undefined) {
+    warnings.push(steering.provenance);
+  }
 
   /* --- the screen needs somewhere to put its identity --------------------- */
 

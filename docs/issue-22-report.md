@@ -135,3 +135,58 @@ deterministically without a live Figma session.
   phase 2's deliverable.
 - **Benchmark regression gate** (phase 4) is scoped: `benchmark/suite.ts` already separates dimensions and
   compares runs; connecting it to the skill layer's decisions lives in phase 3–4.
+
+
+---
+
+# Phases 2–4 (same-session follow-up commit): offline critique, alternatives, regression gate
+
+Scope note up front, kept honest: **the rendered-screenshot critique/repair loop (§4 steps 5–10, live Figma) is still not in this commit.** What this commit adds is the deterministic half of that loop plus the two remaining wiring gaps — the alternatives engine, and the benchmark gate — each with contract tests.
+
+## Phase 2 (partial) — declared criteria enforced on compiled evidence
+
+`design/quality/type-criteria.ts` audits the `type-and-space` skill's *declared* acceptance criteria against the pipeline's compiled program and resolved plan, before any node exists:
+
+- `type.space.readable-labels` — no compiled text below the 11px floor (high severity when violated);
+- `type.space.uppercase-in-check` — no uppercase run of 4+ words in planned text (the uppercase budget);
+- `type.space.one-rhythm` — one gap value across sibling regions; two values are a medium finding that names the odd regions and demands a stated reason; three or more fail high;
+- `type.space.column-length-sane` — explicitly `not-evaluated` offline (needs plugin text measurement); the audit refuses to fake it.
+
+The audit runs as pipeline stage 4.5 (`type-criteria`), its findings ride the existing findings flow (`automatable: false` — a deliberate rhythm break is a human decision), and the criteria verdicts are in the response payload (`typeCriteria.criteria`), each as `pass | fail | not-evaluated`.
+
+## Phase 3 — the alternatives engine is wired, not merely pinned
+
+`design/skills/alternatives.ts` bridges the blueprint engine (`design/composition/candidates.ts`) into the live path. It is not a second planner: it proposes seven family hypotheses (each authored against §4.1's six structural axes, so candidates are pairwise-distinct by construction and audited rather than assumed), scores only the dimensions the brief's own content can measure — task fit (ranked affinity by decision class, in the honest sense: an unfit constraint still hits the disqualification floors), hierarchy and scanability (inventory shape vs family), relationship clarity (stated relationships vs families that draw them), design-system fit (the patterns the brief names) — and lets the shared `selectComposition` engine choose. Unmeasured dimensions stay at the engine's neutral 5.
+
+Pipeline stage 1.6 records the whole decision: candidate count, distinctness audit, ranking with per-family totals and disqualified dimensions, trade-offs, and provenance strings. Steering is bounded three ways:
+
+1. a **caller-stated `desiredComposition` is a hard constraint** — the engine ranks against it but never replaces it; the plan receives the user's composition untouched (`buildCompositionPlan` applies the engine's choice only when the brief states none);
+2. a constraint that **fails the dimension floors** (e.g. an editorial constraint on a monitoring decision) forces nothing: user override is recorded as `honored: false` and the report names the contradiction for a human;
+3. briefs below an **evidentiary floor of 3 information items** are never steered — the engine records why and leaves composition to the planner.
+
+The planner keeps its viability rules; a steered label can still be rejected by them.
+
+## Phase 4 — benchmark baseline + regression gate
+
+`design/benchmark/regression.ts` connects three pieces that previously never met:
+
+- **evidence scoring** — `scoreOfflineEvidence` maps a pipeline plan-mode run onto `scoreBenchmark`'s 100-point offline scorecard. Every dimension carries the deterministic mapping that produced it (`dimensionEvidence`); `productSpecificity` is named not-evaluated and scored 0 (offline evidence cannot measure it); plan-mode runs say so in the result notes. Deterministic: the same response scores the same total.
+- **a versioned baseline** — `figdes-benchmark-baseline-v1` (zod-validated, strict): per case, the brief, the recorded pipeline config, the evidence, and the scored result, so a prior case reproduces from brief + context + configuration. `parseBaseline` refuses a foreign schema or a non-baseline shape instead of accepting whatever parses.
+- **the gate** — `runRegressionGate` is three-valued on purpose: `REGRESSION` on a drop ≥ the threshold (suite default 5) via `compareBenchmarkRuns`, `NOT_EVALUATED` when the candidate run does not reproduce every baseline case (missing cases are named, never averaged away), `PASS` only on full parity. An improvement average can never clear unreproduced cases.
+
+## Tests
+
+`tests/issue-22-phase34.test.mjs` (16 tests, all passing; `npm run test:issue22` now runs 43):
+
+- ≥3 audited-distinct hypotheses with carried rationale; relationship-led brief steers to `topology` and the plan records the steering; caller constraints honoured untouched; disposition on evidence-vs-constraint contradiction; inventory floor;
+- the criteria audit unit-tested (one-rhythm medium/high, 11px floor, uppercase budget, clean pass, not-evaluated honesty) and through the pipeline (stage + findings flow);
+- pipeline evidence scores through the scorecard deterministically; baseline round-trips and refuses foreign documents; the gate is PASS/REGRESSION/NOT_EVALUATED with reasons.
+
+Full suite green: every existing suite passes after the wiring (43 issue-22 tests, 250 runtime, 24 pipeline, 26 product-guard, plus review/blueprint/geometry/plugins/e2e/smoke).
+
+## Honest limitations after this commit
+
+- `productSpecificity` scores 0 offline (by design, with the reason in `notEvaluated`) — the calibration stays conservative until live evidence exists.
+- **The 11px/uppercase/one-rhythm checks are a compile-time gate.** They are structural critiques of pre-render evidence; the rendered-screenshot loop (capture → critique → targeted repair → re-render → resolution ledger) remains the live phase-2 deliverable.
+- **Task-category weights still map `select → explore`** (nearest by task shape), recorded in provenance rather than hidden.
+- **No live-Figma before/after screenshots** for the alternatives loop; the offline equivalents are the steered plan's recorded composition + warnings, reproducible without a live file.

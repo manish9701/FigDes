@@ -21,6 +21,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { compareImages, IMAGE_POLICY } from "./lib/image-diff.mjs";
+import { caseBuildStamps } from "./lib/live-client.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(process.env.FIGDES_LIVE_DIR ?? resolve(root, "artifacts/design-benchmark/live"));
@@ -285,11 +286,6 @@ if (existsSync(nativePathPath)) {
 const covered = new Set(cases.map((c) => c.caseId).filter(Boolean));
 const missingCases = EXPECTED.filter((id) => !covered.has(id));
 const complete = cases.filter((c) => c.status === "COMPLETE");
-const liveBenchmarkComplete =
-  missingCases.length === 0 &&
-  cases.length === EXPECTED.length &&
-  complete.length === EXPECTED.length &&
-  nativePath.status === "COMPLETE";
 
 /**
  * Which commit each case was measured against, and whether that is the
@@ -324,6 +320,39 @@ const buildDrift = cases.map((c) => {
 });
 const staleCases = buildDrift.filter((d) => d.stale);
 const casesWithoutBuild = buildDrift.filter((d) => !d.buildNamed);
+
+/**
+ * The stamps must ALSO agree with each other and with the repository now
+ * (issue #25): a case whose server and plugin builds differ cannot say which
+ * build's behaviour it measured, a stamp that is missing or "unknown" cannot
+ * be tied to a commit at all, and a 12-char stamp that is not this
+ * repository's HEAD is evidence about code that is not in the repository
+ * any more.
+ */
+const stampMismatch = (d) => !caseBuildStamps({ serverBuild: d.serverBuild, pluginBuild: d.pluginBuild, repoHead }).ok;
+const mismatchCases = buildDrift.filter(stampMismatch).map((d) => d.caseId);
+/**
+ * The native path carries the same requirement: its record must name both
+ * builds, and the pair must be this repository's HEAD.
+ */
+const nativeBuildStamps = caseBuildStamps({
+  serverBuild: nativePath.serverBuild,
+  pluginBuild: nativePath.pluginBuild,
+  repoHead,
+});
+/**
+ * Complete AND tied to this repository (issue #25): every case produced, every
+ * case's stamps matching each other and the HEAD, and the native path's own
+ * pair present and matching. A run that measured other code — or cannot name
+ * what it measured — is not complete evidence.
+ */
+const liveBenchmarkComplete =
+  missingCases.length === 0 &&
+  cases.length === EXPECTED.length &&
+  complete.length === EXPECTED.length &&
+  nativePath.status === "COMPLETE" &&
+  mismatchCases.length === 0 &&
+  nativeBuildStamps.ok;
 
 /**
  * The visual regression: every case against its reviewed golden.
@@ -395,6 +424,10 @@ const report = {
   buildDrift,
   staleCases: staleCases.map((d) => d.caseId),
   casesWithoutBuild: casesWithoutBuild.map((d) => d.caseId),
+  // Issue #25: cases whose server/plugin build stamps disagree with each other
+  // or with the repository HEAD. Any mismatch makes the run incomplete.
+  mismatchCases,
+  nativePathBuild: { ok: nativeBuildStamps.ok, reasons: nativeBuildStamps.reasons },
   nativePath,
   visualRegression: {
     policy: IMAGE_POLICY,
@@ -437,6 +470,8 @@ console.log(JSON.stringify({
   repoHead: repoHead ? repoHead.slice(0, 12) : null,
   staleCases: report.staleCases,
   casesWithoutBuild: report.casesWithoutBuild,
+  mismatchCases: report.mismatchCases,
+  nativePathBuild: report.nativePathBuild.ok,
   visualRegression: {
     differing: report.visualRegression.differing,
     uncovered: report.visualRegression.uncovered,

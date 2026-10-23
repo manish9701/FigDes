@@ -475,6 +475,24 @@ export interface PipelineTrace {
   render: { revisionId: string | null; nodeId: string | null; detail: "low" | "high" | null; at: number } | null;
 }
 
+/**
+ * Build/version provenance (issue #25, additive and optional): the server and
+ * plugin builds a report was produced under, their compatibility, the commit
+ * they name and the plugin's semantic version. The caller supplies it when it
+ * measured a live file under stamps it can echo; offline and read-only runs
+ * leave it absent and the report says nothing about builds it never saw.
+ */
+export interface PipelineBuildStamp {
+  serverBuild: string;
+  pluginBuild: string;
+  /** `same-commit` is the only state that lets a live measure read as a measure of the repository. */
+  compatibility: "same-commit" | "different-commit" | "unverifiable";
+  /** The 12-char commit the stamps name, when they name one. */
+  commitSha: string | null;
+  /** The hand-maintained plugin semantic version (`shared/protocol.PLUGIN_VERSION`). */
+  pluginVersion: string;
+}
+
 export interface PipelineReport {
   /** What the pipeline did, in the order it did it. */
   status: "planned" | "built" | "verified" | "repaired" | "incomplete" | "blocked";
@@ -494,4 +512,6 @@ export interface PipelineReport {
   blocked: Array<{ check: string; why: string }>;
   /** The trace, for debugging. */
   trace: PipelineTrace;
+  /** The build/version provenance (issue #25), echoed when the caller supplied it. */
+  builds?: PipelineBuildStamp;
 }

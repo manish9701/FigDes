@@ -22,7 +22,25 @@
  *    stamping in parallel). An unstamped verdict cannot PASS.
  */
 import type { GenericityReport } from "./genericity";
-import { SERVER_BUILD } from "../../../../shared/protocol";
+import { SERVER_BUILD, PLUGIN_VERSION } from "../../../../shared/protocol";
+
+/**
+ * Whether a server/plugin build pair can be assumed to be the same code
+ * (issue #25). This is the exact comparison `tools.buildCompatibility`
+ * applies; it is repeated here — rather than imported — so the review
+ * bundle can derive compatibility without bundling the whole tool registry,
+ * and so a mismatch measured anywhere is measured the same way.
+ */
+export function compatibilityOfBuilds(
+  serverBuild: string,
+  pluginBuild: string | null | undefined,
+): BuildCompatibility {
+  if (!pluginBuild || pluginBuild === "unknown") return "unverifiable";
+  if (pluginBuild === serverBuild) return "same-commit";
+  // The stamp is a short SHA, optionally with a dirtiness marker.
+  const sha = (b: string) => b.split("-")[0] ?? b;
+  return sha(serverBuild) === sha(pluginBuild) ? "same-commit" : "different-commit";
+}
 
 export interface FinalScores {
   hierarchy: number;
@@ -124,6 +142,16 @@ export interface GateStamp {
   transactionId: string | null;
   /** The revision the gate is judging. */
   revision: string | null;
+  /**
+   * The commit the build stamps name (issue #25, additive): the short SHA
+   * beneath the dirtiness marker, when one is derivable. Absent when the
+   * stamp says only "dev".
+   */
+  commitSha?: string | null;
+  /** The hand-maintained plugin semantic version (`shared/protocol.PLUGIN_VERSION`). */
+  pluginVersion?: string;
+  /** True when the build stamp carried the `-dirty` marker. */
+  dirty?: boolean;
 }
 
 /** Phase 9 thresholds. Calibrate through benchmark tests, not vibes. */
@@ -223,7 +251,16 @@ export function evaluateFinalGate(input: {
    * produced the screen. A verdict that cannot name both cannot be PASS: it is
    * describing code and a transaction it cannot tie its claims to.
    */
-  stamp?: { pluginBuild?: string | null; transactionId?: string | null };
+  stamp?: {
+    pluginBuild?: string | null;
+    transactionId?: string | null;
+    /** The commit the stamps name (issue #25); derived from SERVER_BUILD when absent. */
+    commitSha?: string | null;
+    /** The plugin semantic version (issue #25); PLUGIN_VERSION when absent. */
+    pluginVersion?: string;
+    /** The dirtiness marker (issue #25); derived from SERVER_BUILD when absent. */
+    dirty?: boolean;
+  };
   /**
    * Build provenance (issue #26): the server/plugin build pair the screen was
    * measured under. `same-commit` keeps the verdict reachable; anything else
@@ -305,6 +342,12 @@ export function evaluateFinalGate(input: {
     pluginBuild: input.stamp?.pluginBuild ?? null,
     transactionId: input.stamp?.transactionId ?? null,
     revision: input.expectedRevision ?? null,
+    // Issue #25: the stamp names the commit and the plugin version too, so a
+    // verdict can be checked against the repository without a second source.
+    // Derived from the server build when the caller does not supply them.
+    commitSha: input.stamp?.commitSha ?? (SERVER_BUILD === "dev" ? null : (SERVER_BUILD.split("-")[0] ?? null)),
+    pluginVersion: input.stamp?.pluginVersion ?? PLUGIN_VERSION,
+    dirty: input.stamp?.dirty ?? SERVER_BUILD.includes("-dirty"),
   };
   const attachTruth = (report: Omit<FinalQualityReport, "verdict" | "verdictReasons" | "gates" | "stamp">): FinalQualityReport => {
     const build = {
@@ -378,7 +421,16 @@ function deriveGateRecords(
     genericity?: GenericityReport | null;
     accessibility?: { findings: number; notChecked: string[] };
     states?: { declared: number };
-    stamp?: { pluginBuild?: string | null; transactionId?: string | null };
+    stamp?: {
+      pluginBuild?: string | null;
+      transactionId?: string | null;
+      /** The commit the stamps name (issue #25); derived from SERVER_BUILD when absent. */
+      commitSha?: string | null;
+      /** The plugin semantic version (issue #25); PLUGIN_VERSION when absent. */
+      pluginVersion?: string;
+      /** The dirtiness marker (issue #25); derived from SERVER_BUILD when absent. */
+      dirty?: boolean;
+    };
     gates?: GateRecord[];
     scores: Partial<FinalScores>;
     buildCompatibility?: BuildCompatibility;

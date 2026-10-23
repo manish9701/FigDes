@@ -26,7 +26,8 @@ import { evaluateGenericity } from "../design/quality/genericity";
 import { evaluateConsistency } from "../design/quality/consistency";
 import { extendCritique } from "../design/quality/visual-critic";
 import { planRepairs } from "../design/quality/repair-planner";
-import { evaluateFinalGate } from "../design/quality/final-gate";
+import { evaluateFinalGate, compatibilityOfBuilds } from "../design/quality/final-gate";
+import { SERVER_BUILD } from "../../../shared/protocol";
 import { makeFindings, trackFindings } from "../design/quality/visual-findings";
 import { contentRevision } from "../design/quality/revision";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
@@ -1077,6 +1078,12 @@ export const FinalQaArgs = z
     target: z.record(z.unknown()).optional(),
     nodeId: z.string().max(200).optional(),
     project: z.string().max(200).optional(),
+    /**
+     * The transaction that produced the screen under judgement (issue #25).
+     * Optional: the final-gate stamp is more truthful when it names the
+     * transaction the verdict certifies, and the caller may know it.
+     */
+    transactionId: z.string().max(200).optional(),
   })
   .strict();
 
@@ -1150,6 +1157,11 @@ export function countStateSignals(operations: Array<Record<string, unknown>>): n
 export async function finalQaTool(session: Session | null, rawArgs: unknown): Promise<unknown> {
   const args = FinalQaArgs.parse(rawArgs);
   const items: ChecklistItem[] = [];
+  /**
+   * The §18 final gate's own report (issue #25), hoisted so the return value
+   * can carry it alongside the coarse checklist instead of discarding it.
+   */
+  let finalGate: ReturnType<typeof evaluateFinalGate> | null = null;
 
   if (args.program !== undefined) {
     const scored = (await scoreDesignTool({ program: args.program })) as {
@@ -1248,7 +1260,13 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: "needs the live file: run final_qa against a target" }];
     }
 
-    const finalGate = evaluateFinalGate({
+    // Build provenance (issue #25): when a live session is attached, the gate
+    // receives the pair actually measured, so a verdict measured while the
+    // server and the plugin were different builds — or a pair that cannot be
+    // tied to a commit — refuses PASS rather than standing as ordinary. An
+    // offline, program-only run touches no live file and stays unaffected.
+    const pluginBuild = session && typeof session.build === "string" ? session.build : undefined;
+    finalGate = evaluateFinalGate({
       scores: {
         hierarchy: dimension("Hierarchy") * 10,
         composition: dimension("Composition") * 10,
@@ -1262,6 +1280,15 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
       blockingIssues: [...failed.map((f) => String(f.rule ?? "guard")), ...consistencyBlocking],
       states: { declared: statesDeclared },
       ...(accessibility !== null ? { accessibility } : {}),
+      ...(pluginBuild !== undefined
+        ? {
+            buildCompatibility: compatibilityOfBuilds(SERVER_BUILD, pluginBuild),
+            stamp: {
+              pluginBuild,
+              ...(args.transactionId !== undefined ? { transactionId: args.transactionId } : {}),
+            },
+          }
+        : {}),
     });
     items.push(
       { area: "SYSTEM", check: "design tokens consistent", pass: consistency.blocking ? false : consistency.score >= 70 ? true : null, detail: `consistency ${consistency.score}/100: ${consistency.evidence.slice(0, 2).join("; ")}` },
@@ -1334,6 +1361,23 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
   return {
     status: "ok",
     verdict: failed.length > 0 ? "FAIL" : pending.length > 0 ? "PASS WITH LIVE CHECKS PENDING" : "PASS",
+    /**
+     * The truthful final gate (issue #25), no longer discarded: the verdict
+     * that can never PASS on a skipped gate, every gate record, the
+     * build/session stamp, and the reasons. Read these over the coarse
+     * checklist verdict above — a build mismatch, an unstamped verdict or a
+     * skipped gate refuses PASS here.
+     */
+    ...(finalGate !== null
+      ? {
+          finalGate: {
+            verdict: finalGate.verdict,
+            gates: finalGate.gates,
+            stamp: finalGate.stamp,
+            verdictReasons: finalGate.verdictReasons,
+          },
+        }
+      : {}),
     checklist: items,
     failed: failed.map((i) => `${i.area}: ${i.check} — ${i.detail}`),
     pendingLiveChecks: pending.map((i) => `${i.area}: ${i.check} — ${i.detail}`),

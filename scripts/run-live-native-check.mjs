@@ -26,6 +26,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { assertBuildIntegrity } from "./lib/live-client.mjs";
 
 const MCP = process.env.FIGDES_MCP_URL ?? "https://figdes.onrender.com/mcp";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -76,6 +77,13 @@ if (!status?.connected) {
   process.exit(2);
 }
 console.log("plugin:", status.fileName, "page:", status.pageName, "plugin build:", status.build ?? "unknown");
+
+/**
+ * Build/version integrity (issue #25): refuse to run against a server/plugin
+ * pair that is not this repository's HEAD — the check would measure other
+ * code. Exits 1 with a blocker message when the builds mismatch.
+ */
+await assertBuildIntegrity();
 
 /** How many frames with this check's name the file already holds. */
 const countFrames = async () => {

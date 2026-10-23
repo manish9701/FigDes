@@ -10,7 +10,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { ZodError } from "zod";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { TOOL_NAMES } from "../../shared/protocol";
+import { TOOL_NAMES, PLUGIN_VERSION } from "../../shared/protocol";
 import { SessionRegistry } from "./sessions";
 import { TOOLS, BUILD_DEPENDENT_TOOLS, buildScopeWarning } from "./tools";
 import { clients, inferClientFromUserAgent } from "./clients/registry";
@@ -346,7 +346,10 @@ function readJsonBody(req: IncomingMessage): Promise<{ parsed: unknown; hasBody:
 
 function buildServer(registry: SessionRegistry, requestClient?: RequestClient): McpServer {
   const server = new McpServer(
-    { name: "figma-design-agent", version: "0.3.4" },
+    // The advertised version tracks the plugin's (shared/protocol.PLUGIN_VERSION);
+    // it used to lag at a hardcoded literal, so a client could not tell the
+    // version it was talking to (issue #25).
+    { name: "figma-design-agent", version: PLUGIN_VERSION },
     { capabilities: { tools: {} }, instructions: INSTRUCTIONS },
   );
 

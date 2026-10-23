@@ -45,12 +45,14 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { runGauntlet, summariseGauntlet, COVERAGE, SCENARIO_MAP } from "../tests/issue-17-gauntlet.mjs";
+import { evaluateBuildIntegrityEvidence } from "./lib/live-client.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const outDir = resolve(root, "artifacts/release-gate");
 const args = process.argv.slice(2);
 const jsonOnly = args.includes("--json");
 const skipLive = args.includes("--skip-live");
+const PACKAGE = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
 
 /* -------------------------------------------------------------------------- */
 /* The run's identity                                                           */
@@ -63,6 +65,8 @@ const commit = (() => {
     return "unknown";
   }
 })();
+/** The 12-char HEAD the build stamps are compared against (issue #25). */
+const shortHead = commit === "unknown" ? null : commit.slice(0, 12);
 const branch = (() => {
   try {
     return execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
@@ -219,6 +223,43 @@ groups.push(
   }),
 );
 
+/**
+ * The build/version integrity group (issue #25) — MANDATORY, and it runs
+ * BEFORE the live group because a live benchmark that measured other code is
+ * not evidence about this repository at all.
+ *
+ * It reads the recorded live build evidence — `live-report.json`'s per-case
+ * build stamps and `native-check.json`'s pair — plus, when a live server is
+ * configured, the stamps it reports now (offline-safe: no live call is
+ * required to run the gate). It FAILs on a different-commit pair, missing or
+ * "unknown" builds, or a stamp whose 12-char SHA is not this HEAD; it is
+ * BLOCKED when the evidence is absent; and it can never yield an overall PASS
+ * while BLOCKED (see the verdict rule below).
+ */
+const readJsonIfPresent = async (path) => {
+  try {
+    return JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+};
+const buildIntegrityEvidence = {
+  report: await readJsonIfPresent(resolve(root, "artifacts/design-benchmark/live-report.json")),
+  native: await readJsonIfPresent(resolve(root, "artifacts/design-benchmark/live/native-check.json")),
+};
+const buildIntegrityVerdict = evaluateBuildIntegrityEvidence(buildIntegrityEvidence, { repoHead: shortHead });
+const buildIntegrityGroup = {
+  id: "build-integrity",
+  title: "Build/version integrity — the live evidence's server and plugin builds all name this commit",
+  command: "evaluateBuildIntegrityEvidence(live-report.json, native-check.json) (read-only, offline)",
+  status: buildIntegrityVerdict.status,
+  exitCode: buildIntegrityVerdict.exitCode,
+  durationMs: 0,
+  detail: buildIntegrityVerdict.detail,
+  ...buildIntegrityVerdict.extra,
+};
+groups.push(buildIntegrityGroup);
+
 if (!skipLive) {
   groups.push(
     runGroup({
@@ -329,7 +370,7 @@ const GAPS = [
   {
     gap: "The live evidence was measured against a deployment, and the deployment is not the repository",
     detail:
-      "The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.",
+      "The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all, and the build-integrity group (issue #25) refuses the run outright when the recorded stamps do not name this commit. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.",
   },
   {
     gap: "A golden is a regression reference, not an approval",
@@ -353,8 +394,15 @@ const GAPS = [
 /* -------------------------------------------------------------------------- */
 
 const allGroups = [gauntletGroup, ...groups];
-const failed = allGroups.filter((g) => g.status === "FAIL");
+/**
+ * Issue #25: a BLOCKED build-integrity group counts as a failure for the
+ * verdict — "we could not prove the evidence names this commit" is not a state
+ * a passing release may be called in. Other groups' BLOCKED stays INDETERMINATE
+ * (recorded as missing live coverage, not a failure).
+ */
+const failed = allGroups.filter((g) => g.status === "FAIL" || (g.id === "build-integrity" && g.status === "BLOCKED"));
 const blocked = allGroups.filter((g) => g.status === "BLOCKED");
+const integrityBlocked = buildIntegrityGroup.status === "BLOCKED";
 const missingArtifacts = [];
 for (const artifact of ["artifacts/release-gate/latest.json", "artifacts/stress-matrix/latest.json", "artifacts/acceptance/latest.json", "artifacts/design-benchmark/latest.json"]) {
   if (!existsSync(resolve(root, artifact))) missingArtifacts.push(artifact);
@@ -382,13 +430,24 @@ const summary = {
   node: process.version,
   platform: `${process.platform}-${process.arch}`,
   config: { skipLive, groups: allGroups.map((g) => g.id) },
+  // Issue #25: the run's build/version provenance, so the summary can be
+  // checked against the commit it claims to certify without re-deriving it.
+  builds: {
+    serverBuild: buildIntegrityGroup.serverBuild ?? "unknown",
+    pluginBuild: buildIntegrityGroup.pluginBuild ?? "unknown",
+    compatibility: buildIntegrityGroup.compatibility ?? "unverifiable",
+    pluginVersion: PACKAGE.version,
+    commit: shortHead ?? "unknown",
+  },
   verdict,
   verdictReason:
-    verdict === "FAIL"
+    (verdict === "FAIL"
       ? `${failed.length} group(s) failed${missingArtifacts.length > 0 ? ` and ${missingArtifacts.length} required artifact(s) are missing` : ""}`
       : verdict === "INDETERMINATE"
         ? `${blocked.length} group(s) could not run: ${blocked.map((g) => g.id).join(", ")}`
-        : "every mandatory assertion passed and every required artifact exists",
+        : "every mandatory assertion passed and every required artifact exists") +
+    // Issue #25: say plainly when the failure is the un-certifiable builds.
+    (integrityBlocked ? "; the build-integrity group is BLOCKED — the live build evidence does not certify this commit, so the run is not a pass" : ""),
   totals: {
     groups: allGroups.length,
     passed: allGroups.filter((g) => g.status === "PASS").length,
@@ -426,6 +485,10 @@ function markdown(s) {
     "",
     `Run \`${s.runId}\` on commit \`${s.commit}\` (${s.branch}), ${s.startedAt} → ${s.finishedAt}, ${(s.durationMs / 1000).toFixed(1)}s.`,
     `Node ${s.node} on ${s.platform}.`,
+    "",
+    // Issue #25: the build/version provenance, printed so a mismatched run is
+    // visible in the report itself, not only in the JSON.
+    `**Build provenance** — server \`${s.builds?.serverBuild ?? "unknown"}\`, plugin \`${s.builds?.pluginBuild ?? "unknown"}\`, compatibility \`${s.builds?.compatibility ?? "unverifiable"}\`, plugin version \`${s.builds?.pluginVersion ?? "unknown"}\`, commit \`${s.builds?.commit ?? s.commit}\`.`,
     "",
     "## Groups",
     "",

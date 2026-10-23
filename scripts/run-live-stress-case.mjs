@@ -34,7 +34,7 @@ import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { tool, rpc, settleTransaction, MCP } from "./lib/live-client.mjs";
+import { tool, rpc, settleTransaction, assertBuildIntegrity, MCP } from "./lib/live-client.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const liveDir = resolve(root, "artifacts/design-benchmark/live");
@@ -122,6 +122,14 @@ if (!status?.connected) {
   process.exit(2);
 }
 console.log("plugin:", status.fileName, "page:", status.pageName, "plugin build:", status.build ?? "unknown");
+
+/**
+ * Build/version integrity (issue #25): refuse to run against a server/plugin
+ * pair that is not this repository's HEAD — the evidence would be about other
+ * code. Exits 1 with a blocker message when the builds mismatch; returns the
+ * stamps on success.
+ */
+const buildIntegrity = await assertBuildIntegrity();
 
 // Resume: a retry reuses the built frame instead of leaving a duplicate.
 let prior = null;

@@ -21,7 +21,7 @@
  * A bucket that was never filled says so. It never borrows a verdict from
  * another bucket.
  */
-import type { PipelineCheck, PipelineFinding, PipelineReport, PipelineTrace } from "./contracts";
+import type { PipelineCheck, PipelineFinding, PipelineReport, PipelineTrace, PipelineBuildStamp } from "./contracts";
 import type { BuildCompatibility } from "../design/quality/final-gate";
 import { summarizeRepairs, type RepairTrace } from "../design/quality/repair-history";
 import {
@@ -93,6 +93,14 @@ export interface ReportInput {
    * read-only and offline callers that never measured a live file keep working.
    */
   buildCompatibility?: BuildCompatibility;
+  /**
+   * Build/version provenance (issue #25, additive): the server and plugin
+   * builds, their compatibility, the commit they name and the plugin's
+   * semantic version. Echoed verbatim on the report when supplied — the
+   * report records provenance it was given, it does not invent one. Absent
+   * for offline and read-only runs, which never touched a live file.
+   */
+  builds?: PipelineBuildStamp;
   /**
    * Design-intelligence provenance for the contract counters: whether design
    * intelligence ran on this build, and whether the plan carried a
@@ -201,6 +209,9 @@ export function buildReport(input: ReportInput): PipelineReport {
     remainingFindings: input.findings,
     blocked: input.blocked,
     trace: input.trace,
+    // Build/version provenance (issue #25): echoed, never synthesised — a
+    // report that never measured a live file carries no builds block.
+    ...(input.builds ? { builds: input.builds } : {}),
   };
 }
 

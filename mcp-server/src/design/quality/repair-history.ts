@@ -22,6 +22,8 @@
  */
 import type { DesignFinding } from "./finding";
 import { GATE_THRESHOLDS, thresholdSnapshot, detectThresholdDrift, type GateThresholds } from "./dimensions";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 /** Where the fix belongs. Shared defects are fixed at the source, not per node. */
 export type RepairScope = "token" | "component" | "local" | "structural";
@@ -216,8 +218,139 @@ export function recordRepair(input: RepairRecordInput): RepairTrace {
   if (input.revisionAfter !== undefined) trace.revisionAfter = input.revisionAfter;
   if (input.afterRender !== undefined) trace.afterRender = input.afterRender;
   if (input.decidedBy !== undefined) trace.decidedBy = input.decidedBy;
+  sessionTraces.push(trace);
+  persistRepairTrace(trace);
   return trace;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Cross-run persistence (issue #26)                                            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Repair traces used to die with the process: `recordRepair` built a trace,
+ * the caller held it or dropped it, and the next run planned the same failed
+ * mutation again. Now every trace is appended to a bounded JSONL file
+ * (best-effort — persistence must never break a repair) and reloaded at
+ * startup, so `planRepairs` can consult what previous runs already tried.
+ */
+
+const DEFAULT_REPAIR_HISTORY_PATH = "artifacts/repair-history.jsonl";
+
+/** Hard bound on the persisted file: old traces are trimmed, never unbounded. */
+export const MAX_PERSISTED_REPAIR_TRACES = 2000;
+
+let repairHistoryPathOverride: string | null = null;
+
+/**
+ * Overrides the persistence path (tests); pass null to restore the default.
+ *
+ * The override is also published through `REPAIR_HISTORY_PATH` so every
+ * bundle in the process (dist-test splits modules per family) resolves the
+ * same file. Clearing removes only a value this setter published — an
+ * externally provided environment keeps working.
+ */
+export function setRepairHistoryPath(path: string | null): void {
+  repairHistoryPathOverride = path;
+  try {
+    if (path === null) {
+      if (envPublishedBySetter) {
+        delete process.env["REPAIR_HISTORY_PATH"];
+        envPublishedBySetter = false;
+      }
+    } else {
+      process.env["REPAIR_HISTORY_PATH"] = path;
+      envPublishedBySetter = true;
+    }
+  } catch {
+    return;
+  }
+}
+
+let envPublishedBySetter = false;
+
+export function getRepairHistoryPath(): string {
+  const fromEnv = typeof process.env["REPAIR_HISTORY_PATH"] === "string" && process.env["REPAIR_HISTORY_PATH"].length > 0
+    ? process.env["REPAIR_HISTORY_PATH"]
+    : null;
+  return repairHistoryPathOverride ?? fromEnv ?? DEFAULT_REPAIR_HISTORY_PATH;
+}
+
+/** Traces reloaded from the file at startup. */
+let persistedTraces: RepairTrace[] = [];
+
+/** Traces recorded by this process. */
+let sessionTraces: RepairTrace[] = [];
+
+function isRepairTrace(value: unknown): value is RepairTrace {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  return typeof v["id"] === "string" && Array.isArray(v["findingIds"]) && Array.isArray(v["mutations"]);
+}
+
+/** Best-effort load: a missing or corrupt file is an empty history, not an error. */
+export function reloadRepairHistory(): void {
+  persistedTraces = [];
+  try {
+    const file = getRepairHistoryPath();
+    if (!existsSync(file)) return;
+    const lines = readFileSync(file, "utf8").split("\n");
+    const traces: RepairTrace[] = [];
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      try {
+        const parsed: unknown = JSON.parse(trimmed);
+        if (isRepairTrace(parsed)) traces.push(parsed);
+      } catch {
+        continue;
+      }
+    }
+    persistedTraces = traces.slice(-MAX_PERSISTED_REPAIR_TRACES);
+  } catch {
+    persistedTraces = [];
+  }
+}
+
+/** The combined history previous runs plus this one, oldest first. */
+export function getRepairHistory(): readonly RepairTrace[] {
+  return [...persistedTraces, ...sessionTraces];
+}
+
+/** Clears the in-memory history (tests). The file is left alone. */
+export function clearRepairHistory(): void {
+  persistedTraces = [];
+  sessionTraces = [];
+}
+
+/** Best-effort append: persistence must never break the repair it records. */
+function persistRepairTrace(trace: RepairTrace): void {
+  try {
+    const file = getRepairHistoryPath();
+    mkdirSync(dirname(file), { recursive: true });
+    const line = JSON.stringify(trace);
+    let existing: string[] = [];
+    try {
+      if (existsSync(file)) {
+        existing = readFileSync(file, "utf8").split("\n").filter((l) => l.trim().length > 0);
+      }
+    } catch {
+      existing = [];
+    }
+    const merged = [...existing, line].slice(-MAX_PERSISTED_REPAIR_TRACES);
+    if (!existsSync(file) || merged.length <= existing.length) {
+      // New file, or the cap trimmed old traces: rewrite the bounded file.
+      writeFileSync(file, merged.length > 0 ? `${merged.join("\n")}\n` : "", "utf8");
+    } else {
+      appendFileSync(file, `${line}\n`, "utf8");
+    }
+  } catch {
+    return;
+  }
+}
+
+// Load once at startup; callers that change the path call reloadRepairHistory.
+reloadRepairHistory();
 
 /* -------------------------------------------------------------------------- */
 /* Integrity: a repair may not buy a PASS                                       */

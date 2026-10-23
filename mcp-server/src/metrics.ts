@@ -54,6 +54,27 @@ export const counters = {
   renders: 0,
   renderTokens: 0,
   renderBytes: 0,
+  /* --- First-Pass Quality Contract (issue #26): outcomes that used to be
+         computed per call and discarded are aggregated here, so a run can say
+         "verified with zero repairs" and mean it across runs. --- */
+  /** Built screens verified with zero repairs attempted. */
+  firstPassAccepted: 0,
+  /** Built screens with zero repairs attempted (the acceptance denominator). */
+  firstPassTotal: 0,
+  /** Pipeline visual checks that failed. */
+  visualQAFailures: 0,
+  /** Runs whose payload carried intelligence-applied:true. */
+  intelligenceAppliedCount: 0,
+  /** Runs that disclosed design-intelligence provenance either way. */
+  intelligenceTotal: 0,
+  /** Runs whose plan carried a composition hint. */
+  compositionHintAppliedCount: 0,
+  /** Runs that disclosed composition-hint provenance either way. */
+  hintTotal: 0,
+  /** Repair self-verifications that passed (no unresolved, no regression). */
+  repairVerificationPass: 0,
+  /** Repair self-verifications that failed. */
+  repairVerificationFail: 0,
 };
 
 export function recordToolCall(tool: string, ms: number, opts?: { ops?: number; nodes?: number }): void {
@@ -102,6 +123,64 @@ export function recordRender(tokens: number, base64Bytes: number, ms: number): v
   pushBounded(renderMs, { ms, at: Date.now() });
 }
 
+/* -------------------------------------------------------------------------- */
+/* First-Pass Quality Contract recorders (issue #26)                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Records a first-pass outcome: a built screen with zero repairs attempted.
+ * `verified` is true only when the report's own status is `verified` — a
+ * screen that needed no repair and still did not verify is a first pass that
+ * did not accept, not a silent pass.
+ */
+export function recordFirstPass(verified: boolean): void {
+  counters.firstPassTotal += 1;
+  if (verified) counters.firstPassAccepted += 1;
+}
+
+/** Records the pipeline visual check's outcome; only failures aggregate. */
+export function recordVisualQA(status: string): void {
+  if (status === "fail") counters.visualQAFailures += 1;
+}
+
+/**
+ * Records design-intelligence provenance disclosure. `hintApplied` is
+ * optional because not every provenance payload names a composition hint;
+ * the hint rate is computed over runs that disclosed it either way.
+ */
+export function recordIntelligence(applied: boolean, hintApplied?: boolean): void {
+  counters.intelligenceTotal += 1;
+  if (applied) counters.intelligenceAppliedCount += 1;
+  if (hintApplied !== undefined) {
+    counters.hintTotal += 1;
+    if (hintApplied) counters.compositionHintAppliedCount += 1;
+  }
+}
+
+/** Records the repair pass's own verdict (self-verification, not the build). */
+export function recordRepairVerification(verdict: string): void {
+  if (verdict === "PASS") counters.repairVerificationPass += 1;
+  else if (verdict === "FAIL") counters.repairVerificationFail += 1;
+}
+
+/** Resets only the contract counters, so tests can aggregate deterministically. */
+export function resetContractCounters(): void {
+  counters.firstPassAccepted = 0;
+  counters.firstPassTotal = 0;
+  counters.visualQAFailures = 0;
+  counters.intelligenceAppliedCount = 0;
+  counters.intelligenceTotal = 0;
+  counters.compositionHintAppliedCount = 0;
+  counters.hintTotal = 0;
+  counters.repairVerificationPass = 0;
+  counters.repairVerificationFail = 0;
+}
+
+function rate(numerator: number, denominator: number): number {
+  if (denominator === 0) return 0;
+  return Math.round((numerator / denominator) * 100) / 100;
+}
+
 export function recordInspect(ms: number): void {
   pushBounded(inspectMs, { ms, at: Date.now() });
 }
@@ -130,6 +209,24 @@ export function snapshot(): Record<string, unknown> {
   for (const [tool, samples] of toolDurations) tools[tool] = stats(samples);
   return {
     counters: { ...counters },
+    contract: {
+      firstPassAccepted: counters.firstPassAccepted,
+      firstPassTotal: counters.firstPassTotal,
+      firstPassAcceptanceRate: rate(counters.firstPassAccepted, counters.firstPassTotal),
+      visualQAFailures: counters.visualQAFailures,
+      intelligenceAppliedCount: counters.intelligenceAppliedCount,
+      intelligenceTotal: counters.intelligenceTotal,
+      intelligenceAppliedRate: rate(counters.intelligenceAppliedCount, counters.intelligenceTotal),
+      compositionHintAppliedCount: counters.compositionHintAppliedCount,
+      hintTotal: counters.hintTotal,
+      hintAppliedRate: rate(counters.compositionHintAppliedCount, counters.hintTotal),
+      repairVerificationPass: counters.repairVerificationPass,
+      repairVerificationFail: counters.repairVerificationFail,
+      repairVerificationPassRate: rate(
+        counters.repairVerificationPass,
+        counters.repairVerificationPass + counters.repairVerificationFail,
+      ),
+    },
     transactions: { apply: stats(transactionApplyMs), total: stats(transactionTotalMs) },
     inspect: stats(inspectMs),
     render: stats(renderMs),

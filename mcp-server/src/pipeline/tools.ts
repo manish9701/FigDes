@@ -122,6 +122,33 @@ function programLabels(program: { content: Array<{ args: Record<string, unknown>
   return labels;
 }
 
+/**
+ * First-build completeness blockers (issue #26).
+ *
+ * `verifyPlan`'s required-information-missing / primary-action-missing /
+ * region-off-canvas findings and the type-criteria readable-labels (<11px)
+ * failures used to ride the findings flow as advisories while the apply
+ * proceeded — a first build that ships without what the brief says the
+ * screen cannot work without is a screen that works without it. Critical
+ * and high findings in those classes refuse the apply (same pattern as the
+ * transaction-edge brief gate: nothing created, actionable message);
+ * medium/low stay advisory.
+ */
+export function firstBuildBlockers(
+  structure: { findings: PipelineFinding[] },
+  typeCriteria: { findings: PipelineFinding[] },
+): PipelineFinding[] {
+  const blockingStructure = structure.findings.filter(
+    (f) =>
+      (f.id.startsWith("required-information-missing") ||
+        f.id === "primary-action-missing" ||
+        f.id.startsWith("region-off-canvas")) &&
+      (f.severity === "critical" || f.severity === "high"),
+  );
+  const blockingType = typeCriteria.findings.filter((f) => f.rule === "type.space.readable-labels");
+  return [...blockingStructure, ...blockingType];
+}
+
 export async function designPipelineTool(
   session: Session | null,
   registry: SessionRegistry,
@@ -465,6 +492,36 @@ export async function designPipelineTool(
     };
   }
 
+  /* --- stage 4.7: the first-build completeness gate (issue #26) ------------ */
+
+  /**
+   * A first build missing required information, its primary action, room on
+   * the canvas, or readable type is refused before anything is created —
+   * the same pattern as the transaction-edge brief gate. The findings
+   * themselves are unchanged (still recorded with evidence); what changes
+   * is that critical/high findings in these classes stop the apply instead
+   * of accompanying it. Medium/low stay advisory.
+   */
+  const completenessBlockers = firstBuildBlockers(structure, typeCriteria);
+  if (completenessBlockers.length > 0) {
+    const problems = completenessBlockers.map((f) => `${f.summary} Fix: ${f.fix}`);
+    stage(
+      trace,
+      "completeness-refused",
+      `First-build completeness refused the build: ${completenessBlockers.length} blocking finding(s) (${completenessBlockers.map((f) => f.id).join(", ")}); nothing was created.`,
+      completenessBlockers.flatMap((f) => f.nodeIds),
+    );
+    return {
+      ...common,
+      status: "refused",
+      stage: "completeness",
+      completeness: { blocking: true, findings: completenessBlockers.map((f) => f.id) },
+      problems,
+      note: "Nothing was created: the plan is missing information the brief requires, the action the task needs, room on the canvas, or readable type. Fix the problems and build again — a first build that ships without them is a screen that works without what the brief says it cannot work without.",
+      trace,
+    };
+  }
+
   /* --- stage 5: apply ---------------------------------------------------- */
 
   const existing = await resolveExistingResources(session, operations);
@@ -515,6 +572,11 @@ export async function designPipelineTool(
     overflow: Object.fromEntries(plan.regions.map((r) => [r.id, r.constraints.overflow])),
     sizing: Object.fromEntries(plan.regions.map((r) => [r.id, { width: r.sizing.width, height: r.sizing.height }])),
     ...((measured.metrics.size > 0 ? { textMeasurements: Object.fromEntries(measured.metrics) } : {}) as Pick<PreflightContext, "textMeasurements">),
+    // Issue #26: the pipeline's compiled routes are the connector evidence
+    // `checkConnectors` needs — without them the blocking connector class
+    // silently no-ops on this path. Same shape `runtimePreflightContext`
+    // already threads on the runtime path.
+    ...(compiled.connectorRoutes !== undefined && compiled.connectorRoutes.length > 0 ? { connectors: compiled.connectorRoutes } : {}),
     briefBlockers: blockers.map((b) => ({ ...(b.id !== undefined ? { id: b.id } : {}), severity: b.severity, message: b.message, ...(b.fix !== undefined ? { fix: b.fix } : {}) })),
   };
   stage(trace, "preflight-context", `Blocking preflight evidence gathered: ${Object.keys(boxes).length} resolved box(es), ${blockers.length} brief blocker(s), ${measured.metrics.size} text measurement(s).`);
@@ -538,6 +600,7 @@ export async function designPipelineTool(
     createdNodes,
     rootNodeId,
     render: args.render !== false,
+    promisedConnectors: compiled.connectorRoutes ?? [],
   });
   trace.checks.push(...live.checks);
   trace.findings.push(...live.findings);
@@ -659,6 +722,7 @@ export async function designPipelineTool(
         createdNodes,
         rootNodeId,
         render: args.render !== false,
+        promisedConnectors: compiled.connectorRoutes ?? [],
       });
     } catch (err) {
       recheckError = err instanceof Error ? err.message : String(err);
@@ -707,7 +771,7 @@ export async function designPipelineTool(
 
     live.checks = [
       ...live.checks.filter((c) =>
-        !["render-freshness", "nodes-created", "live-structure", "review-rules", "live-scan-complete", "geometry-agreement"].includes(c.id),
+        !["render-freshness", "connector-endpoint-visible", "nodes-created", "live-structure", "review-rules", "live-scan-complete", "geometry-agreement"].includes(c.id),
       ),
       ...after.checks,
     ];
@@ -873,7 +937,7 @@ export async function designPipelineTool(
 async function verifyLiveScreen(
   session: Session,
   plan: ReturnType<typeof buildCompositionPlan>,
-  evidence: { createdNodes: Array<{ temporaryId?: string; figmaNodeId?: string }>; rootNodeId: string | null; render: boolean },
+  evidence: { createdNodes: Array<{ temporaryId?: string; figmaNodeId?: string }>; rootNodeId: string | null; render: boolean; promisedConnectors?: Array<{ id: string; from: string; to: string }> },
 ): Promise<{
   checks: PipelineCheck[];
   findings: PipelineFinding[];
@@ -955,6 +1019,7 @@ async function verifyLiveScreen(
     render,
     currentRevision,
     ruleFindings,
+    promisedConnectors: evidence.promisedConnectors ?? [],
   });
 
   /**

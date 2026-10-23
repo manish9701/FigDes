@@ -201,6 +201,24 @@ groups.push(
   }),
 );
 
+groups.push(
+  runGroup({
+    id: "fidelity",
+    title: "Plan-to-build fidelity gate (First-Pass Quality Contract)",
+    command: "node",
+    args: ["scripts/run-fidelity-gate.mjs"],
+    parse: (output, code) => {
+      const tests = Number(output.match(/"tests":\s*(\d+)/)?.[1] ?? 0);
+      const pass = Number(output.match(/"pass":\s*(\d+)/)?.[1] ?? 0);
+      return {
+        status: code === 0 ? "PASS" : "FAIL",
+        detail: code === 0 ? `fidelity matrix passed (${pass}/${tests} test(s))` : "the fidelity matrix reported a failure",
+        extra: { tests, pass },
+      };
+    },
+  }),
+);
+
 if (!skipLive) {
   groups.push(
     runGroup({

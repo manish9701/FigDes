@@ -41,6 +41,72 @@ import {
 } from "./metrics";
 
 /**
+ * Pre-build score/guard evidence threaded in by the calling handler.
+ *
+ * Collected via the score_design / design_guard tool internals (never a new
+ * tool): the score report's weak spots and the product guard's verdict for
+ * the program about to be built. The dispatcher enforces it at the
+ * transaction edge — a FAIL verdict or a critical weak spot refuses the apply
+ * unless the caller waives it explicitly with approved:true plus a reason.
+ * Absent evidence means nothing was measured, which is not a block.
+ */
+export interface ScoreGuardEvidence {
+  /** score_design weak spots: dimension names (advisory) or detail objects. */
+  scoreWeakSpots?: unknown[];
+  /** design_guard verdict: PASS | WARNING | FAIL | INDETERMINATE ... */
+  guardVerdict?: string;
+  /** Explicit human waiver covering this evidence. Single-use per dispatch. */
+  approved?: boolean;
+  reason?: string;
+}
+
+/**
+ * A weak spot only blocks dispatch when it is critical: an explicit
+ * critical severity, or a dimension score below 4 (severely failing, not
+ * merely below the 6-point done bar). Plain dimension names — the shape
+ * score_design returns — stay advisory: they are the fix list for the next
+ * pass, not a reason to refuse the build.
+ */
+export function isCriticalWeakSpot(spot: unknown): boolean {
+  if (spot === null || typeof spot !== "object" || Array.isArray(spot)) return false;
+  const o = spot as Record<string, unknown>;
+  if (o["severity"] === "critical") return true;
+  if (typeof o["score"] === "number" && o["score"] < 4) return true;
+  return false;
+}
+
+/**
+ * Returns the refusal reason when the score/guard evidence blocks, or null.
+ *
+ * A FAIL guard verdict and any critical weak spot both refuse unless waived
+ * with approved:true plus a non-empty reason — the same explicit-justification
+ * pattern as the checkpoint gate's needs-approval.
+ */
+export function scoreGuardRefusal(evidence: ScoreGuardEvidence | undefined): string | null {
+  if (!evidence) return null;
+  const waived =
+    evidence.approved === true && typeof evidence.reason === "string" && evidence.reason.trim().length > 0;
+  if (waived) return null;
+  const verdict = typeof evidence.guardVerdict === "string" ? evidence.guardVerdict.toUpperCase() : "";
+  if (verdict === "FAIL") {
+    return (
+      `score-guard: the design_guard verdict for this build is FAIL, so nothing may be applied from it. ` +
+      `Fix the failing truths (or re-run design_guard on the repaired program) and rebuild — ` +
+      `or waive explicitly with approved:true plus the reason this FAIL is safe to build.`
+    );
+  }
+  const critical = (evidence.scoreWeakSpots ?? []).filter(isCriticalWeakSpot);
+  if (critical.length > 0) {
+    return (
+      `score-guard: score_design reports ${critical.length} critical weak spot(s) for this build, ` +
+      `so nothing may be applied from it. Repair the failing dimensions and rebuild — ` +
+      `or waive explicitly with approved:true plus the reason these spots are safe to build.`
+    );
+  }
+  return null;
+}
+
+/**
  * A failed transaction is thrown as an MCP tool error rather than returned as a
  * successful payload. Returning `{status:"failed"}` as a *success* invites the
  * model to gloss over it and report the design as done.
@@ -62,7 +128,7 @@ export async function dispatchTransaction(
   registry: SessionRegistry,
   session: Session,
   tool: "create_design" | "modify_design" | "update_component" | "native_design",
-  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext },
+  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext; scoreGuard?: ScoreGuardEvidence },
 ): Promise<TransactionResult> {
   const transactionId = payload.transactionId ?? `txn_${randomUUID().slice(0, 8)}`;
   const ops = payload.operations as unknown[];
@@ -86,6 +152,23 @@ export async function dispatchTransaction(
         `(ledger: "${label}").\n` +
         blockingBrief.slice(0, 5).map((b) => `  ${b.message}${b.fix ? ` Fix: ${b.fix}` : ""}`).join("\n") +
         `\nFirst contradiction: "${first.message}". Resolve it in the brief, then build again.`,
+    );
+  }
+
+  // Issue #26 — the score/guard gate at the transaction edge. A build whose
+  // measured verdict is FAIL (or carries critical weak spots) must not reach
+  // the document, whatever path threaded it here. The evidence rides in on
+  // `scoreGuard`; an explicit waiver (approved:true plus a reason) covers this
+  // dispatch only. Refused server-side, before any socket or document contact.
+  const guardBlock = scoreGuardRefusal(payload.scoreGuard);
+  if (guardBlock !== null) {
+    const label = "blocked: score-guard refused (FAIL verdict or critical weak spots)";
+    recordPreflightCatch(1);
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.complete(transactionId, "failed", { error: guardBlock, label });
+    throw new Error(
+      `Refused before dispatch: ${guardBlock}\n` +
+        `(ledger: "${label}"). Nothing was created and nothing was sent.`,
     );
   }
 

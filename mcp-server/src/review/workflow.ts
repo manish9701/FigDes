@@ -32,7 +32,6 @@ import { contentRevision } from "../design/quality/revision";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
-import { validateTransaction } from "../preflight";
 import type { Session, SessionRegistry } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
 
@@ -820,9 +819,11 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
     // Issue #23 close-out: the loop's fix transactions mutate the document, so
     // they go through the tracked dispatcher (blocking preflight, job ledger,
     // document lock, transaction-call idempotency) like every other mutating
-    // path. When no registry is threaded (direct callers in tests), the same
-    // blocking preflight still hard-refuses before the plain send. The
-    // failure dispositions below are unchanged in both cases.
+    // path.
+    // Issue #26: the registry-less fallback is gone. Dispatching straight to
+    // the socket bypasses the ledger, so a retried fix duplicates work and a
+    // timed-out one leaves nothing to reconcile against. Without a registry
+    // the loop refuses instead of sending blind.
     const fixDescription = `refine_screen iteration ${i}: ${actionable.map((f) => f.rule).join(", ")}`;
     if (registry) {
       try {
@@ -837,20 +838,13 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         applied = { status: "failed", error: { message: err instanceof Error ? err.message : String(err) } };
       }
     } else {
-      const fixPreflight = validateTransaction(operations as unknown[]);
-      if (!fixPreflight.ok) {
-        applied = {
-          status: "failed",
-          error: {
-            message: `Preflight rejected the refinement fix before contacting Figma: ${fixPreflight.issues[0]?.message ?? "invalid"}. Fix: ${fixPreflight.issues[0]?.fix ?? ""}`,
-          },
-        };
-      } else {
-        applied = (await session.request("modify_design", {
-          description: fixDescription,
-          operations: operations as Array<Record<string, unknown>>,
-        })) as { status?: string; error?: { message?: string } };
-      }
+      applied = {
+        status: "failed",
+        error: {
+          message:
+            "Refused: refine_screen fixes dispatch through the tracked transaction dispatcher (job ledger with same-id idempotency). No registry was threaded, so nothing was sent blind. Re-invoke with a connected registry/session so the fix lands in the ledger.",
+        },
+      };
     }
 
     if (applied.status !== "success") {

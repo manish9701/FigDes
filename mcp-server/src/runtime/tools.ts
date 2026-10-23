@@ -16,7 +16,8 @@ import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
 import type { PreflightResult } from "../../../shared/protocol";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
-import { dispatchTransaction } from "../transaction";
+import { dispatchTransaction, type ScoreGuardEvidence } from "../transaction";
+import { scoreDesign } from "../review/score";
 import { preflightCheckTag, validateTransaction } from "../preflight";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromIR } from "../memory/guard";
@@ -435,6 +436,11 @@ export async function runRuntimeTool(
    */
   const hasText = programHasText(program);
   const applicabilityBasis = !hasText ? "none-needed" : measuredCount > 0 ? "measured" : "estimates";
+  // Issue #26 — blocking-mode marking. A program with no plan and no declared
+  // style still builds (raw exploration must work), but the payload says so:
+  // intelligence.applied:false plus a first-pass-ineligible flag, top-level
+  // and inside stats where metrics consumption reads it.
+  const firstPassIneligible = !intelligence.applied;
   const payload = {
     // A plan whose geometry is not what was asked for is not "completed", and
     // it is emphatically not "applied". Three distinct states, because issue #11
@@ -445,7 +451,7 @@ export async function runRuntimeTool(
     ...(applicabilityBasis === "estimates" ? { applicabilityWarning: "Layout resolved from text ESTIMATES (the measure_text round trip answered empty or failed). The apply path measures against the live plugin and may resolve different geometry — re-run with a responsive plugin before trusting this verdict, and expect the refusal reasons to change." } : {}),
     ...(compiled.applicable ? {} : { inapplicableReasons: compiled.inapplicableReasons }),
     dryRun: dryRun ?? false,
-    stats: compiled.stats,
+    stats: { ...compiled.stats, firstPassIneligible },
     regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role, width: r.width, height: r.height, grow: r.grow, layout: r.layout })),
     /**
      * Which algorithm each region actually used, and how many boxes a relation
@@ -481,9 +487,13 @@ export async function runRuntimeTool(
      * declared visualIntent.style. `false` means it ran on the auto
      * art-direction fallback (or none) — disclosed here and in `warnings`,
      * with the fix named. `applicabilityBasis` below says what the geometry
-     * stands on; this says what the decisions stand on.
+     * stands on; this says what the decisions stand on. A `false` here also
+     * marks the build first-pass-ineligible (issue #26): raw exploration
+     * still builds, but it never counts as a disciplined first pass.
      */
     intelligence,
+    /** Issue #26: false exactly when the build ran without design intelligence. */
+    firstPassIneligible,
     /**
      * What the product guard concluded about this build.
      *
@@ -551,6 +561,28 @@ export async function runRuntimeTool(
   // single-transaction dispatcher, which runs it at the transaction edge.
   const preflightContext = runtimePreflightContext(compiled, measuredMetrics);
 
+  // Issue #26: score/guard evidence for the dispatch edge, collected via the
+  // score_design (scoreDesign) and design_guard (productGuard, already run by
+  // the interpreter at build time) internals — never a new tool. Plain
+  // dimension-name weak spots are advisory and never block; a FAIL verdict
+  // (or explicitly critical spots) refuses the apply at the transaction edge
+  // unless this call waives it with approved:true plus a reason.
+  const scoreEvidence = scoreDesign({
+    boxes: compiled.boxes,
+    operations: compiled.operations as never,
+    regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role })),
+    composition: inferComposition(compiled.ir.regions),
+    canvasW: canvasSize(compiled.ir.canvas.width, 1440),
+    canvasH: canvasSize(compiled.ir.canvas.height, 900),
+    ...(compiled.ir.visualIntent?.focal !== undefined ? { focal: compiled.ir.visualIntent.focal } : {}),
+  });
+  const dispatchScoreGuard: ScoreGuardEvidence = {
+    scoreWeakSpots: scoreEvidence.weakSpots,
+    ...(compiled.productGuard !== undefined ? { guardVerdict: compiled.productGuard.verdict } : {}),
+    ...(approved !== undefined ? { approved } : {}),
+    ...(reason !== undefined ? { reason } : {}),
+  };
+
   if (chunked === true || (chunked !== false && compiled.operations.length > CHUNK_SIZE * 2)) {
     // Auto-chunk large programs: a single 300-op transaction holds the socket
     // silent for a minute+ and risks losing everything to one bad op. Chunked
@@ -558,7 +590,22 @@ export async function runRuntimeTool(
     // per-chunk rollback. Explicit chunked:false still forces one transaction.
     // Issue #14 parity: each chunk now dispatches through the tracked
     // transaction dispatcher under its own stable per-chunk transactionId.
-    const built = await runChunked(session, registry ?? null, compiled.operations, description, preflightContext);
+    // Issue #26: a chunked build without a registry has no ledger to hold the
+    // chunks, so it is refused before anything is sent rather than dispatched
+    // blind. Re-invoke with a registry, or compile with dryRun:true.
+    if (!registry) {
+      return {
+        ...payload,
+        ...(placement !== null ? { placement } : {}),
+        status: "refused",
+        refusedBy: "ledger",
+        howToProceed:
+          "Refused: chunked design_runtime builds dispatch each chunk through the tracked transaction dispatcher (job ledger with same-id idempotency). No registry was threaded, so nothing was sent. Re-invoke with a connected registry/session to build, or use dryRun:true to compile without one.",
+        chunks: [],
+        completed: false,
+      };
+    }
+    const built = await runChunked(session, registry, compiled.operations, description, preflightContext, dispatchScoreGuard);
     // A blocking preflight verdict comes back as a structured refusal: nothing
     // built, no chunk sent, plan inspectable for repair.
     if (built.refusal !== undefined) {
@@ -574,16 +621,21 @@ export async function runRuntimeTool(
     };
   }
 
-  // The registry-less fallback has no tracked dispatcher to enforce the
-  // blocking preflight at the transaction edge, so it runs here — offline is
-  // the point (validateTransaction contacts nothing) — before a byte is sent.
-  // With a registry the dispatcher runs the same validation and records the
-  // ledger record a same-id retry reconciles against.
+  // Issue #26: every mutating dispatch goes through the tracked dispatcher
+  // with a registry, so the same-id idempotency and the ledger hold apply.
+  // Without a registry there is no ledger to reconcile a retry against, so
+  // the build is refused before anything is sent rather than dispatched
+  // blind. Re-invoke with a connected registry/session, or dryRun to compile.
   if (!registry) {
-    const offline = validateTransaction(compiled.operations, preflightContext);
-    if (!offline.ok) {
-      return { ...payload, ...preflightRefusal(offline), ...(placement !== null ? { placement } : {}) };
-    }
+    return {
+      ...payload,
+      ...(placement !== null ? { placement } : {}),
+      status: "refused",
+      refusedBy: "ledger",
+      howToProceed:
+        "Refused: design_runtime builds dispatch through the tracked transaction dispatcher (job ledger with same-id idempotency). No registry was threaded, so nothing was sent. Re-invoke with a connected registry/session to build, or use dryRun:true to compile without one.",
+      problems: [],
+    };
   }
 
   session.notify({ type: "notify", kind: "activity", text: `Building ${compiled.operations.length} ops…`, at: Date.now() });
@@ -595,18 +647,17 @@ export async function runRuntimeTool(
   // Issue #23: the dispatch carries the program's deterministic evidence
   // (resolved geometry, per-region overflow, sizing intents) so the blocking
   // preflight classes run with real data instead of silently skipping.
-  const transaction = registry
-    ? await dispatchTransaction(registry, session, "create_design", {
-        description: description ?? "Design runtime execution",
-        operations: compiled.operations,
-        ...(transactionId !== undefined ? { transactionId } : {}),
-        preflight: preflightContext,
-      })
-    : await session.request("create_design", {
-        description: description ?? "Design runtime execution",
-        operations: compiled.operations,
-        transactionId,
-      });
+  //
+  // Issue #26: the dispatch also carries the score/guard evidence collected
+  // above, so a FAIL verdict (or critical weak spots) refuses the apply at
+  // the transaction edge unless waived with approved:true plus a reason.
+  const transaction = await dispatchTransaction(registry, session, "create_design", {
+    description: description ?? "Design runtime execution",
+    operations: compiled.operations,
+    ...(transactionId !== undefined ? { transactionId } : {}),
+    preflight: preflightContext,
+    scoreGuard: dispatchScoreGuard,
+  });
 
   return { ...payload, ...(placement !== null ? { placement } : {}), transaction };
 }
@@ -765,8 +816,27 @@ export async function runChunked(
   operations: unknown[],
   description: string | undefined,
   preflight?: PreflightContext,
+  scoreGuard?: ScoreGuardEvidence,
 ): Promise<ChunkedBuild> {
   const chunks: ChunkedBuild["chunks"] = [];
+
+  // Issue #26: chunks dispatch through the tracked dispatcher, so a null
+  // registry means no ledger to hold them. Refuse before anything is sent
+  // rather than dispatching blind; the whole-list preflight below still runs
+  // so the refusal names the geometric obstacle when there is one.
+  if (!registry) {
+    return {
+      chunks,
+      completed: false,
+      refusal: {
+        status: "refused",
+        refusedBy: "ledger",
+        howToProceed:
+          "Refused: chunked builds dispatch each chunk through the tracked transaction dispatcher (job ledger with same-id idempotency). No registry was threaded, so nothing was sent. Re-invoke with a connected registry/session, or compile with dryRun:true.",
+        problems: [],
+      },
+    };
+  }
 
   const wholeList = validateTransaction(operations, preflight);
   if (!wholeList.ok) {
@@ -801,17 +871,16 @@ export async function runChunked(
 
     let result: ChunkResult;
     try {
-      result = registry
-        ? await dispatchTransaction(registry, session, "create_design", {
-            description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
-            operations: slice,
-            transactionId,
-            preflight: chunkPreflight,
-          })
-        : ((await session.request("create_design", {
-            description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
-            operations: slice,
-          })) as ChunkResult);
+      // Issue #26: the per-chunk dispatch carries the same score/guard
+      // evidence as the single-transaction path, so a FAIL verdict (or
+      // critical weak spots) refuses every chunk, not just the first.
+      result = await dispatchTransaction(registry, session, "create_design", {
+        description: `${description ?? "Design runtime execution"} (chunk ${chunkNo})`,
+        operations: slice,
+        transactionId,
+        preflight: chunkPreflight,
+        ...(scoreGuard !== undefined ? { scoreGuard } : {}),
+      });
     } catch (err) {
       // The dispatcher refuses failed chunks by throwing; the chunked contract
       // records them instead. The build stops, the failing chunk carries the

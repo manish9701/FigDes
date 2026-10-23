@@ -99,6 +99,9 @@ export interface GateRecord {
   detail?: string;
 }
 
+/** The build pair a verdict was measured under (`tools.buildCompatibility`). */
+export type BuildCompatibility = "same-commit" | "different-commit" | "unverifiable";
+
 /** The gates that must report `ran` before the verdict may say PASS. */
 export const REQUIRED_GATES: readonly string[] = [
   "evidence-backed-scores",
@@ -221,6 +224,14 @@ export function evaluateFinalGate(input: {
    * describing code and a transaction it cannot tie its claims to.
    */
   stamp?: { pluginBuild?: string | null; transactionId?: string | null };
+  /**
+   * Build provenance (issue #26): the server/plugin build pair the screen was
+   * measured under. `same-commit` keeps the verdict reachable; anything else
+   * refuses PASS (a different build fails the verdict, an untraceable one
+   * blocks it). Absent means "not measured here": read-only and offline
+   * callers that never touched a live file are unaffected.
+   */
+  buildCompatibility?: BuildCompatibility;
 }): FinalQualityReport {
   const scores: FinalScores = {
     hierarchy: clamp(input.scores.hierarchy ?? 50),
@@ -296,8 +307,12 @@ export function evaluateFinalGate(input: {
     revision: input.expectedRevision ?? null,
   };
   const attachTruth = (report: Omit<FinalQualityReport, "verdict" | "verdictReasons" | "gates" | "stamp">): FinalQualityReport => {
-    const verdict = verdictFor(report.status, gates);
-    return { ...report, gates, stamp, verdict, verdictReasons: reasonsFor(report, gates) };
+    const build = {
+      ...(input.buildCompatibility !== undefined ? { compatibility: input.buildCompatibility } : {}),
+      stamped: stamp.pluginBuild !== null && stamp.transactionId !== null,
+    };
+    const verdict = verdictFor(report.status, gates, build);
+    return { ...report, gates, stamp, verdict, verdictReasons: reasonsFor(report, gates, build) };
   };
 
   if (remaining.length > 0 || a11yBlocking.length > 0) {
@@ -366,6 +381,7 @@ function deriveGateRecords(
     stamp?: { pluginBuild?: string | null; transactionId?: string | null };
     gates?: GateRecord[];
     scores: Partial<FinalScores>;
+    buildCompatibility?: BuildCompatibility;
   },
   measured: { missingScores: string[]; staleEvidence: boolean; structuralFailures: number },
 ): GateRecord[] {
@@ -445,6 +461,22 @@ function deriveGateRecords(
       : { name: "evidence-backed-scores", status: "notEvaluated", required: true, detail: `missing evidence-backed scores: ${measured.missingScores.join(", ")}` },
   );
 
+  /* build-compatibility (issue #26) ----------------------------------------- */
+  //
+  // Only enumerated when the caller measured it: read-only and offline runs
+  // never touch a live file, so an absent pair is "not measured here", not a
+  // refusal. A supplied pair is required — a verdict measured under the wrong
+  // build is not a verdict about this repository.
+  if (input.buildCompatibility !== undefined) {
+    records.push(
+      input.buildCompatibility === "same-commit"
+        ? { name: "build-compatibility", status: "ran", required: true, detail: "the server and plugin builds are a same-commit pair" }
+        : input.buildCompatibility === "different-commit"
+          ? { name: "build-compatibility", status: "failed", required: true, detail: "the server and plugin builds differ: the measures may not describe this repository's behaviour" }
+          : { name: "build-compatibility", status: "skipped", required: true, detail: "the plugin build cannot be tied to a commit: the run cannot certify this repository" },
+    );
+  }
+
   /* interaction-states (opt-in by shape, informational) ------------------- */
   records.push(
     input.states !== undefined
@@ -462,15 +494,31 @@ function deriveGateRecords(
 }
 
 /**
- * The verdict mapping (issue #23 (b)): any required gate that is skipped or
- * never evaluated holds the verdict at BLOCKED — the gate could not run, so
- * the run is incomplete rather than bad — and any gate that ran and found a
- * blocker makes the verdict FAIL. REVIEW status (a check ran, the outcome is
- * withheld for evidence a human or a live session must supply) is also BLOCKED,
- * with the name of what is outstanding.
+ * The verdict mapping (issue #23 (b), hardened by issue #26): any required
+ * gate that is skipped or never evaluated holds the verdict at BLOCKED — the
+ * gate could not run, so the run is incomplete rather than bad — and any gate
+ * that ran and found a blocker makes the verdict FAIL. REVIEW status (a check
+ * ran, the outcome is withheld for evidence a human or a live session must
+ * supply) is also BLOCKED, with the name of what is outstanding.
+ *
+ * The `build` provenance refuses PASS on top of the gates, so a caller that
+ * overrides the gate records cannot launder a mismatched build into PASS:
+ * `different-commit` FAILs (the measures may describe other code),
+ * `unverifiable` BLOCKEDs (nothing ties the run to a commit), and an absent
+ * stamp BLOCKEDs (the verdict names no transaction it certifies). Read-only
+ * inspection callers omit `build` and are unaffected.
  */
-function verdictFor(status: FinalQualityReport["status"], gates: readonly GateRecord[]): FinalVerdict {
+export function verdictFor(
+  status: FinalQualityReport["status"],
+  gates: readonly GateRecord[],
+  build?: { compatibility?: BuildCompatibility | null; stamped?: boolean },
+): FinalVerdict {
   if (status === "FAIL" || gates.some((gate) => gate.status === "failed")) return "FAIL";
+  const compatibility = build?.compatibility ?? null;
+  if (compatibility !== null && compatibility !== "same-commit") {
+    return compatibility === "different-commit" ? "FAIL" : "BLOCKED";
+  }
+  if (build?.stamped === false) return "BLOCKED";
   if (
     status === "PASS" &&
     !gates.some((gate) => gate.required && (gate.status === "skipped" || gate.status === "notEvaluated"))
@@ -479,9 +527,10 @@ function verdictFor(status: FinalQualityReport["status"], gates: readonly GateRe
 }
 
 /** Never-PASS reasons, one per forcing line — the narrative behind the verdict. */
-function reasonsFor(
+export function reasonsFor(
   report: { status: FinalQualityReport["status"]; reason: string },
   gates: readonly GateRecord[],
+  build?: { compatibility?: BuildCompatibility | null; stamped?: boolean },
 ): string[] {
   const reasons: string[] = [];
   if (report.status === "FAIL") reasons.push(`blocking outcome: ${report.reason}`);
@@ -489,6 +538,17 @@ function reasonsFor(
   for (const gate of gates) {
     if (gate.status === "failed") reasons.push(`${gate.name}: ran and found a blocker — ${gate.detail ?? ""}`);
     else if (gate.required && (gate.status === "skipped" || gate.status === "notEvaluated")) reasons.push(`${gate.name}: ${gate.status} — ${gate.detail ?? ""}`);
+  }
+  const compatibility = build?.compatibility ?? null;
+  if (compatibility !== null && compatibility !== "same-commit" && !reasons.some((r) => r.startsWith("build-compatibility:"))) {
+    reasons.push(
+      compatibility === "different-commit"
+        ? "build-compatibility: the server and plugin builds differ — the verdict cannot certify this repository"
+        : "build-compatibility: the plugin build cannot be tied to a commit — the verdict cannot certify this repository",
+    );
+  }
+  if (build?.stamped === false && !reasons.some((r) => r.startsWith("session-stamp:"))) {
+    reasons.push("session-stamp: the verdict is unstamped — no plugin build and transaction it certifies");
   }
   return reasons;
 }

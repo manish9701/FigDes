@@ -1,0 +1,10 @@
+{
+  "schema": "fidelity-gate-v1",
+  "startedAt": "2026-10-23T09:42:59.645Z",
+  "finishedAt": "2026-10-23T09:42:59.948Z",
+  "strict": true,
+  "status": "PASS",
+  "tests": 23,
+  "pass": 23,
+  "fail": 0
+}

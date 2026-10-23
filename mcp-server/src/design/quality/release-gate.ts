@@ -37,7 +37,7 @@ import {
   type DimensionInput,
   type GateReport,
 } from "./dimensions";
-import { summarizeRepairs, type RepairTrace, type RepairHistorySummary } from "./repair-history";
+import { summarizeRepairs, getRepairHistory, type RepairTrace, type RepairHistorySummary } from "./repair-history";
 
 export interface ReleaseGateInput {
   /** Revision under judgement. */
@@ -63,6 +63,63 @@ export interface ReleaseGateInput {
   snapshotReference?: string;
   /** What was actually built. Drives the §17 honesty wording. */
   deliverable?: "visual-prototype" | "design-system-artifact" | "unclear";
+}
+
+/**
+ * Release-build strictness (First-Pass Quality Contract).
+ *
+ * By default `benchmark_regression` and `live_validation` are reported but
+ * non-blocking: they are not knowable from a single design task. A release
+ * build flips the flag — the regression comparison then *requires* evidence,
+ * so a release can never ship on an unevaluated baseline.
+ */
+export interface ReleaseGateOptions {
+  /** Treat `benchmark_regression` as a required dimension. Default false. */
+  requireBenchmarkRegression?: boolean;
+  /** Treat `live_validation` as a required dimension. Default false. */
+  requireLiveValidation?: boolean;
+}
+
+/**
+ * The `runRegressionGate` verdict in the narrow shape the release path
+ * consumes. Kept structural (not imported) so quality never depends on the
+ * benchmark module's internals.
+ */
+export interface BenchmarkGateSummary {
+  verdict: "PASS" | "REGRESSION" | "NOT_EVALUATED";
+  missing: string[];
+  comparison: { regressions: string[] };
+  reasons: string[];
+}
+
+/**
+ * Maps a regression-gate verdict onto the release gate's input.
+ *
+ * The honesty rule: PENDING only when the baseline is missing. A verdict of
+ * REGRESSION becomes blocking regressions; NOT_EVALUATED (baseline exists
+ * but the candidate never reproduced it) becomes blocking regressions too —
+ * an unevaluated candidate is not a passing one. Only a missing baseline is
+ * `performed: false`, which the release gate reports as PENDING.
+ */
+export function benchmarkRegressionForGate(gate: BenchmarkGateSummary | null): NonNullable<ReleaseGateInput["benchmarkRegression"]> {
+  if (gate === null) {
+    return { performed: false, notes: ["No benchmark baseline is recorded — the comparison was expected but not run."] };
+  }
+  if (gate.verdict === "PASS") {
+    return { performed: true, regressions: [], notes: gate.reasons };
+  }
+  if (gate.verdict === "REGRESSION") {
+    return { performed: true, regressions: [...gate.comparison.regressions], notes: gate.reasons };
+  }
+  return {
+    performed: true,
+    regressions: [
+      gate.missing.length > 0
+        ? `candidate did not reproduce the baseline case(s): ${gate.missing.join(", ")}`
+        : "candidate shares no cases with the baseline",
+    ],
+    notes: gate.reasons,
+  };
 }
 
 export interface HandoffRecord {
@@ -91,8 +148,10 @@ export interface ReleaseGateReport extends GateReport {
   };
 }
 
-export function buildReleaseGate(input: ReleaseGateInput): ReleaseGateReport {
+export function buildReleaseGate(input: ReleaseGateInput, options: ReleaseGateOptions = {}): ReleaseGateReport {
   const revisionId = input.revisionId;
+  const requireBenchmark = options.requireBenchmarkRegression === true;
+  const requireLive = options.requireLiveValidation === true;
 
   /* ---- Findings from every evaluator, unified ----------------------------- */
   const structural: DesignFinding[] = (input.structuralFindings ?? []).map((f) => fromProtocolFinding(f, revisionId));
@@ -195,7 +254,9 @@ export function buildReleaseGate(input: ReleaseGateInput): ReleaseGateReport {
   dimensions.push(
     (() => {
       if (!input.liveValidation) {
-        return { dimension: "live_validation" as const, status: "NOT_APPLICABLE" as const, reasons: ["Live validation was not attempted for this run."], findingIds: [] };
+        return requireLive
+          ? { dimension: "live_validation" as const, status: "PENDING" as const, reasons: ["Live validation is required for release builds but was not attempted."], findingIds: [] }
+          : { dimension: "live_validation" as const, status: "NOT_APPLICABLE" as const, reasons: ["Live validation was not attempted for this run."], findingIds: [] };
       }
       if (!input.liveValidation.performed) {
         return { dimension: "live_validation" as const, status: "PENDING" as const, reasons: ["Live validation was required but not performed."], findingIds: [] };
@@ -216,7 +277,9 @@ export function buildReleaseGate(input: ReleaseGateInput): ReleaseGateReport {
   dimensions.push(
     (() => {
       if (!input.benchmarkRegression) {
-        return { dimension: "benchmark_regression" as const, status: "NOT_APPLICABLE" as const, reasons: ["No benchmark comparison was run."], findingIds: [] };
+        return requireBenchmark
+          ? { dimension: "benchmark_regression" as const, status: "PENDING" as const, reasons: ["A benchmark comparison is required for release builds but none was run."], findingIds: [] }
+          : { dimension: "benchmark_regression" as const, status: "NOT_APPLICABLE" as const, reasons: ["No benchmark comparison was run."], findingIds: [] };
       }
       if (!input.benchmarkRegression.performed) {
         return { dimension: "benchmark_regression" as const, status: "PENDING" as const, reasons: ["A benchmark comparison was expected but not run."], findingIds: [] };
@@ -248,7 +311,14 @@ export function buildReleaseGate(input: ReleaseGateInput): ReleaseGateReport {
     if (updated) allFindings = allFindings.map((f) => (f.id === updated.id ? updated : f));
   }
 
-  const gate = evaluateGate({ dimensions, acceptedRisks });
+  const gate = evaluateGate({
+    dimensions,
+    acceptedRisks,
+    additionallyRequired: [
+      ...(requireBenchmark ? ["benchmark_regression" as const] : []),
+      ...(requireLive ? ["live_validation" as const] : []),
+    ],
+  });
 
   const notVerified = [
     ...gate.notVerified,
@@ -322,8 +392,29 @@ export function gateFromLiveRun(input: {
   evidence?: RenderEvidenceRecord | null;
   postRenderMutations?: string[];
   liveValidation?: ReleaseGateInput["liveValidation"];
-}): ReleaseGateReport {
-  return buildReleaseGate(input);
+  benchmarkRegression?: ReleaseGateInput["benchmarkRegression"];
+}, options: ReleaseGateOptions = {}): ReleaseGateReport {
+  return buildReleaseGate(input, options);
+}
+
+/**
+ * The release-build gate: benchmark regression is blocking. A release with
+ * no comparison recorded is PENDING (never PASS); a release with regressions
+ * is FAIL. Use this — not the default non-blocking gate — for release builds.
+ */
+export function buildReleaseBuildGate(input: ReleaseGateInput): ReleaseGateReport {
+  return buildReleaseGate(input, { requireBenchmarkRegression: true });
+}
+
+/**
+ * Cross-run repair summary (issue #26): the persisted + session history
+ * summarized for callers that hold no traces of their own. Opt-in — the gate
+ * itself still reports only the traces it was given, so an unrelated history
+ * file can never change a release verdict behind the caller's back.
+ */
+export function persistedRepairSummary(): RepairHistorySummary | null {
+  const traces = getRepairHistory();
+  return traces.length > 0 ? summarizeRepairs(traces) : null;
 }
 
 /** Re-exported so a caller can add its own evidence-backed finding without importing two modules. */

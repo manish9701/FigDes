@@ -172,6 +172,31 @@ const CreateArgs = z
     reason: z.string().max(400).optional().describe("The user's stated reason, kept in the audit trail."),
     transactionId: z.string().max(200).optional(),
     sessionId: SessionArg,
+    /**
+     * Plan provenance (issue #26): the plan_screen plan this build comes from,
+     * or any marker that design intelligence ran on it. Raw operations bypass
+     * ALL design intelligence, so a non-dry-run dispatch without provenance
+     * needs an explicit approved+reason justification instead.
+     */
+    plan: z.unknown().optional().describe("plan_screen program provenance: the plan this build executes. Absent means raw operations."),
+    planId: z.string().max(200).optional().describe("Reference to the plan_screen plan this build executes, when the plan itself is not inlined."),
+    intelligenceApplied: z.boolean().optional().describe("Set when design intelligence (plan_screen plan or declared visualIntent.style) ran on this build."),
+    /**
+     * Pre-build score/guard evidence (issue #26): weak spots from score_design
+     * and the verdict from design_guard for the design about to be built. A
+     * FAIL verdict or critical weak spots refuse the dispatch at the
+     * transaction edge unless waived with approved:true plus a reason.
+     */
+    scoreGuard: z
+      .object({
+        scoreWeakSpots: z.array(z.unknown()).optional(),
+        guardVerdict: z.string().max(32).optional(),
+        approved: z.boolean().optional(),
+        reason: z.string().max(400).optional(),
+      })
+      .strict()
+      .optional()
+      .describe("score_design / design_guard evidence for this build. FAIL or critical weak spots block dispatch unless waived."),
   })
   .strict();
 
@@ -695,6 +720,106 @@ async function viaPlugin(
     throw new Error(`The Figma plugin could not complete ${tool}: ${raw.error}`);
   }
   return raw;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Plan-provenance gate (issue #26)                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Whether the raw args carry plan_screen provenance or an explicit
+ * design-intelligence signal.
+ *
+ * Accepted markers: an inlined `plan`, a `planId`/`planRef` reference, an
+ * explicit `intelligenceApplied:true` / `fromPlan:true`, or a `program`
+ * carrying a plan_screen plan or a declared visualIntent.style (the
+ * design_runtime program channel). Anything else is raw operations.
+ */
+export function hasPlanProvenance(raw: unknown): boolean {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return false;
+  const r = raw as Record<string, unknown>;
+  if (r["plan"] !== undefined && r["plan"] !== null) return true;
+  if (typeof r["planId"] === "string" && (r["planId"] as string).length > 0) return true;
+  if (typeof r["planRef"] === "string" && (r["planRef"] as string).length > 0) return true;
+  if (r["fromPlan"] === true || r["intelligenceApplied"] === true) return true;
+  const program = r["program"];
+  if (program !== null && typeof program === "object" && !Array.isArray(program)) {
+    const p = program as Record<string, unknown>;
+    if (p["plan"] !== undefined && p["plan"] !== null) return true;
+    const intent = p["visualIntent"];
+    if (
+      intent !== null &&
+      typeof intent === "object" &&
+      !Array.isArray(intent) &&
+      typeof (intent as Record<string, unknown>)["style"] === "string" &&
+      ((intent as Record<string, unknown>)["style"] as string).length > 0
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The refusal a raw mutating call gets: a `needs-approval` result, not an
+ * error, so the model can answer it by re-sending with approved:true plus a
+ * reason — the same single-use pattern as the checkpoint gate.
+ */
+export function planProvenanceRefusal(operationCount: number): Record<string, unknown> {
+  return {
+    status: "needs-approval",
+    question:
+      `This change carries no plan_screen provenance and no explicit design-intelligence signal, ` +
+      `so it would bypass decision classification, composition hints and the build-time product guard. ` +
+      `Is this raw build intentional?`,
+    ifApproved: "The raw operations are dispatched as-is, without design intelligence.",
+    instead:
+      "Call plan_screen first (or design_pipeline for the whole loop) and build from its program — " +
+      "or use design_runtime, which carries the plan channel natively — then run design_guard(inspect:true) on the result.",
+    checkpoints: [{ gate: "plan-provenance", detail: "no plan, planId, or intelligence-applied signal on a mutating call" }],
+    measured: { operations: operationCount },
+    howToProceed:
+      "Nothing has been changed. If the user confirms the raw build is intentional, call this tool again with " +
+      "approved:true and a short reason. To see the effect first, call the same tool with dryRun:true - that needs no approval.",
+  };
+}
+
+/**
+ * Enforces the plan-provenance gate for raw mutating calls.
+ *
+ * Returns a refusal payload when the call must stop, or null when it may
+ * proceed. Design-time inspection stays open: dryRun creates nothing and
+ * needs no provenance, and readonly native scripts are inspection-only.
+ */
+export function requirePlanProvenance(
+  rawArgs: unknown,
+  opts: { approved?: boolean; reason?: string; dryRun?: boolean; readonly?: boolean; operations: unknown },
+): Record<string, unknown> | null {
+  if (opts.dryRun === true || opts.readonly === true) return null;
+  if (hasPlanProvenance(rawArgs)) return null;
+  if (opts.approved === true && typeof opts.reason === "string" && opts.reason.trim().length > 0) return null;
+  const count = Array.isArray(opts.operations) ? opts.operations.length : 0;
+  return planProvenanceRefusal(count);
+}
+
+/**
+ * Merges a mutating call's score/guard evidence with its tool-level waiver.
+ *
+ * Without evidence there is nothing to waive, so nothing is threaded and the
+ * dispatcher runs exactly as before. With evidence, the caller's
+ * approved+reason covers the dispatch-edge score block for this dispatch only.
+ */
+export function scoreGuardForDispatch(parsed: {
+  scoreGuard?: { scoreWeakSpots?: unknown[]; guardVerdict?: string; approved?: boolean; reason?: string };
+  approved?: boolean;
+  reason?: string;
+}): { scoreWeakSpots?: unknown[]; guardVerdict?: string; approved?: boolean; reason?: string } | undefined {
+  if (!parsed.scoreGuard) return undefined;
+  return {
+    ...parsed.scoreGuard,
+    ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
+    ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+  };
 }
 
 export const CompareVisualsArgs = z.object({
@@ -1460,7 +1585,27 @@ inputSchema: CompileArgs,
       "Execute JavaScript directly in the Figma Plugin API context. This is the primary builder for composition-led screens, and it bypasses design intelligence entirely (no decision classification, no composition hints, no build-time product guard) — for new screens, plan first with plan_screen or design_pipeline and run design_guard(inspect:true) on the built frame afterwards. The script receives the real figma API plus a high-level figdes builder (stack/frame/text/rect/ellipse/vector/connect/instance) that handles font loading, auto-layout ordering, sizing and native geometry. Prefer figdes for construction and raw figma for advanced API work. Return rootId/createdNodeIds/mutatedNodeIds. Optional renderAfter='first-created' or 'explicit' turns the same call into a build + visual evidence checkpoint. Native writes are transactional and serialized per session; timeout is an execution watchdog that waits for an in-flight script to settle before rollback, preventing late mutations.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
-      const parsed = UseFigmaArgs.parse(args ?? {});
+      // Issue #26: UseFigmaArgs is strict and owns no plan channel, so the
+      // provenance markers (and the explicit approved+reason justification)
+      // travel on the raw args beside the script and are stripped before the
+      // strict parse. Readonly scripts are inspection-only and stay open.
+      const raw = ((args ?? {}) as Record<string, unknown>);
+      const { plan, planId, planRef, fromPlan, intelligenceApplied, approved, reason, ...scriptArgs } = raw;
+      void plan;
+      void planId;
+      void planRef;
+      void fromPlan;
+      void intelligenceApplied;
+      void approved;
+      void reason;
+      const parsed = UseFigmaArgs.parse(scriptArgs);
+      const provenanceGate = requirePlanProvenance(raw, {
+        ...(typeof approved === "boolean" ? { approved } : {}),
+        ...(typeof reason === "string" ? { reason } : {}),
+        ...(parsed.readonly !== undefined ? { readonly: parsed.readonly } : {}),
+        operations: [{ type: "native-script" }],
+      });
+      if (provenanceGate) return provenanceGate;
       return figdesUseFigmaHandler(registry.resolve(parsed.sessionId), parsed);
     }
   },
@@ -1769,6 +1914,18 @@ inputSchema: CreateArgs,
       });
       if (gate) return gate;
 
+      // Issue #26: raw operations bypass ALL design intelligence. A non-dry-run
+      // dispatch needs plan_screen provenance (or the intelligence-applied
+      // signal) or an explicit approved+reason justification. Dry runs stay
+      // open: design-time inspection must not need approval.
+      const provenanceGate = requirePlanProvenance(args, {
+        ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
+        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+        ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
+        operations: parsed.operations,
+      });
+      if (provenanceGate) return provenanceGate;
+
       if (parsed.dryRun) {
         // Dry runs validate without ledger noise: preflight + trace only.
         const preflight = validateTransaction(parsed.operations as unknown[]);
@@ -1792,6 +1949,7 @@ inputSchema: CreateArgs,
         description: parsed.description,
         operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
+        ...(scoreGuardForDispatch(parsed) !== undefined ? { scoreGuard: scoreGuardForDispatch(parsed) } : {}),
       });
     },
   },
@@ -1815,6 +1973,17 @@ inputSchema: ModifyArgs,
         ...(existing !== undefined ? { existing } : {}),
       });
       if (gate) return gate;
+
+      // Issue #26: same provenance gate as create_design — raw edits bypass
+      // design intelligence, so they need a plan reference or an explicit
+      // approved+reason justification. Dry runs stay open.
+      const provenanceGate = requirePlanProvenance(args, {
+        ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
+        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
+        ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
+        operations: parsed.operations,
+      });
+      if (provenanceGate) return provenanceGate;
 
       if (parsed.dryRun) {
         const preflight = validateTransaction(parsed.operations as unknown[]);
@@ -1840,6 +2009,7 @@ inputSchema: ModifyArgs,
         description: parsed.description,
         operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
+        ...(scoreGuardForDispatch(parsed) !== undefined ? { scoreGuard: scoreGuardForDispatch(parsed) } : {}),
       });
     },
   },

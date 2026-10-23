@@ -19,3 +19,7 @@ dist-test/
 
 # Job-ledger restart persistence (opt-in via DESIGN_AGENT_JOB_DIR)
 .jobs/
+
+# Cross-run repair trace (runtime log, recreated at runtime; never commit test rows)
+artifacts/repair-history.jsonl
+

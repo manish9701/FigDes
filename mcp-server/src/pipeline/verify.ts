@@ -32,6 +32,19 @@ export interface CompiledProgram {
   applicable: boolean;
   inapplicableReasons: string[];
   boxes: Map<string, { id: string; x: number; y: number; w: number; h: number }>;
+  /**
+   * Routed connectors with their resolved endpoints, carried so the
+   * dispatch-time preflight can re-prove the endpoints land on the nodes
+   * they name (issue #26: the pipeline threads these into its own
+   * preflightContext, the same shape `runtimePreflightContext` already used).
+   */
+  connectorRoutes?: Array<{
+    id: string;
+    from: string;
+    to: string;
+    endpoints: Array<{ x: number; y: number }>;
+    labelAt?: { x: number; y: number } | null;
+  }>;
   productGuard?: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number };
 }
 
@@ -517,6 +530,16 @@ export interface LiveEvidence {
     fix?: string;
     suggestedOperations?: Array<Record<string, unknown>>;
   }>;
+  /**
+   * Connectors the program promised (compiled routes, id/from/to).
+   *
+   * When non-empty, `verifyLive` adds the `connector-endpoint-visible`
+   * check: a promised connector with no attached route in the live metrics
+   * — or with a missing/stale render, so nobody could see it — is a FAIL,
+   * never a review. Structure can be right while the relationship the
+   * screen exists to draw is absent.
+   */
+  promisedConnectors?: Array<{ id: string; from: string; to: string }>;
 }
 
 export function verifyLive(
@@ -753,6 +776,76 @@ export function verifyLive(
       detail: `The render is bound to revision ${evidence.render.revisionId ?? "unknown"}.`,
       nodeIds: [],
     });
+  }
+
+  /* --- connectors promised vs connectors visible --------------------------- */
+
+  /**
+   * A promised connector with no visible endpoint is not "worth a look" —
+   * it is the relationship the screen was built to draw, missing. So this
+   * check fails closed twice: no attached route in the live metrics (no
+   * VECTOR/CONNECTOR node carrying the edge), or no fresh render to see it
+   * on (missing, or bound to an older revision). Either way the endpoint
+   * cannot be shown to be visible, and an unshown endpoint is not an endpoint.
+   */
+  const promised = evidence.promisedConnectors ?? [];
+  if (promised.length === 0) {
+    checks.push({
+      id: "connector-endpoint-visible",
+      question: "Are promised connector endpoints visible?",
+      status: "pass",
+      detail: "No connectors were promised.",
+      nodeIds: [],
+    });
+  } else {
+    const renderOk =
+      evidence.render !== null &&
+      evidence.render !== undefined &&
+      (evidence.currentRevision === undefined ||
+        evidence.currentRevision === null ||
+        evidence.render.revisionId === evidence.currentRevision);
+    const hasRoute =
+      metrics !== null &&
+      metrics.nodes.some(
+        (n) => n.type === "VECTOR" || n.type === "CONNECTOR" || /connector|route|edge/i.test(n.name ?? ""),
+      );
+    if (renderOk && hasRoute) {
+      checks.push({
+        id: "connector-endpoint-visible",
+        question: "Are promised connector endpoints visible?",
+        status: "pass",
+        detail: `${promised.length} promised connector(s) have a routed edge in the file and a fresh render to see it on.`,
+        nodeIds: [],
+      });
+    } else {
+      const why =
+        !renderOk
+          ? evidence.render === null || evidence.render === undefined
+            ? "no render was produced, so no endpoint could be seen"
+            : `the render is of revision ${evidence.render.revisionId ?? "unknown"}, the file is at ${evidence.currentRevision}`
+          : "the live metrics carry no routed edge (no VECTOR/CONNECTOR node)";
+      checks.push({
+        id: "connector-endpoint-visible",
+        question: "Are promised connector endpoints visible?",
+        status: "fail",
+        detail: `${promised.length} promised connector(s) (${promised.map((p) => p.id).join(", ")}) with no visible endpoint: ${why}.`,
+        nodeIds: [],
+      });
+      for (const [i, p] of promised.entries()) {
+        findings.push({
+          id: findingId("connector-endpoint-invisible", i),
+          stage: "live",
+          severity: "high",
+          confidence: 0.9,
+          nodeIds: [],
+          summary: `Connector '${p.id}' ('${p.from}' → '${p.to}') has no visible endpoint on the built screen.`,
+          why: "A connector that was promised but cannot be seen is a relationship the screen claims and does not draw.",
+          evidence: { kind: "rule", detail: `promised '${p.from}' → '${p.to}'; ${why}` },
+          fix: "Re-route the connector against the final node boxes, rebuild, and render the current revision before calling this screen done.",
+          automatable: true,
+        });
+      }
+    }
   }
 
   const status = statusOf(checks, findings);

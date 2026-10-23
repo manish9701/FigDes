@@ -19,6 +19,14 @@
  *    already holds is a no-op, so a retried repair does not move anything.
  */
 import type { PipelineFinding } from "./contracts";
+import {
+  assessRepairIntegrity,
+  getRepairHistory,
+  reloadRepairHistory,
+  requiresNewDiagnosis,
+  CURRENT_THRESHOLDS,
+  type RepairTrace,
+} from "../design/quality/repair-history";
 
 /** One repair, ready to apply. */
 export interface RepairInstruction {
@@ -67,10 +75,16 @@ const SEVERITY_ORDER: Record<PipelineFinding["severity"], number> = {
 
 export function planRepairs(
   findings: Array<PipelineFinding | FindingWithOperations>,
-  options: { budget?: number; allowAutomated?: boolean } = {},
+  options: { budget?: number; allowAutomated?: boolean; history?: readonly RepairTrace[] } = {},
 ): RepairPlan {
   const budget = options.budget ?? 3;
   const allowAutomated = options.allowAutomated ?? true;
+  // Cross-run history: what previous runs already tried (issue #26). Defaults
+  // to the persisted + session history; a caller may supply its own slice.
+  // The default re-reads the file so a trace persisted by an earlier run (or
+  // process) is visible here, not only traces recorded in this process.
+  if (options.history === undefined) reloadRepairHistory();
+  const history = options.history ?? getRepairHistory();
 
   const ordered = [...findings].sort((a, b) => {
     const bySeverity = SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity];
@@ -97,6 +111,18 @@ export function planRepairs(
       continue;
     }
 
+    // Cross-run learning (issue #26): after two failed attempts on the same
+    // finding, a new diagnosis is required — not the same mutation again.
+    // The history spans runs (persisted traces), so a repeat that failed
+    // yesterday is refused today, before it costs a transaction.
+    if (requiresNewDiagnosis(history, finding.id)) {
+      skipped.push({
+        findingId: finding.id,
+        why: "Two repair attempts already left this finding in place (see the repair history). A new diagnosis is required before planning the same mutation again.",
+      });
+      continue;
+    }
+
     // A repair that touches no named node is a rewrite, not a repair.
     const targetIds = [
       ...new Set(
@@ -107,6 +133,42 @@ export function planRepairs(
     ];
     if (targetIds.length === 0) {
       skipped.push({ findingId: finding.id, why: "The proposed operations do not name a target node, so they are not a targeted repair." });
+      continue;
+    }
+
+    // The same byte-for-byte mutation already failed for this finding: the
+    // anti-suppression check refuses it, and the planner reports the refusal
+    // instead of burning budget on a retry that history says does not work.
+    const probe: RepairTrace = {
+      id: `probe-${finding.id}`,
+      findingIds: [finding.id],
+      revisionBefore: "probe",
+      diagnosis: {
+        cause: "layout-misplaced",
+        scope: "local",
+        minimalTargets: targetIds,
+        whyThisScope: "Provisional diagnosis for the repeat-mutation check: scoped to the named targets.",
+        whyItShouldWork: "Unproven — this probe only asks whether the same mutation already failed.",
+        falsifiesIf: ["The same mutation already failed, in which case the diagnosis must be revised."],
+        predictedSideEffects: ["Unknown — re-measure after the change."],
+      },
+      mutations: operations.map((op) => ({
+        kind: "operation" as const,
+        description: JSON.stringify(op),
+        targetIds: typeof op["target"] === "string" ? [op["target"] as string] : targetIds,
+      })),
+      result: "unchanged",
+      regressions: [],
+      outcome: "rejected",
+      thresholdsAtDecision: { ...CURRENT_THRESHOLDS },
+      notes: [],
+    };
+    const integrity = assessRepairIntegrity({ trace: probe, dimensionBefore: "FAIL", dimensionAfter: "FAIL", history: [...history] });
+    if (integrity.violations.includes("repeated-failed-attempt")) {
+      skipped.push({
+        findingId: finding.id,
+        why: `The same mutation already failed in a previous attempt (${integrity.reasons[0] ?? "repeated-failed-attempt"}). Revise the diagnosis before retrying.`,
+      });
       continue;
     }
 

@@ -13,7 +13,7 @@
  */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdtemp, writeFile, readFile, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve, dirname, join } from "node:path";
@@ -23,6 +23,15 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const script = join(root, "scripts/run-live-benchmark.mjs");
+
+/**
+ * Issue #25: complete live evidence must name the builds that measured it, and
+ * the stamps must be THIS repository's HEAD. The fixtures therefore name the
+ * real HEAD rather than a literal — a synthetic stamp would be reported as a
+ * mismatch by the same rule that refuses stale production evidence.
+ */
+const HEAD12 = execFileSync("git", ["rev-parse", "--short=12", "HEAD"], { cwd: root }).toString().trim();
+const HEAD_FULL = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root }).toString().trim();
 
 const ALL_CASES = [
   "exo-compute-topology",
@@ -55,6 +64,11 @@ const baseCase = (caseId) => ({
   repairs: [],
   unresolved: [],
   fixtures: [{ fixture: true, note: "no real-looking data" }],
+  // Issue #25: the evidence names the builds that measured it, tied to HEAD.
+  // The validator reads these from the record's top level.
+  commit: HEAD_FULL,
+  serverBuild: HEAD12,
+  pluginBuild: HEAD12,
 });
 
 /**
@@ -71,6 +85,9 @@ const nativeCheck = (overrides = {}) => ({
   createdNodeIds: ["279:1090", "279:1091", "279:1092"],
   measured: { canvas: { width: 480, height: 220 }, nodeCount: 5, textLayers: 2, renderStatus: "ok" },
   cleanup: { status: "success", framesBefore: 0, framesAfter: 0, leftBehind: 0 },
+  // Issue #25: the native path's record names its builds, tied to HEAD.
+  serverBuild: HEAD12,
+  pluginBuild: HEAD12,
   ...overrides,
 });
 
@@ -80,9 +97,10 @@ const stressCase = (overrides = {}) => ({
   canvasHeight: 1100,
   nativeFrameId: "279:1088",
   // Which builds measured the case. The server is deployed and Figma loads the
-  // plugin bundle once, so a live measurement has to be able to name both.
-  serverBuild: "abc123def456",
-  pluginBuild: "abc123def456",
+  // plugin bundle once, so a live measurement has to be able to name both —
+  // and the stamps have to be this repository's HEAD (issue #25).
+  serverBuild: HEAD12,
+  pluginBuild: HEAD12,
   mutations: [
     { revision: "rev-before", summary: "initial build" },
     { revision: "rev-after", summary: "issue #10 fixes" },

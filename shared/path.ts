@@ -66,12 +66,33 @@ export function parseSvgPath(d: string): ParsedPath {
   while (ci < tokens.commands.length) {
     const cmd = tokens.commands[ci++]!;
 
+    /**
+     * Flushes the subpath being built.
+     *
+     * Closed subpaths (ended by Z, which already appended the start point) and
+     * fill regions (subpath index >= 1) are closed rings: the appended start
+     * makes containment well-defined.
+     *
+     * The FIRST subpath when it is OPEN keeps its geometry open — no ghost
+     * start point appended. That ghost was why every open connector path
+     * shipped a doubled return stroke (an extra `L start` drawn back to its
+     * own origin) and why endpoint measurers read the route's `to` as its
+     * `from`. A stroked line is not a polygon; appending closure to it draws
+     * geometry the router never specified.
+     */
+    const flushOpenSubpath = (list: Point[]): void => {
+      const isFirstSubpath = subpaths.length === 0;
+      // A subpath already closed by Z keeps exactly its own points; an open
+      // first subpath stays open; an open later subpath closes for fill.
+      subpaths.push(closed || isFirstSubpath ? list : [...list, { ...start }]);
+      closed = false;
+    };
+
     switch (cmd) {
       case "M": {
         // An M after the first point is an implicit L, per SVG.
         if (current.length > 0) {
-          subpaths.push(closed ? current : [...current, { ...start }]);
-          closed = false;
+          flushOpenSubpath(current);
         }
         cursor = { x: nextNum(), y: nextNum() };
         start = { ...cursor };
@@ -146,7 +167,13 @@ export function parseSvgPath(d: string): ParsedPath {
     }
   }
 
-  if (current.length > 0) subpaths.push(closed ? current : [...current, { ...start }]);
+  if (current.length > 0) {
+    // Same openness rule as the mid-path flush: a Z-closed tail keeps its own
+    // points; an open first subpath stays open; an open later subpath closes
+    // for fill.
+    const isFirstSubpath = subpaths.length === 0;
+    subpaths.push(closed || isFirstSubpath ? current : [...current, { ...start }]);
+  }
 
   const meaningful = subpaths.filter((p) => p.length >= 2);
   if (meaningful.length === 0) throw new Error("Path produced no drawable geometry.");

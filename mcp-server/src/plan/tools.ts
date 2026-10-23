@@ -18,7 +18,7 @@ import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, isAction
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import { bestPattern } from "../design/grammar/matcher";
 import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
-import { compositionHintFor, detectCompositionDescriptors } from "../design/skills/composition";
+import { compositionHintFor, resolveCompositionHintSources } from "../design/skills/composition";
 import { buildDesignContext, contextBrief } from "../design/context/design-context";
 import { toKnowledge } from "../design/system/component-intelligence";
 import type { Composition } from "../runtime/layout";
@@ -316,14 +316,22 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     ...(args.audience !== undefined ? { audience: [args.audience] } : {}),
     ...(args.visualDirection !== undefined ? { visualDirection: directionFor(args.visualDirection) } : {}),
   });
-  // The composition descriptor the direction states (issue #24, item 3) is
-  // compiled into a plan-level hint and applied to the composition plan with
-  // named provenance. A caller-stated composition is untouched: that shell is
-  // the planner's constraint and the hint only shapes the manner inside it.
-  const compositionDescriptors = args.visualDirection !== undefined ? detectCompositionDescriptors(args.visualDirection) : { applied: [], excluded: [] };
-  const compositionHint = compositionDescriptors.applied.length > 0
-    ? compositionHintFor(compositionDescriptors.applied, `Stated in the direction: '${args.visualDirection}'.`).hint
-    : undefined;
+  // The composition descriptors the *stated* direction words name (issue #24,
+  // item 3) and the composition the caller *requests* (desiredComposition
+  // names a descriptor or one of its plain words: 'topology' asks for
+  // topology-over-inspector) both compile into a plan-level hint applied to
+  // the composition plan with named provenance. The requested composition has
+  // priority over the direction's words — it is an explicit instruction where
+  // a direction word is manner — and both whys are recorded when they
+  // differ. The receipt stays honest: a negated word ('not asymmetric') never
+  // applies, and a composition name outside the vocabulary ('dashboard')
+  // produces no hint and no receipt.
+  const hintSources = resolveCompositionHintSources({
+    desiredComposition: args.desiredComposition ?? null,
+    visualDirection: args.visualDirection ?? null,
+  });
+  const compositionHint =
+    hintSources.applied.length > 0 ? compositionHintFor(hintSources.applied, hintSources.why).hint : undefined;
 
   const compositionPlan = buildCompositionPlan({
     pattern,
@@ -343,17 +351,16 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
      * Design-intelligence provenance (issue #24): the mandatory gate's
      * receipt. `classifyDecision` ran (the decision kind below is its
      * verdict, not an echo of the input), and the composition hint compiled
-     * from the stated direction was applied to the composition plan with
-     * named provenance. A plan without this block predates the gate.
+     * from the requested composition or the stated direction — whichever
+     * fired, priority to the request — was applied to the composition plan
+     * with named provenance. A plan without this block predates the gate.
      */
     intelligence: {
       applied: true,
       basis: "plan-screen",
       decisionKind: plan.intent.decisionKind,
       compositionHintApplied: compositionHint !== undefined,
-      ...(compositionHint !== undefined && args.visualDirection !== undefined
-        ? { compositionHintWhy: `Stated in the direction: '${args.visualDirection}'.` }
-        : {}),
+      ...(compositionHint !== undefined ? { compositionHintWhy: hintSources.why } : {}),
       patternId: pattern?.id ?? null,
     },
 

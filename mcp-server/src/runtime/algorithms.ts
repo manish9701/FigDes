@@ -137,19 +137,46 @@ export function tree(nodes: AlgorithmNode[], links: AlgorithmLink[], opts: Algor
   const roots = nodes.filter((n) => !hasParent.has(n.id)).map((n) => n.id);
   const effectiveRoots = roots.length > 0 ? roots : [nodes[0]!.id];
 
+  /**
+   * Levels are resolved breadth-first, not recursively.
+   *
+   * A DFS depth pass visits a node through whichever edge list first reaches
+   * it, so a back link late in the input (`gpu-2 -> core-b`) made core-b sit
+   * BELOW its sibling row and dragged gpu-4 to a phantom level five rows deep
+   * in a three-row graph — the whole forest overflowed the region bottom and,
+   * on a topology-inspector screen, the canvas itself. BFS gives the graph's
+   * honest level: the distance from a root along the FIRST parent chain, which
+   * keeps floating nodes where a diagram reads them, while the depth
+   * resolution stays order-deterministic because children keep their declared
+   * order in the queue.
+   */
   const depth = new Map<string, number>();
-  const setDepth = (id: string, d: number): void => {
-    if (depth.has(id)) return;
+  const queue = effectiveRoots.map((id) => ({ id, d: 0 }));
+  while (queue.length > 0) {
+    const { id, d } = queue.shift()!;
+    if (depth.has(id)) continue;
     depth.set(id, d);
-    for (const child of children.get(id) ?? []) setDepth(child, d + 1);
-  };
-  for (const root of effectiveRoots) setDepth(root, 0);
+    for (const child of children.get(id) ?? []) {
+      if (!depth.has(child)) queue.push({ id: child, d: d + 1 });
+    }
+  }
 
   // Any node only reachable through a cycle gets appended to the first root's
   // forest so it still receives a row.
   let orphanDepth = 0;
   for (const n of nodes) {
-    if (!depth.has(n.id)) setDepth(n.id, orphanDepth);
+    if (!depth.has(n.id)) {
+      // BFS at the orphan level, same rule as the root pass: the whole
+      // disconnected forest lands on this one row.
+      const stack = [n.id];
+      while (stack.length > 0) {
+        const id = stack.shift()!;
+        if (depth.has(id)) continue;
+        depth.set(id, orphanDepth);
+        for (const child of children.get(id) ?? []) stack.push(child);
+      }
+      orphanDepth += 1;
+    }
     const explicit = n.depth;
     if (explicit !== undefined && depth.has(n.id)) depth.set(n.id, Math.max(0, Math.round(explicit)));
   }

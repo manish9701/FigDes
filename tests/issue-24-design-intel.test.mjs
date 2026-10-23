@@ -140,7 +140,10 @@ test("the descriptor vocabulary is closed and detection honours negation", () =>
   assert.deepEqual(detectCompositionDescriptors("asymmetric technical"), { applied: ["asymmetric"], excluded: [] });
   assert.deepEqual(detectCompositionDescriptors("not asymmetric"), { applied: [], excluded: ["asymmetric"] });
   assert.deepEqual(detectCompositionDescriptors("premium technical"), { applied: [], excluded: [] });
-  assert.deepEqual(detectCompositionDescriptors("asymmetrical"), { applied: [], excluded: [] }, "no mid-word matches");
+  // Synonyms apply the vocabulary honestly in plain words: what a person types maps to exactly one descriptor.
+  assert.deepEqual(detectCompositionDescriptors("dense topology map of the cluster"), { applied: ["topology-over-inspector"], excluded: [] });
+  // ...and still never matches mid-word: 'asymmetrically' is neither the name nor the synonym.
+  assert.deepEqual(detectCompositionDescriptors("asymmetrically aligned"), { applied: [], excluded: [] }, "no mid-word matches");
 });
 
 test("a composition descriptor compiles to decisions with provenance and a consumed intent field", () => {

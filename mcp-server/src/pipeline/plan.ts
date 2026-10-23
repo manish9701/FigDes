@@ -25,7 +25,7 @@
 import { planScreen, resolveArchetype, type ScreenIntent } from "../plan/planner";
 import { defaultGutter, layoutRegions } from "../runtime/layout";
 import { classifyInformation, classifyInfoItem, type InfoKind } from "../design/composition/derive";
-import { compositionHintFor, detectCompositionDescriptors, COMPOSITION_VOCABULARY } from "../design/skills/composition";
+import { compositionHintFor, descriptorsForRequestedComposition, COMPOSITION_VOCABULARY } from "../design/skills/composition";
 import type { CompositionDescriptor } from "../design/skills/composition";
 import type { Composition } from "../runtime/layout";
 import type { VisualIntent } from "../../../shared/ir";
@@ -355,12 +355,16 @@ export function buildCompositionPlan(
   /* --- the composition descriptor's plan-level hint (issue #24, item 3) ---- */
 
   /**
-   * When the direction states a closed-vocabulary composition descriptor, its
-   * concrete commitments are applied to the plan's real numbers before the
-   * geometry resolves: `density` scales the regions' internal gaps/paddings
-   * and `rhythm` sets a floor on the section-to-section spacing. Chrome
-   * (navigation, header, footer, status rail) keeps the planner's spacing — a
-   * descriptor about content density must not squeeze a navigation rail.
+   * When the direction states a closed-vocabulary composition descriptor — or
+   * the brief *requests* a composition that names one ('topology' asks for
+   * topology-over-inspector; a plain composition word like 'table' contributes
+   * nothing) — its concrete commitments are applied to the plan's real numbers
+   * before the geometry resolves: `density` scales the regions' internal
+   * gaps/paddings and `rhythm` sets a floor on the section-to-section spacing.
+   * The requested composition has priority over the direction-compiled
+   * descriptors, matching the receipt plan_screen records. Chrome (navigation,
+   * header, footer, status rail) keeps the planner's spacing — a descriptor
+   * about content density must not squeeze a navigation rail.
    * The geometry/negative-space strategies are prose commitments at skill
    * level; here they are recorded so the plan states them explicitly rather
    * than pretending they were applied where the plan has no field for them.
@@ -368,35 +372,48 @@ export function buildCompositionPlan(
    * shapes the manner inside it — same precedence the planner enforces.
    */
   let compositionHintNote: string | null = null;
-  if (intelligence !== undefined && typeof intelligence.intent.composition === "string") {
-    const descriptors = intelligence.intent.composition.split("+").filter((d): d is CompositionDescriptor =>
-      (COMPOSITION_VOCABULARY as readonly string[]).includes(d),
+  const requestedDescriptors = descriptorsForRequestedComposition(brief.desiredComposition);
+  const compiledDescriptors =
+    intelligence !== undefined && typeof intelligence.intent.composition === "string"
+      ? intelligence.intent.composition.split("+").filter((d): d is CompositionDescriptor =>
+          (COMPOSITION_VOCABULARY as readonly string[]).includes(d),
+        )
+      : [];
+  if (requestedDescriptors.length > 0 || compiledDescriptors.length > 0) {
+    // The requested composition is an explicit instruction, the direction's
+    // words are manner — the same priority plan_screen records, so the two
+    // paths cannot disagree about whether a hint was applied. A composition
+    // name outside the vocabulary ('table', 'sequence') contributes nothing.
+    const descriptors = [...requestedDescriptors, ...compiledDescriptors.filter((d) => !requestedDescriptors.includes(d))];
+    const { hint } = compositionHintFor(
+      descriptors,
+      requestedDescriptors.length > 0
+        ? `Requested composition '${brief.desiredComposition}'${compiledDescriptors.length > 0 ? " and the direction-compiled descriptor(s)" : ""}; applied to the plan's spacing before geometry resolves.`
+        : "Compiled by the skill layer; applied to the plan's spacing before geometry resolves.",
     );
-    if (descriptors.length > 0) {
-      const { hint } = compositionHintFor(descriptors, "Compiled by the skill layer; applied to the plan's spacing before geometry resolves.");
-      const isChrome = (role: string): boolean => ["navigation", "header", "footer", "status-rail"].includes(role);
-      for (const r of shell) {
-        if (isChrome(r.role)) continue;
-        const gap = r.gap ?? canvas.grid;
-        const pad = r.padding ?? 24;
-        if (hint.density === "airy") {
-          r.gap = Math.max(gap, 32);
-          r.padding = Math.max(pad, 24);
-        } else if (hint.density === "calm") {
-          r.gap = Math.max(gap, 24);
-        } else if (hint.density === "dense") {
-          r.gap = Math.min(gap, 12);
-          r.padding = Math.min(pad, 16);
-        }
-        if (hint.rhythm === "generous") r.gap = Math.max(gap, 24);
+    const isChrome = (role: string): boolean => ["navigation", "header", "footer", "status-rail"].includes(role);
+    for (const r of shell) {
+      if (isChrome(r.role)) continue;
+      const gap = r.gap ?? canvas.grid;
+      const pad = r.padding ?? 24;
+      if (hint.density === "airy") {
+        r.gap = Math.max(gap, 32);
+        r.padding = Math.max(pad, 24);
+      } else if (hint.density === "calm") {
+        r.gap = Math.max(gap, 24);
+      } else if (hint.density === "dense") {
+        r.gap = Math.min(gap, 12);
+        r.padding = Math.min(pad, 16);
       }
-      compositionHintNote =
-        `Composition descriptor '${hint.descriptor}' applied to the plan: density '${hint.density ?? "unchanged"}' scaled the non-chrome regions' internal spacing; ` +
-        `${hint.rhythm !== undefined ? `rhythm '${hint.rhythm}' set a section-spacing floor; ` : ""}` +
-        `${hint.geometryStrategy ?? "geometry unchanged"}; ${hint.negativeSpaceStrategy ?? "negative space unchanged"}.` +
-        (hint.focalPosture !== undefined ? ` Focal posture: ${hint.focalPosture}.` : "");
-      warnings.push(compositionHintNote);
+      if (hint.rhythm === "generous") r.gap = Math.max(gap, 24);
     }
+    compositionHintNote =
+      `Composition descriptor '${hint.descriptor}' applied to the plan: density '${hint.density ?? "unchanged"}' scaled the non-chrome regions' internal spacing; ` +
+      `${hint.rhythm !== undefined ? `rhythm '${hint.rhythm}' set a section-spacing floor; ` : ""}` +
+      `${hint.geometryStrategy ?? "geometry unchanged"}; ${hint.negativeSpaceStrategy ?? "negative space unchanged"}.` +
+      (hint.focalPosture !== undefined ? ` Focal posture: ${hint.focalPosture}.` : "") +
+      (requestedDescriptors.length > 0 ? ` Source: requested composition '${brief.desiredComposition}'.` : "");
+    warnings.push(compositionHintNote);
   }
 
   // The geometry is re-resolved with the same engine the compiler uses, so

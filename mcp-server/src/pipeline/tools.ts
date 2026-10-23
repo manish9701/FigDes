@@ -50,6 +50,7 @@ import { buildCompositionPlan } from "./plan";
 import { buildProgram, applyMeasuredWidths } from "./program";
 import { verifyLive, verifyPlan, type CompiledProgram, type LiveEvidence } from "./verify";
 import { compileVisualIntent, reviewVisualIntelligence, toPipelineFinding } from "../design/skills/intent-compiler";
+import { resolveCompositionHintSources } from "../design/skills/composition";
 import { resolveCompositionAlternatives } from "../design/skills/alternatives";
 import { auditTypeCriteria } from "../design/quality/type-criteria";
 import { evaluateGenericity } from "../design/quality/genericity";
@@ -354,6 +355,21 @@ export async function designPipelineTool(
     stage(trace, "type-criteria", `Declared type/spacing criteria audited on compiled evidence (pre-render): all clear.`);
   }
 
+  /**
+   * The composition-hint receipt: did the plan carry a composition hint, and
+   * from where. Computed from the same two sources plan_screen records, with
+   * the same shared resolver — the requested composition (desiredComposition
+   * naming a descriptor or its plain words) has priority over the direction's
+   * descriptor words — so the pipeline's report cannot disagree with
+   * plan_screen's. A negated direction word and a composition name outside
+   * the vocabulary contribute nothing, keeping the receipt honest.
+   */
+  const hintSources = resolveCompositionHintSources({
+    desiredComposition: brief.desiredComposition ?? null,
+    visualDirection: brief.visualDirection,
+  });
+  const compositionHintApplied = hintSources.applied.length > 0;
+
   const common = {
     brief,
     plan,
@@ -366,6 +382,11 @@ export async function designPipelineTool(
      * and the build-time product guard (effectiveRules) always runs inside
      * executeRuntime above. `applied` is unconditionally true here; a raw
      * bypass cannot reach this payload without passing those stages.
+     *
+     * `compositionHintApplied` is computed from the same two sources
+     * plan_screen records — the requested composition and the direction's
+     * descriptor words — with the same shared resolver, so the pipeline's
+     * report cannot disagree with plan_screen's.
      */
     intelligence: {
       applied: true,
@@ -374,6 +395,8 @@ export async function designPipelineTool(
       skillsSkipped: intelligence.selection.skipped.length,
       decisions: intelligence.decisions.length,
       steeredComposition: alternatives.steeredComposition,
+      compositionHintApplied,
+      ...(compositionHintApplied ? { compositionHintWhy: hintSources.why } : {}),
     },
     /** The skill layer's full output: selection, decisions, compiled intent, the anti-generic review, and the composition alternatives (issue #22). */
     visualIntelligence: {
@@ -424,6 +447,10 @@ export async function designPipelineTool(
       repairs: [],
       findings: structure.findings,
       blocked: [{ check: "live-structure", why: "Nothing was applied to Figma." }],
+      // The plan carried the enforced-intelligence provenance and — where the
+      // requested composition or the direction named a descriptor — the
+      // composition-hint receipt, recorded for the contract counters.
+      intelligence: { applied: true, compositionHintApplied },
       trace,
     });
     return {
@@ -911,6 +938,10 @@ export async function designPipelineTool(
       : {}),
     findings: remaining,
     blocked: live.blocked,
+    // The build ran the enforced-intelligence path; the composition-hint
+    // receipt (requested composition / direction descriptors, shared resolver)
+    // is recorded for the contract counters exactly as plan_screen states it.
+    intelligence: { applied: true, compositionHintApplied },
     trace,
   });
 

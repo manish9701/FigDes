@@ -1176,9 +1176,10 @@ test("a half-circle arc starts and ends where it should", () => {
 
   assert.ok(parsed.winding.length > 4, "an arc must flatten to several points, not a straight line");
   assert.deepEqual(parsed.winding[0], { x: 0, y: 0 });
-  // The parser closes open subpaths by repeating the start point, so the real
-  // endpoint is second to last.
-  const end = parsed.winding[parsed.winding.length - 2];
+  // Open subpaths stay open: no start point is appended, so the endpoint is
+  // the last vertex. (It used to be second to last behind a ghost closure
+  // point — that ghost doubled every open connector's drawn stroke.)
+  const end = parsed.winding[parsed.winding.length - 1];
   assert.ok(Math.abs(end.x - 100) < 0.01 && Math.abs(end.y) < 0.01, `arc must end at (100, 0), ended at ${JSON.stringify(end)}`);
 });
 
@@ -1198,7 +1199,8 @@ test("a full circle drawn as two arcs stays on its radius", () => {
 test("a degenerate arc degrades to a line instead of failing", () => {
   const parsed = parseSvgPath("M 10 10 A 0 0 0 0 1 90 10");
   assert.ok(parsed.winding.length >= 2);
-  // Second to last: the parser repeats the start point at the end of open paths.
+  // Index 1 is the first flattened vertex after the start: open subpaths no
+  // longer append a ghost closure point, so real geometry is where it lands.
   assert.deepEqual({ x: Math.round(parsed.winding[1].x), y: Math.round(parsed.winding[1].y) }, { x: 90, y: 10 });
 });
 

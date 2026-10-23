@@ -644,6 +644,31 @@ test("P1-7: three identical content nodes are still reported as duplicates", () 
 /* P1 #6 — refine_screen iteration accounting                                 */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * The tracked dispatcher a registerless refine_screen no longer dispatches to:
+ * fixes land in the ledger. This is the same structural fake the issue-26
+ * dispatch-gate tests use — a ledger with the five methods dispatchTransaction
+ * touches, plus the session it hands everything to.
+ */
+function ledgerRegistry(session) {
+  const store = new Map();
+  return {
+    jobs: {
+      store,
+      begin(j) { store.set(j.transactionId, { ...j, state: "queued" }); },
+      get(id) { return store.get(id); },
+      priorResult() { return undefined; },
+      update(id, patch) { Object.assign(store.get(id), patch); },
+      complete(id, state, info, result) {
+        const job = store.get(id);
+        job.state = state;
+        if (result) job.result = result;
+      },
+    },
+    resolve() { return { ...session, requestIdFor: () => undefined }; },
+  };
+}
+
 test("P1-6: the iteration summary counts iterations that actually ran", async () => {
   // The live failure: one visible iteration, reported as three. This drives the
   // real tool with a stub plugin, so the accounting is the shipped code path.
@@ -654,6 +679,7 @@ test("P1-6: the iteration summary counts iterations that actually ran", async ()
 
   const calls = { collect: 0, modify: 0 };
   const session = {
+    requestIdFor: () => undefined,
     async request(kind) {
       if (kind === "collect_metrics") {
         calls.collect += 1;
@@ -668,7 +694,7 @@ test("P1-6: the iteration summary counts iterations that actually ran", async ()
     },
   };
 
-  const result = await refineScreenTool(session, { maxIterations: 3 });
+  const result = await refineScreenTool(session, { maxIterations: 3 }, ledgerRegistry(session));
   assert.equal(result.status, "converged", `expected convergence, got ${result.status}: ${JSON.stringify(result.whyNothingWasApplied ?? [])}`);
   assert.equal(result.summary.iterationsRun, result.iterations.length, "the summary must match the trace");
   assert.equal(result.summary.iterationBudget, 3);
@@ -683,6 +709,7 @@ test("P1-6: refine_screen actually applies the contrast repair", async () => {
 
   const sent = [];
   const session = {
+    requestIdFor: () => undefined,
     async request(kind, args) {
       if (kind === "collect_metrics") {
         // Only the first read is defective; everything after the fix is clean.
@@ -696,7 +723,7 @@ test("P1-6: refine_screen actually applies the contrast repair", async () => {
     },
   };
 
-  const result = await refineScreenTool(session, { maxIterations: 3 });
+  const result = await refineScreenTool(session, { maxIterations: 3 }, ledgerRegistry(session));
   assert.equal(sent.length, 1, `exactly one fix should have been applied, got ${JSON.stringify(sent)}`);
   assert.equal(sent[0].type, "setFill");
   assert.equal(sent[0].target, "12:34");

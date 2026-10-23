@@ -96,20 +96,49 @@ const DESCRIPTOR_SPECS: Record<CompositionDescriptor, Omit<CompositionHint, "des
   },
 };
 
+/**
+ * The plain words a person actually writes for each descriptor, beside its
+ * canonical vocabulary name. The synonym set is closed under the same honesty
+ * rule as the vocabulary itself: only real words for these six arrangements —
+ * "topology" for topology-over-inspector, the way a user actually types it —
+ * and nothing is guessed beyond them. No word appears under two descriptors,
+ * so a direction word can never match the vocabulary ambiguously: one match
+ * resolves to exactly one descriptor.
+ */
+export const DESCRIPTOR_SYNONYMS: Record<CompositionDescriptor, readonly string[]> = {
+  asymmetric: ["asymmetrical"],
+  split: ["split-view", "split view", "split-screen", "split screen"],
+  centered: ["centred"],
+  radial: ["hub-and-spoke", "hub and spoke"],
+  "dense-editorial": ["dense editorial"],
+  "topology-over-inspector": ["topology", "topology map", "network map", "network diagram", "node-link", "node link", "cluster map"],
+};
+
 /** Escapes a vocabulary phrase for exact text search. */
 function escapePhrase(phrase: string): string {
   return phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 const NEGATOR_WORDS = ["not", "no", "without", "never", "anti", "non"];
+/** Function words that may sit between a negator and the phrase it negates. */
+const NEGATOR_FILLER = new Set(["a", "an", "the", "this", "that", "it", "its", "just", "really", "truly", "merely", "purely", "exactly"]);
 
-/** True when `text` ends with a negator immediately before the phrase match. */
+/**
+ * True when `text` ends with a negator immediately before the phrase match.
+ *
+ * Reading is loose adjacency: articles and emphasis words between the negator
+ * and the phrase are crossed when scanning backwards up to four tokens ("not a
+ * topology map" excludes; "a topology map next to it" does not), so the
+ * grammar of a real direction does not defeat the exclusion.
+ */
 function precededByNegator(text: string, matchIndex: number): boolean {
   const before = text.slice(0, matchIndex).trimEnd().toLowerCase();
-  for (const negator of NEGATOR_WORDS) {
-    if (before.endsWith(`${negator} `)) return true;
-    const bare = before.slice(Math.max(0, before.length - negator.length));
-    if (before !== "" && bare === negator) return true;
+  if (before === "") return false;
+  const tokens = before.split(/[\s\-_/]+/).filter((t) => t.length > 0);
+  for (let i = tokens.length - 1, scanned = 0; i >= 0 && scanned < 4; i -= 1, scanned += 1) {
+    const token = tokens[i]!;
+    if (NEGATOR_FILLER.has(token)) continue;
+    return NEGATOR_WORDS.includes(token);
   }
   return false;
 }
@@ -121,20 +150,49 @@ export interface CompositionDescriptorFacts {
   excluded: CompositionDescriptor[];
 }
 
+/** Cached word-boundary pattern per descriptor phrase; inner spaces flexible. */
+const PHRASE_PATTERNS = new Map<string, RegExp>();
+
+function compiledPhrasePattern(phrase: string): RegExp {
+  let pattern = PHRASE_PATTERNS.get(phrase);
+  if (pattern === undefined) {
+    const source = phrase
+      .split(/\s+/)
+      .map((word) => escapePhrase(word))
+      .join("\\s+");
+    // No "g" flag: every exec must answer with the leftmost match, so the
+    // cached pattern carries no lastIndex state across calls.
+    pattern = new RegExp(`(?<![a-zA-Z\\-])${source}(?![a-zA-Z\\-])`, "i");
+    PHRASE_PATTERNS.set(phrase, pattern);
+  }
+  return pattern;
+}
+
 /**
  * Reads the composition descriptors out of a direction string.
- * Phrases are matched on word boundaries so 'split' never matches 'split-view'
- * mid-word, and a preceding negator excludes rather than applies — the same
- * negation rule the direction skill applies to manner words.
+ *
+ * Each descriptor is matched through its canonical vocabulary name *and* its
+ * plain-word synonyms (DESCRIPTOR_SYNONYMS), on word boundaries
+ * case-insensitively — 'split' never matches 'split-view' mid-word, and
+ * 'topology' matches at the string's start, at its end, and before
+ * punctuation. Per descriptor the match that comes first in the string wins
+ * (equal indexes keep the canonical name first), which decides applied versus
+ * excluded together with the negation rule, so a phrase pair like
+ * 'topology … not network map' records the direction honestly rather than
+ * letting a later synonym override the earlier word. The outer loop runs in
+ * vocabulary order, so `applied` is stable across calls.
  */
 export function detectCompositionDescriptors(direction: string): CompositionDescriptorFacts {
   const applied: CompositionDescriptor[] = [];
   const excluded: CompositionDescriptor[] = [];
   for (const descriptor of COMPOSITION_VOCABULARY) {
-    const re = new RegExp(`(?<![a-zA-Z\\-])${escapePhrase(descriptor)}(?![a-zA-Z\\-])`, "gi");
-    const match = re.exec(direction);
-    if (match === null) continue;
-    if (precededByNegator(direction, match.index)) excluded.push(descriptor);
+    let first: number | null = null;
+    for (const phrase of [descriptor, ...DESCRIPTOR_SYNONYMS[descriptor]]) {
+      const match = compiledPhrasePattern(phrase).exec(direction);
+      if (match !== null && (first === null || match.index < first)) first = match.index;
+    }
+    if (first === null) continue;
+    if (precededByNegator(direction, first)) excluded.push(descriptor);
     else applied.push(descriptor);
   }
   return { applied, excluded };
@@ -143,6 +201,66 @@ export function detectCompositionDescriptors(direction: string): CompositionDesc
 /** True when the word is (part of) this skill's descriptor vocabulary. */
 export function isCompositionDescriptor(word: string): boolean {
   return (COMPOSITION_VOCABULARY as readonly string[]).includes(word.toLowerCase());
+}
+
+/**
+ * The composition-hint sources, resolved in priority order with named
+ * provenance — the receipt both plan_screen and the pipeline report from, so
+ * the two paths cannot disagree.
+ *
+ * Two sources exist: the composition the caller *requests*
+ * (`desiredComposition` names a descriptor or one of its plain words —
+ * 'topology' asks for topology-over-inspector, 'split-view' for split) and
+ * the descriptors the direction states in words. The requested composition
+ * has priority: it is an explicit instruction, where a direction word is
+ * manner; when both name a descriptor the requested one is applied first and
+ * the direction's remaining descriptors follow, and both provenance clauses
+ * are recorded so the receipt never hides a source. Honesty is preserved:
+ * a negated direction word ('not asymmetric') contributes only to
+ * `excluded` and never applies, a composition name outside the vocabulary
+ * ('dashboard') contributes nothing, and with neither source present
+ * `applied` is empty so no hint is compiled and the receipt stays false.
+ */
+export interface CompositionHintSources {
+  /** Descriptors that will shape the composition hint, requested composition first. */
+  applied: CompositionDescriptor[];
+  /** Descriptors the direction negates ('not asymmetric'); never applied. */
+  excluded: CompositionDescriptor[];
+  /** One provenance clause per source that fired, requested composition first. */
+  why: string;
+}
+
+/**
+ * Which descriptor(s) a *requested* composition label names, if any. The
+ * closed vocabulary and its synonyms decide: 'topology' names
+ * topology-over-inspector and 'split-view' names split, while a plain
+ * composition name outside it ('dashboard', 'table', 'canvas') resolves to
+ * none, so a requested composition produces a hint only where the vocabulary
+ * says one exists.
+ */
+export function descriptorsForRequestedComposition(desiredComposition: string | null | undefined): CompositionDescriptor[] {
+  if (desiredComposition === undefined || desiredComposition === null) return [];
+  return detectCompositionDescriptors(desiredComposition).applied;
+}
+
+export function resolveCompositionHintSources(input: {
+  desiredComposition?: string | null;
+  visualDirection?: string | null;
+}): CompositionHintSources {
+  const requestedName = input.desiredComposition;
+  const direction = input.visualDirection;
+  const requested = requestedName !== undefined && requestedName !== null ? detectCompositionDescriptors(requestedName).applied : [];
+  const stated =
+    direction !== undefined && direction !== null ? detectCompositionDescriptors(direction) : { applied: [], excluded: [] };
+  const applied: CompositionDescriptor[] = [];
+  for (const descriptor of requested) applied.push(descriptor);
+  for (const descriptor of stated.applied) if (!applied.includes(descriptor)) applied.push(descriptor);
+  // Each clause is its own sentence (priority respected, request first), so
+  // they are joined with spaces rather than semicolons through the periods.
+  const clauses: string[] = [];
+  if (requested.length > 0) clauses.push(`Requested composition: ${requestedName}.`);
+  if (stated.applied.length > 0) clauses.push(`Stated in the direction: '${direction}'.`);
+  return { applied, excluded: stated.excluded, why: clauses.join(" ") };
 }
 
 /**

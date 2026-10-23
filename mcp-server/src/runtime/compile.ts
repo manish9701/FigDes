@@ -15,7 +15,7 @@ import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, expectedRelationBox, type PlacedBox } from "./constraints";
 import { checkIdentity } from "./identity";
-import { CONNECTOR_CLEARANCE_MIN, arrowSpace, edgeClearanceViolations, labelBoxAt, labelTangent, pickLabelPosition, routeConnector } from "./connectors";
+import { CONNECTOR_CLEARANCE_MIN, arrowSpace, labelBoxAt, labelTangent, pickLabelPosition, routeConnectorClearance } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
 import { fitStackToCanvas, inferComposition, MIN_STACK_REGION_H, packContent, planLayoutReflowed, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
@@ -262,7 +262,19 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // The shell layout may itself have had to repair an overflowing stack (the
   // canvas-fit reflow inside `layoutRegions`); counted so `reflowed` reports
   // every automatic geometry change, not just relation-driven ones.
-  const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, { reflow: ir.relations.length === 0 });
+  //
+  // `bands` collects the horizontal bands the shell formed (a fill/grow canvas
+  // region beside fixed-width siblings, e.g. map + inspector). The fit passes
+  // below consume them: members of one band grow together, capped at the band
+  // height, so the band stays one cohesive row inside the canvas instead of the
+  // inspector growing past the bottom edge or the map silently shrinking alone.
+  // Declared relations decline banding in the shell (the solver owns geometry
+  // there), so an empty list is the normal state for unchanged programs.
+  const bands: Array<{ members: readonly string[]; capH: number }> = [];
+  const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, {
+    reflow: ir.relations.length === 0,
+    bandsOut: (collected) => bands.push(...collected),
+  });
   let regions = shell.regions;
   let reflowed = shell.reflowed;
   // Whether a requested native auto-layout container was honoured. Reported
@@ -526,11 +538,11 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // taller than its header spilled into the region below and read as clipped.
   // Only growth, never shrinkage; side rails (starting above) never shift.
   if (!deck) {
-    fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid });
+    fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid, bands });
     // …and then the other direction: `solveAxis` handed the leftover to `fill`
     // before any `hug` sibling had been measured, so the fill region can be
     // holding space that a region below it is about to need.
-    fitFillRegions({ regions, boxes, operations, canvasH: canvasSize(canvas.height, 900), gutter: canvas.grid * 4, grid: canvas.grid });
+    fitFillRegions({ regions, boxes, operations, canvasH: canvasSize(canvas.height, 900), gutter: canvas.grid * 4, grid: canvas.grid, bands });
   }
   /* --------------------------------------------------------- relations --- */
 
@@ -1169,7 +1181,13 @@ function emitConnectors(
 
     const fromBox = boxes.get(spec.from);
     const toBox = boxes.get(spec.to);
-    let route = routeConnector(spec, fromBox, toBox);
+    // Route clearance: the default route is solved as always, then
+    // deterministic Z-stair reroutes run when it passes *through* a third-party
+    // node. The chosen route is what is emitted, whatever it was; a crossing
+    // it could not shake after bounded effort is a named violation, never a
+    // silent line over a box.
+    const solved = routeConnectorClearance(spec, fromBox, toBox, nodeBoxes, CONNECTOR_CLEARANCE_MIN);
+    let route = solved?.result ?? null;
     if (!route) {
       // Distinguish "you never drew it" from "you drew it but it got no
       // geometry". Collapsing both into "unknown node" sent the reader looking
@@ -1189,29 +1207,31 @@ function emitConnectors(
       continue;
     }
 
-    // Node-edge clearance: an edge that passes over (or within halo of) a
-    // third-party node reads as connecting to it. Try the other rectilinear
-    // routing first — straight and orthogonal jog around different obstacles —
-    // and only warn when neither clears. Advisory (`layout`, never blocking):
-    // a crowded map is a spacing judgement, not broken geometry.
+    // Route-through-node is the hard class: a segment entering a node box it
+    // does not connect is named as a `connector` violation (blocking) so the
+    // dispatcher's preflight gates the plan on it, instead of letting the
+    // screen ship with edges drawn over machines. What remains after bounded
+    // reroutes is the best variant found, not a silent best.
+    if (solved && solved.through.length > 0) {
+      const names = solved.through.slice(0, 4).map((n) => `'${n}'`).join(", ");
+      violations.push({
+        rule: "connector",
+        message: `Connector '${spec.id}': route of '${spec.from}' to '${spec.to}' passes through node ${names}. Move the node(s) off the edge or reroute with routing:'straight'.`,
+      });
+    }
+
+    // Node-edge clearance: an edge that passes close to a third-party node —
+    // without entering it — reads as ambiguity. Reported for the route that was
+    // actually chosen; when a reroute cleared a crossing the message says so
+    // rather than repeating the old geometry's complaint.
     if (route && fromBox && toBox) {
-      let offenders = edgeClearanceViolations(route.points, nodeBoxes, spec.from, spec.to);
-      const fallbackRouting = spec.routing === "straight" ? "orthogonal" : "straight";
-      if (offenders.length > 0 && (spec.routing ?? "orthogonal") !== "curved") {
-        const retry = routeConnector({ ...spec, routing: fallbackRouting }, fromBox, toBox);
-        if (retry) {
-          const retryOffenders = edgeClearanceViolations(retry.points, nodeBoxes, spec.from, spec.to);
-          if (retryOffenders.length < offenders.length) {
-            route = retry;
-            offenders = retryOffenders;
-          }
-        }
-      }
+      const offenders = solved?.halo ?? [];
       if (offenders.length > 0) {
         const names = offenders.slice(0, 4).map((n) => `'${n}'`).join(", ");
+        const reroutLine = solved?.detoured && solved.through.length === 0 ? ", so it was rerouted clear of them" : "";
         violations.push({
           rule: "layout",
-          message: `Connector '${spec.id}' passes within ${CONNECTOR_CLEARANCE_MIN}px of ${names}${offenders.length > 4 ? ` and ${offenders.length - 4} more` : ""}. Move the node(s) off the edge or reroute with routing:'${fallbackRouting}'.`,
+          message: `Connector '${spec.id}' passes within ${CONNECTOR_CLEARANCE_MIN}px of ${names}${offenders.length > 4 ? ` and ${offenders.length - 4} more` : ""} on its default routing${reroutLine}. Move the node(s) off the edge or reroute with routing:'straight'.`,
         });
       }
     }
@@ -1447,6 +1467,11 @@ function emitContent(args: {
     graphicAlgorithm && graphicAlgorithm !== "masonry"
       ? components.filter((c) => c.kind === "component" && c.type === "deviceNode")
       : [];
+  // Devices placed by the graph algorithm must survive into the flow probe:
+  // the band the flow pass will occupy is computed over exactly the list that
+  // pass will pack, so the reserve and the pack can never disagree.
+  const placedIds = new Set(graphDevices.map((c) => c.id));
+  const flowItems = [...textItems, ...components.filter((c) => !placedIds.has(c.id)), ...instances.filter((c) => !placedIds.has(c.id))];
   type GraphItem = Extract<ContentSpec, { kind: "shape" | "vector" | "component" }>;
   const graphItems: GraphItem[] = [...(graphics as GraphItem[]), ...graphDevices];
   const deviceSize = { w: grid * 16, h: grid * 10 };
@@ -1476,6 +1501,81 @@ function emitContent(args: {
     );
     const levelClearance = Math.max(gap * 2, arrowSpace(heaviestEdge) + 4);
     const nodeLevelGap = hasDevices ? deviceSize.h + levelClearance : gap * 2;
+
+    // The flow band (a title, a legend, pills) stacks from the region's top in
+    // the flow pass that follows, so a ladder that spans the full inner box
+    // would climb over it. Probe the same packing the flow pass will run and
+    // reserve exactly the band it occupies: the graph then owns what remains,
+    // and a spread ladder and a title can no longer collide.
+    let flowBandH = 0;
+    if (flowItems.length > 0) {
+      const flowProbe = packContent({
+        region: inner,
+        items: flowItems.map((c) => ({ id: c.id, height: estimateHeight(c, inner.w, typeScale, titleScale, grid, look, textMetrics) })),
+        gap,
+        columns,
+      });
+      for (const box of flowProbe.values()) {
+        flowBandH = Math.max(flowBandH, box.y + box.h - inner.y);
+      }
+      // A crowded flow band must never squeeze the graph out entirely: keep at
+      // least one row's extent so the algorithm has somewhere to place its
+      // nodes and the squeeze surfaces as a placement warning, not as regions
+      // the diagram never fit in.
+      flowBandH = Math.min(flowBandH, Math.max(0, inner.h - nodeLevelGap));
+    }
+    const graphInner: ResolvedBox = { x: inner.x, y: inner.y + flowBandH, w: inner.w, h: Math.max(0, inner.h - flowBandH) };
+
+    // Spread the tree ladder into the space the region actually has.
+    //
+    // The floor pitch keeps arrowheads alive (levelClearance), but it only ever
+    // *adds* clearance above node height: a 4-level graph on a tall hero left
+    // three quarters of the region empty while sibling gaps stayed at the
+    // minimum, forcing cross links to thread between 8-12px gutters. Two
+    // bounded runs of the same deterministic algorithm make the pitch a
+    // decision instead of a floor: the probe fixes structure (deeper levels and
+    // leaf columns read off the same layout), then both pitches expand to span
+    // what remains — capped so no box can ever leave the bounds (a pitch
+    // beyond `(inner.h - nodeH) / rows` pushes the centred first row's box
+    // above the region) and floored at the clearance so a tight region keeps
+    // exactly the old behaviour rather than overlapping.
+    let levelPitch = nodeLevelGap;
+    let columnPitch = nodeGap;
+    // `tidyTree` never reaches this block: region.layout has no such value and
+    // `topology` resolves to tree/cluster above, so the union excludes it.
+    if (algorithm === "tree") {
+      const structureHead = runAlgorithm(algorithm, nodes, ir.links, {
+        bounds: graphInner,
+        gap: nodeGap,
+        levelGap: nodeLevelGap,
+        columns,
+        ...(hasDevices ? { nodeSize: deviceSize } : {}),
+      });
+      const deepest = typeof (structureHead.detail as { depth?: number } | undefined)?.depth === "number" ? (structureHead.detail as { depth: number }).depth : 0;
+      const rows = Math.max(1, deepest + 1);
+      let leafCols = 1;
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let finite = false;
+      for (const p of structureHead.points.values()) {
+        if (!Number.isFinite(p.x)) continue;
+        finite = true;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+      }
+      if (finite && nodeGap > 0) leafCols = Math.max(1, Math.round((maxX - minX) / nodeGap) + 1);
+      const nodeExtent = hasDevices ? deviceSize : graphicSize(grid);
+      if (rows >= 2 && graphInner.h > nodeExtent.h) {
+        levelPitch = Math.max(nodeLevelGap, (graphInner.h - nodeExtent.h) / rows);
+      }
+      if (leafCols >= 2 && graphInner.w > nodeExtent.w) {
+        columnPitch = Math.max(nodeGap, (graphInner.w - nodeExtent.w) / leafCols);
+      }
+    }
+    // Non-tree algorithms keep their existing pitch derivation: the spread is
+    // a tree property (levels and leaf columns), and `levelGap` on other
+    // routes means something else (timeline lanes).
+
     // `forceGraph` is served by the existing simulator; the rest are in
     // algorithms.ts. Both return centres, which the caller turns into boxes.
     const points =
@@ -1486,9 +1586,9 @@ function emitContent(args: {
             { center: { x: inner.x + inner.w / 2, y: inner.y + inner.h / 2 }, radius: Math.max(40, Math.min(inner.w, inner.h) / 3) },
           )
         : runAlgorithm(algorithm, nodes, ir.links, {
-            bounds: { x: inner.x, y: inner.y, w: inner.w, h: inner.h },
-            gap: nodeGap,
-            levelGap: nodeLevelGap,
+            bounds: graphInner,
+            gap: columnPitch,
+            levelGap: levelPitch,
             columns,
             ...(hasDevices ? { nodeSize: deviceSize } : {}),
           }).points;
@@ -1506,8 +1606,8 @@ function emitContent(args: {
       } else {
         nanFallbacks++;
         finitePoints.set(spec.id, {
-          x: inner.x + inner.w / 2,
-          y: inner.y + grid * 10 + i * (deviceSize.h + (hasDevices ? levelClearance : gap)),
+          x: graphInner.x + graphInner.w / 2,
+          y: graphInner.y + grid * 10 + i * (deviceSize.h + (hasDevices ? levelClearance : gap)),
         });
       }
     });
@@ -1539,7 +1639,7 @@ function emitContent(args: {
     // Integer coordinates: fractional drift from halving shifts is invisible
     // precision that only pollutes grid-alignment checks downstream.
     for (const b of sepBoxes) { b.x = Math.round(b.x); b.y = Math.round(b.y); }
-    const sep = separateOverlaps(sepBoxes, { x: inner.x, y: inner.y, w: inner.w, h: inner.h }, hasDevices ? levelClearance : gap);
+    const sep = separateOverlaps(sepBoxes, { x: graphInner.x, y: graphInner.y, w: graphInner.w, h: graphInner.h }, hasDevices ? levelClearance : gap);
     if (sep.remaining > 0) {
       violations.push({
         rule: "layout",
@@ -1606,8 +1706,7 @@ function emitContent(args: {
 
   // Devices already placed by a graph algorithm must not flow as well, or every
   // machine would be drawn twice: once on the graph, once in a column.
-  const placedIds = new Set(graphDevices.map((c) => c.id));
-  const flow = [...textItems, ...components.filter((c) => !placedIds.has(c.id)), ...instances.filter((c) => !placedIds.has(c.id))];
+  const flow = flowItems;
   if (flow.length > 0) {
     if (requested === "grid") algorithms[region.id] = "grid";
     else if (requested === "masonry") algorithms[region.id] = "masonry";
@@ -4031,14 +4130,46 @@ function repackColumns(region: { columns?: number; layout?: string; role?: strin
  * 1920x1080) are excluded by the caller. Region frame ops are patched in
  * place and the boxes map is updated, so connectors resolved afterwards anchor
  * to the final geometry.
+ *
+ * Band members (`bands`, from the shell's horizontal banding) grow as one
+ * object rather than each to its own content: their heights are shared — the
+ * tallest member requirement wins, exactly as the band was resolved — and the
+ * growth is capped at the band's height. Without the cap, an inspector whose
+ * content ran taller than the band grew the region past the canvas bottom;
+ * with it, the band stays one cohesive row inside the canvas and any remaining
+ * overflow is the containment finding `assertResolvedGeometry` reports, never
+ * a canvas escape.
  */
 function fitRegionsToContent(args: {
   regions: ResolvedRegion[];
   boxes: Map<string, PlacedBox>;
   operations: Operation[];
   grid: number;
+  bands?: ReadonlyArray<{ members: readonly string[]; capH: number }>;
 }): void {
   const { regions, boxes, operations, grid } = args;
+
+  // Band membership by id; the first band naming a region owns it (the shell
+  // never puts a region in two bands).
+  const bandOf = new Map<string, { members: readonly string[]; capH: number }>();
+  for (const band of args.bands ?? []) {
+    for (const id of band.members) {
+      if (!bandOf.has(id)) bandOf.set(id, band);
+    }
+  }
+  /** Bands still to process: the band grows once, at its first member. */
+  const pendingBands = new Set(args.bands ?? []);
+
+  /** The lowest box the region's own children reach (canvas-absolute), or `-Infinity` when it holds none. */
+  const contentBottomOf = (region: ResolvedRegion): number => {
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (box) bottom = Math.max(bottom, box.y + box.h);
+    }
+    return bottom;
+  };
+
   const ordered = [...regions].sort((a, b) => a.y - b.y || a.x - b.x);
   const origBottom = new Map(ordered.map((r) => [r.id, r.y + r.h]));
   const grown: Array<{ bottom: number; dy: number }> = [];
@@ -4048,6 +4179,12 @@ function fitRegionsToContent(args: {
     if (box) boxes.set(id, { ...box, y: box.y + dy });
   };
 
+  const patchRegionFrame = (region: ResolvedRegion): void => {
+    const frame = boxes.get(region.id);
+    if (frame) boxes.set(region.id, { ...frame, y: region.y, h: region.h });
+    patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+  };
+
   for (const region of ordered) {
     const origY = region.y;
     const dy = grown.filter((g) => g.bottom <= origY).reduce((sum, g) => sum + g.dy, 0);
@@ -4055,21 +4192,49 @@ function fitRegionsToContent(args: {
       region.y = origY + dy;
       shiftBox(region.id, dy);
       for (const child of region.children) shiftBox(child, dy);
-      patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      patchRegionFrame(region);
+    }
+    const band = bandOf.get(region.id);
+    if (band) {
+      if (!pendingBands.delete(band)) continue;
+      // The band is one row: measure every member against the (shared,
+      // post-shift) band top and let the tallest requirement set the height —
+      // the same rule the shell used to resolve the band. The cap is a maximum,
+      // never a shrink: a band already taller than its cap (alignment rounding)
+      // keeps its resolved height.
+      const members = band.members
+        .map((id) => regions.find((r) => r.id === id))
+        .filter((m): m is ResolvedRegion => Boolean(m));
+      if (members.length < 2) continue;
+      const requireds = members.map((m) => {
+        const pad = normalizePadding(m.padding, grid);
+        const bottom = contentBottomOf(m);
+        return bottom === Number.NEGATIVE_INFINITY ? m.h : Math.max(m.h, bottom - m.y + pad.bottom);
+      });
+      const curH = Math.max(...members.map((m) => m.h));
+      const target = Math.max(curH, Math.min(Math.max(...requireds), band.capH));
+      if (target > curH + 0.5) {
+        const dyGrow = Math.round(target) - curH;
+        if (dyGrow > 0) {
+          for (const m of members) {
+            m.h = Math.round(target);
+            patchRegionFrame(m);
+          }
+          // Regions below shift once for the whole band: an entry per member
+          // would move them once per member.
+          const first = members[0]!;
+          grown.push({ bottom: origBottom.get(first.id) ?? origY + curH, dy: dyGrow });
+        }
+      }
+      continue;
     }
     const pad = normalizePadding(region.padding, grid);
-    let contentBottom = Number.NEGATIVE_INFINITY;
-    for (const child of region.children) {
-      const box = boxes.get(child);
-      if (box) contentBottom = Math.max(contentBottom, box.y + box.h);
-    }
+    const contentBottom = contentBottomOf(region);
     if (contentBottom === Number.NEGATIVE_INFINITY) continue;
     const required = contentBottom - region.y + pad.bottom;
     if (required > region.h) {
       region.h = Math.round(required);
-      const frame = boxes.get(region.id);
-      if (frame) boxes.set(region.id, { ...frame, y: region.y, h: region.h });
-      patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      patchRegionFrame(region);
       grown.push({ bottom: origBottom.get(region.id) ?? origY + region.h, dy: region.h - (origBottom.get(region.id)! - origY) });
     }
   }
@@ -4095,6 +4260,13 @@ function fitRegionsToContent(args: {
  * remainder, and the remainder is by definition what is left after everything
  * else has been given what it asked for.
  *
+ * With `bands` (the shell's horizontal banding) the screen is modelled as rows
+ * instead of columns: a band spans columns, so a column pass cannot see that a
+ * band member shrinking must be matched by every member of its band. Rows keep
+ * the band cohesive — a fill-height member gives the space back (same rule as
+ * ever), and the whole band moves down to the new height, so the row stays one
+ * row inside the canvas.
+ *
  * Content that genuinely does not fit is not hidden: the containment check
  * reports it, which is the honest outcome for a screen whose regions and
  * contents disagree about how much room there is.
@@ -4106,6 +4278,7 @@ function fitFillRegions(args: {
   canvasH: number;
   gutter: number;
   grid: number;
+  bands?: ReadonlyArray<{ members: readonly string[]; capH: number }>;
 }): void {
   const { regions, boxes, operations, canvasH, gutter } = args;
 
@@ -4113,6 +4286,109 @@ function fitFillRegions(args: {
     const box = boxes.get(id);
     if (box) boxes.set(id, { ...box, y: box.y + dy });
   };
+
+  /**
+   * How much room this region's own content needs.
+   *
+   * This is the floor. An earlier version floored at 1px, and the result was a
+   * 1px-tall topology panel with all four of its metric cards reported as
+   * outside it — trading one visible overflow for a pile of meaningless ones.
+   * A fill region cannot give back space its content is standing in; the space
+   * simply does not exist, and the geometry check above says so.
+   */
+  const contentFloor = (region: ResolvedRegion): number => {
+    const pad = normalizePadding(region.padding, args.grid);
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (box) bottom = Math.max(bottom, box.y + box.h);
+    }
+    if (bottom === Number.NEGATIVE_INFINITY) return 1;
+    return Math.max(1, Math.ceil(bottom - region.y + pad.bottom));
+  };
+
+  if (args.bands && args.bands.length > 0) {
+    /* Band-aware rows ------------------------------------------------------ */
+
+    // One row per shared top edge. The shell bands members at exactly the same
+    // y, so clustering by y groups band members together and keeps every other
+    // region its own row. A row counts as a band only when every member belongs
+    // to a resolved band; anything else falls back to per-region fill
+    // shrinkage, which is the column pass's own rule.
+    const bandIds = new Set<string>();
+    for (const band of args.bands) for (const id of band.members) bandIds.add(id);
+
+    const rows: Array<{ regions: ResolvedRegion[]; band: boolean }> = [];
+    for (const r of [...regions].sort((a, b) => a.y - b.y || a.x - b.x)) {
+      const last = rows[rows.length - 1];
+      if (last && Math.abs(last.regions[0]!.y - r.y) < 0.5) {
+        last.regions.push(r);
+        if (!bandIds.has(r.id)) last.band = false;
+      } else {
+        rows.push({ regions: [r], band: bandIds.has(r.id) });
+      }
+    }
+
+    const rowHeight = (row: { regions: ResolvedRegion[] }): number => Math.max(...row.regions.map((r) => r.h));
+    const rowTotal = rows.reduce((sum, row) => sum + rowHeight(row), 0) + gutter * Math.max(0, rows.length - 1);
+    let overflow = rowTotal - canvasH;
+
+    if (overflow > 0) {
+      for (const row of rows) {
+        if (overflow <= 0) break;
+        const members = row.regions;
+        if (row.band && members.length >= 2) {
+          // The band shrinks as one height, floored at what any member's content
+          // is standing in. Only a fill-height member triggers it: the same
+          // "only a fill region gives space back" rule the per-column pass
+          // applies, so a band without one still owns its declared height here.
+          const fillMember = members.find((m) => m.height === "fill");
+          if (!fillMember) continue;
+          const curH = Math.max(...members.map((m) => m.h));
+          const floorMax = Math.max(...members.map((m) => contentFloor(m)));
+          const take = Math.min(overflow, curH - floorMax);
+          if (take <= 0) continue;
+          const newH = Math.max(floorMax, Math.round(curH - take));
+          overflow -= curH - newH;
+          for (const m of members) {
+            m.h = newH;
+            const frame = boxes.get(m.id);
+            if (frame) boxes.set(m.id, { ...frame, h: newH });
+            patchEmit(operations, m.id, { x: m.x, y: m.y, width: m.w, height: newH });
+          }
+          continue;
+        }
+        for (const region of members) {
+          if (overflow <= 0) break;
+          if (region.height !== "fill") continue;
+          const take = Math.min(overflow, region.h - contentFloor(region));
+          if (take <= 0) continue;
+          region.h = Math.round(region.h - take);
+          overflow -= take;
+          const frame = boxes.get(region.id);
+          if (frame) boxes.set(region.id, { ...frame, h: region.h });
+          patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+        }
+      }
+    }
+
+    // Re-stack rows from the top so the space comes off the right place. Band
+    // members move together (they share a top), carrying their content, exactly
+    // as growth shifts regions down in `fitRegionsToContent`.
+    let y = 0;
+    for (const row of rows) {
+      for (const region of row.regions) {
+        const dy = Math.round(y) - region.y;
+        if (dy !== 0) {
+          region.y = Math.round(y);
+          for (const id of [region.id, ...region.children]) shiftBox(id, dy);
+          patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+        }
+      }
+      y += rowHeight(row) + gutter;
+    }
+    return;
+  }
 
   // Columns, not one list. A side-rail shell puts a full-height nav rail at x=0
   // and stacks the content beside it at x=contentX; summing both into one stack
@@ -4135,26 +4411,6 @@ function fitFillRegions(args: {
     const total = ordered.reduce((sum, r) => sum + r.h, 0) + gutter * Math.max(0, ordered.length - 1);
     let overflow = total - canvasH;
     if (overflow <= 0) continue;
-
-    /**
-     * How much room this region's own content needs.
-     *
-     * This is the floor. An earlier version floored at 1px, and the result was a
-     * 1px-tall topology panel with all four of its metric cards reported as
-     * outside it — trading one visible overflow for a pile of meaningless ones.
-     * A fill region cannot give back space its content is standing in; the space
-     * simply does not exist, and the geometry check above says so.
-     */
-    const contentFloor = (region: ResolvedRegion): number => {
-      const pad = normalizePadding(region.padding, args.grid);
-      let bottom = Number.NEGATIVE_INFINITY;
-      for (const child of region.children) {
-        const box = boxes.get(child);
-        if (box) bottom = Math.max(bottom, box.y + box.h);
-      }
-      if (bottom === Number.NEGATIVE_INFINITY) return 1;
-      return Math.max(1, Math.ceil(bottom - region.y + pad.bottom));
-    };
 
     for (const region of ordered) {
       if (overflow <= 0) break;

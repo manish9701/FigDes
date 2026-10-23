@@ -383,7 +383,7 @@ function segIntersectsRect(
  */
 export function edgeClearanceViolations(
   points: Array<{ x: number; y: number }>,
-  boxes: Map<string, { x: number; y: number; w: number; h: number }>,
+  boxes: ReadonlyMap<string, { x: number; y: number; w: number; h: number }>,
   fromId: string,
   toId: string,
   min = CONNECTOR_CLEARANCE_MIN,
@@ -403,6 +403,262 @@ export function edgeClearanceViolations(
     }
   }
   return [...hit].sort();
+}
+
+/**
+ * Half-pixel shrink applied when a route segment is tested against a node box.
+ *
+ * A segment exactly along a box edge — the jog down the side of the box the
+ * connector itself exits, or a midline grazing a neighbour — touches the box's
+ * boundary, and the boundary is also where endpoints live. Counting exact
+ * contact would flag every orthogonal route that clips its own endpoint boxes,
+ * so a segment has to be *inside* by this much (or cross a face) to count as
+ * passing through. Full-halo proximity (within `CONNECTOR_CLEARANCE_MIN`) stays
+ * the advisory check; crossing the box itself is the harder, rarer defect.
+ */
+export const ROUTE_BOX_EPSILON = 0.5;
+
+export interface RouteBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Which third-party node boxes a route *passes through*.
+ *
+ * This is the hard sibling of `edgeClearanceViolations`: a segment entering a
+ * node's box — not merely its clearance halo — reads as connecting to a node it
+ * was never wired to, so it is a route defect rather than a spacing judgement.
+ * Endpoint boxes are excluded (touching the nodes it connects is the route's
+ * job) as are zero-size boxes. Returns ids sorted, deterministic input out.
+ */
+export function routeThroughNodes(
+  points: Array<{ x: number; y: number }>,
+  boxes: ReadonlyMap<string, RouteBox>,
+  fromId: string,
+  toId: string,
+): string[] {
+  const hit = new Set<string>();
+  for (let i = 0; i + 1 < points.length; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    // Zero-length jogs (a straight horizontal orthogonal route has one) touch
+    // nothing; measuring them would flag the endpoint's own box.
+    if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6) continue;
+    for (const [id, box] of boxes) {
+      if (id === fromId || id === toId) continue;
+      if (box.w <= 0 || box.h <= 0) continue;
+      const inner = {
+        x: box.x + ROUTE_BOX_EPSILON,
+        y: box.y + ROUTE_BOX_EPSILON,
+        w: box.w - ROUTE_BOX_EPSILON * 2,
+        h: box.h - ROUTE_BOX_EPSILON * 2,
+      };
+      if (segIntersectsRect(a, b, inner)) hit.add(id);
+    }
+  }
+  return [...hit].sort();
+}
+
+/**
+ * Z-shaped orthogonal route between two resolved boxes whose midline is set
+ * by an explicit corridor, instead of by the displacement's dominance.
+ *
+ * Every reroute candidate ends up here: with the corridor on the vertical axis
+ * the stair runs horizontally at `mid.y`, with it on the horizontal axis the
+ * stair runs vertically at `mid.x`. The jogs stay at the endpoints' own
+ * columns, so a shed route keeps terminating on the boxes it names.
+ */
+function corridorRoutePoints(mid: { x?: number; y?: number }, p1: { x: number; y: number }, p2: { x: number; y: number }): Array<{ x: number; y: number }> {
+  if (mid.y !== undefined) {
+    return [p1, { x: p1.x, y: mid.y }, { x: p2.x, y: mid.y }, p2];
+  }
+  const midX = mid.x ?? (p1.x + p2.x) / 2;
+  return [p1, { x: midX, y: p1.y }, { x: midX, y: p2.y }, p2];
+}
+
+/**
+ * Packages an explicit point list as a `ConnectorResult`, keeping the same
+ * output contract as `routeConnector`: arrowheads as closed triangular
+ * subpaths scaled to the stroke (only when the chord has room), a label anchor
+ * at the middle segment, and an honest summary naming the route.
+ */
+function routeFromPoints(spec: ConnectorSpec, from: ResolvedBox, to: ResolvedBox, points: Array<{ x: number; y: number }>, note: string): ConnectorResult {
+  const f = (n: number): number => Math.round(n * 100) / 100;
+  const p1 = points[0]!;
+  const p2 = points[points.length - 1]!;
+  const parts = points.map((p, i) => `${i === 0 ? "M" : "L"} ${f(p.x)} ${f(p.y)}`);
+  const weight = spec.strokeWeight ?? 1;
+  const size = arrowSpace(weight) / 2;
+  const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const headsFit = chord >= arrowSpace(weight) && points.length >= 2;
+  if (spec.arrowEnd !== false && headsFit) {
+    parts.push(arrowHead(p2, { x: p2.x - p1.x, y: p2.y - p1.y }, size));
+  }
+  if (spec.arrowStart === true && headsFit) {
+    parts.push(arrowHead(p1, { x: p1.x - p2.x, y: p1.y - p2.y }, size));
+  }
+  const midIndex = Math.floor(points.length / 2);
+  const labelAt = { x: f(points[midIndex]!.x), y: f(points[midIndex]!.y) };
+  const headsWanted = spec.arrowEnd !== false || spec.arrowStart === true;
+  const arrowNote = headsFit
+    ? ""
+    : ` (nodes ${Math.round(chord)}px apart, closer than the ${Math.round(size * 2)}px the arrowheads need, so it is drawn without one)`;
+  return {
+    path: parts.join(" "),
+    points,
+    ...(labelAt ? { labelAt } : {}),
+    summary: `orthogonal connector ${spec.from} -> ${spec.to}${note}${arrowNote}`,
+    arrowheadsOmitted: headsWanted && !headsFit,
+  };
+}
+
+/** Obstacle that can block a stair candidate, in deterministic sweep order. */
+interface DetourObstacle {
+  id: string;
+  box: RouteBox;
+}
+
+/**
+ * Deterministic candidate list: how a corridor can dodge each blocking box.
+ *
+ * For the given axis, the midline takes: the displacement's own mid, then each
+ * blocking box's band edges (+clearance outside the box), then the far edge of
+ * the whole obstacle set on that side. Candidates are bounded (`MAX_STAIRS`)
+ * so a crowded map stays a bounded pass, not a search; duplicates are dropped
+ * and the order never depends on hash iteration.
+ */
+function corridorCandidates(axis: "flat" | "steep", p1: { x: number; y: number }, p2: { x: number; y: number }, obstacles: DetourObstacle[], clearance: number): Array<number> {
+  const MAX_STAIRS = 24;
+  const rivals = obstacles.slice(0, MAX_STAIRS);
+
+  const mids: number[] = [];
+  const push = (m: number): void => {
+    const v = Math.round(m * 100) / 100;
+    if (Number.isFinite(v) && !mids.some((seen) => Math.abs(seen - v) < 1e-6)) mids.push(v);
+  };
+
+  const natural = axis === "flat" ? (p1.x + p2.x) / 2 : (p1.y + p2.y) / 2;
+  push(natural);
+  let bandLo = Infinity;
+  let bandHi = -Infinity;
+  for (const rival of rivals) {
+    if (axis === "flat") {
+      push(rival.box.x - clearance);
+      push(rival.box.x + rival.box.w + clearance);
+      bandLo = Math.min(bandLo, rival.box.x);
+      bandHi = Math.max(bandHi, rival.box.x + rival.box.w);
+    } else {
+      push(rival.box.y - clearance);
+      push(rival.box.y + rival.box.h + clearance);
+      bandLo = Math.min(bandLo, rival.box.y);
+      bandHi = Math.max(bandHi, rival.box.y + rival.box.h);
+    }
+  }
+  if (Number.isFinite(bandLo) && Number.isFinite(bandHi)) {
+    push(bandHi + clearance);
+    push(bandLo - clearance);
+  }
+  return mids;
+}
+
+export interface ClearanceSolution {
+  /** The route to emit: the standard one when clean, else the best variant. */
+  result: ConnectorResult;
+  /**
+   * Third-party node boxes the chosen route still passes through, sorted.
+   * A non-empty list is worth a named compile violation, never silence.
+   */
+  through: string[];
+  /** Nodes the chosen route approaches too closely (the advisory class). */
+  halo: string[];
+  /** True when a reroute replaced the default route. */
+  detoured: boolean;
+}
+
+/**
+ * Routes one connector, keeping it clear of the other nodes in its region.
+ *
+ * The default route is solved exactly as `routeConnector` always has, then
+ * tested against the third-party boxes: first for *passing through* (a
+ * segment entering a box it does not connect) and then for the advisory halo.
+ * Only when the default route actually crosses a box do reroute candidates
+ * run: deterministic Z-stair corridors — the displacement's own mid, corridor
+ * shifts forced to each blocking box's band edge, and the far side of the
+ * whole obstacle set, both axes, natural axis first. The first candidate with
+ * no crossings wins; otherwise the variant with the fewest crossings (then the
+ * fewest halo grazes) does, and the caller has to see the leftover in a
+ * violation rather than in the layout.
+ *
+ * Curves keep their geometry: an author-declared bow is a shape choice, and a
+ * chord measured through a bowed route can say "crossed" about a line that
+ * curved around, so curves carry only the existing advisory. Everything else
+ * — the default orthogonal stair, or a `straight` edge that is blocked —
+ * reroutes within bounds.
+ */
+export function routeConnectorClearance(
+  spec: ConnectorSpec,
+  from: ResolvedBox | undefined,
+  to: ResolvedBox | undefined,
+  obstacles?: ReadonlyMap<string, RouteBox>,
+  minClearance = CONNECTOR_CLEARANCE_MIN,
+): ClearanceSolution | null {
+  const base = routeConnector(spec, from, to);
+  const boxes = obstacles ?? new Map<string, RouteBox>();
+  if (!from || !to || !base) return null;
+
+  const through = routeThroughNodes(base.points, boxes, spec.from, spec.to);
+  const halo = edgeClearanceViolations(base.points, boxes, spec.from, spec.to);
+  const routing = spec.routing ?? "orthogonal";
+
+  // A curve's actual paint departs from its chord, so the chord cannot be trusted
+  // as the shaped route's clearance evidence; the advisory carries curves only.
+  if (routing === "curved" || through.length === 0) {
+    return { result: base, through, halo, detoured: false };
+  }
+
+  // The self-mid stair IS what the old fallback retry produced, so swopping an
+  // author-straight edge for it keeps the historical behaviour where there was
+  // one, while the remaining candidates give that route a genuinely clearer
+  // corridor instead of one fixed shift.
+  const naturalAxis = Math.abs(to.x + to.w / 2 - (from.x + from.w / 2)) >= Math.abs(to.y + to.h / 2 - (from.y + from.h / 2)) ? "flat" : "steep";
+  const otherAxis = naturalAxis === "flat" ? "steep" : "flat";
+  const clearance = minClearance + 2;
+
+  const rivals: DetourObstacle[] = [...boxes.entries()]
+    .filter(([id, box]) => id !== spec.from && id !== spec.to && box.w > 0 && box.h > 0)
+    .sort((a, b) => a[1].x - b[1].x || a[1].y - b[1].y || a[0].localeCompare(b[0]))
+    .map(([id, box]) => ({ id, box }));
+
+  const p1 = base.points[0]!;
+  const p2 = base.points[base.points.length - 1]!;
+
+  let best = { points: base.points, through, halo, score: through.length * 16 + halo.length };
+  const run = (candidates: Array<number>, axis: "flat" | "steep"): void => {
+    for (const mid of candidates) {
+      const points = corridorRoutePoints(axis === "flat" ? { x: mid } : { y: mid }, p1, p2);
+      const cThrough = routeThroughNodes(points, boxes, spec.from, spec.to);
+      const cHalo = edgeClearanceViolations(points, boxes, spec.from, spec.to);
+      const score = cThrough.length * 16 + cHalo.length;
+      if (score < best.score) {
+        best = { points, through: cThrough, halo: cHalo, score };
+        if (cThrough.length === 0 && cHalo.length === 0) break;
+      }
+    }
+  };
+  run(corridorCandidates(naturalAxis, p1, p2, rivals, clearance), naturalAxis);
+  run(corridorCandidates(otherAxis, p1, p2, rivals, clearance), otherAxis);
+
+  const detoured = best.points !== base.points;
+  const note = detoured
+    ? through.length > 0
+      ? ` (rerouted clear of ${through.map((n) => `'${n}'`).slice(0, 2).join(" and ")})`
+      : ""
+    : "";
+  const result = routeFromPoints(spec, from, to, best.points, note);
+  return { result, through: best.through, halo: best.halo, detoured };
 }
 
 /**

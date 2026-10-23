@@ -299,6 +299,32 @@ export interface ShellInput {
    */
   reflow?: boolean;
   reflowOut?: (changed: number) => void;
+  /**
+   * Collects the horizontal bands the stack layout formed (`layoutStackBanded`),
+   * one entry per band: the member ids in declaration order and the height cap —
+   * the band's own resolved height, which is also how far any of its members
+   * may grow to fit content.
+   *
+   * The compiler consumes this so its fit passes can keep band members growing
+   * together and capped. Nothing outside `layoutRegions` needs it, so bands are
+   * reported through a callback instead of changing the return shape every
+   * caller (planner, pipeline, tests) already consumes. `layoutSideRail` never
+   * reports bands: its content column stacks, it does not band.
+   */
+  bandsOut?: (bands: readonly ResolvedBand[]) => void;
+}
+
+/**
+ * A horizontal band of regions that were resolved side by side.
+ *
+ * `capH` is the band's resolved height: the tallest requirement any member
+ * stated (or the canvas leftover a fill member takes), already capped so the
+ * band never runs past the canvas bottom. It is the ceiling the compiler's fit
+ * passes honour when content asks a member to grow.
+ */
+export interface ResolvedBand {
+  members: readonly string[];
+  capH: number;
 }
 
 /**
@@ -318,7 +344,75 @@ export function layoutRegions(input: ShellInput): ResolvedRegion[] {
   return isSideRail ? layoutSideRail(input, nav!) : layoutStack(input);
 }
 
+/** The minimum width a fill member of a horizontal band may keep. */
+export const MIN_BAND_FILL_W = 240;
+
+/**
+ * A region is bandable when it can absorb the leftover width of a horizontal
+ * band. The same signal `grow` settles on — `"fill"` or a positive grow weight
+ * — which is also how the runtime interpreter normalises a growing region:
+ * `executeRuntime` coerces both axes of a `grow` region to `fill`.
+ */
+function isFillWidth(r: Region): boolean {
+  return r.width === "fill" || growOf(r.grow) > 0;
+}
+
+/**
+ * The consecutive runs of regions that band side by side.
+ *
+ * A run starts where a fill/grow-width region is followed or preceded by
+ * numeric-width regions and extends greedily: a hug-width region ends it, a
+ * second fill-width region ends it, and members are dropped from the right
+ * until the declared widths fit beside a fill region of at least
+ * `MIN_BAND_FILL_W`. Numeric-only runs never band (no flexible member means
+ * nothing to band around), which keeps two numeric-width columns stacking
+ * exactly as they did before banding existed.
+ */
+function bandRunsOf(regions: Region[], canvasW: number, gutter: number): Array<{ start: number; indices: number[] }> {
+  const runs: Array<{ start: number; indices: number[] }> = [];
+  let i = 0;
+  while (i < regions.length) {
+    const members: Region[] = [];
+    let fillSeen = false;
+    for (let j = i; j < regions.length; j++) {
+      const r = regions[j]!;
+      const numeric = typeof r.width === "number";
+      if (!numeric && !isFillWidth(r)) break; // a hug-width region ends the run
+      if (isFillWidth(r)) {
+        if (fillSeen) break; // a second flexible member ends it
+        fillSeen = true;
+      }
+      members.push(r);
+    }
+    // Drop members from the right until the widths -- plus the gutters between
+    // the members -- leave a fill member at least `MIN_BAND_FILL_W` wide.
+    const fits = (): boolean =>
+      members.reduce((a, m) => a + (isFillWidth(m) ? 0 : typeof m.width === "number" ? Math.min(m.width, canvasW) : 0), 0) +
+        gutter * (members.length - 1) +
+        MIN_BAND_FILL_W <=
+      canvasW;
+    while (members.length > 0 && !fits()) members.pop();
+    if (members.length >= 2 && members.some(isFillWidth)) {
+      runs.push({ start: i, indices: members.map((_, k) => i + k) });
+      i += members.length;
+    } else {
+      i += 1;
+    }
+  }
+  return runs;
+}
+
 function layoutStack(input: ShellInput): ResolvedRegion[] {
+  // Banding is declined when the relation solver owns the geometry: the solver
+  // positions regions against each other, and a pre-banded stack would fight
+  // the placement it is about to get. Declared relations are the explicit way
+  // to compose a split; banding is the implicit one.
+  const bands = input.reflow === false ? [] : bandRunsOf(input.regions, input.canvasW, input.gutter);
+  return bands.length === 0 ? layoutStackRows(input) : layoutStackBanded(input, bands);
+}
+
+/** The plain vertical stack: every region its own full-width row. */
+function layoutStackRows(input: ShellInput): ResolvedRegion[] {
   const { regions, canvasW, canvasH, gutter } = input;
 
   const stack = regions.map((r) => ({
@@ -376,6 +470,138 @@ function layoutStack(input: ShellInput): ResolvedRegion[] {
     y += h + gutter;
     return box;
   });
+}
+
+/**
+ * The stack layout with horizontal banding.
+ *
+ * ## Why this exists
+ *
+ * `layoutStackRows` places every non-rail region as its own full-width row in a
+ * vertical stack: header row, then each region at `y += heights + gutter`. A
+ * split-view — a fill/grow canvas region beside a fixed-width inspector — was
+ * unreachable without hand-written relations, so a topology program declared as
+ * `header 64, map grow 1, inspector 340` rendered the map full-width 1280x582
+ * and wrapped the inspector *below it* as `340x90 at y=710`: the panel content
+ * only measured 90px tall and the canvas-fit reflow shrank it into a squashed
+ * bottom rail. Plan templates promise split-view (topology canvas beside a
+ * subordinate inspector); the runtime never banded them.
+ *
+ * Regions are grouped into consecutive bands (`bandRunsOf`); each band renders
+ * side by side: numeric-width members keep their declared width (clamped to the
+ * canvas), the fill/grow member takes the remainder, and every member shares
+ * the band's height — the tallest requirement its members' height hints state,
+ * so the band is one cohesive row. A fill height keeps "take the canvas
+ * leftover" true, a numeric height states its own, an unmeasured (hug) height
+ * stays at zero here and is grown by the compiler's fit passes once content is
+ * measured. The height is then capped so the band never runs past the canvas
+ * bottom: overflow *inside* a capped band is a containment finding, not a
+ * canvas escape.
+ *
+ * Pure function: declarations in, resolved boxes out. Bands are reported on
+ * `input.bandsOut` so the compiler's fit passes can keep them cohesive.
+ */
+function layoutStackBanded(input: ShellInput, bands: Array<{ start: number; indices: number[] }>): ResolvedRegion[] {
+  const { regions, canvasW, canvasH, gutter } = input;
+
+  // Units in declaration order: a row is one region, a band is its members
+  // placed across the full canvas width as one horizontal line.
+  const runAt = new Map<number, number[]>();
+  for (const b of bands) runAt.set(b.start, b.indices);
+  const units: Array<{ band: boolean; indices: number[] }> = [];
+  let i = 0;
+  while (i < regions.length) {
+    const run = runAt.get(i);
+    if (run) {
+      units.push({ band: true, indices: run });
+      i += run.length;
+    } else {
+      units.push({ band: false, indices: [i] });
+      i += 1;
+    }
+  }
+
+  // Each unit's height along the stacking axis, solved exactly as the plain
+  // stack solves it: fixed units keep their size, `fill` units share the
+  // leftover by grow weight, `hug` units measure to zero here and grow when the
+  // compiler measures their content.
+  const stack = units.map((u) => {
+    if (!u.band) {
+      const r = regions[u.indices[0]!]!;
+      return { id: r.id, grow: r.grow, width: r.width, height: r.height };
+    }
+    const members = u.indices.map((k) => regions[k]!);
+    const fillHeight = members.some((m) => m.height === "fill");
+    const numericHeights = members.map((m) => (typeof m.height === "number" ? m.height : 0)).filter((h) => h > 0);
+    return {
+      // A band id is never emitted; the children below carry real ids.
+      id: members.map((m) => m.id).join("+"),
+      // The band grows with its hungriest member: a grow:1 map outvotes a
+      // grow:0 inspector when another fill unit competes for the leftover.
+      grow: Math.max(0, ...members.map((m) => growOf(m.grow))),
+      width: canvasW, // not read by the column solver
+      height: fillHeight ? ("fill" as MajorSize) : numericHeights.length > 0 ? Math.max(...numericHeights) : ("hug" as MajorSize),
+    };
+  });
+
+  const solved = solveAxis({ children: stack, axis: "column", gap: gutter, available: canvasH });
+
+  // Canvas-fit reflow, as in `layoutStackRows`: when no unit is `fill`, an
+  // over-tall stack of fixed units overflows silently. Runs and bands alike are
+  // not shrinkable here — a band's height is a claim the compiler's fit passes
+  // honour alongside the hint it states, and shrinking it in the shell would
+  // tear members apart before content was ever measured.
+  const refit = fitStackToCanvas({
+    heights: solved,
+    shrinkable: units.map((u, k) => u.band === false && typeof (regions[u.indices[0]!] as Region).height === "number"),
+    canvasH,
+    gutter,
+  });
+  if (refit.changed > 0) input.reflowOut?.(refit.changed);
+  const heights = refit.heights;
+
+  const out: ResolvedRegion[] = [];
+  const reported: ResolvedBand[] = [];
+  let y = 0;
+  for (let k = 0; k < units.length; k++) {
+    const unit = units[k]!;
+    // The height cap keeps a band on the canvas: band.y + bandH <= canvasH.
+    // The vertical solve already lands on the canvas edge when a fill unit
+    // exists (total distributed equals `available`), so this is the arithmetic
+    // guard for the numeric cases `fitStackToCanvas` cannot pull back.
+    const h = unit.band
+      ? Math.max(1, Math.min(heights[k]!, canvasH - Math.round(y)))
+      : Math.round(heights[k] ?? 0);
+    if (!unit.band) {
+      const r = regions[unit.indices[0]!]!;
+      // An explicit width is honoured, left-aligned — the same rule
+      // `layoutStackRows` applies, so a row in a banded program behaves
+      // identically to a row in an unbanded one.
+      const w = typeof r.width === "number" ? r.width : canvasW;
+      out.push({ ...r, x: 0, y: Math.round(y), w, h });
+    } else {
+      // Horizontal placement in declaration order: numeric-width members keep
+      // their declared width (clamped to the canvas, as `layoutStackRows`
+      // comments the reasoning for), the fill/grow member takes the remainder
+      // at the slot its declaration order gives it.
+      const members = unit.indices.map((kk) => regions[kk]!);
+      const fillAt = members.findIndex((m) => isFillWidth(m));
+      const widths = members.map((m, mi) => (mi === fillAt ? 0 : Math.min(typeof m.width === "number" ? m.width : canvasW, canvasW)));
+      const numericSum = widths.reduce((a, b) => a + b, 0);
+      const fillW = Math.max(1, canvasW - numericSum - gutter * (members.length - 1));
+      widths[fillAt] = fillW;
+      let x = 0;
+      members.forEach((m, mi) => {
+        out.push({ ...m, x, y: Math.round(y), w: widths[mi]!, h });
+        x += (widths[mi] ?? 0) + gutter;
+      });
+      reported.push({ members: members.map((m) => m.id), capH: h });
+    }
+    y += h + gutter;
+  }
+
+  if (reported.length > 0) input.bandsOut?.(reported);
+  return out;
 }
 
 function layoutSideRail(input: ShellInput, nav: Region): ResolvedRegion[] {
@@ -761,11 +987,15 @@ export function planLayout(ir: DesignIR, gutter?: number): ResolvedRegion[] {
  * when the program declares relations, because the relation solver then owns
  * the geometry and pre-shrinking the stack would fight the placement it is
  * about to be given.
+ *
+ * `opts.bandsOut` collects the horizontal bands `layoutStackBanded` formed (see
+ * `ShellInput`); the compiler's fit passes consume them to keep band members
+ * growing together and capped at the band height.
  */
 export function planLayoutReflowed(
   ir: DesignIR,
   gutter?: number,
-  opts?: { reflow?: boolean },
+  opts?: { reflow?: boolean; bandsOut?: ShellInput["bandsOut"] },
 ): { regions: ResolvedRegion[]; reflowed: number } {
   const g = gutter ?? defaultGutter(ir.canvas.grid);
   if (opts?.reflow === false) {
@@ -789,6 +1019,7 @@ export function planLayoutReflowed(
     reflowOut: (n) => {
       reflowed += n;
     },
+    ...(opts?.bandsOut ? { bandsOut: opts.bandsOut } : {}),
   });
   return { regions, reflowed };
 }

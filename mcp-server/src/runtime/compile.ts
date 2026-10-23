@@ -46,6 +46,24 @@ export const TYPE_SCALE: Record<string, { size: number; weight: number; family?:
   code: { size: 12, weight: 400, family: "JetBrains Mono" },
 };
 
+/**
+ * The type ramp's readability floor (issue #25): nothing renders below it.
+ *
+ * The contrast intent scales display type (bold 1.15, muted 0.9), and a muted
+ * eyebrow at the ramp's 11px step rounded to 10px — below the floor the
+ * type-and-space skill declares and the completeness gate enforces, which
+ * refused the whole build. The multipliers shape hierarchy; they do not
+ * override the floor. Same number as design/quality/type-criteria.ts's
+ * MIN_LABEL_PX, kept local so the runtime bundle stays decoupled from the
+ * quality bundle.
+ */
+export const MIN_FONT_PX = 11;
+
+/** The font size a text op emits: the ramp size through the deck/type/contrast multipliers, never below the floor. */
+export function emittedFontSize(base: number, typeScale = 1, display = 1): number {
+  return Math.max(MIN_FONT_PX, Math.round(base * typeScale * display));
+}
+
 /* -------------------------------------------------------------------------- */
 /* Style look (FigDes §26)                                                   */
 /* -------------------------------------------------------------------------- */
@@ -1832,7 +1850,7 @@ function emitText(
       style: weightToStyle(weight),
       // Slides are 1920 wide against a 1440 design canvas; unscaled type reads as
       // fine print from the back of the room.
-      fontSize: Math.round((spec.size ?? scale.size) * typeScale * display),
+      fontSize: emittedFontSize((spec.size ?? scale.size) * typeScale, display),
       ...(spec.letterSpacing !== undefined ? { letterSpacing: spec.letterSpacing } : {}),
       ...(spec.fill !== undefined ? { fill: resolveToken(spec.fill) } : {}),
       // The file's own text style, when the program named one: the design
@@ -3882,7 +3900,7 @@ function checkTextFit(
 
       const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
       const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
-      const fontSize = (spec.size ?? scale.size) * typeScale * display;
+      const fontSize = emittedFontSize((spec.size ?? scale.size) * typeScale, display);
 
       // Longest run with no break opportunity: a word, a URL, a stack trace, a
       // path. Spaces give the layout somewhere to wrap; these do not.
@@ -4851,7 +4869,7 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
 
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
   const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
-  const size = (spec.size ?? scale.size) * typeScale * display;
+  const size = emittedFontSize((spec.size ?? scale.size) * typeScale, display);
   const usable = Math.max(40, spec.maxWidth ?? width);
   // Per-character pitch includes the tracking (pixels, added after every glyph)
   // and the uppercase widening a preset transform will apply — a tracked caps

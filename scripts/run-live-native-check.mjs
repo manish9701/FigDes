@@ -110,7 +110,16 @@ return { rootId: frame.id, createdNodeIds: [frame.id, stack.id, title.id, body.i
 `;
 
 console.log("running the native path…");
-const native = (await tool("figdes_use_figma", { script, renderAfter: "none" })).data;
+const native = (await tool("figdes_use_figma", {
+  script,
+  renderAfter: "none",
+  // Issue #26 channels: a mutating script with no plan_screen provenance needs
+  // an explicit approval with a reason. This check IS the provenance: it is the
+  // gauntlet's own disposable frame (created, inspected, and removed with the
+  // framesAfter/leftBehind verification below), not a product surface.
+  approved: true,
+  reason: "The native-path check is the release gauntlet's own disposable frame (FIGDES_NATIVE_CHECK_V01). It is created, inspected, removed, and the cleanup is verified in this run.",
+})).data;
 
 const rootId = native?.rootId ?? native?.result?.rootId ?? null;
 const created = native?.createdNodeIds ?? native?.result?.createdNodeIds ?? [];

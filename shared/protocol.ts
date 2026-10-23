@@ -1847,7 +1847,8 @@ export type UiToMain =
   | { kind: "refresh-panel" }
   | { kind: "select-node"; nodeId: string }
   | { kind: "request"; requestId: string; tool: PluginToolName; payload: unknown }
-  | { kind: "cancel"; requestId: string; transactionId?: string; reason?: string };
+  | { kind: "cancel"; requestId: string; transactionId?: string; reason?: string }
+  | { kind: "resize"; height: number };
 
 export type MainToUi =
   | { kind: "server-config"; url: string; secret?: string; pluginVersion: string }

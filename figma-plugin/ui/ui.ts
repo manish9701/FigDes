@@ -131,10 +131,37 @@ function appendLog(level: string, message: string): void {
   latestEl.textContent = message;
   latestEl.className = level === "error" ? "err" : "";
   latestEl.id = "latest";
+  fitHeight();
 }
 
 function toMain(msg: UiToMain): void {
   parent.postMessage({ pluginMessage: msg }, "*");
+}
+
+/* -------------------------------------------------------------------------- */
+/* Auto-fit height                                                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The panel takes only the room its content needs — no dead empty space.
+ *
+ * The iframe measures its own scroll height and asks the main thread to
+ * resize (an iframe cannot call figma.ui.resize itself). Updates are
+ * coalesced through requestAnimationFrame so a burst of log lines resizes
+ * once, and the height is clamped so the panel never becomes a sliver or
+ * eats the canvas.
+ */
+const PANEL_MIN_H = 96;
+const PANEL_MAX_H = 480;
+let fitQueued = false;
+function fitHeight(): void {
+  if (fitQueued) return;
+  fitQueued = true;
+  window.requestAnimationFrame(() => {
+    fitQueued = false;
+    const h = Math.ceil(document.body.scrollHeight);
+    toMain({ kind: "resize", height: Math.min(PANEL_MAX_H, Math.max(PANEL_MIN_H, h)) });
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -159,6 +186,7 @@ function render(summary: PanelSummary): void {
   const build = (summary as { build?: string }).build;
   versionEl.title = build ? `build ${build}` : "no build stamp: rebuild the plugin and reopen the panel";
   if (build && build !== "unknown") versionEl.textContent = `v${summary.pluginVersion} · ${build}`;
+  fitHeight();
 }
 
 /**
@@ -214,8 +242,10 @@ function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
     progressHideTimer = window.setTimeout(() => {
       progressEl.style.visibility = "hidden";
       progressLabelEl.style.visibility = "hidden";
+      fitHeight();
     }, 4000);
   }
+  fitHeight();
 }
 
 /**
@@ -227,6 +257,7 @@ function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
 function renderNotify(msg: Extract<ServerMessage, { type: "notify" }>): void {
   if (msg.kind === "activity") {
     activityEl.textContent = msg.text;
+    fitHeight();
     return;
   }
 
@@ -735,6 +766,15 @@ el<HTMLButtonElement>("save").addEventListener("click", () => {
 // change.
 toMain({ kind: "ready" });
 refreshPanel();
+
+// Size to the content once it is in, and whenever a collapsible section
+// opens or closes — opening "Server connection" grows the panel, closing it
+// shrinks it back instead of leaving the empty room behind.
+for (const id of ["settings", "logdetails"]) {
+  document.getElementById(id)?.addEventListener("toggle", fitHeight);
+}
+previewEl.addEventListener("load", fitHeight);
+fitHeight();
 
 // A sleeping laptop, a backgrounded tab or a proxy that severs idle sockets
 // all look identical from here: the socket dies quietly. Reconnect the moment

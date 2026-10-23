@@ -126,8 +126,14 @@ const queue: MainToUi[] = [];
 /** In-flight main-thread requests: requestId -> transactionId (when known). */
 const activeRequests = new Map<string, string | undefined>();
 
+/** Panel width: the iframe auto-fits its height to content, width stays fixed. */
+const PANEL_WIDTH = 272;
+/** Clamp for iframe-requested heights: never a sliver, never a full canvas. */
+const PANEL_MIN_H = 96;
+const PANEL_MAX_H = 480;
+
 function showUI(): void {
-  figma.showUI(__html__, { width: 272, height: 168, themeColors: true });
+  figma.showUI(__html__, { width: PANEL_WIDTH, height: 120, themeColors: true });
   // The full config (including the secret) is re-sent once the iframe reports
   // "ready" â€” at this point the postMessage channel is guaranteed to exist.
   post({ kind: "server-config", url: serverUrl(), pluginVersion: PLUGIN_VERSION });
@@ -617,6 +623,15 @@ figma.ui.onmessage = async (msg: UiToMain) => {
         } else {
           log("warn", `Cancel for unknown request ${msg.requestId}; nothing to abort.`);
         }
+        break;
+      }
+
+      case "resize": {
+        // Auto-fit height: the iframe measures its own content and asks for
+        // exactly that much room, so the panel never shows dead empty space.
+        // Width stays fixed; only the height follows the content.
+        const h = Math.round(msg.height);
+        if (Number.isFinite(h)) figma.ui.resize(PANEL_WIDTH, Math.min(PANEL_MAX_H, Math.max(PANEL_MIN_H, h)));
         break;
       }
     }

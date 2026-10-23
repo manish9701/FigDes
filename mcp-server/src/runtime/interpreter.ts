@@ -47,6 +47,15 @@ import { compileVisual } from "./visual";
 import { validatePrimitiveArgs } from "./primitive-schema";
 import { resolveStyleTokens, presetAlignment } from "./visual-presets";
 import { VisualConceptSchema } from "../../../shared/ir";
+import {
+  CompositionContractSchema,
+  deriveCompositionContract,
+  uncheckedReceipt,
+  verifyCompositionHandoff,
+  type CompositionContract,
+  type HandoffReceipt,
+  type ResolvedComposition,
+} from "./handoff";
 
 /* -------------------------------------------------------------------------- */
 /* The runtime vocabulary                                                      */
@@ -165,6 +174,7 @@ const REGION_ARGS = new Set([
   "fill",
   "radius",
   "composition",
+  "role",
   "layout",
   "columns",
   "gridColumns",
@@ -488,6 +498,20 @@ export const RuntimeProgramSchema = z.object({
    */
   plan: z.record(z.unknown()).optional(),
   /**
+   * The plan's composition contract (issue #28).
+   *
+   * The frozen statement of what the composition is: the regions, the box each
+   * one was given, the relations between them, and the content that belongs
+   * where. The build is measured against it, so a build that resolves a
+   * *different* composition is refused instead of shipping.
+   *
+   * It is derived from a plan and travels with the program, so this key is
+   * normally written by `plan_screen` or the pipeline rather than by hand. A
+   * program without one still builds — there is simply nothing to check
+   * against, and the receipt says so rather than claiming a pass.
+   */
+  compositionContract: z.record(z.unknown()).optional(),
+  /**
    * User-defined reusable patterns.
    *
    * Instantiated with `{ fn: "template", args: { name, values } }`. Expansion is
@@ -549,6 +573,15 @@ export interface RuntimeResult {
   applicable: boolean;
   /** Why the plan is not applicable. Empty when it is. */
   inapplicableReasons: string[];
+  /**
+   * The composition handoff receipt (issue #28).
+   *
+   * What the build resolved, measured against the plan's composition model.
+   * `status: "fail"` means the build is a different composition from the one
+   * that was planned, and the build is refused. `status: "unchecked"` means
+   * there was no contract to check against — which is not a pass.
+   */
+  compositionHandoff?: HandoffReceipt;
   stats: {
     calls: number;
     regions: number;
@@ -779,7 +812,7 @@ const args = call.args as Record<string, unknown>;
 
 regions.push({
       id,
-      role: coerceRole(call.fn),
+      role: coerceStatedRole(args.role) ?? coerceRole(call.fn),
       composition: coerceComposition(args.composition),
       layout: coerceLayout(args.layout, compositionHint(args.composition)),
       ...(args.columns !== undefined ? { columns: coerceNumber(args.columns, 1, 1, 24) } : {}),
@@ -1320,15 +1353,92 @@ case "shape": {
     // interrogate which truths those are.
   }
 
+  /* ------------------------------------------- the composition handoff --- */
+
+  /**
+   * The composition handoff (issue #28).
+   *
+   * The plan resolved a composition model; the compiler resolved the geometry.
+   * This is where the two are compared, and where a build that came out as a
+   * *different* composition is caught — before anything reaches Figma.
+   *
+   * Three sources, in order of authority:
+   *
+   * 1. an explicit `compositionContract` on the program (the pipeline and
+   *    `plan_screen` both write one);
+   * 2. the `plan` the program carries, read for its own boxes — the common
+   *    `plan_screen` → `design_runtime` path;
+   * 3. nothing, in which case the receipt says the check did not run. A
+   *    program built without a plan is still allowed to build; it just cannot
+   *    claim the composition was checked.
+   */
+  const contract = readCompositionContract(parsedProgram, warnings);
+  let handoff: HandoffReceipt | undefined;
+  const handoffViolations: Array<{ rule: string; message: string }> = [];
+
+  if (contract === null) {
+    handoff = uncheckedReceipt(
+      "the program carries no plan, so there is no composition model to check the resolved geometry against.",
+    );
+  } else if (canvas.deck) {
+    // A deck resolves every region as its own slide. Canvas-absolute geometry
+    // across slides is meaningless, so there is nothing to compare.
+    handoff = uncheckedReceipt("deck mode resolves each region as its own slide, so the plan's geometry does not apply.", contract.source);
+  } else if (Math.abs(contract.canvas.width - canvas.width) > 1 || Math.abs(contract.canvas.height - canvas.height) > 1) {
+    handoff = uncheckedReceipt(
+      `the plan was resolved for a ${contract.canvas.width}x${contract.canvas.height} canvas and this build is ${canvas.width}x${canvas.height}, so the planned geometry does not describe it.`,
+      contract.source,
+    );
+  } else {
+    const resolvedComposition: ResolvedComposition = {
+      canvas: { width: canvas.width, height: canvas.height },
+      regions: ir.regions.map((r) => {
+        const box = compiled.boxes.get(r.id);
+        return {
+          id: r.id,
+          role: r.role,
+          composition: r.composition,
+          x: box?.x ?? 0,
+          y: box?.y ?? 0,
+          w: box?.w ?? 0,
+          h: box?.h ?? 0,
+        };
+      }),
+      content: ir.content.map((c) => {
+        const box = compiled.boxes.get(c.id);
+        // The IR states containment through the region's children list rather
+        // than on the content itself, so the parent is read back from there.
+        const parent = ir.regions.find((r) => r.children.includes(c.id))?.id;
+        return {
+          id: c.id,
+          ...(parent !== undefined ? { parent } : {}),
+          x: box?.x ?? 0,
+          y: box?.y ?? 0,
+          w: box?.w ?? 0,
+          h: box?.h ?? 0,
+        };
+      }),
+    };
+    handoff = verifyCompositionHandoff(contract, resolvedComposition);
+    for (const finding of handoff.findings.filter((f) => f.severity === "blocking")) {
+      handoffViolations.push({ rule: `handoff:${finding.rule}`, message: `${finding.summary} ${finding.why} ${finding.fix}` });
+    }
+  }
+
+  if (handoffViolations.length > 0) {
+    violations.push(...handoffViolations);
+  }
+
   return {
     ir,
     operations: compiled.operations,
     violations,
-    /** False when the resolved geometry, an unknown parent, or the product guard says otherwise. */
-    applicable: compiled.applicable && guard.stats.failures === 0 && parentViolations.length === 0,
+    /** False when the resolved geometry, an unknown parent, the composition handoff, or the product guard says otherwise. */
+    applicable: compiled.applicable && guard.stats.failures === 0 && parentViolations.length === 0 && handoffViolations.length === 0,
     inapplicableReasons: [
       ...compiled.inapplicableReasons,
       ...parentViolations.map((v) => v.message),
+      ...handoffViolations.map((v) => v.message),
       ...violations.filter((v) => v.rule === "product").map((v) => v.message),
     ],
     boxes: compiled.boxes,
@@ -1336,6 +1446,8 @@ case "shape": {
     constrained: compiled.stats.constrained,
     reflowed: compiled.stats.reflowed,
     connectorRoutes: compiled.connectorRoutes,
+    /** The composition handoff receipt: the plan's model against the built geometry. */
+    compositionHandoff: handoff,
     stats: {
       calls: regionCalls.length + parsedProgram.content.length,
       regions: compiled.stats.regionCount,
@@ -1825,6 +1937,47 @@ function expandGraph(exp: GraphExpansion): RuntimeCall[] {
 }
 
 /**
+ * Reads the composition contract the build is measured against (issue #28).
+ *
+ * Two sources, in order of authority:
+ *
+ * 1. an explicit `compositionContract` on the program — what `plan_screen` and
+ *    the pipeline write, and what a caller can hand-edit to state an intent
+ *    the plan did not;
+ * 2. the `plan` the program carries, read for its own boxes — the common
+ *    `plan_screen` → `design_runtime` path, where the plan travels as a whole
+ *    object.
+ *
+ * A malformed contract is reported and skipped rather than guessed at: the
+ * build still runs, and the receipt says the check did not run.
+ */
+function readCompositionContract(
+  program: { compositionContract?: Record<string, unknown> | undefined; plan?: Record<string, unknown> | undefined },
+  warnings: string[],
+): CompositionContract | null {
+  if (program.compositionContract !== undefined) {
+    const parsed = CompositionContractSchema.safeParse(program.compositionContract);
+    if (parsed.success) return parsed.data;
+    warnings.push(
+      `The composition contract was not usable (${parsed.error.issues[0]?.message ?? "malformed"}), so the composition handoff did not run.`,
+    );
+    return null;
+  }
+  if (program.plan !== undefined) {
+    const derived = deriveCompositionContract(program.plan);
+    if (derived !== null) {
+      const parsed = CompositionContractSchema.safeParse(derived);
+      if (parsed.success) return parsed.data;
+      warnings.push(
+        `The plan's composition model was not usable (${parsed.error.issues[0]?.message ?? "malformed"}), so the composition handoff did not run.`,
+      );
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
  * Reads region calls out of a plan_screen output object.
  *
  * Each entry is validated as a region call on its own, so a malformed plan
@@ -2059,6 +2212,38 @@ function coerceRole(fn: PrimitiveName): DesignIR["regions"][number]["role"] {
     column: "column",
   };
   return map[fn] ?? "custom";
+}
+
+/**
+ * The role a region states, when it states one.
+ *
+ * The primitive name only carries a role for the few primitives that *are* a
+ * role — `navigation`, `header`, `hero`, `inspector`. Everything else arrives
+ * as `frame` and used to land as "custom", which quietly threw away the
+ * planner's decision about what a region *is*: the content column stopped
+ * being content, and the runtime's own composition inference then read the
+ * screen differently from the plan that produced it.
+ *
+ * A stated role wins over the primitive's, and an unusable one is ignored.
+ */
+function coerceStatedRole(v: unknown): DesignIR["regions"][number]["role"] | null {
+  const allowed = [
+    "navigation",
+    "header",
+    "hero",
+    "primary-visual",
+    "content",
+    "secondary",
+    "inspector",
+    "status-rail",
+    "footer",
+    "slide",
+    "stage",
+    "column",
+    "custom",
+  ] as const;
+  if (typeof v !== "string") return null;
+  return (allowed as readonly string[]).includes(v) ? (v as never) : null;
 }
 
 function coerceComposition(v: unknown): DesignIR["regions"][number]["composition"] {

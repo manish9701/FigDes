@@ -454,6 +454,16 @@ export async function runRuntimeTool(
    * the payload and the score can never disagree about what was built.
    */
   const appliedComposition = inferComposition(compiled.ir.regions);
+  /**
+   * Issue #28 — the composition handoff receipt.
+   *
+   * The plan resolved a composition model; the runtime resolved the geometry.
+   * This is the comparison, carried on the payload so the caller can see
+   * whether the composition held — and, when it did not, exactly which
+   * relation broke and what to do about it.
+   */
+  const handoff = compiled.compositionHandoff;
+  const handoffFailed = handoff !== undefined && handoff.status === "fail";
   // Issue #26 — blocking-mode marking. A program with no plan and no declared
   // style still builds (raw exploration must work), but the payload says so:
   // intelligence.applied:false plus a first-pass-ineligible flag, top-level
@@ -516,6 +526,16 @@ export async function runRuntimeTool(
      * requested vs selected vs applied can be compared downstream.
      */
     appliedComposition,
+    /**
+     * Issue #28 — the composition handoff: the plan's composition model
+     * measured against the geometry this build resolved.
+     *
+     * `status: "fail"` means the build is a different composition from the
+     * one that was planned, and the build was refused. `status: "unchecked"`
+     * means there was no composition model to check against — which is not a
+     * pass, and says so.
+     */
+    ...(handoff !== undefined ? { compositionHandoff: handoff } : {}),
     /**
      * Issue #25 — the measurement receipt, fail-closed.
      *
@@ -590,9 +610,18 @@ export async function runRuntimeTool(
   if (!compiled.applicable) {
     return {
       ...payload,
-      howToProceed:
-        `This plan was not built: the resolved geometry is not what the program asked for (${compiled.inapplicableReasons.length} problem(s)). Fix the causes below, or re-run with dryRun:true to inspect the operations without committing.`,
+      howToProceed: handoffFailed
+        ? `This plan was not built: the resolved geometry is a different composition from the plan (${handoff?.findings.filter((f) => f.severity === "blocking").length ?? 0} blocking defect(s)). ` +
+          `The plan's composition model is the contract — fix the named relation in the program, or change the plan and build against the changed plan. ` +
+          `Re-run with dryRun:true to inspect the operations without committing.`
+        : `This plan was not built: the resolved geometry is not what the program asked for (${compiled.inapplicableReasons.length} problem(s)). Fix the causes below, or re-run with dryRun:true to inspect the operations without committing.`,
       problems: compiled.inapplicableReasons,
+      ...(handoffFailed
+        ? {
+            refusedBy: "composition-handoff",
+            compositionDefects: (handoff?.findings ?? []).filter((f) => f.severity === "blocking"),
+          }
+        : {}),
     };
   }
 

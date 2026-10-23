@@ -423,6 +423,17 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     },
 
     /**
+     * The composition contract (issue #28).
+     *
+     * The plan's composition model, frozen: the regions, the box each one was
+     * given, the relations between them, and the focal. It travels with
+     * `program` into the build, where the resolved geometry is measured
+     * against it — so a build that comes out as a *different* composition is
+     * refused with the defect explained, rather than reported as complete.
+     */
+    compositionContract: plan.program.compositionContract ?? null,
+
+    /**
      * Issue #25 — the composition receipt at plan time.
      *
      * `requestedComposition` echoes the caller's `desiredComposition` (null

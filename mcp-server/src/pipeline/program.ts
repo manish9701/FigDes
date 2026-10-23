@@ -28,6 +28,7 @@
  */
 import type { CompositionPlan, ContentSlot, NormalizedBrief, RegionSpec } from "./contracts";
 import { decideDisclosure } from "./disclosure";
+import { deriveCompositionContract, type CompositionContract } from "../runtime/handoff";
 import type { VisualIntent } from "../../../shared/ir";
 
 /** A runtime program call. */
@@ -43,6 +44,13 @@ export interface BuiltProgram {
     canvas: { name: string; width: number; height: number; grid: number };
     regions: ProgramCall[];
     content: ProgramCall[];
+    /**
+     * The plan's composition model, frozen (issue #28).
+     *
+     * Carried into the build so the resolved geometry is measured against the
+     * plan that produced it.
+     */
+    compositionContract?: CompositionContract | null;
     visualIntent: Record<string, unknown>;
     /**
      * The drawn relationships as named links (issue #25 gauntlet leg).
@@ -192,6 +200,11 @@ export function buildProgram(
       fn: regionPrimitive(region.role),
       id: region.id,
       args: {
+        // The role travels with the region: the primitive says what shape it
+        // is, the role says what it IS. Without it a content column arrived
+        // as a generic frame, and the runtime's composition inference read a
+        // different screen from the plan that produced it.
+        role: region.role,
         width: isLastBand && typeof region.sizing.width === "number" ? "fill" : region.sizing.width,
         height: region.sizing.height,
         ...(region.grow > 0 ? { grow: region.grow } : {}),
@@ -342,6 +355,28 @@ export function buildProgram(
       },
       regions,
       content,
+      /**
+       * The composition contract (issue #28).
+       *
+       * The plan's composition model, frozen and carried into the build: the
+       * regions, the box each one was given, the relations between them, the
+       * focal, and which region each content slot belongs to. The runtime
+       * measures the resolved geometry against it, and refuses a build that
+       * came out as a different composition.
+       */
+      compositionContract: deriveCompositionContract({
+        canvas: plan.canvas,
+        regions: plan.regions.map((r) => ({
+          id: r.id,
+          role: r.role,
+          composition: r.composition,
+          bounds: r.bounds,
+        })),
+        hierarchy: plan.hierarchy,
+        focal: plan.focal,
+        content: plan.content.map((s) => ({ id: s.id, regionId: s.regionId })),
+        source: "design_pipeline",
+      }),
       visualIntent,
       ...(drawnLinks !== undefined && drawnLinks.length > 0 ? { links: drawnLinks } : {}),
     },

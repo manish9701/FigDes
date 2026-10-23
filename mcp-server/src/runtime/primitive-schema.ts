@@ -97,6 +97,12 @@ const REGION_COMMON: ArgSpec[] = [
   colour,
   num("radius", "Corner radius.", "8"),
   enumArg("composition", "Forces a composition instead of inferring one.", ["auto", "editorial", "instrument", "canvas", "topology", "table", "timeline", "split-view", "spatial", "diagram", "sequence", "comparison"]),
+  enumArg(
+    "role",
+    "What this region IS, semantically. The primitive name only carries a role for the few that are one (navigation, header, hero, inspector); stating the role keeps the planner's decision — 'content', 'primary-visual', 'secondary', 'status-rail' — through the build, so the composition and the product guard judge the screen the plan described.",
+    ["navigation", "header", "hero", "primary-visual", "content", "secondary", "inspector", "status-rail", "footer", "slide", "stage", "column", "custom"],
+    '"content"',
+  ),
   enumArg("layout", "How children are arranged.", LAYOUT_VALUES, '"topology"'),
   num("columns", "Column count for grid/masonry layouts."),
   num("gridColumns", "Figma layout-grid columns drawn on this region."),

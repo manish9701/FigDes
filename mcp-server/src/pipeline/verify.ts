@@ -46,6 +46,19 @@ export interface CompiledProgram {
     labelAt?: { x: number; y: number } | null;
   }>;
   productGuard?: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number };
+  /**
+   * The composition handoff receipt (issue #28).
+   *
+   * Carried so the report can say whether the resolved geometry preserved the
+   * plan's composition — and, when it did not, name the broken relation.
+   */
+  compositionHandoff?: {
+    status: string;
+    checked: number;
+    summary: string;
+    findings: Array<{ rule: string; severity: string; summary: string }>;
+    reasons: string[];
+  };
 }
 
 function humanize(id: string): string {

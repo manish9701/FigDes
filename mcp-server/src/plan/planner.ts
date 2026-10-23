@@ -25,6 +25,7 @@
  * creates nothing, so a wrong composition costs one message rather than an undo.
  */
 import { defaultGutter, inferComposition, layoutRegions, type Composition } from "../runtime/layout";
+import { deriveCompositionContract, type CompositionContract } from "../runtime/handoff";
 import type { Region } from "../../../shared/ir";
 import { defaultRules } from "../memory/rules-exo";
 import { bestPattern } from "../design/grammar/matcher";
@@ -641,6 +642,13 @@ export interface ScreenPlan {
     canvas: { name: string; width: number; height: number; grid: number };
     regions: Array<{ fn: string; id: string; args: Record<string, unknown> }>;
     /**
+     * The composition contract (issue #28).
+     *
+     * The plan's composition model, frozen so the build can be measured
+     * against it. `null` only when the plan resolved no geometry to check.
+     */
+    compositionContract?: CompositionContract | null;
+    /**
      * The art director's taste, in the runtime's own vocabulary.
      *
      * Focal region plus hierarchy-derived weights, so a plan built from this
@@ -971,6 +979,11 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
         fn: primitiveFor(r.role),
         id: r.id,
         args: {
+          // The role travels with the region. The primitive name only says
+          // what shape the region is; the role says what it *is*, and it is
+          // what the composition inference and the product guard reason
+          // about. Dropping it turned a content column into a generic frame.
+          role: r.role,
           ...(typeof r.width === "number" ? { width: r.width } : { width: r.width }),
           ...(typeof r.height === "number" ? { height: r.height } : { height: r.height }),
           ...(r.grow > 0 ? { grow: r.grow } : {}),
@@ -979,6 +992,22 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
           composition: r.composition,
         },
       })),
+      /**
+       * The composition contract (issue #28).
+       *
+       * The plan's composition model, frozen: the regions, the box each one
+       * was given, the relations between them, and the focal. It travels with
+       * the program into the build, so the build is measured against the plan
+       * that produced it. Without it the runtime is free to resolve a
+       * *different* composition and report the build as complete.
+       */
+      compositionContract: deriveCompositionContract({
+        boxes: finalBoxes,
+        regions: grownRegions.map((r) => ({ id: r.id, role: r.role, composition: r.composition })),
+        artDirection,
+        intent: { canvas: { width, height } },
+        source: "plan_screen",
+      }),
       visualIntent: {
         ...(artDirection.focal !== null ? { focal: artDirection.focal.id } : {}),
         // Rank sets the weight, but chrome never grows no matter its rank: a

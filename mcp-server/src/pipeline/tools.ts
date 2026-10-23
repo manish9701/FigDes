@@ -523,6 +523,18 @@ export async function designPipelineTool(
       : {}),
     /** Issue #25 — requested vs selected vs applied composition, with evidence. */
     compositionReceipt,
+    /**
+     * Issue #28 — the composition handoff: the plan's composition model
+     * measured against the resolved geometry.
+     *
+     * `status: "fail"` means the build resolved a different composition from
+     * the one that was planned, and the build is refused. `status:
+     * "unchecked"` means there was no composition model to check against —
+     * which is not a pass.
+     */
+    ...((compiled as unknown as { compositionHandoff?: unknown }).compositionHandoff !== undefined
+      ? { compositionHandoff: (compiled as unknown as { compositionHandoff: unknown }).compositionHandoff }
+      : {}),
     ...(reuse.length > 0 ? { reuse } : {}),
     assumptions,
     clarifications,
@@ -674,7 +686,13 @@ export async function designPipelineTool(
   }
 
   if (!compiled.applicable) {
-    stage(trace, "apply-refused", "The program does not resolve to a buildable screen; nothing was created.");
+    stage(
+      trace,
+      "apply-refused",
+      (compiled as unknown as { compositionHandoff?: { status?: string } }).compositionHandoff?.status === "fail"
+        ? "The build resolved a different composition from the plan; nothing was created."
+        : "The program does not resolve to a buildable screen; nothing was created.",
+    );
     return {
       ...common,
       status: "blocked",

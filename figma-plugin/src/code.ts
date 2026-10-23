@@ -127,7 +127,7 @@ const queue: MainToUi[] = [];
 const activeRequests = new Map<string, string | undefined>();
 
 function showUI(): void {
-  figma.showUI(__html__, { width: 340, height: 260, themeColors: true });
+  figma.showUI(__html__, { width: 272, height: 168, themeColors: true });
   // The full config (including the secret) is re-sent once the iframe reports
   // "ready" â€” at this point the postMessage channel is guaranteed to exist.
   post({ kind: "server-config", url: serverUrl(), pluginVersion: PLUGIN_VERSION });

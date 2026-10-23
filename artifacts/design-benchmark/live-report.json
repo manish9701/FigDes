@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T15:15:30.941Z",
+  "generatedAt": "2026-10-23T15:56:48.189Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -13,7 +13,7 @@
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -23,7 +23,7 @@
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -33,7 +33,7 @@
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -43,7 +43,7 @@
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -53,7 +53,7 @@
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -63,7 +63,7 @@
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -73,7 +73,7 @@
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -83,7 +83,7 @@
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -93,7 +93,7 @@
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
@@ -103,7 +103,7 @@
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "repoHead": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
       "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",

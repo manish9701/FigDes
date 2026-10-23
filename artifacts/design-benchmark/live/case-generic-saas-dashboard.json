@@ -1,10 +1,10 @@
 {
   "caseId": "generic-saas-dashboard",
-  "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-  "serverBuild": "40bc6f893f93-dirty",
-  "pluginBuild": "02c8af33ddb5-dirty",
+  "commit": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
+  "serverBuild": "61a8b1e5dbcb",
+  "pluginBuild": "61a8b1e5dbcb",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-21T12:44:51.052Z",
+  "startedAt": "2026-10-23T15:57:22.849Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -125,7 +125,19 @@
         "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
       }
     ],
-    "warnings": []
+    "warnings": [
+      "Design intelligence bypassed: this program carries no plan_screen plan and declares no visualIntent.style, so no decision was classified and no composition hint was applied. Auto art-direction 'technical-editorial' was applied as a quality fallback, which is a floor, not a plan. Call plan_screen first (or design_pipeline for the whole loop) and build from its program — until then this result is undisciplined by decision classification, composition hints and the guard preview."
+    ],
+    "applicabilityBasis": "measured",
+    "textMeasurements": 8,
+    "measuredTextUsed": 0,
+    "requiredTextNodes": 8,
+    "measurement": {
+      "required": 8,
+      "measured": 8,
+      "verdict": "ok"
+    },
+    "acceptance": null
   },
   "status": "GUARD_BLOCKED",
   "guardViolations": [
@@ -134,5 +146,5 @@
       "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
     }
   ],
-  "runtimeMs": 564
+  "runtimeMs": 919
 }

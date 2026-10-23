@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "data-heavy-workspace",
-  "recordedAt": "2026-10-23T05:11:23.750Z",
+  "recordedAt": "2026-10-23T05:28:22.758Z",
   "brief": {
     "screen": "Follow-up queue",
     "product": "ops-ledger",
@@ -92,6 +92,11 @@
     {
       "rule": "plan-geometry-drift-02",
       "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x402.",
+      "severity": "medium"
+    },
+    {
+      "rule": "plan-geometry-drift-03",
+      "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x306, built 1168x306.",
       "severity": "medium"
     },
     {

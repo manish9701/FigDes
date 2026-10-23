@@ -164,11 +164,24 @@ export function buildProgram(
 
     const inner = Math.max(40, region.bounds.w - region.padding.left - region.padding.right);
 
+    // A stacked region whose declared width is narrower than the content column
+    // leaves the rest of its row empty — the last band's right side went to
+    // waste (a 360px inspector under an 1150px table left 790px of dead canvas).
+    // The last content band takes the full width; the panels inside it re-flow
+    // into columns.
+    const lastContentIdx = (() => {
+      for (let i = plan.regions.length - 1; i >= 0; i--) {
+        if (plan.regions[i]!.role !== "navigation") return i;
+      }
+      return -1;
+    })();
+    const isLastBand = plan.regions.indexOf(region) === lastContentIdx;
+
     regions.push({
       fn: regionPrimitive(region.role),
       id: region.id,
       args: {
-        width: region.sizing.width,
+        width: isLastBand && typeof region.sizing.width === "number" ? "fill" : region.sizing.width,
         height: region.sizing.height,
         ...(region.grow > 0 ? { grow: region.grow } : {}),
         gap: region.gap,

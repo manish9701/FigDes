@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-compute-topology",
-  "recordedAt": "2026-10-23T05:11:23.615Z",
+  "recordedAt": "2026-10-23T05:28:22.706Z",
   "brief": {
     "screen": "Cluster routing",
     "product": "fenek-clusters",

@@ -2697,7 +2697,7 @@ function emitComponent(
           type: "createText",
           parent: spec.id,
           name: "Readout",
-          content: `${str("usedLabel", String(used))} / ${str("totalLabel", String(total))}${str("unit", " GB")} used`,
+          content: `${str("usedLabel", String(used))} / ${str("totalLabel", String(total))} ${str("unit", "GB").trim()} used`,
           fontSize: fs(12),
           family: "JetBrains Mono",
           fill: tone.fg,

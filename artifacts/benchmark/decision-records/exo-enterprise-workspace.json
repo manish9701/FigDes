@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-enterprise-workspace",
-  "recordedAt": "2026-10-23T05:11:23.725Z",
+  "recordedAt": "2026-10-23T05:28:22.749Z",
   "brief": {
     "screen": "Enterprise workspace",
     "product": "fenek-fleet",

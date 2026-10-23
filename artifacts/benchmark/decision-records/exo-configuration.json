@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-configuration",
-  "recordedAt": "2026-10-23T05:11:23.707Z",
+  "recordedAt": "2026-10-23T05:28:22.741Z",
   "brief": {
     "screen": "Policy approval",
     "product": "fenek-clusters",
@@ -96,7 +96,7 @@
     },
     {
       "rule": "plan-geometry-drift-03",
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x293.",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 1192x293.",
       "severity": "medium"
     },
     {

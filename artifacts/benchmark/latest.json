@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-23T05:11:23.778Z",
+  "recordedAt": "2026-10-23T05:28:22.772Z",
   "suite": "v1-offline-pipeline",
   "gate": {
     "verdict": "PASS",
@@ -104,7 +104,7 @@
         },
         {
           "rule": "plan-geometry-drift-03",
-          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x176.",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 1182x176.",
           "severity": "medium"
         },
         {
@@ -229,7 +229,7 @@
         },
         {
           "rule": "plan-geometry-drift-03",
-          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x293.",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 1192x293.",
           "severity": "medium"
         },
         {
@@ -360,7 +360,7 @@
     },
     {
       "caseId": "data-heavy-workspace",
-      "total": 53.5,
+      "total": 53,
       "dimensions": {
         "hierarchy": 9,
         "composition": 9,
@@ -371,7 +371,7 @@
         "density": 8,
         "nativeQuality": 5,
         "distinctiveness": 9,
-        "readability": 7
+        "readability": 6
       },
       "notes": [
         "offline score: plan-mode run — no native nodes were applied to Figma",
@@ -391,7 +391,7 @@
         "density": "compiled intent carries [alignment, density, rhythm]; density decisions are consumed downstream (program/report)",
         "nativeQuality": "structure is in review",
         "distinctiveness": "7 pairwise-distinct candidates, selected family 'table'",
-        "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
+        "readability": "0 overflow finding(s), 3 geometry finding(s) in the resolved layout"
       },
       "outstandingIssues": [
         {
@@ -402,6 +402,11 @@
         {
           "rule": "plan-geometry-drift-02",
           "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x402.",
+          "severity": "medium"
+        },
+        {
+          "rule": "plan-geometry-drift-03",
+          "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x306, built 1168x306.",
           "severity": "medium"
         },
         {

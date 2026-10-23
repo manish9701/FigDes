@@ -2643,7 +2643,7 @@ function emitComponent(
           type: "createFrame",
           id: spec.id,
           parent: parentHint,
-          name: str("label", "Memory"),
+          name: str("title", str("label", "Memory")),
           x: box.x,
           y: box.y,
           width: barW,
@@ -2655,6 +2655,11 @@ function emitComponent(
           itemSpacing: grid / 2,
         }),
       );
+      if (str("title")) {
+        operations.push(
+          op({ type: "createText", parent: spec.id, name: "Title", content: str("title"), fontSize: fs(12), fill: "#555555" }),
+        );
+      }
       operations.push(
         op({ type: "createRectangle", parent: spec.id, name: "Track", x: box.x, y: box.y, width: barW, height: 8, fill: "#E8E6DF", cornerRadius: 4 }),
       );

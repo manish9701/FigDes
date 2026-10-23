@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "spatial-relationship",
-  "recordedAt": "2026-10-23T03:32:49.492Z",
+  "recordedAt": "2026-10-23T03:50:15.819Z",
   "brief": {
     "screen": "Dependency graph",
     "product": "graph-controller",

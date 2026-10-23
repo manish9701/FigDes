@@ -316,9 +316,35 @@ export function buildProgram(
   };
 }
 
+/**
+ * Parses a budget statement into the figures the memoryBudget primitive draws.
+ *
+ * Understands the shape the demo briefs state ("16 GB of 1.5 TB available") and
+ * normalises the units to GB so the bar's fractions compare like with like.
+ * Returns null for anything it cannot read — the caller falls back to a
+ * labelled metric rather than inventing figures.
+ */
+function parseMemoryBudget(value: string | null): { used: number; total: number; remaining: number; unit: string } | null {
+  if (value === null) return null;
+  const match = value.match(/([\d.]+)\s*(B|KB|MB|GB|TB)\s+of\s+([\d.]+)\s*(B|KB|MB|GB|TB)/i);
+  if (!match) return null;
+  const toGB = (n: number, unit: string): number => {
+    switch (unit.toUpperCase()) {
+      case "TB": return n * 1024;
+      case "GB": return n;
+      case "MB": return n / 1024;
+      case "KB": return n / (1024 * 1024);
+      default: return n / (1024 * 1024 * 1024);
+    }
+  };
+  const used = toGB(parseFloat(match[1]!), match[2]!);
+  const total = toGB(parseFloat(match[3]!), match[4]!);
+  if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return null;
+  return { used, total, remaining: Math.max(0, total - used), unit: "GB" };
+}
+
 /** Turns one content slot into a runtime call. */
-function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: NormalizedBrief): ProgramCall | null {
-  const id = slot.id;
+function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: NormalizedBrief): ProgramCall | null {  const id = slot.id;
   const parent = region.id;
   switch (slot.primitive) {
     case "text":
@@ -375,6 +401,42 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
         parent,
         args: { title: slot.label, ...(slot.value !== null ? { value: slot.value } : {}) },
       };
+    case "fitGauge": {
+      // A verdict from the brief's own demo value: "Fits · 1.48 TB headroom"
+      // becomes fits:true, verdict "Fits", detail "1.48 TB headroom". No value
+      // means no evidence for a verdict — the honest fallback is the metric
+      // placeholder, never a fabricated fit.
+      const value = slot.value ?? "";
+      const parts = value.split("·").map((s) => s.trim()).filter(Boolean);
+      const fits = /\bfits\b/i.test(value) && !/does not fit|doesn'?t fit|no fit/i.test(value);
+      if (value === "") return { fn: "metric", id, parent, args: { label: slot.label, value: NO_VALUE, valueStyle: "technical" } };
+      return {
+        fn: "fitGauge",
+        id,
+        parent,
+        // The information label rides on the detail line, so the required
+        // information stays findable on the screen — the gauge answers it.
+        args: { fits, verdict: parts[0] ?? "Fits", detail: `${slot.label} — ${parts.slice(1).join(" · ")}` },
+      };
+    }
+    case "memoryBudget": {
+      // "16 GB of 1.5 TB available" becomes a budget bar: required 16, available
+      // 1536 GB, headroom 1520. The units normalise to GB so the bar's fractions
+      // are honest. Anything unparseable falls back to the labelled metric.
+      const budget = parseMemoryBudget(slot.value);
+      if (budget === null) {
+        return { fn: "metric", id, parent, args: { label: slot.label, value: slot.value ?? NO_VALUE, ...(slot.value === null ? { valueStyle: "technical" } : {}) } };
+      }
+      return {
+        fn: "memoryBudget",
+        id,
+        parent,
+        // The caption names the information the budget answers, so the
+        // required information stays on the screen and the bar reads as its
+        // answer rather than as two anonymous figures.
+        args: { title: slot.label, usedLabel: "Required", totalLabel: "Available", ...budget },
+      };
+    }
     case "panel":
       return { fn: "panel", id, parent, args: { title: slot.label } };
     case "sectionHeader":

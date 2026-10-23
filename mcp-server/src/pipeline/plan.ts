@@ -100,6 +100,8 @@ const PRIMITIVE_HEIGHT: Record<string, number> = {
   button: 40,
   text: 40,
   navItem: 36,
+  fitGauge: 56,
+  memoryBudget: 90,
 };
 
 /**
@@ -120,6 +122,8 @@ const PRIMITIVE_WIDTH: Record<string, number> = {
   modelRow: 200,
   panel: 200,
   timelineEvent: 200,
+  fitGauge: 200,
+  memoryBudget: 200,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -256,8 +260,25 @@ export function buildCompositionPlan(
    * archetype, so every existing plan is unchanged.
    */
   const archetype = resolveArchetype(brief.primaryDecision, brief.archetype ?? undefined);
+  /**
+   * A priority item the brief already covers is redundant, not additional: the
+   * fixture says "fit verdict for the selected model" where the archetype says
+   * "fit verdict", and keeping both builds the same readout twice — one of
+   * them with no value, rendering a bare "—". Word-stem containment is the
+   * match: "requires/required" and "fit verdict" should not hinge on inflection.
+   */
+  const stem = (s: string): string[] =>
+    s.toLowerCase().split(/\W+/).map((t) => t.replace(/(es|ed|s)$/, "")).filter((t) => t.length > 2);
+  const coveredBy = (a: string, b: string): boolean => {
+    const at = stem(a);
+    const bt = new Set(stem(b));
+    return at.length > 0 && at.every((t) => bt.has(t));
+  };
   const priorityItems = (archetype?.priority ?? []).filter(
-    (p) => !brief.requiredInformation.some((r) => r.toLowerCase() === p.toLowerCase()),
+    (p) =>
+      !brief.requiredInformation.some(
+        (r) => r.toLowerCase() === p.toLowerCase() || coveredBy(p, r) || coveredBy(r, p),
+      ),
   );
   const briefForPlan =
     priorityItems.length > 0 ? { ...brief, requiredInformation: [...brief.requiredInformation, ...priorityItems] } : brief;
@@ -578,7 +599,7 @@ export function buildCompositionPlan(
 
   /* --- content slots ----------------------------------------------------- */
 
-  const { slots: content, notPlaced } = planContent(briefForPlan, regions, plan.composition);
+  const { slots: content, notPlaced } = planContent(briefForPlan, regions, plan.composition, archetype?.name);
   const byRegion = new Map<string, ContentSlot[]>();
   for (const slot of content) {
     const list = byRegion.get(slot.regionId) ?? [];
@@ -738,7 +759,7 @@ function interactionFor(role: string): string | null {
  *   optional information yields to the canvas and required information is
  *   reported rather than quietly dropped.
  */
-function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition: Composition): {
+function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition: Composition, archetype?: string): {
   slots: ContentSlot[];
   notPlaced: Array<{ label: string; why: string }>;
 } {
@@ -799,7 +820,12 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
     add(regionId, {
       text: item.text,
       kind: item.kind,
-      primitive: primitiveFor(item.kind, item.text, host?.composition ?? composition, false),
+      // EXO model-fit plans have purpose-built primitives for their two
+      // structural needs — the fit verdict is a verdict pill and the
+      // requires-vs-available fit is a budget bar, not a labelled card. The
+      // archetype is what makes this a deployment decision, so no other plan
+      // is affected.
+      primitive: placementPrimitiveFor(item.text, archetype) ?? primitiveFor(item.kind, item.text, host?.composition ?? composition, false),
       required: isRequired(item.text),
       weight: isRequired(item.text) ? 1 : 2,
     });
@@ -1038,6 +1064,28 @@ function planContent(brief: NormalizedBrief, regions: RegionSpec[], composition:
  * The first preference that exists wins; the fit is checked afterwards, when
  * the region's real height is known.
  */
+/**
+ * The EXO placement primitives a model-fit plan asks for by name.
+ *
+ * The archetype's priority vocabulary ("fit verdict", "requires vs available")
+ * is the plan's own words for these two structural needs, so the same phrases
+ * route to the primitives that draw them: the verdict becomes a pill and the
+ * resource fit becomes a budget bar. Returns null for anything else, so every
+ * non-model-fit plan and every unrecognised label is unchanged.
+ */
+const EXO_PLACEMENT_PRIMITIVES: Array<[RegExp, string]> = [
+  [/\bfit verdict\b/i, "fitGauge"],
+  [/\brequir\w* vs available\b/i, "memoryBudget"],
+];
+
+function placementPrimitiveFor(label: string, archetype: string | undefined): string | null {
+  if (archetype !== "model-fit" && archetype !== "deployment") return null;
+  for (const [pattern, primitive] of EXO_PLACEMENT_PRIMITIVES) {
+    if (pattern.test(label)) return primitive;
+  }
+  return null;
+}
+
 function pickRegion(kind: InfoKind, regions: RegionSpec[]): string | null {
   for (const candidate of KIND_REGION_PREFERENCE[kind]) {
     const byId = regions.find((r) => r.id === candidate);

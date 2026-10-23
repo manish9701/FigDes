@@ -111,7 +111,10 @@ function stage(trace: PipelineTrace, name: string, detail: string, ids: string[]
 function programLabels(program: { content: Array<{ args: Record<string, unknown> }> }): string[] {
   const labels: string[] = [];
   for (const call of program.content) {
-    for (const key of ["text", "label", "title", "value", "date"]) {
+    // `detail` is the fitGauge's caption line, which carries the information
+    // label the gauge answers ("fit verdict for the selected model — 1.48 TB
+    // headroom"), so required information stays verifiable.
+    for (const key of ["text", "label", "title", "value", "date", "detail"]) {
       const v = call.args[key];
       if (typeof v === "string" && v.length > 0) labels.push(v);
     }

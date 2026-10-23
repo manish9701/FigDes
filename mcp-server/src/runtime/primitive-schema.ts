@@ -282,6 +282,7 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
   ],
   shardBlock: [text("shard", "Shard id.", '"shard-1"'), text("size", "Shard size."), text("machine", "Target machine."), text("title", "Block caption.")],
   memoryBudget: [
+    text("title", "Bar caption. The information the budget answers."),
     text("usedLabel", "Label for the used figure."),
     text("totalLabel", "Label for the total figure."),
     num("used", "Used figure."),

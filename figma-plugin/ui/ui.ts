@@ -448,7 +448,7 @@ function connect(): void {
   socket.onerror = () => {
     if (!isCurrent()) return;
     setState("error");
-    appendLog("error", "Socket error. Is the Design Agent server running?");
+    appendLog("error", "Socket error. Is the FigDes server running?");
     if (saveBtn.disabled) setSaveStatus("err", "✗ Could not reach server – check the URL, then Apply.");
   };
 

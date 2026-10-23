@@ -1,24 +1,24 @@
 # Issue #17 — release gate
 
-**Verdict: FAIL** — 2 group(s) failed
+**Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `2f257693-2026-10-23T15-14-49-511Z` on commit `2f257693462ce8a4e5a2159bf4fd2c50f2929aa9` (main), 2026-10-23T15:14:49.511Z → 2026-10-23T15:15:31.679Z, 42.2s.
+Run `34b513a8-2026-10-23T16-35-53-975Z` on commit `34b513a857808a42b9013892efe24acab4bd5a8d` (main), 2026-10-23T16:35:53.975Z → 2026-10-23T16:37:00.071Z, 66.1s.
 Node v22.17.0 on win32-x64.
 
-**Build provenance** — server `40bc6f893f93-dirty`, plugin `02c8af33ddb5-dirty`, compatibility `different-commit`, plugin version `0.3.5`, commit `2f257693462c`.
+**Build provenance** — server `34b513a85780`, plugin `34b513a85780`, compatibility `same-commit`, plugin version `0.3.5`, commit `34b513a85780`.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
 | **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 26/26 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **FAIL** | 28.6s | 1 failing test(s): live validator: a full evidence set, including a fresh stress render, passes |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 9.2s | 9/9 benchmark case(s) passed |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 54.1s | 1266/1266 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.4s | 9/9 benchmark case(s) passed |
 | **fidelity** | Plan-to-build fidelity gate (First-Pass Quality Contract) | **PASS** | 0.4s | fidelity matrix passed (0/0 test(s)) |
-| **build-integrity** | Build/version integrity — the live evidence's server and plugin builds all name this commit | **FAIL** | 0.0s | build integrity FAILS for 11 of 11 live evidence record(s): data-heavy-workspace: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) \| editorial-product-page: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) \| exo-compute-topology: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c); … |
-| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 1.7s | the live benchmark did not complete (10/10 case(s) produced) |
+| **build-integrity** | Build/version integrity — the live evidence's server and plugin builds all name this commit | **PASS** | 0.0s | all 11 live evidence record(s) carry server and plugin build stamps that name this repository's HEAD (34b513a85780) |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.2s | the live benchmark completed (10/10 case(s) with real renders and reviews); 1 case(s) have no golden to compare against |
 
 ## Gauntlet cases (26/26 passed)
 
@@ -42,7 +42,7 @@ Node v22.17.0 on win32-x64.
 | **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 29ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 16ms, worst 17ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
@@ -120,20 +120,6 @@ The server has no font metrics, so a text node's height is a character-count est
 ### The native path is covered structurally, not visually
 
 The native check proves the native path executes against the real Plugin API, builds a real auto-layout frame, renders it, and cleans up after itself. It does not compare that render against a golden: the native path is model-authored, so what it builds is not a fixed reference.
-
-## Failures
-
-### regression — Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation)
-
-**Status.** FAIL
-
-**Detail.** 1 failing test(s): live validator: a full evidence set, including a fresh stress render, passes
-
-### build-integrity — Build/version integrity — the live evidence's server and plugin builds all name this commit
-
-**Status.** FAIL
-
-**Detail.** build integrity FAILS for 11 of 11 live evidence record(s): data-heavy-workspace: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) | editorial-product-page: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) | exo-compute-topology: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c); …
 
 ## How to reproduce
 

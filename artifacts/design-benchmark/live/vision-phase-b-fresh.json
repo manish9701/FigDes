@@ -1,74 +1,101 @@
 {
-  "phase": "B-vision-review-fresh-build",
-  "reviewer": "opencode-agent (direct PNG inspection)",
-  "commitUnderTest": "40bc6f8",
-  "method": "Each fresh r1 PNG read pixel-for-pixel on the 40bc6f8 build; findings are what is actually visible. Verdicts PASS/WATCH/FAIL per screen; no scores invented.",
-  "observations": {
-    "exo-compute-topology": {
+  "schema": "vision-phase-b-fresh",
+  "reviewer": "direct PNG inspection (opencode Phase B pass)",
+  "at": "2026-10-23T22:05:00Z",
+  "build": "34b513a85780",
+  "note": "Every verdict below comes from looking at the saved PNG bytes (shots/<id>-r1.png), not from scores or tool responses. WATCH findings are recorded, not hidden. The fixture screens are the loop's minimal mechanics fixtures: structurally correct but deliberately under-composed, which is the same sparsity pattern issue #20's Phase B recorded.",
+  "cases": [
+    {
+      "caseId": "exo-compute-topology",
       "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 4 },
+      "visible": "Header 'Compute topology [fixture]' with a View all link; warning pill '1 needs attention'; hub-01 (1.8 TB) routed by two orthogonal arrowheaded connectors to node-01 (96 GB) and degraded node-02 (orange border); the 8us label rides the left edge.",
       "findings": [
-        "hub-01/node-01/node-02 render as separate devices with a routed, labelled 8us edge and the amber needs-attention stroke on node-02",
-        "the 1 needs attention pill renders beside the headline, attached to the board",
-        "~70% void around the topology"
+        "WATCH sparse: the topology occupies the top-left ~40% of the 1440x900 canvas; the lower-right is one large empty band.",
+        "MINOR the '8us' edge label sits at the run's top-left corner rather than the edge midpoint, so it could read as belonging to either edge."
       ]
     },
-    "exo-model-detail": {
+    {
+      "caseId": "exo-model-detail",
       "verdict": "WATCH",
+      "scores": { "focal": 5, "hierarchy": 7, "composition": 3 },
+      "visible": "Model name 'atlas-7b [fixture]'; Memory 41 GB and Throughput 88 tok/s as mono instrument readouts; green 'fits' pill.",
       "findings": [
-        "title, Memory 41 GB and Throughput 88 tok/s metrics and the green fits pill all render inside the frame",
-        "~65% of the canvas below y=280 is void — the inspector has no lower composition"
+        "WATCH sparse: three items hug the top-left; roughly 70% of the canvas is empty."
       ]
     },
-    "exo-configuration": {
+    {
+      "caseId": "exo-runtime-monitoring",
       "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 4 },
+      "visible": "Real telemetry values render: error rate 0.4%, latency p95 240ms, GPU 92%, memory pressure 71%, plus a 'watching' pill.",
       "findings": [
-        "Runtime policy title, Thresholds label and the Approve button render top-left",
-        "~80% void; the policy body never arrives on canvas"
+        "WATCH sparse: the telemetry stack hugs the top-left; ~65% of the canvas is empty."
       ]
     },
-    "exo-enterprise-workspace": {
+    {
+      "caseId": "exo-configuration",
       "verdict": "WATCH",
+      "scores": { "focal": 4, "hierarchy": 5, "composition": 2 },
+      "visible": "'Runtime policy' and 'Thresholds' rows with a dark Approve button.",
       "findings": [
-        "Fleet/Models rail with the active Fleet pill, Assigned fleet title, Manage link, edge-04 (amber stroke) and edge-09 all render",
-        "the rail is narrower than its letter-spaced labels: F l e e t tracks past the rail edge",
-        "~65% void below the two device cards"
+        "WATCH sparse: ~90% of the canvas is empty; the screen states its items but composes none of them."
       ]
     },
-    "exo-runtime-monitoring": {
+    {
+      "caseId": "exo-enterprise-workspace",
       "verdict": "WATCH",
+      "scores": { "focal": 5, "hierarchy": 6, "composition": 3 },
+      "visible": "Nav rail with tracked-caps 'Fleet' (active, amber) and 'Models'; 'Assigned fleet [fixture]' header; edge-04 (degraded, highlighted) and edge-09 rows.",
       "findings": [
-        "Error rate 0.4% and Latency 240 ms p95 mono readouts, GPU 92% and Memory pressure 71% metrics, watching pill all render",
-        "~70% void below the readouts"
+        "WATCH sparse: ~75% of the canvas is empty.",
+        "MINOR the header's right-side action label ('Manage') sits flush at the canvas edge and its tail is cut at the frame boundary."
       ]
     },
-    "data-heavy-workspace": {
+    {
+      "caseId": "generic-saas-dashboard",
+      "verdict": "GUARD_REFUSED",
+      "scores": null,
+      "gradedBy": "the product guard's refusal; violations recorded on the case record",
+      "findings": []
+    },
+    {
+      "caseId": "data-heavy-workspace",
       "verdict": "WATCH",
+      "scores": { "focal": 4, "hierarchy": 5, "composition": 2 },
+      "visible": "'Follow-ups [fixture]' with Open incidents 7 and an owner pill.",
       "findings": [
-        "Follow-ups title, Open incidents 7 metric and the owner: rios pill render",
-        "~75% void; the incident rows themselves are not on canvas"
+        "WATCH sparse: ~80% of the canvas is empty."
       ]
     },
-    "spatial-relationship": {
+    {
+      "caseId": "spatial-relationship",
       "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 4 },
+      "visible": "'Dependency graph [fixture]': ingest → relay (pressured, orange) → store as a vertical chain, both connectors arrowheaded and labelled (feeds / drains), endpoints landing on the nodes.",
       "findings": [
-        "the dependency graph renders: ingest -feeds-> relay -drains-> store, amber stroke on the weak link, labelled edges",
-        "~65% void around the graph; the nodes sit in a narrow central column"
+        "WATCH sparse: the chain is centred in the upper third; ~60% of the canvas is empty."
       ]
     },
-    "editorial-product-page": {
+    {
+      "caseId": "editorial-product-page",
       "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 6, "composition": 3 },
+      "visible": "Headline 'Run the small model first [fixture]', subline 'Half the cost, nearly the quality', dark 'Run atlas-7b' button.",
       "findings": [
-        "headline, subhead and the Run atlas-7b button render top-left",
-        "~85% void — an editorial page with no body composition"
+        "WATCH sparse: the editorial block occupies the top-left corner; ~85% of the canvas is empty — an editorial layout is supposed to own its canvas."
       ]
     },
-    "hard-stress-test": {
+    {
+      "caseId": "hard-stress-test",
       "verdict": "WATCH",
+      "scores": { "focal": 7, "hierarchy": 8, "composition": 5 },
+      "visible": "The full stress screen: nav rail with 11px EXO Labs wordmark; header with title, decision subtitle and dark 'Route model' primary action; topology laid out as a real BFS tree (device-hub centred above, device-01/device-02 side by side, device-03 under device-01) with arrowheaded, 'open'-labelled orthogonal connectors routed clear of every node body; a support band of instrument metrics with the illustrative-values disclosure.",
       "findings": [
-        "header band, Cluster Routing title, Route model button, device-01 to device-03 topology with open-labelled arrowed edges, cluster health/shard balance, GPU memory/model throughput placeholders, cold start, disk pressure, recent deploys and audit log all render inside the 1600x1100 frame",
-        "the red [fixture] pill on device-01 overlaps the node label text (real, minor collision)",
-        "~60% void between the topology band and the summary band"
+        "WATCH the cluster-health area shows a red 'ready' state pill although the brief's stated cluster value is 'Degraded' — the state marker contradicts the value it sits beside.",
+        "WATCH several support metrics render blank dashes with no value, so the band reads as instrumentation without readings.",
+        "WATCH a large empty band separates the topology from the support band (~250px at this canvas)."
       ]
     }
-  }
+  ]
 }

@@ -1,10 +1,10 @@
 {
   "caseId": "generic-saas-dashboard",
-  "commit": "61a8b1e5dbcb20bd435b4497c103d4b67589e89d",
-  "serverBuild": "61a8b1e5dbcb",
-  "pluginBuild": "61a8b1e5dbcb",
+  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
+  "serverBuild": "34b513a85780",
+  "pluginBuild": "34b513a85780",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-23T15:57:22.849Z",
+  "startedAt": "2026-10-23T16:28:14.600Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -146,5 +146,14 @@
       "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
     }
   ],
-  "runtimeMs": 919
+  "runtimeMs": 627,
+  "visualScores": null,
+  "visualStatus": "PHASE_B_JUDGED_GUARD_REFUSED",
+  "visualFindings": [],
+  "unresolved": [],
+  "visionPhaseB": {
+    "reviewer": "direct PNG inspection (opencode Phase B pass)",
+    "verdict": "GUARD_REFUSED",
+    "at": "2026-10-23T22:05:00Z"
+  }
 }

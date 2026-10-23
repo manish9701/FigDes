@@ -1,7 +1,7 @@
 {
   "caseId": "exo-configuration",
-  "commit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-  "createdAt": "2026-10-21T12:51:46.825Z",
+  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
+  "createdAt": "2026-10-23T16:35:44.749Z",
   "screenshotReference": "artifacts/design-benchmark/live/goldens/exo-configuration.png",
   "policy": {
     "maxMeanDifference": 3,

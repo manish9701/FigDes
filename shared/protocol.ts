@@ -595,12 +595,35 @@ export const CreateInstanceOp = z.object({
   componentId: RefSchema,
   x: z.number().finite().optional(),
   y: z.number().finite().optional(),
+  /**
+   * TEXT property overrides, applied after creation via `setProperties`.
+   *
+   * Keys are component-property names (e.g. `{ Label: "Deploy" }`); values
+   * must be strings because only a TEXT property can take a string. Unknown
+   * names are skipped by the plugin rather than failing the transaction, so
+   * this is a best-effort passthrough, not a rename. Lets a reused component
+   * carry the new screen's copy instead of the master's.
+   */
+  properties: z.record(z.string()).optional(),
 });
 
 export const SetVariantOp = z.object({
   type: z.literal("setVariant"),
   target: RefSchema,
-  variant: z.record(z.string()),
+  /**
+   * Component-set variant selection as Property=Value pairs. Optional so the
+   * op can also carry a TEXT-only override (see `properties`): switching the
+   * variant and rewording the copy are independent acts. At least one of
+   * `variant` / `properties` must be present — the plugin refuses an op that
+   * changes nothing.
+   */
+  variant: z.record(z.string()).optional(),
+  /**
+   * TEXT property overrides, merged over the instance's existing properties.
+   * Same best-effort contract as `createInstance.properties`: unknown names
+   * are skipped, never fatal.
+   */
+  properties: z.record(z.string()).optional(),
 });
 
 /**
@@ -1700,6 +1723,12 @@ export interface FindComponentsResult {
   total: number;
   /** Fuzzy matches, best first. Empty when no query was given. */
   matches: Array<{ component: ComponentSummary; score: number; reason: string }>;
+  /**
+   * Present when a query matched nothing: names what was tried (including any
+   * role-alias expansion) and what to do next, so an empty result reads as
+   * guidance rather than as a dead end.
+   */
+  guidance?: string;
 }
 
 export interface CreateComponentResult {

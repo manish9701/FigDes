@@ -119,7 +119,7 @@ const REGION_COMMON: ArgSpec[] = [
 
 /** Args every state-capable component accepts. */
 const STATE_COMMON: ArgSpec[] = [
-  structured("states", "object[]", "Expands to one sibling per state, each carrying the state in its id.", '[{ "state": "loading" }, { "state": "error" }]'),
+  structured("states", "object[]", "Expands to one sibling per state, each carrying the state in its id. Accepts state names ('loading') or { state: 'loading' } objects; unknown entries warn and skip.", '[{ "state": "loading" }, "error"]'),
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -182,6 +182,7 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
     enumArg("shape", "Shape kind.", SHAPE_VALUES, '"polygon"'),
     colour,
     text("stroke", "Stroke colour.", '"#D9D8D0"'),
+    num("strokeWeight", "Stroke width in px. A line draws at this height.", "1"),
     num("radius", "Corner radius for rect."),
     num("opacity", "Opacity 0-1."),
     num("sides", "Side count for polygon/star (3-24).", "6"),
@@ -227,6 +228,17 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
     enumArg("tone", "Colour pair for the pill.", TONE_VALUES, '"healthy"'),
     enumArg("state", "Alias for tone.", TONE_VALUES),
     text("surface", "Override the pill background."),
+    text(
+      "componentId",
+      "Reuse escape hatch: a COMPONENT or COMPONENT_SET id from find_component. When present, emits createInstance (plus setVariant when variantProps is given) instead of drawing frame+text; the label travels as a TEXT property override. When absent, draws the pill from frames exactly as before.",
+      '"C:abc123"',
+    ),
+    structured(
+      "variantProps",
+      "object",
+      "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
+      '{ "State": "healthy" }',
+    ),
     ...STATE_COMMON,
   ],
   deviceNode: [
@@ -246,17 +258,48 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
     bool("active", "Shorthand for state:'active'."),
     text("color", "Label colour when not active."),
     text("surface", "Row surface."),
+    text(
+      "componentId",
+      "Reuse escape hatch: a COMPONENT or COMPONENT_SET id from find_component. When present, emits createInstance (plus setVariant when variantProps is given) instead of drawing frame+text; the label travels as a TEXT property override. When absent, draws the item from frames exactly as before.",
+      '"C:abc123"',
+    ),
+    structured(
+      "variantProps",
+      "object",
+      "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
+      '{ "State": "active" }',
+    ),
     ...STATE_COMMON,
   ],
   panel: [text("title", "Panel title."), text("surface", "Panel surface."), enumArg("tone", "Surface tone.", TONE_VALUES)],
   button: [
     text("label", "Button label.", '"Deploy"'),
     enumArg("variant", "Visual contract for the action.", VARIANT_VALUES, '"primary"'),
+    text(
+      "componentId",
+      "Reuse escape hatch: a COMPONENT or COMPONENT_SET id from find_component. When present, emits createInstance (plus setVariant when variantProps is given) instead of drawing frame+text; the label travels as a TEXT property override. When absent, draws the button from frames exactly as before.",
+      '"C:abc123"',
+    ),
+    structured(
+      "variantProps",
+      "object",
+      "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
+      '{ "State": "primary" }',
+    ),
     ...STATE_COMMON,
   ],
-  divider: [text("color", "Rule colour.", '"#E0E0E0"')],
-  sectionHeader: [text("title", "Section title.", '"Throughput"'), text("action", "Right-aligned action label, e.g. 'View all'."), num("subtitle", "Unused; use a text primitive for a subtitle.")],
-  sectionDivider: [text("title", "Divider label."), text("color", "Rule colour.")],
+  divider: [
+    text("color", "Rule colour.", '"#E0E0E0"'),
+    enumArg("orientation", "Rule direction. Vertical swaps the axes (thin wide, tall high); the 1px rect is the horizontal hairline only.", ["horizontal", "vertical"], '"horizontal"'),
+    num("strokeWeight", "Rule thickness in px.", "1"),
+  ],
+  sectionHeader: [text("title", "Section title.", '"Throughput"'), text("action", "Right-aligned action label, e.g. 'View all'."), text("subtitle", "Supporting note kept on the record. The header draws title + action; render a visible subtitle with its own text primitive.", '"Q3 throughput"')],
+  sectionDivider: [
+    text("title", "Divider label."),
+    text("color", "Rule colour."),
+    enumArg("orientation", "Rule direction. Vertical draws the rule tall and thin.", ["horizontal", "vertical"], '"horizontal"'),
+    num("strokeWeight", "Rule thickness in px.", "1"),
+  ],
   modelRow: [
     text("title", "Model name.", '"llama-70b"'),
     text("value", "Shards or placement count.", '"4 shards"'),
@@ -443,7 +486,12 @@ function typeMatches(spec: ArgSpec, value: unknown): boolean {
     case "object[]":
       return Array.isArray(value) && value.every((v) => typeof v === "object" && v !== null);
     case "enum":
-      return typeof value === "string" && (spec.values ?? []).includes(value);
+      // Product enums arrive in product casing ("Healthy", "ONLINE",
+      // "Selected") while the compiler canonicalises with toLowerCase before
+      // reading. Validation must compare the same way, or it warns on input
+      // the compiler accepts — a validator that rejects what the compiler
+      // does is the drift being fixed.
+      return typeof value === "string" && (spec.values ?? []).some((v) => v.toLowerCase() === value.toLowerCase());
     case "colour":
     case "token":
       // A colour slot accepts a hex or a variable name; whether the name

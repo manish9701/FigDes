@@ -1251,6 +1251,19 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       if (op.x !== undefined) instance.x = op.x;
       if (op.y !== undefined) instance.y = op.y;
 
+      // TEXT property overrides (e.g. the new screen's label on a reused
+      // button). Best-effort per key: an unknown property name is skipped
+      // rather than failing the whole instance.
+      if (op.properties !== undefined) {
+        for (const [key, value] of Object.entries(op.properties)) {
+          try {
+            instance.setProperties({ [key]: value });
+          } catch {
+            // Skipped: not a TEXT property on this component.
+          }
+        }
+      }
+
       return register(ctx, op.id, instance, index, op.type);
     }
 
@@ -1757,12 +1770,18 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
       // We need to merge with existing properties
       const newProps: { [propertyName: string]: string | boolean | VariableAlias } = {};
       for (const [k, prop] of Object.entries(instance.componentProperties)) {
-         if (prop.value !== undefined && typeof prop.value !== "object") {
-            newProps[k] = prop.value as string | boolean;
-         }
+        if (prop.value !== undefined && typeof prop.value !== "object") {
+          newProps[k] = prop.value as string | boolean;
+        }
       }
-      for (const [k, v] of Object.entries(op.variant)) {
+      for (const [k, v] of Object.entries(op.variant ?? {})) {
         newProps[k] = String(v);
+      }
+      for (const [k, v] of Object.entries(op.properties ?? {})) {
+        newProps[k] = String(v);
+      }
+      if (Object.keys(op.variant ?? {}).length === 0 && Object.keys(op.properties ?? {}).length === 0) {
+        throw new OperationError(`setVariant on ${node.id} changes nothing: give a variant and/or TEXT properties.`, index, op.type);
       }
       instance.setProperties(newProps);
       invalidateCache(ctx, node.id);

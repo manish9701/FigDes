@@ -447,20 +447,20 @@
       "id": "connector-1",
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-4-gpu-memory",
-      "x": 836.63,
-      "y": 104.93,
-      "width": 339.54,
-      "height": 132.07
+      "x": 836.13,
+      "y": 104.43,
+      "width": 340.54,
+      "height": 133.07
     },
     {
       "type": "createVector",
       "id": "connector-2",
-      "parent": "root",
+      "parent": "map",
       "name": "orthogonal connector slot-6-node-topology -> slot-7-latency",
-      "x": 715,
-      "y": 327,
-      "width": 10,
-      "height": 32
+      "x": 714.5,
+      "y": 113.5,
+      "width": 11,
+      "height": 33
     },
     {
       "type": "createText",
@@ -473,10 +473,10 @@
     {
       "type": "createText",
       "id": "connector-2-label",
-      "parent": "root",
+      "parent": "map",
       "name": "Label connect",
       "x": 726,
-      "y": 329
+      "y": 116
     }
   ],
   "structuralChecks": [

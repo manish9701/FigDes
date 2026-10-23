@@ -732,7 +732,7 @@ export function metricsFromLiveNodes(nodes: NodeMetrics[]): LiveGuardMetrics {
  */
 export function snapshotFromIR(ir: {
   regions: Array<{ id: string; role: string; composition: string }>;
-  content: Array<{ kind: string; id: string; type?: string; text?: string; props?: Record<string, unknown> }>;
+  content: Array<{ kind: string; id: string; type?: string; text?: string; props?: Record<string, unknown>; from?: string; to?: string; label?: string }>;
   links?: Array<{ from: string; to: string; label?: string }>;
 }, resolved: { composition: string }): GuardSnapshot {
   const components: Array<{ type: string; count: number }> = [];
@@ -745,7 +745,17 @@ export function snapshotFromIR(ir: {
   for (const [type, n] of count) components.push({ type, count: n });
 
   const connectors = ir.content.filter((n) => n.kind === "connector");
-  const labeledEdges = connectors.filter((n) => typeof (n as { label?: unknown }).label === "string").length;
+  // Edge truth is the deduped union of connectors and links: graph expansion
+  // emits both for the same relationship (a connector plus its layout link),
+  // so counting both lists sums every edge twice. Labels live on connectors,
+  // so labeledEdges is read from them, not from links.
+  const edgePairs = new Set<string>();
+  for (const n of connectors) {
+    if (typeof n.from === "string" && typeof n.to === "string") edgePairs.add(`${n.from}→${n.to}`);
+  }
+  for (const l of ir.links ?? []) edgePairs.add(`${l.from}→${l.to}`);
+  const topologyEdges = edgePairs.size;
+  const labeledEdges = connectors.filter((n) => typeof n.label === "string").length;
 
   // Interactive components with no label: buttons, pills and rows that nothing
   // names. State communicated without words fails the critical-states rule.
@@ -865,9 +875,9 @@ export function snapshotFromIR(ir: {
       metricCards: count.get("metric") ?? 0,
       textNodes: ir.content.filter((n) => n.kind === "text").length,
       topologyNodes,
-      topologyEdges: (ir.links ?? []).length,
+      topologyEdges,
       labeledEdges,
-      unlabeledEdges: Math.max(0, (ir.links ?? []).length - labeledEdges),
+      unlabeledEdges: Math.max(0, topologyEdges - labeledEdges),
       unlabeledComponents,
       buttons: (count.get("button") ?? 0),
       dominantActions,

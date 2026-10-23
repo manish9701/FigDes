@@ -134,7 +134,11 @@ const healthyTopologyProgram = {
   content: [
     { fn: "deviceNode", id: "node-a", parent: "map", args: { label: "node-a", health: "healthy" } },
     { fn: "deviceNode", id: "node-b", parent: "map", args: { label: "node-b", health: "degraded" } },
-    { fn: "connector", id: "link-1", parent: "map", args: { from: "node-a", to: "node-b", label: "24us" } },
+    // Owns the plain line: a cluster stacks its nodes 8px apart, closer than
+    // arrowheads need, so the default heads would be omitted with an advisory.
+    // arrowEnd:false declares the headless edge deliberate, keeping this
+    // fixture violation-free.
+    { fn: "connector", id: "link-1", parent: "map", args: { from: "node-a", to: "node-b", label: "24us", arrowEnd: false } },
   ],
 };
 

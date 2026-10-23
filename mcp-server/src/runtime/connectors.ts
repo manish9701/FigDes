@@ -58,6 +58,13 @@ export interface ConnectorResult {
   labelAt?: { x: number; y: number };
   /** Human-readable description used in the operation name. */
   summary: string;
+  /**
+   * True when heads were wanted but the gap was too short for them, so the
+   * route is a plain line. The summary already says so in prose; this flag
+   * carries the same fact as data so the caller can report it without parsing
+   * its own sentence.
+   */
+  arrowheadsOmitted: boolean;
 }
 
 /** Default arrowhead length. Scaled by stroke weight in `arrowHead`. */
@@ -199,7 +206,10 @@ export function routeConnector(spec: ConnectorSpec, from: ResolvedBox | undefine
     ? ""
     : ` (nodes ${Math.round(chord)}px apart, closer than the ${Math.round(size * 2)}px the arrowheads need, so it is drawn without one)`;
 
-  return { path: parts.join(" "), ...(labelAt ? { labelAt } : {}), summary: summary + note };
+  // Heads were wanted (an end head is the default) but the gap could not show
+  // them. Reported as data, not just prose, so the compile can warn on it.
+  const headsWanted = spec.arrowEnd !== false || spec.arrowStart === true;
+  return { path: parts.join(" "), ...(labelAt ? { labelAt } : {}), summary: summary + note, arrowheadsOmitted: headsWanted && !headsFit };
 }
 
 /**

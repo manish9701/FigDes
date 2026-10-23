@@ -332,6 +332,22 @@ export async function designPipelineTool(
     plan,
     program,
     programNotes: built.notes,
+    /**
+     * Design-intelligence provenance (issue #24): the pipeline is the
+     * enforced-intelligence path — brief signals always select skills, the
+     * alternatives engine always proposes genuinely different compositions,
+     * and the build-time product guard (effectiveRules) always runs inside
+     * executeRuntime above. `applied` is unconditionally true here; a raw
+     * bypass cannot reach this payload without passing those stages.
+     */
+    intelligence: {
+      applied: true,
+      basis: "design-pipeline",
+      skillsSelected: intelligence.selection.selected,
+      skillsSkipped: intelligence.selection.skipped.length,
+      decisions: intelligence.decisions.length,
+      steeredComposition: alternatives.steeredComposition,
+    },
     /** The skill layer's full output: selection, decisions, compiled intent, the anti-generic review, and the composition alternatives (issue #22). */
     visualIntelligence: {
       signals: intelligence.signals,

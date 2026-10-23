@@ -202,11 +202,18 @@ async function handle(tool: PluginToolName, payload: unknown, requestId?: string
     }
 
     case "set_variant": {
-      const p = (payload ?? {}) as { instanceId?: string; variant?: string };
-      if (typeof p.instanceId !== "string" || typeof p.variant !== "string") {
-        throw new Error("set_variant needs an instanceId and a variant name.");
+      const p = (payload ?? {}) as { instanceId?: string; variant?: string; properties?: Record<string, string> };
+      if (typeof p.instanceId !== "string") {
+        throw new Error("set_variant needs an instanceId.");
       }
-      return setVariant({ instanceId: p.instanceId, variant: p.variant });
+      if (typeof p.variant !== "string" && p.properties === undefined) {
+        throw new Error("set_variant needs a variant name and/or TEXT properties.");
+      }
+      return setVariant({
+        instanceId: p.instanceId,
+        ...(typeof p.variant === "string" ? { variant: p.variant } : {}),
+        ...(p.properties !== undefined ? { properties: p.properties } : {}),
+      });
     }
 
     case "update_component": {

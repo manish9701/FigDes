@@ -1126,7 +1126,10 @@ test("a template keeps its internal connector connected after namespacing", () =
         body: [
           { fn: "shape", id: "s1", args: { shape: "ellipse", fill: "#111111" } },
           { fn: "shape", id: "s2", args: { shape: "ellipse", fill: "#111111" } },
-          { fn: "connector", id: "edge", args: { from: "s1", to: "s2" } },
+          // Labelled: an unlabeled edge is now counted (connectors join links
+          // in topologyEdges) and correctly trips the explains-relationships
+          // warning, so the fixture carries the label the rule asks for.
+          { fn: "connector", id: "edge", args: { from: "s1", to: "s2", label: "link" } },
         ],
       },
     ],

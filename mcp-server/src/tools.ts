@@ -233,7 +233,11 @@ const SetVariantArgs = z
   .object({
     sessionId: SessionArg,
     instanceId: z.string().max(200).describe("Figma id of the instance. Resolve it with find_node first."),
-    variant: z.string().max(200).describe("Variant name, exact or as Property=Value pairs."),
+    variant: z.string().max(200).optional().describe("Variant name, exact or as Property=Value pairs."),
+    properties: z
+      .record(z.string())
+      .optional()
+      .describe("TEXT property overrides, e.g. { Label: 'Deploy' }. At least one of variant/properties is required."),
   })
   .strict();
 
@@ -382,6 +386,10 @@ const CreateInstanceArgs = z
     x: z.number().optional(),
     y: z.number().optional(),
     parent: z.string().max(200).optional().describe("Parent node id. Defaults to the current page."),
+    properties: z
+      .record(z.string())
+      .optional()
+      .describe("TEXT property overrides, e.g. { Label: 'Deploy' }. Unknown names are skipped, never fatal."),
   })
   .strict();
 
@@ -933,7 +941,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "set_variant",
     title: "Switch an instance to another variant",
     description:
-      "Change which variant of a component set an instance shows, by variant name (exact or Property=Value pairs). Use this instead of deleting an instance and placing a new one - the position, overrides and layer order survive.",
+      "Change which variant of a component set an instance shows, by variant name (exact or Property=Value pairs). May also carry TEXT properties to reword the copy without switching variants. Use this instead of deleting an instance and placing a new one - the position, overrides and layer order survive.",
     inputSchema: SetVariantArgs,
     handler: async (args, registry) => {
       const parsed = SetVariantArgs.parse(args);
@@ -1065,7 +1073,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "design_runtime",
     title: "Build a design from semantic primitives",
     description:
-      "Use this for information-led screens. Do not use it as the primary builder when plan_screen.execution.nativeRequired=true. For composition-led screens, use figdes_use_figma for the shell and reserve this for reusable semantic content inside a Hybrid composition. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. Pass dryRun=true first.",
+      "MANDATORY FIRST STEP: call plan_screen (or design_pipeline for the whole loop) before this, and build from its program. A raw program with no plan and no visualIntent.style bypasses decision classification, composition hints and the guard preview — the result discloses intelligence-applied:false and falls back to auto art-direction. Use this for information-led screens. Do not use it as the primary builder when plan_screen.execution.nativeRequired=true. For composition-led screens, use figdes_use_figma for the shell and reserve this for reusable semantic content inside a Hybrid composition. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. The product guard runs on every build and applicabilityBasis says what the geometry stands on. Pass dryRun=true first.",
     inputSchema: RuntimeArgs,
     handler: async (args, registry) => {
       const parsed = RuntimeArgs.parse(args);
@@ -1379,7 +1387,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "compile_ir",
     title: "Compile a Design IR to operations",
     description:
-      "Compile a Design IR (canvas, regions with semantic roles, content) into Figma operations without touching the document. Use this to validate a layout or inspect the resolved geometry. Lower level than design_runtime: prefer design_runtime unless you need explicit control over regions.",
+      "Compile a Design IR (canvas, regions with semantic roles, content) into Figma operations without touching the document. Use this to validate a layout or inspect the resolved geometry. Lower level than design_runtime — and raw IR bypasses plan intelligence (no decision classification, no composition hint, no plan channel), so the result discloses intelligence-applied:false with the fix named, and always runs the product guard. Prefer design_runtime with a plan_screen program unless you need explicit control over regions; run design_guard on the result before building.",
 inputSchema: CompileArgs,
     handler: async (args) => compileIrTool(args),
   },
@@ -1400,7 +1408,7 @@ inputSchema: CompileArgs,
     name: "design_guard",
     title: "Check a design against the project's product rules",
     description:
-      "The do-not-drift layer. Checks a design against the project's product truths (spec: devices auto-discover, placement is automatic, chat is not primary, avoid generic SaaS card walls) and returns PASS / WARNING / FAIL with the measured evidence for each. Pass a program to check a design before building it, or inspect:true to check what is currently in the file. Read-only and free. Only machine-checkable evidence can produce a FAIL; anything needing judgement is returned as a question for a human rather than guessed at.",
+      "The do-not-drift layer. Checks a design against the project's product rules (spec: devices auto-discover, placement is automatic, chat is not primary, avoid generic SaaS card walls) and returns PASS / WARNING / FAIL with the measured evidence for each. design_runtime and design_pipeline already run this guard at build time — call it explicitly when building from raw operations (create_design, figdes_use_figma) or raw IR (compile_ir), where no build-time guard sees the work. Pass a program to check a design before building it, or inspect:true to check what is currently in the file. Read-only and free. Only machine-checkable evidence can produce a FAIL; anything needing judgement is returned as a question for a human rather than guessed at.",
     inputSchema: DesignGuardArgs,
     handler: async (args, registry) => {
       const parsed = DesignGuardArgs.parse(args);
@@ -1412,7 +1420,7 @@ inputSchema: CompileArgs,
     name: "plan_screen",
     title: "Plan a screen before drawing it",
     description:
-      "Start here for any new screen. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, the art director's decisions (focal, hierarchy, strategies, states, risks), a five-pass build plan, full structural variants to compare, and a preview of which product rules the plan will trip. Accepts an archetype ('model-fit', 'topology'...) that presets objective, decision and anti-patterns. Creates nothing, so a wrong composition costs one message instead of an undo. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
+      "MANDATORY FIRST STEP for any new screen — call this before design_runtime, compile_ir, create_design or figdes_use_figma. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, the art director's decisions (focal, hierarchy, strategies, states, risks), a five-pass build plan, full structural variants to compare, and a preview of which product rules the plan will trip. Accepts an archetype ('model-fit', 'topology'...) that presets objective, decision and anti-patterns. Creates nothing, so a wrong composition costs one message instead of an undo. The result carries intelligence provenance (applied:true, decisionKind, compositionHintApplied) proving classification ran. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
     inputSchema: PlanScreenArgs,
     handler: async (args, registry) => {
       const parsed = PlanScreenArgs.parse(args);
@@ -1436,7 +1444,7 @@ inputSchema: CompileArgs,
     name: "design_pipeline",
     title: "Turn a brief into a composed, verified Figma screen",
     description:
-      "The whole loop in one call: normalize the brief, plan the composition, build it from semantic primitives, verify the resolved geometry, apply it as one tracked transaction, read the built screen back, run the review rules, render it, repair what can be repaired safely, and report what was generated, what was verified, what was repaired and what is still unverified. A brief that contradicts itself is refused before anything is created; a check that could not run is reported as unverified rather than as a pass. Pass mode:'plan' to get the plan, the program and the structural verification without touching Figma.",
+      "The enforced-intelligence loop in one call: normalize the brief, plan the composition, build it from semantic primitives, verify the resolved geometry, apply it as one tracked transaction, read the built screen back, run the review rules, render it, repair what can be repaired safely, and report what was generated, what was verified, what was repaired and what is still unverified. Skills, composition alternatives, the build-time product guard and the final guard always run — the report carries intelligence-applied:true. A brief that contradicts itself is refused before anything is created; a check that could not run is reported as unverified rather than as a pass. Pass mode:'plan' to get the plan, the program and the structural verification without touching Figma.",
     inputSchema: DesignPipelineArgs,
     handler: async (args, registry) => {
       const parsed = DesignPipelineArgs.parse(args);
@@ -1449,7 +1457,7 @@ inputSchema: CompileArgs,
     name: "figdes_use_figma",
     title: "Native Composition Execution",
     description:
-      "Execute JavaScript directly in the Figma Plugin API context. This is the primary builder for composition-led screens. The script receives the real figma API plus a high-level figdes builder (stack/frame/text/rect/ellipse/vector/connect/instance) that handles font loading, auto-layout ordering, sizing and native geometry. Prefer figdes for construction and raw figma for advanced API work. Return rootId/createdNodeIds/mutatedNodeIds. Optional renderAfter='first-created' or 'explicit' turns the same call into a build + visual evidence checkpoint. Native writes are transactional and serialized per session; timeout is an execution watchdog that waits for an in-flight script to settle before rollback, preventing late mutations.",
+      "Execute JavaScript directly in the Figma Plugin API context. This is the primary builder for composition-led screens, and it bypasses design intelligence entirely (no decision classification, no composition hints, no build-time product guard) — for new screens, plan first with plan_screen or design_pipeline and run design_guard(inspect:true) on the built frame afterwards. The script receives the real figma API plus a high-level figdes builder (stack/frame/text/rect/ellipse/vector/connect/instance) that handles font loading, auto-layout ordering, sizing and native geometry. Prefer figdes for construction and raw figma for advanced API work. Return rootId/createdNodeIds/mutatedNodeIds. Optional renderAfter='first-created' or 'explicit' turns the same call into a build + visual evidence checkpoint. Native writes are transactional and serialized per session; timeout is an execution watchdog that waits for an in-flight script to settle before rollback, preventing late mutations.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
       const parsed = UseFigmaArgs.parse(args ?? {});
@@ -1745,7 +1753,7 @@ inputSchema: CompileArgs,
     name: "create_design",
     title: "Create a design in Figma (low level)",
     description:
-      "Create real native Figma nodes (frames, rectangles, ellipses, text, auto layout) from a structured operation list. Applied as one undoable transaction. Set dryRun=true first for anything large.",
+      "Create real native Figma nodes (frames, rectangles, ellipses, text, auto layout) from a structured operation list. Applied as one undoable transaction. Raw operations bypass ALL design intelligence (no decision classification, no composition plan, no build-time product guard) — for new screens, plan first with plan_screen or design_pipeline and prefer design_runtime; run design_guard(inspect:true) on the result afterwards. Set dryRun=true first for anything large.",
 inputSchema: CreateArgs,
     handler: async (args, registry) => {
       const parsed = CreateArgs.parse(args);
@@ -1792,7 +1800,7 @@ inputSchema: CreateArgs,
     name: "modify_design",
     title: "Modify existing Figma nodes",
     description:
-      "Change existing nodes by id: rename, resize, reposition, restyle, restructure with auto layout, or remove. Always inspect first and address nodes by their real Figma id.",
+      "Change existing nodes by id: rename, resize, reposition, restyle, restructure with auto layout, or remove. Always inspect first and address nodes by their real Figma id. Raw edits bypass design intelligence — re-run design_guard(inspect:true) on the affected frame afterwards.",
 inputSchema: ModifyArgs,
     handler: async (args, registry) => {
       const parsed = ModifyArgs.parse(args);

@@ -19,6 +19,10 @@ import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { preflightCheckTag, validateTransaction } from "../preflight";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
+import { runGuard, snapshotFromIR } from "../memory/guard";
+import { defaultRules } from "../memory/rules-exo";
+import { assessIRIntelligence, assessRuntimeIntelligence } from "../design/intelligence-gate";
+import { inferComposition } from "./layout";
 import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
 
@@ -79,12 +83,12 @@ const RUNTIME_GUIDE = [
   "  statusPill   args: { label, surface?, color? }",
   "  deviceNode   args: { label, memory?, surface? }",
   "  navItem      args: { label, color?, surface? }",
-  "  button       args: { label, surface?, color? }",
+  "  button       args: { label, variant?: primary|secondary|destructive|quiet|loading|disabled, states? }",
   "  panel        args: { title, surface?, radius? }",
-  "  sectionHeader args: { title }",
-  "  divider      args: { color? }",
+  "  sectionHeader args: { title, action?, subtitle? }",
+  "  divider      args: { color?, orientation?: horizontal|vertical, strokeWeight? }  vertical swaps the axes; the 1px rect is the horizontal hairline only",
   "  modelRow     args: { title }",
-  "  shape        args: { shape: rect|ellipse|line|polygon|star, fill?, stroke?, radius? }",
+  "  shape        args: { shape: rect|ellipse|line|polygon|star, fill?, stroke?, radius? }  line is a horizontal rule (a vector with tight stroke-sized bounds, not a rectangle)",
   "                polygon/star take sides, innerRatio (star), rotation. Vertices are computed,",
   "                so a hexagon reads as a hexagon.",
   "  logoMark     args: { mark: ring|orbit|chevron|hex|bars|prism|wave|grid|shield|bolt|lens|arc, size?, color?, surface?, strokeWeight? }",
@@ -303,7 +307,10 @@ export function reuseAdvisory(operations: Array<Record<string, unknown>>): Array
   for (const [key, count] of groups) {
     if (count >= 3) {
       advisories.push(
-        `${count} identical ${key.replace("x", "x")} surfaces: consider create_component + create_instance so shared changes stay in sync (find_component first — one may already exist).`,
+        `${count} identical ${key.replace("x", "x")} surfaces: this is a component, not ${count} rectangles. ` +
+          `Call find_component first (try role words like "button", "badge", "input", "nav" — aliases are expanded automatically); ` +
+          `if a match exists, place it with create_instance (pass the TEXT label via properties, variant via setVariant) instead of rebuilding it. ` +
+          `Only when nothing matches should you draw it once and promote it with create_component so the next screen can instance it.`,
       );
       break;
     }
@@ -365,6 +372,16 @@ export async function runRuntimeTool(
   const { dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
   const { program, direction } = applyAutoArtDirection(parsed.program);
+
+  // Issue #24 — the intelligence gate. A program that carries no plan_screen
+  // plan and declares no visualIntent.style bypasses decision classification,
+  // composition hints and the guard preview. That bypass used to be silent;
+  // now it is a first-class verdict on the payload (`intelligence.applied`)
+  // with a warning naming the fix. The build still proceeds on the auto
+  // art-direction fallback — disclosure, not a block.
+  const intelligence = assessRuntimeIntelligence(parsed.program, {
+    ...(direction !== null ? { autoStyle: direction.style } : {}),
+  });
 
   // Measure the text before the layout is computed, so the screen is laid out
   // from the heights the renderer will really produce. The first compile
@@ -451,7 +468,17 @@ export async function runRuntimeTool(
     /** Component-reuse advisories measured from the compiled operations. */
     ...(advisories.length > 0 ? { reuse: advisories } : {}),
     violations: compiled.violations,
-    warnings: compiled.warnings,
+    warnings: [...compiled.warnings, ...intelligence.warnings],
+    /**
+     * Whether this build ran under design intelligence (issue #24).
+     *
+     * `applied: true` means the program carried a plan_screen plan or a
+     * declared visualIntent.style. `false` means it ran on the auto
+     * art-direction fallback (or none) — disclosed here and in `warnings`,
+     * with the fix named. `applicabilityBasis` below says what the geometry
+     * stands on; this says what the decisions stand on.
+     */
+    intelligence,
     /**
      * What the product guard concluded about this build.
      *
@@ -819,6 +846,15 @@ export function compileIrTool(args: unknown): unknown {
   const parsed = CompileArgs.parse(args);
   const compiled = compileIR(parsed.ir);
 
+  // Issue #24 — the direct-compile bypass. `compile_ir` takes raw IR with no
+  // plan channel, so a caller reaching it skips decision classification and
+  // composition hints entirely. Two things are therefore unavoidable here
+  // rather than opt-in: the intelligence verdict (disclosed, with the fix
+  // named) and the product guard (run on every compile, reported on every
+  // payload — the same truths the interpreter enforces at build time).
+  const intelligence = assessIRIntelligence(parsed.ir);
+  const guard = runGuard(defaultRules(), snapshotFromIR(parsed.ir, { composition: inferComposition(parsed.ir.regions) }));
+
   return {
     status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
     applicable: compiled.applicable,
@@ -828,6 +864,17 @@ export function compileIrTool(args: unknown): unknown {
     regions: compiled.regions.map((r) => ({ id: r.id, x: r.x, y: r.y, w: r.w, h: r.h })),
     violations: compiled.violations,
     operations: compiled.operations,
+    /** The intelligence bypass verdict: raw IR carries no plan, disclosed here. */
+    intelligence,
+    warnings: intelligence.warnings,
+    /** The product guard, run on every compile — never opt-in. */
+    productGuard: {
+      verdict: guard.verdict,
+      rulesChecked: guard.stats.rulesChecked,
+      failures: guard.stats.failures,
+      warnings: guard.stats.warnings,
+      manual: guard.stats.manual,
+    },
     howToProceed: compiled.applicable
       ? undefined
       : "The resolved geometry is not what the IR asked for. Fix the problems above — an inspector off the canvas, a connector that cannot resolve, or an operation whose position disagrees with its resolved box — then compile again.",

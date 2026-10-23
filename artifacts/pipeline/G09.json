@@ -535,7 +535,7 @@
       "name": "Inspector",
       "x": 272,
       "y": 594,
-      "width": 360,
+      "width": 1168,
       "height": 306
     },
     {
@@ -767,7 +767,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1168x72, built 1168x141; content: planned 1168x458, built 1168x389",
+      "detail": "header: planned 1168x72, built 1168x141; content: planned 1168x458, built 1168x389; inspector: planned 360x306, built 1168x306",
       "nodeIds": []
     },
     {
@@ -812,6 +812,21 @@
       "evidence": {
         "kind": "geometry",
         "detail": "content: planned 1168x458, built 1168x389"
+      },
+      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "automatable": false
+    },
+    {
+      "id": "plan-geometry-drift-03",
+      "stage": "plan",
+      "severity": "medium",
+      "confidence": 0.9,
+      "nodeIds": [],
+      "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x306, built 1168x306.",
+      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "evidence": {
+        "kind": "geometry",
+        "detail": "inspector: planned 360x306, built 1168x306"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

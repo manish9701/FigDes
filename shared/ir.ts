@@ -272,6 +272,22 @@ export const ComponentSpecSchema = z
         ]),
       )
       .default({}),
+    /**
+     * Reuse escape hatch (issue #24): a live component id from
+     * `find_component` / `inspect_design_system`. When present, the compiler
+     * emits `createInstance` (+ `setVariant` when `variant` is present) instead
+     * of drawing the component from frames and text; when absent, the component
+     * draws itself exactly as before. Kept beside `props` (not inside it)
+     * because `props` only carries flat scalars — a live id is a reference, not
+     * a drawing instruction.
+     */
+    componentId: z.string().min(1).max(200).optional(),
+    /**
+     * Component-set variant selection as Property=Value pairs, applied via
+     * `setVariant` after the instance is created. Only read when
+     * `componentId` is present.
+     */
+    variant: z.record(z.string()).optional(),
   })
   .strict();
 
@@ -671,5 +687,13 @@ export interface CompileResult {
     reflowed: number;
     /** Operations whose emitted position disagrees with the resolved box. */
     traceMismatches: number;
+    /**
+     * Whether a requested native auto-layout container was honoured.
+     *
+     * True when no region asked for one or the request was applied; false when
+     * the compiler declined it (see the `auto-layout` violation, which is
+     * always kept alongside this flag — declining is reported, never silent).
+     */
+    nativeLayoutApplied?: boolean;
   };
 }

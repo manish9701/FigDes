@@ -477,7 +477,7 @@
       "name": "Context",
       "x": 0,
       "y": 624,
-      "width": 360,
+      "width": 390,
       "height": 220
     },
     {
@@ -548,7 +548,7 @@
       "name": "CUDA out of memory while allocating the ",
       "x": 0,
       "y": 0,
-      "width": 360
+      "width": 390
     }
   ],
   "structuralChecks": [
@@ -621,7 +621,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 390x88, built 390x153; nav: planned 208x132, built 208x45; subject: planned 390x396, built 390x330; context: planned 360x132, built 360x220",
+      "detail": "header: planned 390x88, built 390x153; nav: planned 208x132, built 208x45; subject: planned 390x396, built 390x330; context: planned 360x132, built 390x220",
       "nodeIds": []
     },
     {
@@ -706,11 +706,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x132, built 360x220.",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x132, built 390x220.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "context: planned 360x132, built 360x220"
+        "detail": "context: planned 360x132, built 390x220"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

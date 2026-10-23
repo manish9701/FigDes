@@ -32,6 +32,35 @@ export interface FindOptions {
 
 export const DEFAULT_FIND: FindOptions = { limit: 25, maxNodes: 4000 };
 
+/**
+ * Role aliases (issue #24): the name a caller asks for is rarely the name a
+ * file uses. `find_component("button")` should find a component called
+ * "Primary CTA", not report that no component is literally named "button".
+ * Each key expands to the names files actually use for that role; matching is
+ * still substring-based, so these only widen the net, never narrow it.
+ */
+export const ROLE_ALIASES: Record<string, string[]> = {
+  button: ["button", "cta", "action"],
+  input: ["input", "field", "text-input", "textinput"],
+  badge: ["badge", "pill", "status", "tag", "chip"],
+  nav: ["nav", "navigation", "tab", "menu"],
+};
+
+/** Expands generic role words in the query to the names files actually use. */
+export function expandRoleAliases(query: string): { terms: string[]; expanded: string[] } {
+  const terms = query.trim().toLowerCase().split(/[\s_-]+/).filter(Boolean);
+  const expanded = [...terms];
+  for (const term of terms) {
+    const aliases = ROLE_ALIASES[term];
+    if (aliases) {
+      for (const alias of aliases) {
+        if (!expanded.includes(alias)) expanded.push(alias);
+      }
+    }
+  }
+  return { terms, expanded };
+}
+
 export async function findComponents(opts: FindOptions): Promise<FindComponentsResult> {
   await allPages();
 
@@ -117,7 +146,7 @@ export async function findComponents(opts: FindOptions): Promise<FindComponentsR
   }
 
   const query = opts.query.trim().toLowerCase();
-  const terms = query.split(/[\s_-]+/).filter(Boolean);
+  const { terms, expanded } = expandRoleAliases(query);
 
   const scored = all
     .map((component) => {
@@ -127,7 +156,7 @@ export async function findComponents(opts: FindOptions): Promise<FindComponentsR
       let score = 0;
       const reasons: string[] = [];
 
-      for (const term of terms) {
+      for (const term of expanded) {
         if (nameHay === term) {
           score += 1;
           reasons.push(`name is exactly "${term}"`);
@@ -154,10 +183,21 @@ export async function findComponents(opts: FindOptions): Promise<FindComponentsR
     .filter((m) => m.score > 0)
     .sort((a, b) => b.score - a.score || a.component.name.localeCompare(b.component.name));
 
+  const aliasTerms = expanded.filter((t) => !terms.includes(t));
+  // An empty result is guidance, not a dead end: name what was tried
+  // (including the alias expansion) and the next step for each outcome.
+  const guidance =
+    scored.length === 0
+      ? `No component matches "${opts.query}"` +
+        (aliasTerms.length > 0 ? ` (also tried role aliases: ${aliasTerms.join(", ")})` : "") +
+        `. Omit the query to list everything in the file, try a shorter word, or build the UI with create_component so the next screen can reuse it.`
+      : undefined;
+
   return {
     truncated,
     total: all.length,
     matches: scored.slice(0, opts.limit),
+    ...(guidance !== undefined ? { guidance } : {}),
   };
 }
 
@@ -314,7 +354,12 @@ export async function createInstance(input: {
  * "Style=Primary, State=Hover" without the caller needing to know which
  * convention the file uses.
  */
-export async function setVariant(input: { instanceId: string; variant: string }): Promise<{
+export async function setVariant(input: {
+  instanceId: string;
+  variant?: string;
+  /** TEXT property overrides, applied after the (optional) variant switch. */
+  properties?: Record<string, string>;
+}): Promise<{
   instanceId: string;
   from: string;
   to: string;
@@ -339,40 +384,61 @@ export async function setVariant(input: { instanceId: string; variant: string })
     throw new Error(`Could not read the main component of ${input.instanceId}. It may be remote or deleted.`);
   }
 
-  const parent = main.parent;
-  if (!parent || parent.type !== "COMPONENT_SET") {
-    throw new Error(
-      `"${main.name}" is a standalone component, not a variant set, so there is nothing to switch to. Promote the variants into a set first.`,
-    );
+  let from = main.name;
+  let to = main.id;
+  let toName = main.name;
+
+  if (input.variant !== undefined && input.variant.trim().length > 0) {
+    const parent = main.parent;
+    if (!parent || parent.type !== "COMPONENT_SET") {
+      throw new Error(
+        `"${main.name}" is a standalone component, not a variant set, so there is nothing to switch to. Promote the variants into a set first.`,
+      );
+    }
+
+    const variants = [...(parent as unknown as { children: ComponentNode[] }).children];
+    const want = input.variant.trim();
+    const pairs = want
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => part.split("=").map((s) => s.trim()))
+      .filter((kv): kv is [string, string] => kv.length === 2 && kv[0]!.length > 0 && kv[1]!.length > 0);
+
+    const match =
+      variants.find((v) => v.name.trim() === want) ??
+      (pairs.length > 0
+        ? variants.find((v) => {
+            const segments = v.name.split(",").map((s) => s.trim().toLowerCase());
+            return pairs.every(([k, val]) => segments.includes(`${k.toLowerCase()}=${val.toLowerCase()}`));
+          })
+        : undefined);
+
+    if (!match) {
+      const names = variants.map((v) => `"${v.name}"`).join(", ");
+      throw new Error(`No variant matches '${input.variant}'. Variants of "${parent.name}": ${names || "(none)"}.`);
+    }
+
+    instance.swapComponent(match);
+    to = match.id;
+    toName = match.name;
   }
 
-  const variants = [...(parent as unknown as { children: ComponentNode[] }).children];
-  const want = input.variant.trim();
-  const pairs = want
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => part.split("=").map((s) => s.trim()))
-    .filter((kv): kv is [string, string] => kv.length === 2 && kv[0]!.length > 0 && kv[1]!.length > 0);
-
-  const match =
-    variants.find((v) => v.name.trim() === want) ??
-    (pairs.length > 0
-      ? variants.find((v) => {
-          const segments = v.name.split(",").map((s) => s.trim().toLowerCase());
-          return pairs.every(([k, val]) => segments.includes(`${k.toLowerCase()}=${val.toLowerCase()}`));
-        })
-      : undefined);
-
-  if (!match) {
-    const names = variants.map((v) => `"${v.name}"`).join(", ");
-    throw new Error(`No variant matches '${input.variant}'. Variants of "${parent.name}": ${names || "(none)"}.`);
+  if (input.properties !== undefined) {
+    for (const [key, value] of Object.entries(input.properties)) {
+      try {
+        instance.setProperties({ [key]: value });
+      } catch {
+        // Unknown property names are skipped, never fatal.
+      }
+    }
   }
 
-  const from = main.name;
-  instance.swapComponent(match);
+  if ((input.variant === undefined || input.variant.trim().length === 0) && input.properties === undefined) {
+    throw new Error(`setVariant on ${input.instanceId} changes nothing: give a variant and/or TEXT properties.`);
+  }
 
-  return { instanceId: instance.id, from, to: match.id, toName: match.name };
+  return { instanceId: instance.id, from, to, toName };
 }
 
 /**

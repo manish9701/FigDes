@@ -339,6 +339,24 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
   return {
     status: plan.warnings.length > 0 || plan.guardPreview.length > 0 ? "planned-with-warnings" : "planned",
 
+    /**
+     * Design-intelligence provenance (issue #24): the mandatory gate's
+     * receipt. `classifyDecision` ran (the decision kind below is its
+     * verdict, not an echo of the input), and the composition hint compiled
+     * from the stated direction was applied to the composition plan with
+     * named provenance. A plan without this block predates the gate.
+     */
+    intelligence: {
+      applied: true,
+      basis: "plan-screen",
+      decisionKind: plan.intent.decisionKind,
+      compositionHintApplied: compositionHint !== undefined,
+      ...(compositionHint !== undefined && args.visualDirection !== undefined
+        ? { compositionHintWhy: `Stated in the direction: '${args.visualDirection}'.` }
+        : {}),
+      patternId: pattern?.id ?? null,
+    },
+
     /** The headline: what this screen is for. */
     decision: {
       primaryDecision: plan.intent.primaryDecision,

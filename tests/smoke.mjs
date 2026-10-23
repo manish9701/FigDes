@@ -721,7 +721,15 @@ await check("design_runtime dryRun compiles a program", async () => {
   assert.equal(data.dryRun, true);
   assert.ok(data.operations.length > 5, "should compile a real node tree");
   assert.equal(data.stats.regions, 2);
-  assert.equal(data.warnings.length, 0);
+  // Intelligence gate: raw programs without plan_screen/visualIntent disclose
+  // intelligence-applied:false rather than silently passing. Zero warnings only
+  // holds for intelligence-backed programs.
+  assert.ok(data.intelligence, "payload discloses intelligence provenance");
+  if (data.intelligence.applied === false) {
+    assert.ok(data.warnings.some((w) => /plan_screen|design_pipeline|intelligence/i.test(w)), "bypass must name the intelligence path");
+  } else {
+    assert.equal(data.warnings.length, 0);
+  }
 });
 
 await check("design_runtime rejects a code-string argument rather than running it", async () => {

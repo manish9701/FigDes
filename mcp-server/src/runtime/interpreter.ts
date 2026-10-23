@@ -194,6 +194,9 @@ const CONTENT_ARGS = new Set([
   "sides",
   "innerRatio",
   "rotation",
+  // Rule direction for divider / sectionDivider. Absent here, a correctly
+  // spelled `orientation` was rejected as unknown.
+  "orientation",
   // Logo marks
   "mark",
   "size",
@@ -524,6 +527,12 @@ export interface RuntimeResult {
     layoutMs: number;
     /** How many primitives the model used instead of hand-rolled operations. */
     semanticUnits: number;
+    /**
+     * Whether a requested native auto-layout container was honoured.
+     * Forwarded from the compile: a declined request stays a fact in the
+     * payload (alongside its `auto-layout` violation), never a silent pass.
+     */
+    nativeLayoutApplied?: boolean;
   };
   /** Populated when a call referenced a primitive that does not apply here. */
 warnings: string[];
@@ -1025,6 +1034,10 @@ case "shape": {
           shape: (args.shape as never) ?? "rect",
           ...(args.fill !== undefined ? { fill: coerceToken(args.fill) } : {}),
           ...(args.stroke !== undefined ? { stroke: coerceToken(args.stroke) } : {}),
+          // A line draws at its stroke width, so the weight has to travel to
+          // the IR — dropping it here forced every line to a 1px hairline no
+          // matter what was asked for.
+          ...(args.strokeWeight !== undefined ? { strokeWeight: coerceNumber(args.strokeWeight, 1, 0, 64) } : {}),
           ...(args.radius !== undefined ? { radius: coerceNumber(args.radius, 0, 0, 200) } : {}),
           ...(args.opacity !== undefined ? { opacity: coerceNumber(args.opacity, 1, 0, 1) } : {}),
           ...(args.sides !== undefined ? { sides: Math.max(3, Math.min(24, Math.round(Number(args.sides) || 6))) } : {}),
@@ -1149,11 +1162,30 @@ case "shape": {
       }
 
       default: {
+        // Reuse escape hatch (issue #24): a live component reference is not a
+        // drawing instruction, so it travels beside `props`, not inside it —
+        // `props` only carries flat scalars and would reject the variant
+        // record as a nested blob. Stripped before validation, reattached after.
+        const rawComponentId = args.componentId;
+        const rawVariantProps = args.variantProps as Record<string, unknown> | undefined;
+        const { componentId: _cid, variantProps: _vp, ...restArgs } = args;
+        void _cid;
+        void _vp;
+        const variantRecord =
+          rawVariantProps !== null && typeof rawVariantProps === "object" && !Array.isArray(rawVariantProps)
+            ? Object.fromEntries(
+                Object.entries(rawVariantProps)
+                  .filter(([, v]) => typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+                  .map(([k, v]) => [k, String(v)]),
+              )
+            : undefined;
         const parsed = ComponentSpecSchema.safeParse({
           id,
           kind: "component",
           type: componentTypeFor(call.fn),
-          props: args,
+          props: restArgs,
+          ...(typeof rawComponentId === "string" && rawComponentId.length > 0 ? { componentId: rawComponentId } : {}),
+          ...(variantRecord !== undefined && Object.keys(variantRecord).length > 0 ? { variant: variantRecord } : {}),
         });
         if (parsed.success) {
           content.push(parsed.data);
@@ -1260,6 +1292,7 @@ case "shape": {
       operationCount: compiled.stats.operationCount,
       layoutMs: compiled.stats.layoutMs,
       semanticUnits: parsedProgram.content.filter((c) => RUNTIME_PRIMITIVES[c.fn].kind === "content").length,
+      nativeLayoutApplied: compiled.stats.nativeLayoutApplied,
     },
     warnings,
     intentNotes,
@@ -1872,8 +1905,32 @@ function expandStates(call: RuntimeCall, warnings: string[]): RuntimeCall[] {
   const table = STATE_TABLES[call.fn];
   if (!table) return [call];
 
+  // The schema documents the object form (`{ state: "loading" }`), and bare
+  // names are the common shorthand — both are accepted. Anything else warns
+  // and skips instead of silently dropping the whole strip (or worse,
+  // silently keeping a single default the author never asked for).
+  if (args.states !== undefined && !Array.isArray(args.states)) {
+    warnings.push(`'states' on '${call.fn}' must be an array of state names or { state: "..." } objects; it was ignored.`);
+  }
   const raw = Array.isArray(args.states) ? args.states : [];
-  const states = raw.filter((s): s is string => typeof s === "string" && s.length > 0).slice(0, 14);
+  const states: string[] = [];
+  for (const entry of raw.slice(0, 64)) {
+    if (states.length >= 14) break;
+    const name =
+      typeof entry === "string"
+        ? entry
+        : entry !== null && typeof entry === "object" && !Array.isArray(entry)
+          ? (entry as Record<string, unknown>).state
+          : undefined;
+    if (typeof name === "string" && name.length > 0) {
+      states.push(name);
+      continue;
+    }
+    warnings.push(`State entry ${JSON.stringify(entry)} on '${call.fn}' is not a state name or { state: "..." } object and was skipped.`);
+  }
+  if (raw.length > 64) {
+    warnings.push(`Only the first 64 'states' entries on '${call.fn}' were read; the rest were ignored.`);
+  }
   if (states.length === 0) {
     const { states: _dropped, ...rest } = args;
     void _dropped;

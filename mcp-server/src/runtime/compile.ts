@@ -264,6 +264,10 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, { reflow: ir.relations.length === 0 });
   let regions = shell.regions;
   let reflowed = shell.reflowed;
+  // Whether a requested native auto-layout container was honoured. Reported
+  // on `stats` so a declined request is a fact in the payload, not just a
+  // violation line — and the violation is always kept alongside it.
+  let nativeLayoutApplied = true;
   if (alignGrid > 0) {
     regions = regions.map((r) => ({
       ...r,
@@ -382,6 +386,9 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       const fixedExtentChildren = children.length > 0 && children.every((c) => c.kind === "component");
       const autoLayout = wantsAutoLayout && flowRegion && fixedExtentChildren;
       if (wantsAutoLayout && !autoLayout) {
+        // Declined, not silently passed: the violation below stays, and the
+        // stats flag records the decline for callers that gate on the payload.
+        nativeLayoutApplied = false;
         violations.push({
           rule: "auto-layout",
           message:
@@ -812,6 +819,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       constrained,
       reflowed,
       traceMismatches,
+      nativeLayoutApplied,
     },
   };
 }
@@ -1006,6 +1014,38 @@ function emitTokens(ir: DesignIR, operations: Operation[]): void {
 /* -------------------------------------------------------------------------- */
 
 /**
+ * Shifts a normalised connector path by (dx, dy).
+ *
+ * `normalizePath` frames the route at its own top-left, so a node padded by
+ * strokeWeight/2 on every side would leave the path glued to the node's top
+ * and left edges — half the stroke hanging outside the bounds that are
+ * supposed to enclose it. Shifting every coordinate by the pad centres the
+ * route in its padded node. Only M/L/Z occur here (the normaliser flattens
+ * curves), so numbers strictly alternate x, y after each command.
+ */
+function shiftNormalizedPath(path: string, dx: number, dy: number): string {
+  if (dx === 0 && dy === 0) return path;
+  const r3 = (n: number): number => Math.round(n * 1000) / 1000;
+  const out: string[] = [];
+  let axis = 0;
+  for (const token of path.split(" ")) {
+    if (token === "M" || token === "L" || token === "Z") {
+      out.push(token);
+      axis = 0;
+      continue;
+    }
+    const n = Number(token);
+    if (!Number.isFinite(n)) {
+      out.push(token);
+      continue;
+    }
+    out.push(String(r3(n + (axis === 0 ? dx : dy))));
+    axis = 1 - axis;
+  }
+  return out.join(" ");
+}
+
+/**
  * The start and end of a routed connector's main path.
  *
  * Reads the two moveto/lineto coordinates rather than re-deriving them, so the
@@ -1055,10 +1095,15 @@ function emitConnectors(
   for (const spec of connectors) {
     if (spec.kind !== "connector") continue;
 
-    // In deck mode a connector must live on the same slide as both endpoints.
-    // A line cannot span two slides, so crossing one is a violation rather than
-    // a silently misplaced vector.
+    // A connector lives with its endpoints. In deck mode that is load-bearing
+    // (a line cannot span slides, so crossing one is a violation rather than
+    // a silently misplaced vector). Outside deck mode a connector joining two
+    // nodes inside one region parents to that region, so it moves with the
+    // region instead of orphaning at the root. Coordinates below are
+    // parent-local either way, so the region's origin is subtracted from the
+    // absolute route geometry when it is the parent.
     let parent = "root";
+    const origin = { x: 0, y: 0 };
     if (deck) {
       const fromHome = home.get(spec.from);
       const toHome = home.get(spec.to);
@@ -1070,6 +1115,17 @@ function emitConnectors(
         continue;
       }
       parent = fromHome;
+    } else {
+      const fromHome = home.get(spec.from);
+      const toHome = home.get(spec.to);
+      if (fromHome !== undefined && fromHome === toHome) {
+        const regionBox = boxes.get(fromHome);
+        if (regionBox) {
+          parent = fromHome;
+          origin.x = regionBox.x;
+          origin.y = regionBox.y;
+        }
+      }
     }
 
     const fromBox = boxes.get(spec.from);
@@ -1127,18 +1183,36 @@ function emitConnectors(
       }
     }
 
+    // A short gap cannot show arrowheads: heads that cover the whole chord
+    // read as decoration on nothing, so the router draws a plain line and says
+    // so in the summary. That silence used to be total — restated here as an
+    // advisory finding, so "no direction cue" is a visible decision with a fix,
+    // not a mystery. Advisory (`layout`, never blocking): a short gap is a
+    // spacing judgement, not broken geometry.
+    if (route.arrowheadsOmitted) {
+      violations.push({
+        rule: "layout",
+        message: `Connector '${spec.id}' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate '${spec.from}' and '${spec.to}' to show direction, or set arrowEnd:false to own the plain line.`,
+      });
+    }
+
+    const pad = (spec.strokeWeight ?? 1) / 2;
     operations.push(
       op({
         type: "createVector",
         id: spec.id,
-        // Connectors attach to the root frame so they can span regions.
         parent,
         name: route.summary,
-        x: normalized.x,
-        y: normalized.y,
-        width: normalized.width,
-        height: normalized.height,
-        path: normalized.path,
+        // Vector bounds must enclose the stroke: a stroked vector's paint
+        // straddles its path by half the weight on every side, so the node is
+        // padded by strokeWeight/2 against the raw path bounds and the path is
+        // shifted into the centre of its padded node. Without this a 3px
+        // critical edge clips half its ink at the node edge.
+        x: normalized.x - origin.x - pad,
+        y: normalized.y - origin.y - pad,
+        width: normalized.width + pad * 2,
+        height: normalized.height + pad * 2,
+        path: shiftNormalizedPath(normalized.path, pad, pad),
         stroke: spec.stroke !== undefined ? resolveToken(spec.stroke) : "#8A8C84",
         strokeWeight: spec.strokeWeight,
         fill: [],
@@ -1150,11 +1224,16 @@ function emitConnectors(
     );
 
     if (spec.label && route.labelAt) {
-      labels.push({ id: `${spec.id}-label`, text: spec.label, x: route.labelAt.x, y: route.labelAt.y, weight: spec.strokeWeight, parent });
+      labels.push({ id: `${spec.id}-label`, text: spec.label, x: route.labelAt.x - origin.x, y: route.labelAt.y - origin.y, weight: spec.strokeWeight, parent });
     }
   }
 
   // Labels are emitted after the lines so they sit on top of them in z-order.
+  // The +6/-14 nudge clears the line itself, but the offset is blind: on a
+  // dense topology two labels can still collide, and a midpoint near a node
+  // can overlap it. Kept as a fixed offset (not collision-solved) so labels
+  // stay deterministic; overlap here is a spacing judgement for review, not a
+  // compile failure.
   for (const label of labels) {
 operations.push(
         op({
@@ -1348,8 +1427,10 @@ function emitContent(args: {
       const at = finitePoints.get(spec.id);
       if (!at) continue;
       // A device keeps its natural machine-tile size; abstract graphics share
-      // one small square so dots and rings read as one system.
-      const extent = spec.kind === "component" ? deviceSize : size;
+      // one small square so dots and rings read as one system. A line keeps a
+      // tight row: its height is the stroke it draws, not the square — the
+      // emitter draws exactly this, so the recorded box matches it.
+      const extent = spec.kind === "component" ? deviceSize : isLineShape(spec) ? { w: size.w, h: lineStrokeHeight(spec) } : size;
       sepBoxes.push({
         id: spec.id,
         x: Math.round(at.x - extent.w / 2),
@@ -1397,15 +1478,21 @@ function emitContent(args: {
         const at = spots.get(spec.id);
         if (!at) continue;
         // Dots overshoot their mathematical box so they read the same size as
-        // the flat-edged tiles around them.
-        const box: ResolvedBox = overshoot({ x: at.x - grid * 2, y: at.y - grid * 2, w: grid * 4, h: grid * 4 });
+        // the flat-edged tiles around them. A line is exempt from the
+        // overshoot: its row is already tight (see lineStrokeHeight), and
+        // padding it would break the agreement with what is emitted.
+        const box: ResolvedBox = isLineShape(spec)
+          ? { x: at.x - grid * 2, y: at.y, w: grid * 4, h: lineStrokeHeight(spec) }
+          : overshoot({ x: at.x - grid * 2, y: at.y - grid * 2, w: grid * 4, h: grid * 4 });
         boxes.set(spec.id, { id: spec.id, ...box });
         emitGraphic(spec, region, box, operations);
       }
     } else {
       const placed = packContent({
         region: inner,
-        items: graphics.map((c) => ({ id: c.id, height: grid * 6 })),
+        // A line reserves its stroke height, not the graphic square: packing
+        // it at 48px and emitting it at 2px would disagree by construction.
+        items: graphics.map((c) => ({ id: c.id, height: isLineShape(c) ? lineStrokeHeight(c) : grid * 6 })),
         gap,
         columns,
       });
@@ -1413,7 +1500,7 @@ function emitContent(args: {
       for (const spec of graphics) {
         const box = placed.get(spec.id);
         if (!box) continue;
-        const resolved: ResolvedBox = { ...box, h: grid * 6 };
+        const resolved: ResolvedBox = { ...box, h: isLineShape(spec) ? lineStrokeHeight(spec) : grid * 6 };
         boxes.set(spec.id, { id: spec.id, ...resolved });
         emitGraphic(spec, region, resolved, operations);
       }
@@ -1570,6 +1657,24 @@ function emitText(
   }
 }
 
+/**
+ * Tight height for a horizontal line mark.
+ *
+ * A line is one-dimensional, so its bounds are the stroke itself: the height
+ * encloses half the stroke weight on each side of the path, which is where a
+ * stroked vector's paint actually lands. Callers lay the line out at exactly
+ * this height and emit it at exactly this height, so the recorded box and the
+ * drawn node agree by construction rather than by coincidence.
+ */
+function lineStrokeHeight(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>): number {
+  return Math.max(1, Math.round(typeof spec.strokeWeight === "number" ? spec.strokeWeight : 1));
+}
+
+/** True for a shape that is a mark, not a surface. */
+function isLineShape(spec: ContentSpec): spec is Extract<ContentSpec, { kind: "shape" }> {
+  return spec.kind === "shape" && spec.shape === "line";
+}
+
 function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, region: ResolvedRegion, box: ResolvedBox, operations: Operation[]): void {
   // Shapes and vectors are emitted **relative to their region**, like text and
   // components. The plugin assigns `node.x = op.x`, and Figma's `x` is
@@ -1622,6 +1727,35 @@ function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, r
         strokeWeight: spec.strokeWeight ?? 1.5,
         fill: spec.fill !== undefined ? resolveToken(spec.fill) : [],
         ...(spec.opacity !== undefined ? { opacity: spec.opacity } : {}),
+      }),
+    );
+    return;
+  }
+
+  if (spec.kind === "shape" && spec.shape === "line") {
+    // A line is a mark, not a surface: emitting it as a rectangle drew a
+    // 352x48 bar for what the author meant as a rule. It compiles to a
+    // horizontal createVector centred in its row, with tight bounds that
+    // enclose half the stroke on each side (a stroked vector's paint straddles
+    // its path). The layout reserves exactly this height (see the graphics
+    // branches in emitContent), so the trace check holds by construction.
+    const w = Math.max(1, Math.round(box.w));
+    const h = lineStrokeHeight(spec);
+    const cy = Math.round((h / 2) * 1000) / 1000;
+    operations.push(
+      op({
+        type: "createVector",
+        id: spec.id,
+        parent: region.id,
+        name: "line",
+        x: box.x,
+        y: box.y,
+        width: w,
+        height: h,
+        path: `M 0 ${cy} L ${w} ${cy}`,
+        stroke: spec.stroke !== undefined ? resolveToken(spec.stroke) : "#111111",
+        ...(spec.strokeWeight !== undefined ? { strokeWeight: spec.strokeWeight } : {}),
+        fill: [],
       }),
     );
     return;
@@ -1720,6 +1854,32 @@ function emitInstance(
   }
 }
 
+function emitComponentInstance(
+  spec: Extract<ContentSpec, { kind: "component" }>,
+  region: ResolvedRegion,
+  box: ResolvedBox,
+  operations: Operation[],
+): void {
+  // `box` is already region-relative here: emitComponent subtracts the region
+  // origin before dispatching, so these coordinates are parent-local and the
+  // operation trace agrees with the resolved geometry by construction.
+  const label = typeof spec.props.label === "string" && spec.props.label.length > 0 ? spec.props.label : undefined;
+  operations.push(
+    op({
+      type: "createInstance",
+      id: spec.id,
+      parent: region.id,
+      componentId: spec.componentId!,
+      ...(label !== undefined ? { properties: { label } } : {}),
+      x: Math.max(0, Math.round(box.x)),
+      y: Math.max(0, Math.round(box.y)),
+    }),
+  );
+  if (spec.variant && Object.keys(spec.variant).length > 0) {
+    operations.push(op({ type: "setVariant", target: spec.id, variant: spec.variant }));
+  }
+}
+
 function emitComponent(
   spec: Extract<ContentSpec, { kind: "component" }>,
   region: ResolvedRegion,
@@ -1751,6 +1911,19 @@ function emitComponent(
    * single button's variant palette.
    */
   const styleLook = look;
+
+  // Reuse escape hatch (issue #24): a live component id means the file already
+  // has this UI, so instance it instead of redrawing it. The label travels as
+  // a TEXT property override; the frame+text path below is the fallback when
+  // no component was named.
+  if (
+    (spec.type === "button" || spec.type === "statusPill" || spec.type === "navItem") &&
+    typeof spec.componentId === "string" &&
+    spec.componentId.length > 0
+  ) {
+    emitComponentInstance(spec, region, box, operations);
+    return;
+  }
 
   switch (spec.type) {
     case "metric": {
@@ -1929,6 +2102,29 @@ function emitComponent(
     }
 
     case "divider": {
+      // A hairline is a 1px rectangle, not a vector line: Figma has no line
+      // primitive, and a 1px rect measures exactly what it draws, so the trace
+      // check holds by construction. The 1px rect is ONLY the horizontal
+      // hairline — a vertical rule swaps the axes (thin wide, tall high)
+      // instead of collapsing to a dot.
+      const orientation = typeof p.orientation === "string" ? p.orientation.toLowerCase() : "horizontal";
+      const weight = Math.max(1, Math.round(num("strokeWeight", 1)));
+      if (orientation === "vertical") {
+        operations.push(
+          op({
+            type: "createRectangle",
+            id: spec.id,
+            parent: parentHint,
+            name: "Divider",
+            x: box.x,
+            y: box.y,
+            width: weight,
+            height: Math.max(1, Math.round(box.h)),
+            fill: str("color", "#E0E0E0"),
+          }),
+        );
+        break;
+      }
       operations.push(
         op({
           type: "createRectangle",
@@ -1938,7 +2134,7 @@ function emitComponent(
           x: box.x,
           y: box.y,
           width: Math.max(1, Math.round(box.w)),
-          height: 1,
+          height: weight,
           fill: str("color", "#E0E0E0"),
         }),
       );
@@ -1957,8 +2153,14 @@ function emitComponent(
         destructive: { surface: "#D13415", color: "#FFFFFF" },
         quiet: { surface: "transparent", color: "#242521" },
         loading: { surface: "#242521", color: "#FFFFFF", opacity: 0.6, suffix: "…" },
+        // Disabled is a real state, not a restyle: muted fill at reduced
+        // opacity, so it reads as unavailable rather than as a quiet button.
+        disabled: { surface: "#E5E3DC", color: "#8A8C84", opacity: 0.4 },
       };
-      const look = looks[variant] ?? looks.primary!;
+      // An unknown variant must never silently promote to primary: a button
+      // that looks primary but acts secondary is the lie this table exists to
+      // prevent. Secondary retreats safely, so it is the fallback.
+      const look = looks[variant] ?? looks.secondary!;
       const label = str("label", "Continue") + (look.suffix ?? "");
       operations.push(
         op({
@@ -2445,14 +2647,33 @@ function emitComponent(
     }
 
     case "sectionDivider": {
+      // Orientation mirrors `divider`: horizontal keeps the 1px rule under the
+      // label; vertical draws the rule tall and thin beside it. The 1px rect
+      // is a hairline-only shape — a vertical section divider is a rule, not
+      // a dot, so the axes swap instead of reusing the horizontal geometry.
+      const orientation = typeof p.orientation === "string" ? p.orientation.toLowerCase() : "horizontal";
+      const weight = Math.max(1, Math.round(num("strokeWeight", 1)));
       operations.push(op({ type: "createText", parent: parentHint, name: "Section", content: str("title", str("label", "Section")).toUpperCase(), fontSize: fs(11), weight: 600, letterSpacing: 2, fill: "#6F716A" }));
+      if (orientation === "vertical") {
+        operations.push(
+          op({
+            type: "createRectangle",
+            parent: parentHint,
+            name: "Rule",
+            width: weight,
+            height: Math.max(32, Math.round(box.h)),
+            fill: "#E8E6DF",
+          }),
+        );
+        break;
+      }
       operations.push(
         op({
           type: "createRectangle",
           parent: parentHint,
           name: "Rule",
           width: Math.max(80, Math.round(box.w)),
-          height: 1,
+          height: weight,
           fill: "#E8E6DF",
         }),
       );
@@ -4167,6 +4388,16 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
       // layout reserve 90px of column for a 36px nav item.
       const hug = hugSize(spec, grid, typeScale, look);
       if (hug) return hug.h;
+      if (spec.type === "divider") {
+        // Orientation-aware: a horizontal hairline reserves its own stroke
+        // weight (1px by default); a vertical rule defaults to a grid*8 span
+        // because a 1px-tall box would emit a dot, not a rule.
+        const props = spec.props as Record<string, unknown>;
+        if (typeof props.orientation === "string" && props.orientation.toLowerCase() === "vertical") {
+          return Math.max(1, Math.round(grid * 8));
+        }
+        return Math.max(1, Math.round(typeof props.strokeWeight === "number" ? props.strokeWeight : 1));
+      }
       const fixed = FIXED_COMPONENT_HEIGHT[spec.type];
       return Math.round((fixed ?? 90) * typeScale);
     }
@@ -4233,6 +4464,17 @@ function resolvedSize(
       const innerW = Math.max(40, Math.round(box.w) - grid * 4);
       const lines = detail ? Math.max(1, Math.ceil((detail.length * Math.round(11 * typeScale) * 0.62) / innerW)) : 0;
       return { ...box, w: Math.round(box.w), h: Math.max(40, detail ? grid * 2 + 20 + lines * 15 : 40) };
+    }
+    // A divider draws at its own thin extent, not the column cell: without
+    // this the trace would compare a 1px hairline (or a narrow vertical rule)
+    // against a full-width box and call it a lie.
+    if (spec.type === "divider") {
+      const props = spec.props as Record<string, unknown>;
+      const weight = Math.max(1, Math.round(typeof props.strokeWeight === "number" ? props.strokeWeight : 1));
+      if (typeof props.orientation === "string" && props.orientation.toLowerCase() === "vertical") {
+        return { ...box, w: weight, h: Math.max(1, Math.round(box.h)) };
+      }
+      return { ...box, h: weight };
     }
     return box;
   }

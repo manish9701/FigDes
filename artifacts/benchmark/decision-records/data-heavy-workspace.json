@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "data-heavy-workspace",
-  "recordedAt": "2026-10-23T02:37:56.802Z",
+  "recordedAt": "2026-10-23T03:07:35.549Z",
   "brief": {
     "screen": "Follow-up queue",
     "product": "ops-ledger",

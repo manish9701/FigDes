@@ -3843,15 +3843,19 @@ function canvasFitReflow(args: {
 
   // A region cannot give back space its content is standing in — the repair
   // would trade one overflow report for a pile of containment findings.
+  // Fill and hug regions MAY give back space down to their content need: a
+  // fill region's "take the leftover space" contract is exactly what overflows
+  // when an earlier region grows (a 142px header pushed a 184px fill inspector
+  // to (290,736) on a 900px canvas and nothing could pull it back because both
+  // fills were declared untouchable). What they must not give back is the room
+  // their own content is standing in, so the floor is the content need.
   const shrinkableOf = (region: ResolvedRegion, floor: "usable" | "content"): boolean => {
-    if (region.height === "fill" || region.height === "hug") return false;
     const need = contentNeed(region);
-    if (need === null) return floor === "usable" ? region.h > MIN_STACK_REGION_H : region.h > 1;
+    if (need === null) return region.height !== "fill" && region.height !== "hug" && (floor === "usable" ? region.h > MIN_STACK_REGION_H : region.h > 1);
     const minH = floor === "usable" ? Math.max(MIN_STACK_REGION_H, need) : Math.max(1, need);
     return region.h > minH + 0.5;
   };
   const floorOf = (region: ResolvedRegion, floor: "usable" | "content"): number => {
-    if (region.height === "fill" || region.height === "hug") return region.h;
     const need = contentNeed(region);
     if (need === null) return floor === "usable" ? MIN_STACK_REGION_H : 1;
     return floor === "usable" ? Math.max(MIN_STACK_REGION_H, need) : Math.max(1, need);
@@ -3893,11 +3897,21 @@ function canvasFitReflow(args: {
     let y = ordered[0]!.y;
     for (const region of ordered) {
       const dy = Math.round(y) - region.y;
-      if (dy !== 0) {
+      const was = beforeGeom.get(region.id)!;
+      const moved = dy !== 0 || Math.abs(was.h - region.h) > 0.5;
+      if (moved) {
         region.y = Math.round(y);
-        for (const id of [region.id, ...region.children]) shiftBox(id, dy);
+        // Height-only repairs (dy = 0, the region shrank in place) must patch
+        // too, or the op keeps the old height and the trace check calls the
+        // geometry a lie.
         patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
       }
+      // The region's own resolved box carries the refit geometry as well: the
+      // trace check folds the emitted op against this box, so a box still at
+      // the old height contradicts the patched op.
+      const selfBox = boxes.get(region.id);
+      if (selfBox) boxes.set(region.id, { ...selfBox, x: region.x, y: region.y, w: region.w, h: region.h });
+      for (const id of region.children) shiftBox(id, dy);
       y += region.h + gutter;
     }
     const newBottom = Math.max(...ordered.map((r) => r.y + r.h));

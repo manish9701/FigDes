@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-compute-topology",
-  "recordedAt": "2026-10-23T02:37:56.745Z",
+  "recordedAt": "2026-10-23T03:07:35.495Z",
   "brief": {
     "screen": "Cluster routing",
     "product": "fenek-clusters",
@@ -97,24 +97,14 @@
   ],
   "outstandingIssues": [
     {
-      "rule": "violation-geometry-01",
-      "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x774 at (0, 136).",
-      "severity": "medium"
-    },
-    {
       "rule": "plan-geometry-drift-01",
       "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x86.",
       "severity": "medium"
     },
     {
       "rule": "plan-geometry-drift-02",
-      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x774.",
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x764.",
       "severity": "medium"
-    },
-    {
-      "rule": "not-applicable",
-      "summary": "The program does not resolve to a buildable screen.",
-      "severity": "critical"
     }
   ],
   "repairAttempts": []

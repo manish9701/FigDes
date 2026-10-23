@@ -208,7 +208,9 @@ Do not force everything into generic cards: use components for repeated details,
 - Added a plan-time completeness signal (plan-completeness:deploy) that warns, without blocking, when a deployment plan lacks the placement recommendation or a primary action.
 - New offline regression brief exo-deployment-fit lives in EXO_DEPLOYMENT_BRIEFS (offline-briefs.ts) with its matching case in EXO_DEPLOYMENT_CASES (suite.ts), versioned apart because the frozen OFFLINE_BRIEFS/BENCHMARKS lists are length-pinned by test; tests assert the two stay in sync (tests/planner-deployment.test.mjs).
 
-**Verified:** the nine frozen benchmark briefs classify exactly as before, npm run benchmark:design stays 9/9 PASS, and the issue22 gate verdict is unchanged for every existing case (the new brief was never added to the frozen baseline inputs).
+**Root cause (second leg, found in the live pipeline dry run):** the canvas-fit pass itself refused to shrink `fill` regions (`region.height === "fill"` returned not-shrinkable), so when a fixed header grew to fit its content the fill regions below slid down and nothing could pull them back — the placement inspector spilled to (290, 736) 184 tall on a 900px canvas with `reflowed: 3` claiming a repair that never covered the fills. A fill region may now give back space down to what its content stands in (the same floor `fitFillRegions` already applies), and a height-only repair patches the emitted op and the region's resolved box together, so the trace check can no longer catch them disagreeing.
+
+**Verified:** the nine frozen benchmark briefs classify exactly as before, npm run benchmark:design stays 9/9 PASS, and the issue22 gate verdict is unchanged for every existing case (the new brief was never added to the frozen baseline inputs). The exact EXO brief through the plan-mode pipeline comes back applicable with every structural check passing and the placement region ending exactly at the canvas edge.
 
 ## Layout compiler: fixed stacks overflowed the canvas, relation content landed outside its region, and text widths contradicted their bounds
 

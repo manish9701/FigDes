@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-model-detail",
-  "recordedAt": "2026-10-23T02:37:56.764Z",
+  "recordedAt": "2026-10-23T03:07:35.512Z",
   "brief": {
     "screen": "Model detail",
     "product": "fenek-clusters",
@@ -95,11 +95,6 @@
   ],
   "outstandingIssues": [
     {
-      "rule": "violation-geometry-01",
-      "summary": "Region 'context' spills past the bottom edge of the 1440x900 canvas: 360x196 at (258, 724).",
-      "severity": "medium"
-    },
-    {
       "rule": "plan-geometry-drift-01",
       "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1182x128.",
       "severity": "medium"
@@ -111,13 +106,8 @@
     },
     {
       "rule": "plan-geometry-drift-03",
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x196.",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x176.",
       "severity": "medium"
-    },
-    {
-      "rule": "not-applicable",
-      "summary": "The program does not resolve to a buildable screen.",
-      "severity": "critical"
     },
     {
       "rule": "type.space.one-rhythm",

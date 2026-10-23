@@ -787,7 +787,9 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   if (intent.primaryAction !== undefined && !regions.some(isActionBearing)) {
     regions.push({
       id: "action",
-      role: "secondary",
+      // Chrome ("footer"), not content: information slots must not drift into
+      // the commit step, and the role is how chrome is recognised downstream.
+      role: "footer",
       composition: "editorial",
       width: "fill",
       height: 96,

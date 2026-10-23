@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-runtime-monitoring",
-  "recordedAt": "2026-10-23T02:37:56.776Z",
+  "recordedAt": "2026-10-23T03:07:35.523Z",
   "brief": {
     "screen": "Runtime monitor",
     "product": "fenek-clusters",

@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-23T02:37:56.815Z",
+  "recordedAt": "2026-10-23T03:07:35.563Z",
   "suite": "v1-offline-pipeline",
   "gate": {
     "verdict": "PASS",
@@ -12,7 +12,7 @@
   "cases": [
     {
       "caseId": "exo-compute-topology",
-      "total": 68,
+      "total": 69.5,
       "dimensions": {
         "hierarchy": 7,
         "composition": 9,
@@ -21,7 +21,7 @@
         "spacingRhythm": 9,
         "relationshipClarity": 9,
         "density": 8,
-        "nativeQuality": 2,
+        "nativeQuality": 5,
         "distinctiveness": 9,
         "readability": 7
       },
@@ -40,16 +40,11 @@
         "relationshipClarity": "4 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
         "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
         "density": "compiled intent carries [style, rhythm, contrast, depth, alignment]; density decisions are consumed downstream (program/report)",
-        "nativeQuality": "structure verdict: fail",
+        "nativeQuality": "structure is in review",
         "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
         "readability": "0 overflow finding(s), 2 geometry finding(s) in the resolved layout"
       },
       "outstandingIssues": [
-        {
-          "rule": "violation-geometry-01",
-          "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x774 at (0, 136).",
-          "severity": "medium"
-        },
         {
           "rule": "plan-geometry-drift-01",
           "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x86.",
@@ -57,19 +52,14 @@
         },
         {
           "rule": "plan-geometry-drift-02",
-          "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x774.",
+          "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x764.",
           "severity": "medium"
-        },
-        {
-          "rule": "not-applicable",
-          "summary": "The program does not resolve to a buildable screen.",
-          "severity": "critical"
         }
       ]
     },
     {
       "caseId": "exo-model-detail",
-      "total": 60.5,
+      "total": 62,
       "dimensions": {
         "hierarchy": 9,
         "composition": 9,
@@ -78,7 +68,7 @@
         "spacingRhythm": 4,
         "relationshipClarity": 9,
         "density": 8,
-        "nativeQuality": 2,
+        "nativeQuality": 5,
         "distinctiveness": 9,
         "readability": 6
       },
@@ -97,16 +87,11 @@
         "relationshipClarity": "1 relationship item(s) named; the plan resolves a focal region for them (draw offline proof: screenshot pass)",
         "productSpecificity": "needs product-specific judgement (live/human pass) — offline evidence does not measure this; it is scored, at 0, to keep the calibration honest",
         "density": "compiled intent carries [style, rhythm, contrast, depth, alignment]; density decisions are consumed downstream (program/report)",
-        "nativeQuality": "structure verdict: fail",
+        "nativeQuality": "structure is in review",
         "distinctiveness": "7 pairwise-distinct candidates, selected family 'topology'",
         "readability": "0 overflow finding(s), 3 geometry finding(s) in the resolved layout"
       },
       "outstandingIssues": [
-        {
-          "rule": "violation-geometry-01",
-          "summary": "Region 'context' spills past the bottom edge of the 1440x900 canvas: 360x196 at (258, 724).",
-          "severity": "medium"
-        },
         {
           "rule": "plan-geometry-drift-01",
           "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1182x128.",
@@ -119,13 +104,8 @@
         },
         {
           "rule": "plan-geometry-drift-03",
-          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x196.",
+          "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x176.",
           "severity": "medium"
-        },
-        {
-          "rule": "not-applicable",
-          "summary": "The program does not resolve to a buildable screen.",
-          "severity": "critical"
         },
         {
           "rule": "type.space.one-rhythm",

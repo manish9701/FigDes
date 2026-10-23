@@ -315,3 +315,48 @@ test("the nine frozen offline briefs still classify exactly as before", () => {
     assert.equal(kind, expected[fixture.caseId], `${fixture.caseId} classification must not move`);
   }
 });
+
+/* -------------------------------------------------------------------------- */
+/* The live-pipeline geometry regression (issue #25, second leg)               */
+/* -------------------------------------------------------------------------- */
+
+test("the exact EXO brief plans clean geometry end-to-end in the pipeline", async () => {
+  // The live plan-mode run produced the right deployment composition but the
+  // compile refused: the header grew to fit its content, the fill regions
+  // below slid down, and the canvas-fit pass refused to shrink fills — the
+  // placement inspector spilled to (290,736) 184 tall on a 1440x900 canvas.
+  // The pipeline leg must come back applicable with no failing checks.
+  const { designPipelineTool } = await import("../mcp-server/dist-test/pipeline/tools.js");
+  const response = await designPipelineTool(null, null, {
+    brief: {
+      product: "EXO",
+      screen: "Deployment fit",
+      purpose: "choose the model deployment that fits the discovered compute cluster and launch it",
+      primaryDecision: "Choose a model deployment that fits the discovered compute cluster.",
+      primaryAction: "Launch deployment",
+      requiredInformation: [
+        "the discovered machines and their memory",
+        "memory each model requires",
+        "the automatic placement recommendation",
+        "the fit verdict for the selected model",
+        "launch prerequisites and validation",
+      ],
+      states: ["selected", "validating", "cluster degraded", "launch disabled until validation passes"],
+      audience: "operator",
+      visualDirection: "technical-editorial",
+      dataMode: "demo",
+      viewport: { width: 1440, height: 900 },
+    },
+    mode: "plan",
+  });
+  const checks = response.report?.structurallyVerified?.checks ?? [];
+  const failed = checks.filter((c) => c.status === "fail");
+  assert.deepEqual(
+    failed.map((c) => c.id),
+    [],
+    `no structural check may fail for the deployment brief, got: ${JSON.stringify(failed.map((c) => `${c.id}: ${c.detail}`))}`,
+  );
+  const applicable = checks.find((c) => c.id === "applicable");
+  assert.ok(!applicable || applicable.status !== "fail", `the program must resolve to a buildable screen, got: ${JSON.stringify(applicable)}`);
+  assert.equal(checks.find((c) => c.id === "compiled-geometry")?.status, "pass", "the compiled geometry must agree with the canvas");
+});

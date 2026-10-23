@@ -77,6 +77,19 @@ export interface ConnectorResult {
 const ARROW = 10;
 
 /**
+ * Minimum connector chord that keeps both arrowheads, for a stroke weight.
+ *
+ * Arrowheads scale with the stroke, so a heavier edge needs a longer run:
+ * a 3px critical edge needs 50px where a 1px edge needs 20px. Layout uses
+ * this to pitch nodes far enough apart to keep their direction; anything
+ * shorter degrades to a plain line with a warning (see `routeConnector`).
+ */
+export function arrowSpace(strokeWeight?: number): number {
+  const w = strokeWeight ?? 1;
+  return 2 * Math.max(6, ARROW * Math.min(2.5, Math.max(0.75, w)));
+}
+
+/**
  * Clips a ray from a box's centre to its boundary.
  *
  * A rectangle is not a circle, so the exit distance is the *smaller* of the
@@ -203,9 +216,9 @@ export function routeConnector(spec: ConnectorSpec, from: ResolvedBox | undefine
   // that the connector stays a plain line, which is truthful: two adjacent nodes
   // 8px apart do not need a direction cue, they need to be further apart.
   const weight = spec.strokeWeight ?? 1;
-  const size = Math.max(6, ARROW * Math.min(2.5, Math.max(0.75, weight)));
+  const size = arrowSpace(weight) / 2;
   const chord = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-  const headsFit = chord >= size * 2;
+  const headsFit = chord >= arrowSpace(weight);
 
   if (spec.arrowEnd !== false && headsFit) parts.push(arrowHead(p2, { x: p2.x - p1.x, y: p2.y - p1.y }, size));
   if (spec.arrowStart && headsFit) parts.push(arrowHead(p1, { x: p1.x - p2.x, y: p1.y - p2.y }, size));

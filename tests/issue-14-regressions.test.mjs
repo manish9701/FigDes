@@ -20,6 +20,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import { compileIR } from "../mcp-server/dist-test/runtime/compile.js";
+import { routeConnector } from "../mcp-server/dist-test/runtime/connectors.js";
 import { runRules } from "../mcp-server/dist-test/review/rules.js";
 import { contrastRatio } from "../mcp-server/dist-test/shared/contrast.js";
 
@@ -265,9 +266,16 @@ const TOPO_IR = {
 
 test("L07 — a connector between adjacent nodes is not swallowed by its arrowheads", () => {
   // Recorded first as "the connector has no endpoints". It had them, and the
-  // route was real: a cluster stacks its nodes 8px apart, so the chord between
+  // route was real: a cluster stacked its nodes 8px apart, so the chord between
   // the two box edges is 8px while each arrowhead is 8px. The heads covered the
   // line completely and what reached Figma was a floating triangle.
+  //
+  // Superseded by the issue-24 clearance contract: device levels are now
+  // pitched to clear the heaviest edge's arrowheads, so the layout no longer
+  // produces the degenerate case this test froze. The degradation itself
+  // (bare line + self-explaining name + advisory) is pinned at unit level in
+  // issue-24-topology-quality ("a gap too short for heads stays a plain line
+  // and says so") and end to end for explicit short connectors.
   const ops = compileIR(TOPO_IR).operations;
   const link = ops.find((o) => o.id === "link-0");
   assert.ok(link, "the connector should be emitted");
@@ -281,12 +289,11 @@ test("L07 — a connector between adjacent nodes is not swallowed by its arrowhe
   const gapX = Math.max(n0.x - (n1.x + n1.width), n1.x - (n0.x + n0.width), 0);
   const gapY = Math.max(n0.y - (n1.y + n1.height), n1.y - (n0.y + n0.height), 0);
   const chord = Math.max(gapX, gapY);
-  assert.ok(chord < 20, `this case is about adjacent nodes; got a ${chord}px gap`);
+  assert.ok(chord >= 20, `levels must clear 1px arrowheads; got a ${chord}px gap`);
 
-  // A triangle is a closed subpath; a line is not. Exactly one subpath means
-  // no arrowhead survived to cover the route.
+  // Heads fit, so the route keeps them: two subpaths, line plus triangle.
   const subpaths = link.path.match(/M/g) ?? [];
-  assert.equal(subpaths.length, 1, `expected a bare line, got: ${link.path}`);
+  assert.ok(subpaths.length > 1, `expected arrowheads on a cleared route, got: ${link.path}`);
   assert.ok(link.height >= chord - 1, "the line should still span the gap between the nodes");
 });
 
@@ -308,7 +315,17 @@ test("L07 — a connector with room for arrowheads keeps them", () => {
 test("L07 — a degenerate route explains itself in the layer name", () => {
   // "Why is this a bare line?" has to be answerable from the file, not from
   // whoever happened to be looking at it that afternoon.
-  const link = compileIR(TOPO_IR).operations.find((o) => o.id === "link-0");
-  assert.match(link.name, /arrowheads need|apart/);
-  assert.equal((compileIR(TOPO_IR).violations || []).filter((v) => v.rule === "connector").length, 0);
+  //
+  // Pinned at unit level now: the cluster layout clears arrow space up front,
+  // so the compile no longer produces this case. Two boxes 8px apart still
+  // degrade to a bare line that owns the reason.
+  const route = routeConnector(
+    { id: "link-0", from: "n0", to: "n1", routing: "orthogonal" },
+    { id: "n0", x: 0, y: 0, w: 128, h: 80 },
+    { id: "n1", x: 0, y: 88, w: 128, h: 80 },
+  );
+  assert.ok(route, "adjacent nodes still route");
+  assert.equal((route.path.match(/M/g) ?? []).length, 1, `expected a bare line, got: ${route.path}`);
+  assert.match(route.summary, /arrowheads need|apart/);
+  assert.equal(route.arrowheadsOmitted, true);
 });

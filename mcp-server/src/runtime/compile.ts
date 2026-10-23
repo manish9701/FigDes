@@ -15,7 +15,7 @@ import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, expectedRelationBox, type PlacedBox } from "./constraints";
 import { checkIdentity } from "./identity";
-import { CONNECTOR_CLEARANCE_MIN, edgeClearanceViolations, labelBoxAt, labelTangent, pickLabelPosition, routeConnector } from "./connectors";
+import { CONNECTOR_CLEARANCE_MIN, arrowSpace, edgeClearanceViolations, labelBoxAt, labelTangent, pickLabelPosition, routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
 import { fitStackToCanvas, inferComposition, MIN_STACK_REGION_H, packContent, planLayoutReflowed, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
@@ -1462,7 +1462,20 @@ function emitContent(args: {
     // vertical chain with edges crossing through nodes. Pitch by node size.
     const hasDevices = graphDevices.length > 0;
     const nodeGap = hasDevices ? deviceSize.w + gap : gap;
-    const nodeLevelGap = hasDevices ? deviceSize.h + gap * 2 : gap * 2;
+    // Arrowheads need room: a connector shorter than its heads loses them with
+    // only a warning, so pitch device levels far enough apart that the heaviest
+    // edge keeps its direction. A 1px edge needs 20px, a 3px critical edge 50px;
+    // the +4 margin survives the selection-ring expansion applied later.
+    const edgeNodeIds = new Set(graphItems.map((c) => c.id));
+    const heaviestEdge = ir.content.reduce(
+      (m, c) =>
+        c.kind === "connector" && edgeNodeIds.has(c.from) && edgeNodeIds.has(c.to)
+          ? Math.max(m, typeof c.strokeWeight === "number" ? c.strokeWeight : 1)
+          : m,
+      1,
+    );
+    const levelClearance = Math.max(gap * 2, arrowSpace(heaviestEdge) + 4);
+    const nodeLevelGap = hasDevices ? deviceSize.h + levelClearance : gap * 2;
     // `forceGraph` is served by the existing simulator; the rest are in
     // algorithms.ts. Both return centres, which the caller turns into boxes.
     const points =
@@ -1494,7 +1507,7 @@ function emitContent(args: {
         nanFallbacks++;
         finitePoints.set(spec.id, {
           x: inner.x + inner.w / 2,
-          y: inner.y + grid * 10 + i * (deviceSize.h + gap),
+          y: inner.y + grid * 10 + i * (deviceSize.h + (hasDevices ? levelClearance : gap)),
         });
       }
     });
@@ -1526,7 +1539,7 @@ function emitContent(args: {
     // Integer coordinates: fractional drift from halving shifts is invisible
     // precision that only pollutes grid-alignment checks downstream.
     for (const b of sepBoxes) { b.x = Math.round(b.x); b.y = Math.round(b.y); }
-    const sep = separateOverlaps(sepBoxes, { x: inner.x, y: inner.y, w: inner.w, h: inner.h }, gap);
+    const sep = separateOverlaps(sepBoxes, { x: inner.x, y: inner.y, w: inner.w, h: inner.h }, hasDevices ? levelClearance : gap);
     if (sep.remaining > 0) {
       violations.push({
         rule: "layout",
@@ -2121,6 +2134,10 @@ function emitComponent(
       const selected = p.selected === true;
       const health = typeof p.health === "string" ? p.health : typeof p.status === "string" ? p.status : undefined;
       const stroke = selected ? "#0D99FF" : health !== undefined ? stateTone(health).fg : "#E0E0E0";
+      // The drawn tile is the resolved box, not the intrinsic constant: a
+      // selected node carries a 3px ring whose placement box is 2px larger on
+      // each axis, and emitting the constant here disagreed with the recorded
+      // geometry (operation-trace defect on live topology frames).
       operations.push(
         op({
           type: "createFrame",
@@ -2129,8 +2146,8 @@ function emitComponent(
           name: str("label", "Device"),
           x: box.x,
           y: box.y,
-          width: grid * 16,
-          height: grid * 10,
+          width: Math.max(1, Math.round(box.w)),
+          height: Math.max(1, Math.round(box.h)),
           fill: str("surface", "#FFFFFF"),
           stroke,
           strokeWeight: selected ? 3 : 1,
@@ -4771,11 +4788,9 @@ function hugSize(
       return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }), h: Math.round(36 * typeScale) };
     }
     case "deviceNode": {
-      // Fixed intrinsic, same as the emitter. A device node draws at
-      // grid*16 x grid*10 wherever it lands, so the layout has to reserve that
-      // and the recorded box has to be it — otherwise a device flowing in a
-      // normal region is measured at the full column width and emitted at 128
-      // (issue #13, X11: "'n1' is emitted 128 wide but its resolved box is 900").
+      // Fixed intrinsic: a device node reserves grid*16 x grid*10 wherever it
+      // lands, so the layout never records the full column width for one
+      // (issue #13, X11). The emitter draws the resolved box it is handed.
       return { w: Math.round(grid * 16 * typeScale), h: Math.round(grid * 10 * typeScale) };
     }
     case "fitGauge": {

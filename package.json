@@ -20,7 +20,8 @@
     "build:memory": "esbuild mcp-server/src/memory/guard.ts mcp-server/src/memory/capability-truth.ts mcp-server/src/memory/rules-exo.ts mcp-server/src/memory/store.ts mcp-server/src/memory/tools.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/memory --log-level=warning",
     "build:native": "esbuild mcp-server/src/native/use-figma.ts mcp-server/src/native/lock.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/native --log-level=warning",
     "build:clients": "esbuild mcp-server/src/clients/registry.ts --bundle --platform=node --format=esm --target=node20 --outdir=mcp-server/dist-test/clients --log-level=warning",
-    "benchmark:issue22": "npm run build:test && node scripts/run-issue22-benchmark.mjs", "benchmark:design": "npm run build:test && node scripts/run-design-benchmark.mjs",
+    "benchmark:issue22": "npm run build:test && node scripts/run-issue22-benchmark.mjs",
+    "benchmark:design": "npm run build:test && node scripts/run-design-benchmark.mjs",
     "benchmark:live": "node scripts/run-live-benchmark.mjs",
     "benchmark:live:stress": "node scripts/run-live-stress-case.mjs",
     "benchmark:live:native": "node scripts/run-live-native-check.mjs",
@@ -76,7 +77,7 @@
     "test:issue20": "node --test tests/issue-20-regressions.test.mjs tests/issue-20-fixtures.test.mjs tests/issue-20-ledger.test.mjs",
     "test:issue22": "node --test tests/issue-22-skills.test.mjs tests/issue-22-phase34.test.mjs tests/issue-22-benchmark-gate.test.mjs",
     "test:issue23": "node --test tests/issue-23-preflight.test.mjs tests/issue-23-disclosure.test.mjs tests/issue-23-quality.test.mjs tests/issue-23-exo-regressions.test.mjs",
-    "test:issue24": "node --test tests/issue-24-rollback-journal.test.mjs tests/issue-24-find-roles.test.mjs tests/issue-24-server-reliability.test.mjs tests/issue-24-design-intel.test.mjs tests/issue-24-intelligence-gate.test.mjs tests/issue-24-autolayout-measured.test.mjs",
+    "test:issue24": "node --test tests/issue-24-rollback-journal.test.mjs tests/issue-24-find-roles.test.mjs tests/issue-24-server-reliability.test.mjs tests/issue-24-design-intel.test.mjs tests/issue-24-intelligence-gate.test.mjs tests/issue-24-autolayout-measured.test.mjs tests/issue-24-component-library.test.mjs tests/issue-24-style-fidelity.test.mjs tests/issue-24-topology-quality.test.mjs tests/issue-24-topology-hotfix.test.mjs",
     "test:issue25": "node --test tests/planner-deployment.test.mjs tests/runtime.test.mjs tests/issue-23-preflight.test.mjs",
     "gate": "node scripts/run-release-gate.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs"

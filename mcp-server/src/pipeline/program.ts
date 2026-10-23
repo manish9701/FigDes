@@ -44,6 +44,17 @@ export interface BuiltProgram {
     regions: ProgramCall[];
     content: ProgramCall[];
     visualIntent: Record<string, unknown>;
+    /**
+     * The drawn relationships as named links (issue #25 gauntlet leg).
+     *
+     * Interactions used to become connector *content* only, so the graph
+     * algorithms (tree/cluster for a topology region) never saw an edge and
+     * stacked every node in one column — the column then forced each connector
+     * through the body of the node between its endpoints. The links give the
+     * layout the same edges the connectors draw, so nodes arrange as a graph
+     * and the routes stay clear.
+     */
+    links?: Array<{ from: string; to: string; label?: string }>;
   };
   /** What the builder decided, and why. */
   notes: string[];
@@ -220,6 +231,9 @@ export function buildProgram(
   for (const slot of plan.content) byLabel.set(slot.label.toLowerCase(), slot.id);
   for (const slot of plan.content) byLabel.set(slot.id.toLowerCase(), slot.id);
 
+  /** The drawn edges, mirrored into program.links for the graph layout. */
+  let drawnLinks: BuiltProgram["program"]["links"];
+
   for (const [i, interaction] of brief.interactions.entries()) {
     const from = byLabel.get(interaction.from.toLowerCase());
     const to = byLabel.get(interaction.to.toLowerCase());
@@ -242,6 +256,11 @@ export function buildProgram(
         routing: "orthogonal",
       },
     });
+    // The same edge joins the program's links, so the region's graph layout
+    // (tree/cluster for a topology composition) arranges the nodes as a graph
+    // instead of stacking them in one column — which is what forced each
+    // connector through the body of the node between its endpoints.
+    (drawnLinks ??= []).push({ from, to, label: interaction.kind });
     notes.push(`The relationship '${interaction.from}' → '${interaction.to}' is drawn as a connector between the two named nodes.`);
   }
 
@@ -324,6 +343,7 @@ export function buildProgram(
       regions,
       content,
       visualIntent,
+      ...(drawnLinks !== undefined && drawnLinks.length > 0 ? { links: drawnLinks } : {}),
     },
     notes,
   };

@@ -309,3 +309,84 @@ describe("downstream gates do not award credit without measurement", () => {
     );
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/* The stress fixture's topology lays out as a graph (issue #25 gauntlet leg)  */
+/* -------------------------------------------------------------------------- */
+
+describe("a pipeline topology program from interactions lays out as a graph", () => {
+  // The exact EXO Labs "Cluster Routing" stress brief. Its interactions used to
+  // become connector CONTENT only: the graph algorithms never saw an edge, the
+  // four device nodes stacked into one overlapping column, and connector-2
+  // (hub → device-02) routed straight through device-01's box — the build
+  // refused with a containment/collision violation the layout itself had
+  // caused.
+  const BRIEF = {
+    product: "EXO Labs",
+    screen: "Cluster Routing",
+    purpose: "Route a model across the cluster and see which node is the weak link",
+    primaryDecision: "inspect the cluster routing and find the node that cannot take the model",
+    primaryAction: "Route model",
+    requiredInformation: [
+      "node topology", "device-hub", "device-01", "device-02", "device-03",
+      "cluster health", "GPU memory", "model throughput", "shard balance",
+      "cold start time", "disk pressure", "recent deploys",
+    ],
+    optionalInformation: ["audit log"],
+    dataMode: "demo",
+    visualDirection: "technical-instrument",
+    antiGoals: ["a wall of identical metric cards", "a dark panel carrying the whole identity"],
+    interactions: [
+      { from: "device-hub", to: "device-01", kind: "open" },
+      { from: "device-hub", to: "device-02", kind: "open" },
+      { from: "device-01", to: "device-03", kind: "open" },
+    ],
+    states: ["ready", "degraded", "offline"],
+    viewport: { width: 1600, height: 1100 },
+    values: { "cluster health": "Degraded" },
+  };
+
+  test("the program carries the drawn edges as links", async () => {
+    const res = await designPipelineTool(null, null, { brief: BRIEF, mode: "plan" });
+    const links = res.program?.links ?? [];
+    assert.equal(links.length, 3, `links: ${JSON.stringify(links)}`);
+    assert.ok(links.some((l) => /device-hub/.test(l.from) && /device-02/.test(l.to)), `hub→02 link present: ${JSON.stringify(links)}`);
+  });
+
+  test("no two device boxes overlap, and no connector route passes through a node body", async () => {
+    const [{ executeRuntime }, { routeThroughNodes }] = await Promise.all([
+      import("../mcp-server/dist-test/runtime/interpreter.js"),
+      import("../mcp-server/dist-test/runtime/connectors.js"),
+    ]);
+    const res = await designPipelineTool(null, null, { brief: BRIEF, mode: "plan" });
+    const compiled = executeRuntime(res.program, {});
+
+    const devices = [...compiled.boxes.entries()].filter(([id]) => /device-(hub|0\d)/.test(id));
+    assert.ok(devices.length >= 4, `device boxes resolved: ${devices.map((d) => d[0]).join(", ")}`);
+    for (const [a, [idA, boxA]] of devices.entries()) {
+      for (const [idB, boxB] of devices.slice(a + 1)) {
+        const overlaps =
+          boxA.x < boxB.x + boxB.w && boxB.x < boxA.x + boxA.w && boxA.y < boxB.y + boxB.h && boxB.y < boxA.y + boxA.h;
+        assert.ok(!overlaps, `'${idA}' and '${idB}' overlap: ${JSON.stringify(boxA)} vs ${JSON.stringify(boxB)}`);
+      }
+    }
+
+    const boxes = compiled.boxes;
+    for (const route of compiled.connectorRoutes ?? []) {
+      const through = routeThroughNodes(route.points ?? [], boxes, route.from, route.to);
+      assert.deepEqual(through, [], `connector '${route.id}' (${route.from} → ${route.to}) passes through: ${JSON.stringify(through)}`);
+    }
+  });
+
+  test("the plan comes back applicable with no compiled-geometry refusal", async () => {
+    const res = await designPipelineTool(null, null, { brief: BRIEF, mode: "plan" });
+    const compiledGeometry = (res.structure?.checks ?? []).find((c) => c.id === "compiled-geometry");
+    assert.ok(compiledGeometry === undefined || compiledGeometry.status !== "fail", `compiled-geometry: ${JSON.stringify(compiledGeometry)}`);
+    const problems = res.problems ?? [];
+    assert.equal(
+      problems.filter((p) => /passes through node/.test(p)).length,
+      0,
+      `connector-collision problems: ${JSON.stringify(problems)}`,
+    );
+  });
+});

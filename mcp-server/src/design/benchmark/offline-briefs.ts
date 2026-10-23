@@ -468,6 +468,9 @@ export function evidenceFromResponse(
           | null;
         typeCriteria?: { findings: Array<unknown> | [] } | null;
         structure?: { status?: string; findings?: Array<{ summary?: string; rule?: string }> | [] } | null;
+        /** Issue #25: the runtime/pipeline measurement receipt, when present. */
+        measurement?: { required?: number; measured?: number; verdict?: string } | null;
+        applicabilityBasis?: string | null;
       }
     | null,
   caseId: string,
@@ -501,6 +504,13 @@ export function evidenceFromResponse(
     geometryFindings: structureFindings.filter((f) => /geometry|size/i.test(String(f.summary ?? f.rule ?? ""))).length,
     nativeApplied: false,
   };
+  // Issue #25: optional text-measurement evidence, threaded only when the
+  // response carries the receipt — hand-built evidence literals without it
+  // keep their old shape (and their old score).
+  if (typeof resp?.measurement?.required === "number") {
+    evidence.textRequired = resp.measurement.required;
+    evidence.textMeasured = resp.measurement.measured ?? 0;
+  }
   return { ...evidence, ...overrides };
 }
 

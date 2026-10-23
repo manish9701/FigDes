@@ -21,7 +21,7 @@ import { buildCompositionPlan, compositionHolds } from "../design/composition/pl
 import { compositionHintFor, resolveCompositionHintSources } from "../design/skills/composition";
 import { buildDesignContext, contextBrief } from "../design/context/design-context";
 import { toKnowledge } from "../design/system/component-intelligence";
-import type { Composition } from "../runtime/layout";
+import { inferComposition, type Composition } from "../runtime/layout";
 import type { Session } from "../sessions";
 
 export const PlanScreenArgs = z
@@ -421,6 +421,22 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       boxes: plan.boxes,
       note: "Composition only: no content yet. Nothing here has been created in Figma.",
     },
+
+    /**
+     * Issue #25 — the composition receipt at plan time.
+     *
+     * `requestedComposition` echoes the caller's `desiredComposition` (null
+     * when none was stated), `selectedComposition` is the plan's decision, and
+     * `predictedAppliedComposition` is `inferComposition` over the plan's own
+     * regions — explicitly labelled predicted, because no runtime compile has
+     * run yet. Keeping all three apart is what lets a caller see "I asked for
+     * topology and this plan is a list-detail shell" before anything is built.
+     */
+    requestedComposition: args.desiredComposition ?? null,
+    selectedComposition: plan.composition,
+    predictedAppliedComposition: inferComposition(
+      plan.regions.map((r) => ({ role: r.role, composition: r.composition, width: r.width, grow: r.grow })),
+    ),
 
     /** Ordered regions, each with its reason. */
     regions: plan.regions.map((r) => ({

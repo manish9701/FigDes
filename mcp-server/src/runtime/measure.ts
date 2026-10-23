@@ -87,6 +87,48 @@ function textCalls(program: unknown): Array<{ id: string; text: string; role: st
   return out;
 }
 
+/**
+ * Measurement specs derived from the first compile's `createText` operations
+ * (issue #25, RC1).
+ *
+ * The raw program only names text through direct `fn:"text"` calls; every
+ * primitive that emits its own text — a deviceNode's label and memory line, a
+ * statusPill, a connector's label, a metric's label and value — was invisible
+ * to the measurement. A component-only topology fixture therefore measured
+ * ZERO text nodes and fell back to estimates while reading as a pass. The
+ * compiled operations are the full truth of what will be drawn, so when the
+ * caller supplies the first pass's operations, the specs are derived from
+ * there as well. The key is the op's id when the compiler assigned one (which
+ * is how the recompile and the preflight look measurements up); otherwise the
+ * parent + name pair, which is stable for an un-id'd primitive's text.
+ */
+function textOpsSpecs(operations: unknown[]): Array<{ key: string; text: string; family: string; style: string; size?: number; width?: number }> {
+  const out: Array<{ key: string; text: string; family: string; style: string; size?: number; width?: number }> = [];
+  for (const [index, raw] of (operations ?? []).entries()) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const op = raw as Record<string, unknown>;
+    if (op["type"] !== "createText") continue;
+    const text = typeof op["content"] === "string" ? op["content"] : typeof op["text"] === "string" ? op["text"] : "";
+    if (text.trim().length === 0) continue;
+    const key =
+      typeof op["id"] === "string"
+        ? op["id"]
+        : typeof op["parent"] === "string"
+          ? `${op["parent"]}::${typeof op["name"] === "string" ? op["name"] : `text-${index + 1}`}`
+          : `op-text-${index + 1}`;
+    out.push({
+      key,
+      text,
+      family: typeof op["family"] === "string" ? op["family"] : "Inter",
+      style: typeof op["style"] === "string" ? op["style"] : styleFor(typeof op["weight"] === "number" ? op["weight"] : undefined),
+      ...(typeof op["fontSize"] === "number" ? { size: op["fontSize"] } : {}),
+      // The emitted width is the width the layout resolved, so measure there.
+      ...(typeof op["width"] === "number" && op["width"] > 0 ? { width: Math.max(40, Math.round(op["width"])) } : {}),
+    });
+  }
+  return out;
+}
+
 /** The type scale the compiler uses, so the measurement is taken at the right size. */
 const ROLE_SIZE: Record<string, number> = {
   eyebrow: 11,
@@ -114,27 +156,51 @@ function styleFor(weight: number | undefined): string {
  *
  * `widths` are the widths the first compile resolved, so the text is measured
  * at the width it will actually be drawn at.
+ *
+ * `operations` (optional, issue #25) are the FIRST compile's operations. When
+ * supplied, text emitted by primitives — deviceNode labels, statusPills,
+ * connector labels, metrics — is measured too, not just direct `fn:"text"`
+ * calls. The three-argument contract is unchanged: without `operations` the
+ * behaviour is byte-for-byte what it was.
  */
 export async function measureProgramText(
   session: Session | null,
   program: unknown,
   widths: Map<string, number>,
+  operations?: unknown[],
 ): Promise<MeasureOutcome> {
   const metrics = new Map<string, TextMeasurement>();
   const failed: Array<{ id: string; reason: string }> = [];
   const calls = textCalls(program);
-  if (session === null || calls.length === 0) {
+  const opSpecs = operations !== undefined ? textOpsSpecs(operations) : [];
+  if (session === null || (calls.length === 0 && opSpecs.length === 0)) {
     return { metrics, measured: 0, failed, changed: false };
   }
 
-  const specs = calls.map((c) => ({
-    key: c.id,
-    text: c.text,
-    family: c.family ?? "Inter",
-    style: c.style ?? styleFor(c.weight),
-    size: c.size ?? ROLE_SIZE[c.role] ?? 14,
-    ...(widths.get(c.id) !== undefined ? { width: Math.max(40, Math.round(widths.get(c.id)!)) } : {}),
-  }));
+  // Raw calls first; an ops-derived spec with the same key (the same text
+  // call's emitted op) is already covered. Primitive-emitted text then adds
+  // the keys the raw scan can never see.
+  const byKey = new Map<string, { text: string; family: string; style: string; size: number; width?: number }>();
+  for (const c of calls) {
+    byKey.set(c.id, {
+      text: c.text,
+      family: c.family ?? "Inter",
+      style: c.style ?? styleFor(c.weight),
+      size: c.size ?? ROLE_SIZE[c.role] ?? 14,
+      ...(widths.get(c.id) !== undefined ? { width: Math.max(40, Math.round(widths.get(c.id)!)) } : {}),
+    });
+  }
+  for (const s of opSpecs) {
+    if (byKey.has(s.key)) continue;
+    byKey.set(s.key, {
+      text: s.text,
+      family: s.family,
+      style: s.style,
+      ...(s.size !== undefined ? { size: s.size } : { size: 14 }),
+      ...(s.width !== undefined ? { width: s.width } : {}),
+    });
+  }
+  const specs = [...byKey.entries()].map(([key, s]) => ({ key, ...s }));
 
   /** Serve hits from the session cache; only misses cost a round trip. */
   let cache = measureCache.get(session);

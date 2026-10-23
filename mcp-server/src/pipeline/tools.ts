@@ -40,7 +40,8 @@ import { contentRevision } from "../design/quality/revision";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
-import { measureProgramText, programHasText } from "../runtime/measure";
+import { measureProgramText } from "../runtime/measure";
+import { inferComposition } from "../runtime/layout";
 import { reuseAdvisory, placeRootInFreeCanvas } from "../runtime/tools";
 import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
@@ -121,6 +122,31 @@ function programLabels(program: { content: Array<{ args: Record<string, unknown>
     }
   }
   return labels;
+}
+
+/**
+ * Tiny case-insensitive composition alias match (issue #25, workstream 2).
+ *
+ * The receipt compares a caller-requested composition against the runtime's
+ * applied one; a handful of vocabulary pairs describe the same arrangement
+ * (`topology`/`spatial`/`diagram` are one family; `comparison` is a
+ * `split-view` by another name). Deliberately kept this small: anything not
+ * listed must match exactly or be a mismatch — the receipt errs honest.
+ */
+const COMPOSITION_ALIASES: Record<string, string[]> = {
+  topology: ["spatial", "diagram"],
+  spatial: ["topology", "diagram"],
+  diagram: ["topology", "spatial"],
+  comparison: ["split-view"],
+  "split-view": ["comparison"],
+};
+
+export function compositionMatches(requested: string | null | undefined, applied: string | null | undefined): boolean {
+  if (typeof requested !== "string" || typeof applied !== "string") return false;
+  const r = requested.trim().toLowerCase();
+  const a = applied.trim().toLowerCase();
+  if (r.length === 0 || a.length === 0) return false;
+  return r === a || (COMPOSITION_ALIASES[r] ?? []).includes(a);
 }
 
 /**
@@ -297,7 +323,10 @@ export async function designPipelineTool(
   const firstPass = executeRuntime(built.program, { rules: effectiveRules(memory) }) as unknown as CompiledProgram;
   const widths = new Map<string, number>();
   for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
-  const measured = await measureProgramText(session, built.program, widths);
+  // Issue #25 RC1: the first pass's operations go to the measurement so
+  // primitive-emitted text (deviceNode labels, statusPills, metrics…) is
+  // measured, not just direct `fn:"text"` calls.
+  const measured = await measureProgramText(session, built.program, widths, firstPass.operations as unknown[]);
   const refined = applyMeasuredWidths(built.program, firstPass.boxes);
   const compiled = (
     measured.metrics.size > 0
@@ -306,6 +335,20 @@ export async function designPipelineTool(
   ) as unknown as CompiledProgram;
   const program = refined.measured > 0 ? refined.program : built.program;
   const operations = compiled.operations as Array<Record<string, unknown>>;
+
+  /**
+   * Issue #25 — the text-measurement receipt.
+   *
+   * `required` counts the final compiled `createText` operations (every label
+   * the screen will draw, whatever primitive emitted it); `measured` counts
+   * what the plugin actually measured. When the two disagree the layout stands
+   * on estimates, and the payload carries a fail-closed acceptance marker
+   * rather than letting a plan-mode run read as a verified pass.
+   */
+  const textRequired = operations.filter((op) => op["type"] === "createText").length;
+  const textMeasured = measured.metrics.size;
+  const applicabilityBasis = textRequired === 0 ? "none-needed" : textMeasured >= textRequired ? "measured" : "estimates";
+  const textUnmeasured = applicabilityBasis === "estimates";
   trace.operations = operations.map((op) => ({
     type: String(op["type"] ?? "?"),
     ...(typeof op["id"] === "string" ? { id: op["id"] } : {}),
@@ -370,6 +413,41 @@ export async function designPipelineTool(
   });
   const compositionHintApplied = hintSources.applied.length > 0;
 
+  /**
+   * Issue #25 — the composition receipt: requested vs selected vs applied.
+   *
+   * `compositionHintApplied: true` only ever meant "a hint source was found";
+   * it said nothing about what the runtime actually built. `applied` here is
+   * the runtime's own `inferComposition` over the resolved regions, compared
+   * against both the requested composition and the plan's selected one, with
+   * the region-level evidence so the comparison is auditable rather than a
+   * boolean nobody can check.
+   */
+  const appliedComposition = inferComposition(
+    // The pipeline's CompiledProgram view narrows the IR region shape; the
+    // value underneath is the interpreter's full result whose regions carry
+    // the role/composition the program declared.
+    (compiled as unknown as {
+      ir: { regions: Array<{ id: string; role: string; composition: string; width: unknown; grow: number }> };
+    }).ir.regions as unknown as Parameters<typeof inferComposition>[0],
+  );
+  const compositionReceipt = {
+    requested: brief.desiredComposition ?? null,
+    selected: plan.composition,
+    ...(alternatives.steeredComposition !== null ? { steered: alternatives.steeredComposition } : {}),
+    applied: appliedComposition,
+    mismatch: {
+      requested: brief.desiredComposition != null && !compositionMatches(brief.desiredComposition, appliedComposition),
+      selected: plan.composition != null && !compositionMatches(plan.composition, appliedComposition),
+    },
+    evidence: {
+      hintApplied: compositionHintApplied,
+      ...(compositionHintApplied ? { hintWhy: hintSources.why } : {}),
+      regions: plan.regions.map((r) => ({ id: r.id, role: r.role, composition: r.composition, layout: r.layoutMode })),
+      algorithms: (compiled as unknown as { algorithms?: Record<string, string> }).algorithms ?? {},
+    },
+  };
+
   const common = {
     brief,
     plan,
@@ -423,6 +501,28 @@ export async function designPipelineTool(
     },
     /** The declared type/spacing criteria audit, on compiled evidence (issue #22 phase 2). */
     typeCriteria: { criteria: typeCriteria.criteria, findings: typeCriteria.findings },
+    /**
+     * Issue #25 — the measurement receipt and the fail-closed acceptance
+     * marker: text required vs measured, with the same basis semantics
+     * design_runtime reports. Additive to every existing field.
+     */
+    textMeasurements: textMeasured,
+    applicabilityBasis,
+    measurement: {
+      required: textRequired,
+      measured: textMeasured,
+      verdict: textUnmeasured ? ("BLOCKED" as const) : ("ok" as const),
+    },
+    ...(textUnmeasured
+      ? {
+          acceptance: "BLOCKED" as const,
+          acceptanceReasons: [
+            `text measurement unavailable: ${textMeasured} of ${textRequired} text nodes measured (applicabilityBasis: "estimates") — the geometry stands on estimates, so acceptance is BLOCKED until the plugin measures the text.`,
+          ],
+        }
+      : {}),
+    /** Issue #25 — requested vs selected vs applied composition, with evidence. */
+    compositionReceipt,
     ...(reuse.length > 0 ? { reuse } : {}),
     assumptions,
     clarifications,
@@ -435,6 +535,15 @@ export async function designPipelineTool(
   };
 
   if (mode === "plan" || dryRun) {
+    // Issue #25: a plan-mode run whose required text was not measured stands
+    // on estimates — it is named in `blocked`, not folded into the status.
+    const blocked: Array<{ check: string; why: string }> = [{ check: "live-structure", why: "Nothing was applied to Figma." }];
+    if (textUnmeasured) {
+      blocked.push({
+        check: "text-measurement",
+        why: `Text measurement unavailable: ${textMeasured} of ${textRequired} text nodes measured (applicabilityBasis: "estimates"). The layout stands on estimates, so this run is INDETERMINATE for acceptance until a live plugin measures the text.`,
+      });
+    }
     const report = buildReport({
       planned: true,
       applied: false,
@@ -446,7 +555,7 @@ export async function designPipelineTool(
       visual: { status: "not-run", detail: "No render was produced: nothing was built.", renderRevision: null },
       repairs: [],
       findings: structure.findings,
-      blocked: [{ check: "live-structure", why: "Nothing was applied to Figma." }],
+      blocked,
       // The plan carried the enforced-intelligence provenance and — where the
       // requested composition or the direction named a descriptor — the
       // composition-hint receipt, recorded for the contract counters.
@@ -566,13 +675,12 @@ export async function designPipelineTool(
 
   if (!compiled.applicable) {
     stage(trace, "apply-refused", "The program does not resolve to a buildable screen; nothing was created.");
-    const applicabilityBasis = measured.metrics.size > 0 ? "measured" : programHasText(built.program) ? "estimates" : "none-needed";
     return {
       ...common,
       status: "blocked",
       problems: compiled.inapplicableReasons,
       applicabilityBasis,
-      ...(applicabilityBasis === "estimates" ? { applicabilityWarning: "The geometry was resolved from text ESTIMATES (the measure_text round trip answered empty or failed), so these refusal reasons can move once real text heights arrive — fix the named causes and re-run rather than compensating for exact numbers." } : {}),
+      ...(textUnmeasured ? { applicabilityWarning: "The geometry was resolved from text ESTIMATES (the measure_text round trip answered empty or failed), so these refusal reasons can move once real text heights arrive — fix the named causes and re-run rather than compensating for exact numbers." } : {}),
       note: "Nothing was created: the resolved geometry is not what the program asked for.",
       trace,
     };

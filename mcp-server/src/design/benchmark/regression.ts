@@ -59,6 +59,13 @@ export interface OfflineCaseEvidence {
   geometryFindings: number;
   /** Plan mode never applies native nodes; recorded, never implied. */
   nativeApplied: boolean;
+  /**
+   * Issue #25 — text measurement evidence, when the response carried it.
+   * Optional so the frozen v1 baselines and hand-built test evidence keep
+   * parsing; present exactly when the pipeline reported the receipt.
+   */
+  textRequired?: number;
+  textMeasured?: number;
 }
 
 interface DimensionOutcome {
@@ -149,7 +156,23 @@ export function mapOfflineDimensions(evidence: OfflineCaseEvidence): {
   }
 
   /* --- native quality: plan mode applies nothing -------------------------------- */
-  if (evidence.structureStatus === "pass") {
+  /**
+   * Issue #25: a plan-mode run whose required text was never measured has
+   * verified its geometry against character-count estimates. Score 8 used to
+   * be awarded on exactly that evidence; now the dimension is `null` (not
+   * evaluated offline, scored 0 with the reason recorded) instead of credit
+   * for a measurement that did not happen.
+   */
+  const textUnmeasured =
+    typeof evidence.textRequired === "number" &&
+    evidence.textRequired > 0 &&
+    (evidence.textMeasured ?? 0) < evidence.textRequired;
+  if (textUnmeasured) {
+    dimensions["nativeQuality"] = {
+      score: null,
+      evidence: `text measurement unavailable: ${evidence.textMeasured ?? 0} of ${evidence.textRequired} text nodes measured — the structure passed on estimate-derived geometry, so no native-quality credit is awarded`,
+    };
+  } else if (evidence.structureStatus === "pass") {
     dimensions["nativeQuality"] = {
       score: 8,
       evidence: evidence.nativeApplied
@@ -275,6 +298,9 @@ const EvidenceSchema = z
     overflowFindings: z.number().int().min(0),
     geometryFindings: z.number().int().min(0),
     nativeApplied: z.boolean(),
+    // Issue #25: optional text-measurement evidence (absent in v1 baselines).
+    textRequired: z.number().int().min(0).optional(),
+    textMeasured: z.number().int().min(0).optional(),
   })
   .strict();
 

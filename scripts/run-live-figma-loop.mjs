@@ -293,7 +293,21 @@ for (const c of CASES) {
       rec.irRevision = `live-${c.id}-r1`;
       rec.operationManifest = [];
       const dry = (await tool("design_runtime", { program, dryRun: true, description: `FigDes live bench ${c.id} (dry run)` })).data;
-      rec.dryRun = { operationCount: dry.stats?.operationCount ?? dry.operations?.length ?? 0, violations: dry.violations ?? [], warnings: dry.warnings ?? [] };
+      // Issue #25: the dry run records its text-measurement receipt — what the
+      // basis stands on, how many text nodes were required vs measured — so a
+      // fixture can no longer read as a reliable pass while its text laid out
+      // on estimates.
+      rec.dryRun = {
+        operationCount: dry.stats?.operationCount ?? dry.operations?.length ?? 0,
+        violations: dry.violations ?? [],
+        warnings: dry.warnings ?? [],
+        applicabilityBasis: dry.applicabilityBasis ?? null,
+        textMeasurements: dry.textMeasurements ?? null,
+        measuredTextUsed: dry.stats?.measuredTextUsed ?? null,
+        requiredTextNodes: dry.stats?.requiredTextNodes ?? null,
+        measurement: dry.measurement ?? null,
+        acceptance: dry.acceptance ?? null,
+      };
       if ((dry.violations ?? []).length > 0) {
         /**
          * A guard refusal is evidence, not a crash.
@@ -311,6 +325,28 @@ for (const c of CASES) {
         rec.runtimeMs = Date.now() - t0;
         console.log(`guard-blocked ${c.id}: ${JSON.stringify(dry.violations).slice(0, 200)}`);
         summary.push({ caseId: c.id, status: rec.status, frame: null, findings: rec.guardViolations.length });
+        await writeFile(resolve(liveDir, `case-${c.id}.json`), JSON.stringify(rec, null, 2) + "\n", "utf8");
+        continue;
+      }
+
+      /**
+       * Issue #25 — fail closed on unmeasured text. When the dry run says its
+       * required text was not measured (or the receipt is missing on an old
+       * deployment that also failed to measure anything), the case is
+       * INDETERMINATE: its geometry was verified against estimates, so it must
+       * not reach BUILT_RENDERED_STRUCTURALLY_REVIEWED and read as a pass.
+       */
+      const dryRequired = dry.stats?.requiredTextNodes ?? dry.measurement?.required ?? 0;
+      const dryMeasured = dry.textMeasurements ?? dry.measurement?.measured ?? 0;
+      if (dryRequired > 0 && dryMeasured < dryRequired) {
+        rec.status = "INDETERMINATE_TEXT_MEASUREMENT";
+        rec.indeterminateWhy =
+          `text measurement unavailable: ${dryMeasured} of ${dryRequired} text nodes measured ` +
+          `(applicabilityBasis: ${dry.applicabilityBasis ?? "unknown"}); the dry run stands on estimates, so acceptance is BLOCKED. ` +
+          `Re-run with a responsive plugin session so measure_text runs before trusting this fixture.`;
+        rec.runtimeMs = Date.now() - t0;
+        console.log(`indeterminate ${c.id}: ${rec.indeterminateWhy}`);
+        summary.push({ caseId: c.id, status: rec.status, frame: null, findings: 0 });
         await writeFile(resolve(liveDir, `case-${c.id}.json`), JSON.stringify(rec, null, 2) + "\n", "utf8");
         continue;
       }

@@ -1204,8 +1204,16 @@ export const TOOLS: ToolDefinition[] = [
       const parsed = RuntimeArgs.parse(args);
       const { sessionId, dryRun, ...rest } = parsed;
 
-      // Resolved lazily so a dry run works with Figma closed.
-      const session = dryRun === true && !sessionId ? null : registry.resolve(sessionId);
+      // Resolved so a dry run still measures when the plugin is unambiguous
+      // (issue #25 RC2): the live loop dry-runs without a sessionId, and the
+      // old code discarded the connected plugin here — guaranteeing zero
+      // measurements and an estimates-based verdict that read as a pass.
+      // Explicit sessionId wins (and still errors when unknown); otherwise a
+      // single connected client is used; otherwise null, so a dry run with
+      // Figma closed keeps working.
+      const session = dryRun === true
+        ? (sessionId !== undefined ? registry.resolve(sessionId) : registry.resolveForAnnotation(null))
+        : registry.resolve(sessionId);
       return runRuntimeTool(session, { ...rest, dryRun }, registry);
     },
   },
@@ -1573,7 +1581,16 @@ inputSchema: CompileArgs,
     inputSchema: DesignPipelineArgs,
     handler: async (args, registry) => {
       const parsed = DesignPipelineArgs.parse(args);
-      const session = parsed.mode === "plan" || parsed.dryRun === true ? null : registry.resolve(parsed.sessionId);
+      // Issue #25 RC2: plan mode and dryRun now resolve the session when it is
+      // unambiguous (explicit id wins; exactly one connected client otherwise),
+      // so the offline verification measures text through the live plugin
+      // instead of silently standing on estimates. Zero or multiple live
+      // sessions resolve to null — a plan/dry-run keeps working with Figma
+      // closed; a live build still requires a session.
+      const session =
+        parsed.mode === "plan" || parsed.dryRun === true
+          ? registry.resolveForAnnotation({ sessionId: parsed.sessionId })
+          : registry.resolve(parsed.sessionId);
       return designPipelineTool(session, registry, parsed);
     },
   },

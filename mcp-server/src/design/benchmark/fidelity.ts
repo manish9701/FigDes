@@ -135,6 +135,14 @@ export interface FidelityBuild {
   /** Caller-measured text pairs; authoritative for contrast. */
   texts?: FidelityMeasuredText[];
   canvas?: { width: number; height: number };
+  /**
+   * Issue #25 — text-measurement evidence, when the caller has it. When the
+   * build requires text but the caller measured less than all of it, the
+   * typography/contrast/spacing verdicts stand on estimates: recorded in
+   * `notVerified` (never zeroed, never a global FAIL).
+   */
+  textRequired?: number;
+  textMeasured?: number;
 }
 
 export interface FidelityResult {
@@ -700,6 +708,23 @@ export function scorePlanToBuildFidelity(plan: FidelityPlan, build: FidelityBuil
     const productHits = violations.filter((v) => v.rule === "product").length;
     if (productHits === 0) {
       evidence.push(`product rules: ${plan.productRules.length} stated rule(s), no contradictions in the build`);
+    }
+  }
+
+  /* --- text measurement honesty (issue #25) ---------------------------------- */
+  // A build whose required text was not measured was verified against
+  // character-count estimates. That is not a failure — the signals above still
+  // say what they measured — but it is not a full verification either, so it
+  // is recorded here and never silently folded into a PASS. It fires only
+  // when the caller states the receipt: absent fields mean "not stated",
+  // never "verified" and never a new failure.
+  {
+    const required = typeof build.textRequired === "number" ? build.textRequired : 0;
+    const measured = typeof build.textMeasured === "number" ? build.textMeasured : 0;
+    if (required > 0 && measured < required) {
+      notVerified.push(
+        `text measurement unavailable: ${measured} of ${required} text nodes measured — typography, contrast and overflow verdicts stand on estimates; supply the plugin's measurements to close this`,
+      );
     }
   }
 

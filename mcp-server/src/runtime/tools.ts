@@ -10,7 +10,7 @@ import { createHash } from "node:crypto";
 import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES, type RuntimeResult } from "./interpreter";
 import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
-import { measureProgramText, programHasText } from "./measure";
+import { measureProgramText } from "./measure";
 import { placeRootFrame } from "./placement";
 import { inferArtDirection, isAutoStyleEligible } from "./visual-presets";
 import { DesignIRSchema, canvasSize } from "../../../shared/ir";
@@ -409,7 +409,10 @@ export async function runRuntimeTool(
   if (session !== null) {
     const widths = new Map<string, number>();
     for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
-    const measured = await measureProgramText(session, program, widths);
+    // Issue #25 RC1: the first pass's operations are handed to the measurement
+    // so text emitted by primitives (deviceNode labels, statusPills, connector
+    // labels, metrics) is measured too — not just direct `fn:"text"` calls.
+    const measured = await measureProgramText(session, program, widths, firstPass.operations as unknown[]);
     if (measured.metrics.size > 0) {
       measuredCount = measured.metrics.size;
       measuredMetrics = measured.metrics;
@@ -426,16 +429,31 @@ export async function runRuntimeTool(
   /**
    * What the applicability verdict stands on.
    *
-   * When the plugin could not be asked (or answered empty) but the program has
-   * text, the layout stands on character-count estimates — the SAME program
-   * can compile to different geometry once real text heights arrive, which is
-   * exactly how a dry run said "applicable" and the apply that followed
-   * refused the same program for a spill the estimates could not see
+   * When the plugin could not be asked (or answered empty) but the screen
+   * carries text, the layout stands on character-count estimates — the SAME
+   * program can compile to different geometry once real text heights arrive,
+   * which is exactly how a dry run said "applicable" and the apply that
+   * followed refused the same program for a spill the estimates could not see
    * (measured live on the issue-22 loop). Name the basis so a dry run never
    * reads as a guarantee it does not have.
+   *
+   * Issue #25: the requirement is counted from the FINAL compiled operations
+   * (`createText` ops — including every primitive-emitted label), and the
+   * basis says "measured" only when EVERY required text node was measured.
+   * Previously one measured node out of N flipped the whole verdict to
+   * "measured", and a component-only program (no raw text calls) was reported
+   * "none-needed" while its labels laid out on estimates.
    */
-  const hasText = programHasText(program);
-  const applicabilityBasis = !hasText ? "none-needed" : measuredCount > 0 ? "measured" : "estimates";
+  const requiredText = (compiled.operations as Array<Record<string, unknown>>).filter((op) => op["type"] === "createText").length;
+  const measuredText = measuredCount;
+  const applicabilityBasis = requiredText === 0 ? "none-needed" : measuredText >= requiredText ? "measured" : "estimates";
+  const textUnmeasured = applicabilityBasis === "estimates";
+  /**
+   * Issue #25: the runtime's own composition verdict over the resolved
+   * regions — computed once here and reused by the dispatch-edge scoring, so
+   * the payload and the score can never disagree about what was built.
+   */
+  const appliedComposition = inferComposition(compiled.ir.regions);
   // Issue #26 — blocking-mode marking. A program with no plan and no declared
   // style still builds (raw exploration must work), but the payload says so:
   // intelligence.applied:false plus a first-pass-ineligible flag, top-level
@@ -448,10 +466,25 @@ export async function runRuntimeTool(
     status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
     applicable: compiled.applicable,
     applicabilityBasis,
-    ...(applicabilityBasis === "estimates" ? { applicabilityWarning: "Layout resolved from text ESTIMATES (the measure_text round trip answered empty or failed). The apply path measures against the live plugin and may resolve different geometry — re-run with a responsive plugin before trusting this verdict, and expect the refusal reasons to change." } : {}),
+    ...(textUnmeasured
+      ? {
+          applicabilityWarning:
+            `Layout resolved from text ESTIMATES: only ${measuredText} of ${requiredText} text nodes were measured ` +
+            `(the measure_text round trip answered empty or failed, or the plugin was not connected). The apply path measures ` +
+            `against the live plugin and may resolve different geometry — re-run with a responsive plugin before trusting ` +
+            `this verdict, and expect the refusal reasons to change.`,
+        }
+      : {}),
     ...(compiled.applicable ? {} : { inapplicableReasons: compiled.inapplicableReasons }),
     dryRun: dryRun ?? false,
-    stats: { ...compiled.stats, firstPassIneligible },
+    stats: {
+      ...compiled.stats,
+      firstPassIneligible,
+      /** Issue #25: how many text nodes the screen requires, from the compiled ops. */
+      requiredTextNodes: requiredText,
+      /** Issue #25: how many of those the plugin actually measured. */
+      measuredTextNodes: measuredText,
+    },
     regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role, width: r.width, height: r.height, grow: r.grow, layout: r.layout })),
     /**
      * Which algorithm each region actually used, and how many boxes a relation
@@ -474,12 +507,50 @@ export async function runRuntimeTool(
      * plugin could not be asked, and the layout used the estimate.
      */
     textMeasurements: measuredCount,
+    /**
+     * Issue #25 — the runtime's applied composition, exposed.
+     *
+     * This is what `inferComposition` resolves over the compiled regions — the
+     * composition the runtime actually built, which may differ from what a
+     * hint or a plan requested. Reported next to the hint receipt so
+     * requested vs selected vs applied can be compared downstream.
+     */
+    appliedComposition,
+    /**
+     * Issue #25 — the measurement receipt, fail-closed.
+     *
+     * `verdict: "BLOCKED"` marks a build whose required text was not measured:
+     * the geometry stands on estimates, so downstream acceptance must not read
+     * this run as a verified pass. `applicable`/`status` keep their
+     * geometry-only semantics — this marker is additive and lives beside them.
+     */
+    measurement: {
+      required: requiredText,
+      measured: measuredText,
+      verdict: textUnmeasured ? ("BLOCKED" as const) : ("ok" as const),
+    },
+    ...(textUnmeasured
+      ? {
+          acceptance: "BLOCKED" as const,
+          acceptanceReasons: [
+            `text measurement unavailable: ${measuredText} of ${requiredText} text nodes measured (applicabilityBasis: "estimates") — the geometry stands on estimates, so acceptance is BLOCKED until the plugin measures the text.`,
+          ],
+        }
+      : {}),
     /** The curated art direction applied when the program stated none. */
     ...(direction !== null ? { artDirection: direction } : {}),
     /** Component-reuse advisories measured from the compiled operations. */
     ...(advisories.length > 0 ? { reuse: advisories } : {}),
     violations: compiled.violations,
-    warnings: [...compiled.warnings, ...intelligence.warnings],
+    warnings: [
+      ...compiled.warnings,
+      ...intelligence.warnings,
+      // Issue #25: the fail-closed marker is also a warning, so a consumer
+      // that reads only the warnings array still sees the block.
+      ...(textUnmeasured
+        ? [`text measurement unavailable: ${measuredText} of ${requiredText} text nodes measured; acceptance is BLOCKED (layout stands on estimates).`]
+        : []),
+    ],
     /**
      * Whether this build ran under design intelligence (issue #24).
      *
@@ -571,7 +642,7 @@ export async function runRuntimeTool(
     boxes: compiled.boxes,
     operations: compiled.operations as never,
     regions: compiled.ir.regions.map((r) => ({ id: r.id, role: r.role })),
-    composition: inferComposition(compiled.ir.regions),
+    composition: appliedComposition,
     canvasW: canvasSize(compiled.ir.canvas.width, 1440),
     canvasH: canvasSize(compiled.ir.canvas.height, 900),
     ...(compiled.ir.visualIntent?.focal !== undefined ? { focal: compiled.ir.visualIntent.focal } : {}),

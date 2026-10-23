@@ -327,7 +327,11 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
         id,
         parent,
         args: {
-          text: slot.label,
+          // A text slot is the fallback primitive for long labels; when the
+          // brief supplied a demo value for the information, dropping it would
+          // ship the label with no answer under it — the "—" symptom. The
+          // value rides on the same content, separated by an em dash.
+          text: slot.value !== null ? `${slot.label} — ${slot.value}` : slot.label,
           role: textRole(slot),
           // The wrapping width is set from the resolved layout in a second
           // pass (see applyMeasuredWidths): the column a text lands in is not

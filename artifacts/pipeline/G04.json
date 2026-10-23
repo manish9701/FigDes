@@ -607,7 +607,7 @@
       "id": "compiled-geometry",
       "question": "Does the resolved geometry agree with the program?",
       "status": "fail",
-      "detail": "text-truncated: Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value.",
+      "detail": "text-truncated: Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 534px and cannot wrap. The box holds the value, not the whole value.",
       "nodeIds": []
     },
     {
@@ -646,7 +646,7 @@
       "severity": "medium",
       "confidence": 0.8,
       "nodeIds": [],
-      "summary": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value.",
+      "summary": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 534px and cannot wrap. The box holds the value, not the whole value.",
       "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
       "evidence": {
         "kind": "rule",
@@ -719,7 +719,7 @@
   "violations": [
     {
       "rule": "text-truncated",
-      "message": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 524px and cannot wrap. The box holds the value, not the whole value."
+      "message": "Text 'slot-3-meta-llama-llama-3-1-405b-instru' is truncated at 326px: the run \"meta-llama/Llama-3.1-405B-Instruct-AWQ-INT4-128k\" measures about 534px and cannot wrap. The box holds the value, not the whole value."
     }
   ],
   "applicable": true,

@@ -2660,18 +2660,32 @@ function emitComponent(
           op({ type: "createText", parent: spec.id, name: "Title", content: str("title"), fontSize: fs(12), fill: "#555555" }),
         );
       }
+      // The track and its fill live in their own bar frame: a frame without
+      // auto-layout holds the overlay (the fill drawn over the track), and both
+      // children are parent-local — a canvas-absolute x inside a parented frame
+      // lands displaced by the frame's origin, which is how the track
+      // overflowed its own budget card.
       operations.push(
-        op({ type: "createRectangle", parent: spec.id, name: "Track", x: box.x, y: box.y, width: barW, height: 8, fill: "#E8E6DF", cornerRadius: 4 }),
+        op({
+          type: "createFrame",
+          id: `${spec.id}-bar`,
+          parent: spec.id,
+          name: "Track",
+          width: Math.max(40, barW - grid * 2),
+          height: 8,
+          fill: "#E8E6DF",
+          radius: 4,
+        }),
       );
       if (ratio > 0) {
         operations.push(
           op({
             type: "createRectangle",
-            parent: spec.id,
+            parent: `${spec.id}-bar`,
             name: "Fill",
-            x: box.x,
-            y: box.y,
-            width: Math.max(8, Math.round(barW * ratio)),
+            x: 0,
+            y: 0,
+            width: Math.max(8, Math.round((barW - grid * 2) * ratio)),
             height: 8,
             fill: tone.fg,
             cornerRadius: 4,
@@ -2693,10 +2707,19 @@ function emitComponent(
     }
 
     case "fitGauge": {
-      // A verdict pill: fits or does not fit, with the numbers that justify it.
+      // A verdict with the numbers that justify it. The block stacks the pill
+      // word over its detail line inside one tone surface, sized to the wider
+      // of the two: a frame sized to the pill word alone lets the detail run
+      // out of the block and under whatever sits beside it.
       const fits = p.fits !== false;
       const tone = fits ? TONES.success! : TONES.error!;
       const label = str("label", fits ? "Fits" : "Does not fit");
+      const detail = str("detail", "");
+      const width = Math.max(
+        hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
+        detail ? estimateTextRunWidth(detail, 11, 0) + grid * 4 : 0,
+        72,
+      );
       operations.push(
         op({
           type: "createFrame",
@@ -2705,19 +2728,20 @@ function emitComponent(
           name: label,
           x: box.x,
           y: box.y,
-          width: hugSize(spec, grid, typeScale, styleLook)?.w ?? hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-          height: hugSize(spec, grid, typeScale, styleLook)?.h ?? 40,
+          width,
+          height: Math.max(40, Math.round(box.h || (detail ? grid * 9 : 40))),
           fill: tone.bg,
           stroke: tone.fg,
           strokeWeight: 1,
           radius: grid,
           padding: { top: grid, right: grid * 2, bottom: grid, left: grid * 2 },
-          layoutMode: "HORIZONTAL",
+          layoutMode: "VERTICAL",
+          itemSpacing: grid / 2,
         }),
       );
       operations.push(op({ type: "createText", parent: spec.id, name: "Verdict", content: label, fontSize: fs(13), weight: 600, fill: tone.fg }));
-      if (str("detail")) {
-        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: str("detail"), fontSize: fs(11), family: "JetBrains Mono", fill: tone.fg }));
+      if (detail) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: detail, fontSize: fs(11), family: "JetBrains Mono", fill: tone.fg }));
       }
       break;
     }
@@ -4330,8 +4354,19 @@ function hugSize(
       return { w: Math.round(grid * 16 * typeScale), h: Math.round(grid * 10 * typeScale) };
     }
     case "fitGauge": {
-      const label = str("label", spec.props.fits !== false ? "Fits" : "Does not fit");
-      return { w: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }), h: Math.round(40 * typeScale) };
+      // Same formula the emitter uses: the block is as wide as the pill word
+      // or its detail line, whichever is wider, plus the frame's horizontal
+      // padding. The recorded box must be the emitted size or the operation
+      // trace reports the disagreement.
+      const fits = spec.props.fits !== false;
+      const label = str("label", fits ? "Fits" : "Does not fit");
+      const detail = str("detail", "");
+      const w = Math.max(
+        hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
+        detail ? estimateTextRunWidth(detail, 11, 0) + grid * 4 : 0,
+        72,
+      );
+      return { w, h: Math.round((detail ? grid * 9 : 40) * typeScale) };
     }
     default:
       return null;

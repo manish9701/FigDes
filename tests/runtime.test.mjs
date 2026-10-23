@@ -1694,9 +1694,13 @@ test("a memoryBudget draws a proportional bar with a mono readout", () => {
     content: [{ fn: "memoryBudget", id: "mem", parent: "main", args: { used: 480, total: 512, unit: " GB" } }],
   });
 
-  const rects = result.operations.filter((o) => o.type === "createRectangle");
-  assert.equal(rects.length, 2, "track plus fill");
-  assert.ok(rects[1].width > rects[0].width * 0.9, "480/512 must nearly fill the bar");
+  // The track is a frame (no auto-layout) so the fill overlays it; the fill is
+  // a rectangle inside the track, parent-local, proportional to used/total.
+  const track = result.operations.find((o) => o.type === "createFrame" && o.name === "Track");
+  const fill = result.operations.find((o) => o.type === "createRectangle" && o.name === "Fill");
+  assert.ok(track && fill, "track frame plus fill");
+  assert.equal(fill.parent, track.id, "the fill overlays inside the track frame, parent-local");
+  assert.ok(fill.width > track.width * 0.9, "480/512 must nearly fill the bar");
 
   const readout = result.operations.find((o) => o.type === "createText");
   assert.match(readout.content, /480 \/ 512 GB used/);

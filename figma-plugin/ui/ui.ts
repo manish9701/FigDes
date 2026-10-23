@@ -76,10 +76,7 @@ function el<T extends HTMLElement>(id: string): T {
 
 const dot = el<HTMLSpanElement>("dot");
 const connTextEl = el<HTMLSpanElement>("conn-text");
-const clientEl = el<HTMLSpanElement>("client");
 const latestEl = el<HTMLDivElement>("latest");
-const fileEl = el<HTMLSpanElement>("file");
-const pageEl = el<HTMLSpanElement>("page");
 const versionEl = el<HTMLSpanElement>("version");
 
 const logEl = el<HTMLDivElement>("log");
@@ -109,17 +106,6 @@ function setState(status: Status): void {
   connTextEl.id = "conn-text";
 }
 
-/**
- * Names the driver in the header ("via OpenCode").
- *
- * The server reports the most recently seen MCP client on welcome and
- * re-asserts it on every tool call, so the name tracks hand-offs between
- * agents instead of freezing on whoever spoke first.
- */
-function setClient(name: string): void {
-  clientEl.textContent = `via ${name}`;
-  fitHeight();
-}
 
 /** Apply-button feedback: instant "Saved" cue plus connection outcome. */
 function setSaveBusy(busy: boolean): void {
@@ -196,14 +182,13 @@ function fitHeight(): void {
 /**
  * Renders the panel header from a summary.
  *
- * Deliberately minimal: file, page, version and the build. The build is the
+ * Deliberately minimal: version and the build. The build is the
  * one thing that says whether this panel is running the code in the
- * repository, and Figma does not hot-reload the bundle - so a stale panel is
- * invisible unless the build is on screen.
+ * repository, and Figma does not hot-reload the bundle — so a stale panel is
+ * invisible unless the build is on screen. File and page already show in
+ * Figma itself; the driver already announces itself in the activity line.
  */
 function render(summary: PanelSummary): void {
-  fileEl.textContent = summary.fileName;
-  pageEl.textContent = summary.pageName;
   versionEl.textContent = `v${summary.pluginVersion}`;
   // The build, where a stale panel can be seen rather than assumed away. The
   // summary carries it; a panel built before the stamp existed reports
@@ -291,7 +276,10 @@ function renderNotify(msg: Extract<ServerMessage, { type: "notify" }>): void {
   }
 
   if (msg.kind === "client") {
-    setClient(msg.name);
+    // No persistent driver name in the header: the activity line already
+    // announces who ran each command. Swallow the frame so it never falls
+    // through to the preview branch.
+    fitHeight();
     return;
   }
 
@@ -584,10 +572,7 @@ function startHeartbeat(): void {
           at: Date.now(),
         };
         send(state);
-        if (s.fileName) {
-          fileEl.textContent = s.fileName;
-          pageEl.textContent = s.pageName ?? "";
-        }
+
       })
       .catch(() => {
         /* heartbeat is best-effort */
@@ -613,9 +598,7 @@ function route(msg: ServerMessage): void {
       setState("connected");
 
       toMain({ kind: "connected", status: "connected", sessionId: msg.sessionId });
-      // Who is driving, when the server already knows: a reopened panel names
-      // its agent immediately instead of waiting for the next tool call.
-      if (typeof msg.mcpClient === "string" && msg.mcpClient.length > 0) setClient(msg.mcpClient);
+
       appendLog("info", `Registered — session ${msg.sessionId}`);
       const justApplied = saveBtn.disabled;
       setSaveBusy(false);

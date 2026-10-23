@@ -129,7 +129,7 @@ const activeRequests = new Map<string, string | undefined>();
 /** Panel width: the iframe auto-fits its height to content, width stays fixed. */
 const PANEL_WIDTH = 272;
 /** Clamp for iframe-requested heights: never a sliver, never a full canvas. */
-const PANEL_MIN_H = 96;
+const PANEL_MIN_H = 72;
 const PANEL_MAX_H = 480;
 
 function showUI(): void {

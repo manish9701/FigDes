@@ -76,6 +76,7 @@ function el<T extends HTMLElement>(id: string): T {
 
 const dot = el<HTMLSpanElement>("dot");
 const connTextEl = el<HTMLSpanElement>("conn-text");
+const clientEl = el<HTMLSpanElement>("client");
 const latestEl = el<HTMLDivElement>("latest");
 const fileEl = el<HTMLSpanElement>("file");
 const pageEl = el<HTMLSpanElement>("page");
@@ -106,6 +107,18 @@ function setState(status: Status): void {
           : "Error";
   connTextEl.className = status;
   connTextEl.id = "conn-text";
+}
+
+/**
+ * Names the driver in the header ("via OpenCode").
+ *
+ * The server reports the most recently seen MCP client on welcome and
+ * re-asserts it on every tool call, so the name tracks hand-offs between
+ * agents instead of freezing on whoever spoke first.
+ */
+function setClient(name: string): void {
+  clientEl.textContent = `via ${name}`;
+  fitHeight();
 }
 
 /** Apply-button feedback: instant "Saved" cue plus connection outcome. */
@@ -154,13 +167,25 @@ function toMain(msg: UiToMain): void {
 const PANEL_MIN_H = 96;
 const PANEL_MAX_H = 480;
 let fitQueued = false;
+/**
+ * Last height actually applied. Resizing is skipped when nothing changed:
+ * without this a shrink request that the host rounds or ignores would
+ * re-fire on every subsequent update and visibly flicker.
+ */
+let lastHeight = 0;
 function fitHeight(): void {
   if (fitQueued) return;
   fitQueued = true;
   window.requestAnimationFrame(() => {
     fitQueued = false;
-    const h = Math.ceil(document.body.scrollHeight);
-    toMain({ kind: "resize", height: Math.min(PANEL_MAX_H, Math.max(PANEL_MIN_H, h)) });
+    // Both roots: body alone can under-report once replaced content (a newly
+    // shown preview, an opened section) settles, and an under-measure is a
+    // panel that clips. The max of the two is the honest content height.
+    const h = Math.ceil(Math.max(document.body.scrollHeight, document.documentElement.scrollHeight));
+    const clamped = Math.min(PANEL_MAX_H, Math.max(PANEL_MIN_H, h));
+    if (clamped === lastHeight) return;
+    lastHeight = clamped;
+    toMain({ kind: "resize", height: clamped });
   });
 }
 
@@ -205,8 +230,10 @@ function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
     progressHideTimer = undefined;
   }
   const terminal = msg.phase === "done" || msg.phase === "failed";
-  progressEl.style.visibility = "visible";
-  progressLabelEl.style.visibility = "visible";
+  // display, not visibility: a hidden-but-laid-out bar keeps its pixels in
+  // scrollHeight, so the panel could grow for a build and never shrink back.
+  progressEl.style.display = "";
+  progressLabelEl.style.display = "";
 
   const ratio = msg.total > 0 ? Math.min(1, msg.done / msg.total) : 0;
   progressBarEl.style.width = terminal && msg.phase === "done" ? "100%" : `${Math.round(ratio * 100)}%`;
@@ -240,8 +267,10 @@ function renderProgress(msg: Extract<MainToUi, { kind: "progress" }>): void {
 
   if (terminal) {
     progressHideTimer = window.setTimeout(() => {
-      progressEl.style.visibility = "hidden";
-      progressLabelEl.style.visibility = "hidden";
+      // Removing from layout (not just hiding) lets the panel shrink back to
+      // its idle height once the build narration is over.
+      progressEl.style.display = "none";
+      progressLabelEl.style.display = "none";
       fitHeight();
     }, 4000);
   }
@@ -258,6 +287,11 @@ function renderNotify(msg: Extract<ServerMessage, { type: "notify" }>): void {
   if (msg.kind === "activity") {
     activityEl.textContent = msg.text;
     fitHeight();
+    return;
+  }
+
+  if (msg.kind === "client") {
+    setClient(msg.name);
     return;
   }
 
@@ -579,6 +613,9 @@ function route(msg: ServerMessage): void {
       setState("connected");
 
       toMain({ kind: "connected", status: "connected", sessionId: msg.sessionId });
+      // Who is driving, when the server already knows: a reopened panel names
+      // its agent immediately instead of waiting for the next tool call.
+      if (typeof msg.mcpClient === "string" && msg.mcpClient.length > 0) setClient(msg.mcpClient);
       appendLog("info", `Registered — session ${msg.sessionId}`);
       const justApplied = saveBtn.disabled;
       setSaveBusy(false);

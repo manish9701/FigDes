@@ -526,6 +526,9 @@ function announce(registry: SessionRegistry, client: string, tool: string, detai
   const text = detail ? `${client} · ${tool} — ${detail}` : `${client} · ${tool}`;
   for (const session of registry.connected()) {
     session.notify({ type: "notify", kind: "activity", text: text.slice(0, 140), at: Date.now() });
+    // The panel header names the driver persistently, not just in the
+    // one-line activity stream: every completed call re-asserts who ran it.
+    session.notify({ type: "notify", kind: "client", name: client, at: Date.now() });
   }
 }
 

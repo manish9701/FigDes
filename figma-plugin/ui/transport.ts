@@ -186,7 +186,7 @@ export function createTransport(options: TransportOptions): Transport {
     requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
     heartbeatMs = DEFAULT_HEARTBEAT_MS,
     onRegistered = () => {},
-    onNotify = (msg) => log("info", msg.kind === "activity" ? msg.text : `preview: ${msg.label}`),
+    onNotify = (msg) => log("info", msg.kind === "activity" ? msg.text : msg.kind === "client" ? `driver: ${msg.name}` : `preview: ${msg.label}`),
   } = options;
 
   let socket: SocketLike | null = null;

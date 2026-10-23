@@ -188,7 +188,7 @@ wss.on("connection", (ws: WebSocket) => {
         session.register(msg);
         const linked = registry.linkGeneration(session);
         console.log(`[ws] registered ${session.id} → "${session.fileName}" / "${session.pageName}"${linked.reboundFrom ? ` (rebound from ${linked.reboundFrom} in ${linked.readyMs}ms)` : ""}`);
-        session.send({ type: "welcome", sessionId: session.id, heartbeatMs: 5000 });
+        session.send({ type: "welcome", sessionId: session.id, heartbeatMs: 5000, ...(clients.latest() ? { mcpClient: clients.latest()! } : {}) });
         break;
       }
 

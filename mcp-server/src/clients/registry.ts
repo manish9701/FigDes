@@ -221,6 +221,19 @@ export class ClientRegistry {
     // rather than recording a call that never began.
   }
 
+  /**
+   * Display name of the most recently seen client ("OpenCode", "ChatGPT", …),
+   * or undefined when nothing has connected yet. The plugin panel shows this
+   * in its header so the user sees who is driving.
+   */
+  latest(): string | undefined {
+    let best: Entry | undefined;
+    for (const e of this.entries.values()) {
+      if (!best || e.seq > best.seq) best = e;
+    }
+    return best?.display;
+  }
+
   /** Connections, most-recent first, with live in-flight work attached. */
   snapshot(): { connections: ClientConnection[]; activity: ClientActivity[]; totalCalls: number } {
     const now = Date.now();

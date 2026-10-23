@@ -1375,6 +1375,12 @@ export interface WelcomeMessage {
   type: "welcome";
   sessionId: string;
   heartbeatMs: number;
+  /**
+   * Most recently seen MCP client ("OpenCode", "ChatGPT", …), so a freshly
+   * opened panel names who is driving without waiting for the next tool call.
+   * Absent when no client has been seen yet.
+   */
+  mcpClient?: string;
 }
 
 export interface StateMessage {
@@ -1452,7 +1458,13 @@ export interface CancelMessage {
  */
 export type NotifyMessage =
   | { type: "notify"; kind: "activity"; text: string; at: number }
-  | { type: "notify"; kind: "preview"; label: string; mimeType: string; data: string; at: number };
+  | { type: "notify"; kind: "preview"; label: string; mimeType: string; data: string; at: number }
+  /**
+   * Who is driving. Sent on welcome (latest client) and on every tool call,
+   * so the panel header names the agent (OpenCode, ChatGPT, …) instead of
+   * showing a bare "Connected". Dropped silently by older panels.
+   */
+  | { type: "notify"; kind: "client"; name: string; at: number };
 
 /**
  * Upstream build progress: plugin -> server.

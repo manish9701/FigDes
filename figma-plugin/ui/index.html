@@ -38,9 +38,9 @@
 
       header {
         display: flex;
-        align-items: center;
+        align-items: baseline;
         gap: 5px;
-        margin-bottom: 6px;
+        margin-bottom: 2px;
       }
 
       .dot {
@@ -64,11 +64,30 @@
       }
 
       #file {
-        font-weight: 600;
+        font-weight: 400;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 90px;
+      }
+
+      #brand {
+        font-weight: 700;
+        font-size: 11px;
+        white-space: nowrap;
+      }
+
+      #subline {
+        color: var(--text-3);
+        font-size: 10px;
+        margin-bottom: 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      #client {
+        color: var(--text-2);
       }
 
       #conn-text {
@@ -160,7 +179,7 @@
         background: var(--bg-2);
         margin-top: 6px;
         overflow: hidden;
-        visibility: hidden;
+        display: none;
       }
 
       #progress-bar {
@@ -178,7 +197,7 @@
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        visibility: hidden;
+        display: none;
       }
 
       /* The live stream: what the agent just did, and what it just saw. One
@@ -256,12 +275,12 @@
   <body>
     <header>
       <span id="dot" class="dot"></span>
+      <span id="brand">FigDes</span>
       <span id="conn-text">Connecting…</span>
-      <span id="file">Loading...</span>
-      <span id="page"></span>
       <span class="spacer"></span>
       <span id="version" style="color: var(--text-3)"></span>
     </header>
+    <div id="subline"><span id="client">waiting for a driver…</span> · <span id="file">Loading...</span> · <span id="page"></span></div>
     <div id="latest" aria-live="polite">Starting…</div>
     <div id="progress"><div id="progress-bar"></div></div>
     <div id="progress-label"></div>

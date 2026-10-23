@@ -107,6 +107,30 @@ test("figdes_use_figma without provenance is refused; readonly inspection stays 
   assert.match(refused.instead, /plan_screen/);
 });
 
+test("figdes_use_figma accepts an approved+reason justification as first-class args", async () => {
+  const handler = TOOL_MAP.get("figdes_use_figma").handler;
+  const session = fakeSession(() => ({}));
+  const out = await handler(
+    { script: "figma.createRectangle();", approved: true, reason: "intentional native repair" },
+    { resolve: () => session },
+  );
+  assert.notEqual(out.status, "needs-approval", "the declared approval channel reaches the gate");
+  assert.ok(
+    session.seen.some((s) => s.tool === "execute_figma_script"),
+    "the script was dispatched rather than refused",
+  );
+});
+
+test("figdes_use_figma dryRun runs mutation-protected with the gate open", async () => {
+  const handler = TOOL_MAP.get("figdes_use_figma").handler;
+  const session = fakeSession(() => ({ status: "success", result: { rootId: "9:9" } }));
+  const out = await handler({ script: "figma.createRectangle();", dryRun: true }, { resolve: () => session });
+  assert.notEqual(out.status, "needs-approval", "a dry run needs no approval");
+  assert.equal(out.dryRun, true, "the dry run is disclosed on the result");
+  const sent = session.seen.find((s) => s.tool === "execute_figma_script");
+  assert.equal(sent.args.readonly, true, "the script ran mutation-protected");
+});
+
 test("create_design dryRun is allowed without provenance and creates nothing", async () => {
   const handler = TOOL_MAP.get("create_design").handler;
   const session = fakeSession(() => SUCCESS);

@@ -59,6 +59,19 @@ export const UseFigmaArgs = z
     renderNodeId: z.string().max(200).optional().describe("Node id to render when renderAfter=explicit."),
     renderMaxWidth: z.number().int().min(256).max(2048).optional().default(1024),
     renderDetail: z.enum(["low", "high"]).optional().default("low"),
+    /**
+     * Issue #26 channels, declared so strict clients stop stripping them
+     * before the provenance gate can read them. The handlers still read the
+     * same markers off the raw args, so both spellings work.
+     */
+    dryRun: z.boolean().optional().describe("Inspection-only run: the script executes mutation-protected, nothing is created, and the provenance gate stays open. Apply for real without dryRun."),
+    approved: z.boolean().optional().describe("Explicit approval for a provenance-less mutating script. Covers this one call only; pair with reason."),
+    reason: z.string().max(400).optional().describe("Short justification recorded with an explicit approval."),
+    plan: z.unknown().optional(),
+    planId: z.string().max(200).optional(),
+    planRef: z.string().max(200).optional(),
+    fromPlan: z.boolean().optional(),
+    intelligenceApplied: z.boolean().optional(),
   })
   .strict();
 
@@ -185,6 +198,17 @@ export async function figdesUseFigmaHandler(session: Session, args: unknown): Pr
   const parsed = UseFigmaArgs.parse(args ?? {});
   const timeoutMs = parsed.timeoutMs ?? scriptTimeoutMs();
   if (parsed.readonly === true) return runNativeScript(session, parsed.script, { readonly: true, timeoutMs });
+  // A dry run executes mutation-protected: the plugin refuses writes, so
+  // nothing is created and the provenance gate stays open for free. Real
+  // writes still need a plan channel or an approved+reason justification.
+  if (parsed.dryRun === true) {
+    const out = await runNativeScript(session, parsed.script, { readonly: true, timeoutMs });
+    return {
+      ...out,
+      dryRun: true,
+      note: "Dry run: the script ran mutation-protected, so nothing was created. Apply for real without dryRun — with a plan channel or approved:true plus a reason.",
+    };
+  }
   // Session lock serialises this session's own scripts (spec §36); the
   // document lock above it refuses a *different* session already mutating the
   // same Figma document, which the session lock cannot see (checklist #21).

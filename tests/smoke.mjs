@@ -556,6 +556,8 @@ async function main() {
     const { data, isError } = await callTool("create_design", {
       description: "ChatGPT Test",
       operations: [{ type: "createFrame", id: "temp_1", name: "ChatGPT Test", width: 400, height: 300 }],
+      approved: true,
+      reason: "smoke: intentional raw build exercising the native node path",
     });
     assert.equal(isError, false);
     assert.equal(data.status, "success");
@@ -587,6 +589,8 @@ async function main() {
         { type: "renameNode", target: "24:1", name: "Updated Dashboard" },
         { type: "setSize", target: "24:1", width: 1200, height: 800 },
       ],
+      approved: true,
+      reason: "smoke: intentional raw patch exercising the mutation round-trip",
     });
     assert.equal(data.status, "success");
   });

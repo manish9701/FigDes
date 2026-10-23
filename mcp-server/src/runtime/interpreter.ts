@@ -322,6 +322,16 @@ export const RuntimeCallSchema = z.object({
   id: z.string().min(1).max(64).optional(),
   /** Which region this belongs to. Defaults to the first region. */
   parent: z.string().max(64).optional(),
+  /**
+   * Region-level sizing: the IR dialect spells width/height/grow on the
+   * region object, the plan dialect spells them in args. A caller mirroring
+   * the IR shape on a plan-dialect call used to lose the sizing to the
+   * schema strip silently — the region fell back to hug and the banding
+   * never formed. Declared here and folded into args with a warning.
+   */
+  width: z.unknown().optional(),
+  height: z.unknown().optional(),
+  grow: z.unknown().optional(),
 });
 
 /** Returns the argument keys a primitive does not recognise. */
@@ -731,6 +741,19 @@ export function executeRuntime(input: unknown, options: RuntimeOptions = {}): Ru
     regionIds.add(id);
 
 const args = call.args as Record<string, unknown>;
+
+    // Region-level sizing folds into args with a warning. The IR dialect
+    // spells width/height/grow on the region object; the plan dialect spells
+    // them in args. A caller mirroring the IR shape on a plan-dialect call
+    // used to lose the sizing to the schema strip silently, so the region
+    // fell back to hug/fill defaults and the split-view banding never lit.
+    const callLevel = call as unknown as Record<string, unknown>;
+    for (const key of ["grow", "width", "height"] as const) {
+      if (callLevel[key] !== undefined && args[key] === undefined) {
+        args[key] = callLevel[key];
+        warnings.push(`Region '${id}': '${key}' was declared at region level and folded into args — spell sizing in args so both dialects read it plainly.`);
+      }
+    }
 
     // A `program: "..."` style argument is the exact shape the design document
     // proposed. It is reported rather than ignored, so the model learns the

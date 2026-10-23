@@ -184,3 +184,63 @@ test("relations: a declared relation keeps the solver owning geometry — no ban
   assert.ok(rules.includes("relation"), `the impossible relation is named: ${JSON.stringify(compiled.violations)}`);
   assert.ok(rules.includes("geometry"), `the spill surfaces as resolved geometry: ${JSON.stringify(compiled.violations)}`);
 });
+
+test("IR-shaped sizing on a plan-dialect call folds into args and still bands", () => {
+  const result = executeRuntime({
+    canvas: { name: "Folded sizing", ...CANVAS },
+    regions: [
+      { fn: "frame", id: "map", width: "fill", height: "fill" },
+      { fn: "inspector", id: "ins", width: 360 },
+    ],
+    content: [],
+  });
+  assert.ok(
+    result.warnings.some((w) => /folded into args/.test(w) && /'map'/.test(w)),
+    `region-level declarations are reported, not swallowed: ${JSON.stringify(result.warnings)}`
+  );
+
+  const compiled = compileIR(result.ir);
+  assert.equal(compiled.applicable, true, `the program must apply: ${JSON.stringify(compiled.inapplicableReasons)}`);
+
+  const map = region(compiled, "map");
+  const ins = region(compiled, "ins");
+  near(map.w, 888, "map takes the remainder beside the folded 360px inspector");
+  near(ins.w, 360, "the inspector keeps its region-level declared width");
+  near(ins.x, 920, "inspector sits in the band beside the map");
+  near(map.y, ins.y, "band members share the top edge");
+  for (const r of compiled.regions) {
+    assert.ok(
+      r.x + r.w <= CANVAS.width + 0.5 && r.y + r.h <= CANVAS.height + 0.5,
+      `${r.id} escapes the canvas: x=${r.x} w=${r.w} y=${r.y} h=${r.h}`
+    );
+  }
+});
+
+test("an under-specified rightOf pin declines to own geometry and stays on-canvas", () => {
+  const compiled = compile({
+    canvas: { name: "Bare pin", ...CANVAS },
+    regions: [
+      { fn: "frame", id: "map", args: { width: "fill", height: "fill" } },
+      { fn: "inspector", id: "ins", args: { width: 360 } },
+    ],
+    relations: [{ id: "ins", rightOf: "map" }],
+  });
+
+  const map = region(compiled, "map");
+  const ins = region(compiled, "ins");
+
+  // The bare pin does not own its width and height, so banding still runs:
+  // the map bands beside the 360px inspector instead of eating the canvas.
+  near(map.w, 888, "the fill region bands beside the 360px inspector");
+  assert.ok(ins.x > map.x + map.w - 0.5, "the inspector sits to the right of the map");
+  assert.ok(
+    ins.x + ins.w <= CANVAS.width + 0.5,
+    `the pin must not push the inspector off-canvas: ins.x=${ins.x} w=${ins.w}`
+  );
+  near(ins.y, map.y, "the pin keeps the shared top edge");
+  const rules = compiled.violations.map((v) => v.rule);
+  assert.ok(
+    !rules.includes("relation") && !rules.includes("geometry"),
+    `an on-canvas pin reports no solver violations: ${JSON.stringify(compiled.violations)}`
+  );
+});

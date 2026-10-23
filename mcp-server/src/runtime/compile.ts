@@ -272,7 +272,14 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // there), so an empty list is the normal state for unchanged programs.
   const bands: Array<{ members: readonly string[]; capH: number }> = [];
   const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, {
-    reflow: ir.relations.length === 0,
+    // A relation that declares its width or height hands the geometry to the
+    // solver, so the shell declines banding — including the honest refusal of
+    // a relation that cannot fit. But a bare positioning pin (rightOf with no
+    // sizes) used to switch banding off too, leaving the fill region at full
+    // canvas width and the pinned region at anchor.x + anchor.w = off-canvas.
+    // A pin that owns no size declares no geometry, so the shell bands the
+    // row normally and the pin keeps the placement it asked for.
+    reflow: ir.relations.every((r) => r.width === undefined && r.height === undefined),
     bandsOut: (collected) => bands.push(...collected),
   });
   let regions = shell.regions;

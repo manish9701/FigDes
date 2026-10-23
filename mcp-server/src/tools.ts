@@ -1585,10 +1585,13 @@ inputSchema: CompileArgs,
       "Execute JavaScript directly in the Figma Plugin API context. This is the primary builder for composition-led screens, and it bypasses design intelligence entirely (no decision classification, no composition hints, no build-time product guard) — for new screens, plan first with plan_screen or design_pipeline and run design_guard(inspect:true) on the built frame afterwards. The script receives the real figma API plus a high-level figdes builder (stack/frame/text/rect/ellipse/vector/connect/instance) that handles font loading, auto-layout ordering, sizing and native geometry. Prefer figdes for construction and raw figma for advanced API work. Return rootId/createdNodeIds/mutatedNodeIds. Optional renderAfter='first-created' or 'explicit' turns the same call into a build + visual evidence checkpoint. Native writes are transactional and serialized per session; timeout is an execution watchdog that waits for an in-flight script to settle before rollback, preventing late mutations.",
     inputSchema: UseFigmaArgs,
     handler: async (args, registry) => {
-      // Issue #26: UseFigmaArgs is strict and owns no plan channel, so the
-      // provenance markers (and the explicit approved+reason justification)
-      // travel on the raw args beside the script and are stripped before the
-      // strict parse. Readonly scripts are inspection-only and stay open.
+      // Issue #26: the provenance markers (and the explicit approved+reason
+      // justification) are declared on UseFigmaArgs so strict clients stop
+      // stripping them before the gate can read them, but they still arrive on
+      // the raw args beside the script and are stripped before the strict
+      // parse of the script channel — both spellings reach the gate. dryRun
+      // keeps the gate open and runs the script mutation-protected; readonly
+      // scripts are inspection-only and open either way.
       const raw = ((args ?? {}) as Record<string, unknown>);
       const { plan, planId, planRef, fromPlan, intelligenceApplied, approved, reason, ...scriptArgs } = raw;
       void plan;
@@ -1603,6 +1606,7 @@ inputSchema: CompileArgs,
         ...(typeof approved === "boolean" ? { approved } : {}),
         ...(typeof reason === "string" ? { reason } : {}),
         ...(parsed.readonly !== undefined ? { readonly: parsed.readonly } : {}),
+        ...(parsed.dryRun === true ? { dryRun: true } : {}),
         operations: [{ type: "native-script" }],
       });
       if (provenanceGate) return provenanceGate;

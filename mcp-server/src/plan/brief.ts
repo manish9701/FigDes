@@ -31,6 +31,11 @@ export const DesignBriefArgs = z
     primaryDecision: z.string().min(2).max(200).describe("What the user decides here. A short noun phrase: 'select a model'."),
     availableInformation: z.array(z.string().max(120)).max(30).optional().describe("Data you actually have. Named, not assumed."),
     existingPatterns: z.array(z.string().max(120)).max(20).optional().describe("Patterns the file already uses."),
+    /** Action/state intent, threaded into the plan so the decision's commit step and states are planned, not dropped. */
+    primaryAction: z.string().max(160).optional().describe("The one action this screen exists to commit, e.g. 'Launch deployment'."),
+    secondaryActions: z.array(z.string().max(160)).max(8).optional().describe("Other actions, subordinate to the primary."),
+    states: z.array(z.string().max(40)).max(6).optional().describe("States this screen has to express, e.g. 'selected', 'validating', 'cluster degraded'."),
+    primaryObject: z.string().max(160).optional().describe("The primary object this screen is about, when known."),
     visualDirection: z.string().max(120).optional().describe("e.g. technical-editorial. Recorded and passed through, never invented."),
     name: z.string().max(120).optional(),
     canvas: z
@@ -56,6 +61,12 @@ export function buildBrief(args: DesignBriefArgsShape): unknown {
     ...(args.audience !== undefined ? { audience: args.audience } : {}),
     ...(args.availableInformation !== undefined ? { availableInformation: args.availableInformation } : {}),
     ...(args.existingPatterns !== undefined ? { existingPatterns: args.existingPatterns } : {}),
+    // Action/state intent travels into the planner, so the plan carries the
+    // primary action and the declared states rather than losing them here.
+    ...(args.primaryAction !== undefined ? { primaryAction: args.primaryAction } : {}),
+    ...(args.secondaryActions !== undefined ? { secondaryActions: args.secondaryActions } : {}),
+    ...(args.states !== undefined ? { states: args.states } : {}),
+    ...(args.primaryObject !== undefined ? { primaryObject: args.primaryObject } : {}),
     ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
     ...(args.name !== undefined ? { name: args.name } : {}),
     ...(args.canvas !== undefined ? { canvas: args.canvas } : {}),
@@ -78,6 +89,22 @@ export function buildBrief(args: DesignBriefArgsShape): unknown {
     renamed,
     unmapped,
   };
+  // The action/state fields are accepted here and threaded into the plan
+  // intent above, but the brief→pipeline adapter (adapters.ts owns that
+  // mapping) has no copy for them yet. Stated ones are recorded as documented
+  // loss rather than letting the bridge pretend it carried them.
+  if (args.primaryAction !== undefined) {
+    bridge.unmapped.push({ field: "primaryAction", reason: "the design-brief → pipeline bridge does not map it yet; the field travels into the plan intent instead." });
+  }
+  if (args.secondaryActions !== undefined) {
+    bridge.unmapped.push({ field: "secondaryActions", reason: "the design-brief → pipeline bridge does not map it yet; the field travels into the plan intent instead." });
+  }
+  if (args.states !== undefined) {
+    bridge.unmapped.push({ field: "states", reason: "the design-brief → pipeline bridge does not map it yet; the field travels into the plan intent instead." });
+  }
+  if (args.primaryObject !== undefined) {
+    bridge.unmapped.push({ field: "primaryObject", reason: "the design-brief → pipeline bridge does not map it yet; the field travels into the plan intent instead." });
+  }
 
   const focal = plan.artDirection.focal;
   const [primary, ...secondary] = plan.artDirection.hierarchy;

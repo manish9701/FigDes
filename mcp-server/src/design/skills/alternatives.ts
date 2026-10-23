@@ -44,6 +44,7 @@ const KIND_TO_WEIGHTS: Record<DecisionKind, string> = {
   configure: "configure",
   inspect: "inspect",
   select: "explore",
+  deploy: "configure",
   explore: "explore",
   integration: "default",
   author: "default",

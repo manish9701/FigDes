@@ -50,6 +50,90 @@ export interface StackInput {
 }
 
 /**
+ * The shortest region a canvas-fit reflow may leave behind.
+ *
+ * Below this a stacked region cannot hold even a heading and a line of body
+ * (a 32px title line plus a 20px label plus padding), so "redistribute" would
+ * be a euphemism for "crush". Regions whose declared height is smaller keep it —
+ * a 40px footer bar did not ask to become a squeeze.
+ */
+export const MIN_STACK_REGION_H = 64;
+
+/**
+ * Pulls an overflowing stack of region heights back inside the canvas.
+ *
+ * ## Why this exists
+ *
+ * `solveAxis` hands out exactly `available` only when a `fill` child exists. An
+ * all-fixed stack simply returns the declared sizes, so three fixed regions
+ * totalling more than the canvas height overflowed silently — the live stress
+ * case put an inspector at y=940 on a 900px canvas with nothing reporting why.
+ * Overflow to the bottom edge is never a design someone asked for: regions
+ * below the fold are not visible, they are lost.
+ *
+ * Shrinkage is water-filled: each shrinkable region gives up height in
+ * proportion to how far it sits above its floor, so a 420px header contributes
+ * far more than a 64px rail would (and a region already at its floor gives
+ * nothing). If the floors themselves cannot fit, the overflow is returned
+ * honestly — the caller's geometry check reports it rather than a layout
+ * pretending it fit.
+ */
+export function fitStackToCanvas(args: {
+  heights: number[];
+  /** `true` for a region whose declared height is a number we may shrink. */
+  shrinkable: boolean[];
+  canvasH: number;
+  gutter: number;
+  /** Optional per-region floor (e.g. a content floor). Defaults to `MIN_STACK_REGION_H`. */
+  mins?: number[];
+}): { heights: number[]; changed: number } {
+  const { heights, shrinkable, canvasH, gutter } = args;
+  const out = heights.slice();
+  const n = out.length;
+  if (n === 0) return { heights: out, changed: 0 };
+
+  const gaps = gutter * Math.max(0, n - 1);
+  let overflow = out.reduce((a, b) => a + b, 0) + gaps - canvasH;
+  if (overflow <= 1e-6) return { heights: out, changed: 0 };
+
+  const floorOf = (i: number): number => {
+    const declared = args.mins?.[i];
+    // Never below 1, never above the region's own height: a floor taller than
+    // the region would make it "grow" under the guise of shrinking.
+    return Math.max(1, Math.min(typeof declared === "number" ? declared : MIN_STACK_REGION_H, out[i]!));
+  };
+
+  // One proportional-to-headroom pass distributes at most `cap`, and every
+  // region's share is bounded by its own headroom, so no region can be pushed
+  // below its floor by the pass itself. The loop only guards float residue.
+  for (let pass = 0; pass < n + 1 && overflow > 1e-6; pass++) {
+    const flexible = shrinkable.map((s, i) => (s && out[i]! - floorOf(i) > 1e-6 ? i : -1)).filter((i) => i >= 0);
+    if (flexible.length === 0) break;
+    const headroom = flexible.reduce((a, i) => a + (out[i]! - floorOf(i)), 0);
+    const take = Math.min(overflow, headroom);
+    for (const i of flexible) out[i] = out[i]! - take * ((out[i]! - floorOf(i)) / headroom);
+    overflow -= take;
+  }
+
+  // Integer heights, then absorb any rounding residue on the largest
+  // shrinkable region so the stack lands exactly on (or under) the canvas edge
+  // rather than 1px past it.
+  for (let i = 0; i < n; i++) out[i] = Math.max(floorOf(i), Math.round(out[i]!));
+  const residual = out.reduce((a, b) => a + b, 0) + gaps - canvasH;
+  if (residual > 0) {
+    const donors = shrinkable.map((s, i) => (s && out[i]! - floorOf(i) >= residual ? i : -1)).filter((i) => i >= 0);
+    if (donors.length > 0) {
+      const donor = donors.reduce((a, i) => (out[i]! > out[a]! ? i : a), donors[0]!);
+      out[donor] = out[donor]! - residual;
+    }
+  }
+
+  let changed = 0;
+  for (let i = 0; i < n; i++) if (Math.abs(out[i]! - heights[i]!) > 0.5) changed++;
+  return { heights: out, changed };
+}
+
+/**
  * Distributes leftover space along one axis.
  *
  * Fixed and hug children keep their measured size. `fill` children share what
@@ -209,6 +293,12 @@ export interface ShellInput {
   canvasW: number;
   canvasH: number;
   gutter: number;
+  /**
+   * Decline the canvas-fit reflow (`reflow: false`) or collect how many regions
+   * it moved (`reflowOut`). Both default to the reflow being on and uncounted.
+   */
+  reflow?: boolean;
+  reflowOut?: (changed: number) => void;
 }
 
 /**
@@ -225,9 +315,7 @@ export function layoutRegions(input: ShellInput): ResolvedRegion[] {
   const nav = regions.find((r) => r.role === "navigation");
   const isSideRail = nav && typeof nav.width === "number" && nav.width > 0 && nav.width < Math.min(500, canvasW * 0.4);
 
-  return isSideRail
-    ? layoutSideRail(input, nav!)
-    : layoutStack(input);
+  return isSideRail ? layoutSideRail(input, nav!) : layoutStack(input);
 }
 
 function layoutStack(input: ShellInput): ResolvedRegion[] {
@@ -240,7 +328,29 @@ function layoutStack(input: ShellInput): ResolvedRegion[] {
     height: resolveMajor(r.height),
   }));
 
-  const heights = solveAxis({ children: stack, axis: "column", gap: gutter, available: canvasH });
+  const solved = solveAxis({ children: stack, axis: "column", gap: gutter, available: canvasH });
+
+  // Canvas-fit reflow: when no child is `fill`, `solveAxis` returns the declared
+  // sizes unclamped, and a stack totalling more than the canvas overflowed
+  // silently (a 420px header, a 456px stage and a 340px inspector on a 900px
+  // canvas put the inspector at y=940). Shrink the fixed heights back inside.
+  // `fill` and `hug` children are not shrinkable here — the leftover they were
+  // given (or will claim once measured) is theirs by contract. Declined when
+  // the caller says so: with relations in play the solver owns the geometry,
+  // and pre-shrinking the stack would fight the placement it is about to get.
+  const heights =
+    input.reflow === false
+      ? solved
+      : (() => {
+          const refit = fitStackToCanvas({
+            heights: solved,
+            shrinkable: stack.map((c) => typeof c.height === "number"),
+            canvasH,
+            gutter,
+          });
+          if (refit.changed > 0) input.reflowOut?.(refit.changed);
+          return refit.heights;
+        })();
 
   let y = 0;
   return regions.map((r, i) => {
@@ -283,7 +393,24 @@ function layoutSideRail(input: ShellInput, nav: Region): ResolvedRegion[] {
     height: resolveMajor(r.height),
   }));
 
-  const heights = solveAxis({ children: stack, axis: "column", gap: gutter, available: canvasH });
+  const solved = solveAxis({ children: stack, axis: "column", gap: gutter, available: canvasH });
+
+  // Canvas-fit reflow, as in `layoutStack`: the content column stacks beside the
+  // rail, and the rail cannot lend it height, so an over-tall content column
+  // spilled past the bottom edge with nothing pulling it back.
+  const heights =
+    input.reflow === false
+      ? solved
+      : (() => {
+          const refit = fitStackToCanvas({
+            heights: solved,
+            shrinkable: stack.map((c) => typeof c.height === "number"),
+            canvasH,
+            gutter,
+          });
+          if (refit.changed > 0) input.reflowOut?.(refit.changed);
+          return refit.heights;
+        })();
 
   let y = 0;
   const out: ResolvedRegion[] = others.map((r, i) => {
@@ -622,14 +749,46 @@ export function separateOverlaps(
 
 /** Convenience used by the compiler. */
 export function planLayout(ir: DesignIR, gutter?: number): ResolvedRegion[] {
+  return planLayoutReflowed(ir, gutter).regions;
+}
+
+/**
+ * `planLayout`, plus the count of regions the canvas-fit reflow moved.
+ *
+ * The compiler reports `reflowed` honestly: a stack the shell layout had to
+ * shrink to fit is a repair the caller (and the payload stats) should see, not
+ * a silent correction. `reflow` can be declined — the compiler passes false
+ * when the program declares relations, because the relation solver then owns
+ * the geometry and pre-shrinking the stack would fight the placement it is
+ * about to be given.
+ */
+export function planLayoutReflowed(
+  ir: DesignIR,
+  gutter?: number,
+  opts?: { reflow?: boolean },
+): { regions: ResolvedRegion[]; reflowed: number } {
   const g = gutter ?? defaultGutter(ir.canvas.grid);
-  // The canvas cannot itself be flexible, so "fill"/"hug" there mean the default
-  // desktop canvas. The compiler resolves this too; doing it in both places
-  // keeps planLayout usable standalone.
-  return layoutRegions({
+  if (opts?.reflow === false) {
+    // Reflow off: solveAxis is returned to untouched so the relation solver
+    // measures the geometry the declarations asked for.
+    const regions = layoutRegions({
+      regions: ir.regions,
+      canvasW: canvasSize(ir.canvas.width, 1440),
+      canvasH: canvasSize(ir.canvas.height, 900),
+      gutter: g,
+      reflow: false,
+    });
+    return { regions, reflowed: 0 };
+  }
+  let reflowed = 0;
+  const regions = layoutRegions({
     regions: ir.regions,
     canvasW: canvasSize(ir.canvas.width, 1440),
     canvasH: canvasSize(ir.canvas.height, 900),
     gutter: g,
+    reflowOut: (n) => {
+      reflowed += n;
+    },
   });
+  return { regions, reflowed };
 }

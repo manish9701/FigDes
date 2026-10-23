@@ -10,7 +10,7 @@
  * layout engine computes the geometry.
  */
 import { OperationSchema, parseColor, type Operation } from "../../../shared/protocol";
-import type { CompileResult, ContentSpec, DesignIR, ResolvedBox, ResolvedRegion } from "../../../shared/ir";
+import type { CompileResult, ContentSpec, ConnectorRoute, DesignIR, ResolvedBox, ResolvedRegion } from "../../../shared/ir";
 import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, expectedRelationBox, type PlacedBox } from "./constraints";
@@ -18,7 +18,7 @@ import { checkIdentity } from "./identity";
 import { routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
-import { inferComposition, packContent, planLayout, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
+import { fitStackToCanvas, inferComposition, MIN_STACK_REGION_H, packContent, planLayoutReflowed, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
 import { runAlgorithm } from "./algorithms";
 
 /* -------------------------------------------------------------------------- */
@@ -258,7 +258,12 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // name" (issue #12, A8).
   violations.push(...checkIdentity(ir));
 
-  let regions = planLayout(ir, defaultGutter(canvas.grid) * rhythmScale);
+  // The shell layout may itself have had to repair an overflowing stack (the
+  // canvas-fit reflow inside `layoutRegions`); counted so `reflowed` reports
+  // every automatic geometry change, not just relation-driven ones.
+  const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, { reflow: ir.relations.length === 0 });
+  let regions = shell.regions;
+  let reflowed = shell.reflowed;
   if (alignGrid > 0) {
     regions = regions.map((r) => ({
       ...r,
@@ -276,7 +281,6 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     );
   }
   const regionIds = new Set(ir.regions.map((r) => r.id));
-  let reflowed = 0;
 
   // Content declared but never parented to a region is adopted rather than
   // dropped. The runtime interpreter already defaults an unparented call to the
@@ -495,12 +499,17 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     // holding space that a region below it is about to need.
     fitFillRegions({ regions, boxes, operations, canvasH: canvasSize(canvas.height, 900), gutter: canvas.grid * 4, grid: canvas.grid });
   }
-
   /* --------------------------------------------------------- relations --- */
 
   // Relations run after everything is placed, so an anchor may be a region or a
   // content node and the solver sees real geometry either way (spec §18).
   let constrained = 0;
+  /**
+   * Ids whose geometry the relation solver set, possibly empty (no relations).
+   * Declared here because the automatic canvas-fit pass after this block must
+   * treat them as frozen whether or not relations ran.
+   */
+  const solverTouched = new Set<string>();
   if (ir.relations.length > 0 && deck) {
     // Relations name anchors that may live on other slides. Positioning content
     // against a box on a different slide would silently misplace it, so deck
@@ -533,6 +542,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       const prior = before.get(box.id);
       if (prior && (Math.abs(prior.x - box.x) > 0.5 || Math.abs(prior.y - box.y) > 0.5 || Math.abs(prior.w - box.w) > 0.5 || Math.abs(prior.h - box.h) > 0.5)) {
         moved += 1;
+        solverTouched.add(box.id);
       }
       boxes.set(box.id, box);
     }
@@ -638,7 +648,27 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
           }
         }
       } else {
-        patchEmit(operations, box.id, { x: box.x, y: box.y, width: Math.max(1, Math.round(box.w)), height: Math.max(1, Math.round(box.h)) });
+        // Content moved by a relation is patched in place — and in the same
+        // coordinate space its create op was emitted in: **parent-local**.
+        //
+        // The layout computes canvas-absolute boxes, but a create op parented
+        // to a region stores the position relative to that region's origin
+        // (Figma's convention, which every emitter follows). Patching with the
+        // absolute box and no `origin` wrote the region's own offset into the
+        // child: a `label-wide` constrained inside a region at x=248 landed at
+        // op x=1448 — twice the offset, well outside the region it belonged
+        // to — and then failed containment for a move nobody asked for.
+        const homeRegion = ir.regions.find((r) => r.children.includes(box.id));
+        const parentBox = homeRegion ? boxes.get(homeRegion.id) : undefined;
+        patchEmit(
+          operations,
+          box.id,
+          { x: box.x, y: box.y, width: Math.max(1, Math.round(box.w)), height: Math.max(1, Math.round(box.h)) },
+          // The parent's *current* origin (the solver may have moved the region
+          // first — `boxes` already holds its solved geometry), falling back to
+          // canvas space only when the node has no region to be local to.
+          parentBox ? { x: parentBox.x, y: parentBox.y } : undefined,
+        );
       }
     }
 
@@ -651,13 +681,44 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     });
 
     constrained = moved;
-    reflowed = reflow;
+    reflowed += reflow;
+  }
+
+  /* --------------------------------------------------- canvas-fit reflow --- */
+
+  // The last pass that could move region origins ran above, so this is the
+  // final word on the region stack, and it runs on the geometry everything else
+  // (connectors, text, containment) will be measured against.
+  //
+  // Growth passes (`fitRegionsToContent`) and the relation solver can leave a
+  // stack past the canvas edge; `fitFillRegions` only shrinks `fill` regions,
+  // so an all-fixed stack had nothing to pull it back — the exact stress-case
+  // failure this file's `assertResolvedGeometry` was written to *report*. This
+  // pass is the automatic repair that turns that report into a fix: shrink the
+  // fixed heights toward their content floors and re-stack. Repairs count in
+  // `reflowed`, so the payload says the compiler changed geometry on its own
+  // initiative.
+  //
+  // Regions the relation solver positioned are frozen: their geometry is the
+  // contract the relations declare, and `checkRelation` already reports one
+  // that lands off-canvas rather than silently reinterpreting it.
+  if (!deck) {
+    reflowed += canvasFitReflow({
+      regions,
+      boxes,
+      operations,
+      canvasH: canvasSize(canvas.height, 900),
+      gutter: defaultGutter(canvas.grid) * rhythmScale,
+      grid: canvas.grid,
+      frozen: ir.relations.length > 0 ? solverTouched : undefined,
+    });
   }
 
   /* ------------------------------------------------------- connectors --- */
 
+  let connectorRoutes: ConnectorRoute[] = [];
   if (ir.content.some((c) => c.kind === "connector")) {
-    emitConnectors(ir, boxes, operations, violations, typeScale, deck);
+    connectorRoutes = emitConnectors(ir, boxes, operations, violations, typeScale, deck);
   }
 
   /* ------------------------------------------------------ token refs --- */
@@ -713,6 +774,10 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     "connector",
     "content-parent",
     "identity",
+    // Emitted text width contradicting the resolved box is the same class of
+    // lie as an operation-trace mismatch, just on one axis: the screen would
+    // wrap text at a width the layout never promised.
+    "text-bounds",
     // Content that escapes the region that owns it is a structural defect, and
     // the review engine cannot see it: by the time the screen exists, the
     // content and the region have already drifted apart. A region that allows
@@ -737,6 +802,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     violations,
     applicable: inapplicableReasons.length === 0,
     inapplicableReasons,
+    connectorRoutes,
     stats: {
       regionCount: regions.length,
       contentCount: ir.content.length,
@@ -963,6 +1029,9 @@ function routeEndpoints(path: string): Array<{ x: number; y: number }> {
  * route is solved here into path data, which then goes through the same
  * allowlisted, non-evaluating path pipeline as every other vector. Arrowheads are
  * closed subpaths inside that same path, so a connector is one node.
+ *
+ * Returns each routed connector's resolved endpoints and label anchor, so the
+ * result carries the same evidence the dispatch-time preflight re-proves.
  */
 function emitConnectors(
   ir: DesignIR,
@@ -971,9 +1040,10 @@ function emitConnectors(
   violations: CompileResult["violations"],
   typeScale: number,
   deck: boolean,
-): void {
+): ConnectorRoute[] {
   const connectors = ir.content.filter((c) => c.kind === "connector");
   const labels: Array<{ id: string; text: string; x: number; y: number; weight: number; parent: string }> = [];
+  const routes: ConnectorRoute[] = [];
 
   // Which region each content node belongs to. Needed in deck mode, where a
   // connector must live on the same slide as both of its endpoints.
@@ -1039,6 +1109,7 @@ function emitConnectors(
     // rather than assume.
     if (fromBox && toBox) {
       const endpoints = routeEndpoints(route.path);
+      routes.push({ id: spec.id, from: spec.from, to: spec.to, endpoints, ...(route.labelAt !== undefined ? { labelAt: route.labelAt } : {}) });
       const hull = {
         x: Math.min(fromBox.x, toBox.x),
         y: Math.min(fromBox.y, toBox.y),
@@ -1101,6 +1172,7 @@ operations.push(
       }),
     );
   }
+  return routes;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -1376,7 +1448,7 @@ function emitContent(args: {
         const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look, textMetrics) }, spec);
         const final = resolvedSize(spec, box, grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
-        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look);
         else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
@@ -1393,7 +1465,7 @@ function emitContent(args: {
         if (!box) continue;
         const final = resolvedSize(spec, devicePlacementBox(box, spec), grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
-        if (spec.kind === "text") emitText(spec, region, final, operations, typeScale, titleScale, look);
+        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look);
         else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
@@ -1408,11 +1480,42 @@ function emitContent(args: {
   return algorithms[region.id];
 }
 
+/** The narrowest text layer the compiler will emit or record. */
+const TEXT_MIN_WIDTH = 40;
+
+/**
+ * The width a text layer is emitted at AND its resolved box records.
+ *
+ * One formula, two consumers (`emitText`, `resolvedSize`), because the last
+ * version had two: the emitter wrote `max(40, maxWidth ?? box.w)` while the
+ * resolved box recorded `min(box.w, maxWidth)` — so a `maxWidth` larger than
+ * the packed column, or smaller than the 40px floor, produced an emitted width
+ * that contradicted the geometry the trace check compares against, and the text
+ * wrapped at a width the layout never promised.
+ *
+ * The column always caps the request (a `maxWidth` larger than the space is not
+ * a request to overflow), and the 40px floor applies in BOTH places so a
+ * maxWidth of 20 in a 120px column emits and records 40 — consistent, if
+ * degenerate. Applying the formula to its own output is stable, which is what
+ * makes emit-time re-derivation from the resolved box safe.
+ *
+ * A column that is itself degenerate (0-wide: padding and gap squeezed the
+ * content out) is NOT floored up: the zero-extent check must still see it, so
+ * a squeezed-out child keeps resolving to zero and the "no room for it"
+ * finding keeps firing. Flooring that would paper over a real squeeze as a
+ * fake 40px box.
+ */
+function textEmittedWidth(spec: Extract<ContentSpec, { kind: "text" }>, columnW: number): number {
+  const requested = spec.maxWidth !== undefined && spec.maxWidth > 0 ? Math.min(spec.maxWidth, columnW) : columnW;
+  return Math.max(TEXT_MIN_WIDTH, Math.round(requested));
+}
+
 function emitText(
   spec: Extract<ContentSpec, { kind: "text" }>,
   region: ResolvedRegion,
   box: ResolvedBox,
   operations: Operation[],
+  violations: CompileResult["violations"],
   typeScale = 1,
   titleScale = 1,
   look: StyleLook = DEFAULT_LOOK,
@@ -1446,13 +1549,25 @@ function emitText(
       // The file's own text style, when the program named one: the design
       // system, bound rather than redrawn.
       ...(spec.textStyleId !== undefined ? { textStyleId: spec.textStyleId } : {}),
-      width: Math.max(40, Math.round(spec.maxWidth ?? box.w)),
+      width: textEmittedWidth(spec, box.w),
       // A deliberately truncated text: the box stays the size the layout
       // reserved and the text is cut with an ellipsis, which is the honest
       // rendering of a string that cannot wrap.
       ...(spec.truncate === true ? { textAutoResize: "TRUNCATE" as const } : {}),
     }),
   );
+
+  // Drift guard: the resolved box must already carry this exact width
+  // (`resolvedSize` applies the same formula), so a disagreement here means a
+  // path skipped the resolution step. Reported as a blocking violation rather
+  // than shipping geometry the trace check would call a lie. A degenerate
+  // column is exempt: its zero extent is a deliberate finding, not a drift.
+  if (box.w > 0.5 && Math.abs(box.w - textEmittedWidth(spec, box.w)) > 0.5) {
+    violations.push({
+      rule: "text-bounds",
+      message: `Text '${spec.id}' would be emitted ${textEmittedWidth(spec, box.w)}px wide but its resolved box is ${Math.round(box.w)}px wide — the emitted width and the resolved geometry disagree. Fix the width source so both use one formula.`,
+    });
+  }
 }
 
 function emitGraphic(spec: Extract<ContentSpec, { kind: "shape" | "vector" }>, region: ResolvedRegion, box: ResolvedBox, operations: Operation[]): void {
@@ -1773,7 +1888,7 @@ function emitComponent(
           name: str("label", "Nav item"),
           x: box.x,
           y: box.y,
-          width: hugSize(spec, grid, typeScale, look)?.w ?? hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }),
+          width: hugSize(spec, grid, typeScale, look)?.w ?? hugWidth(displayLabel, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5, letterSpacing: look.navTracking }),
           height: hugSize(spec, grid, typeScale, look)?.h ?? 36,
           fill: active ? NAV_ACTIVE_FILL : surfaceFill(p.surface, []),
           radius: grid / 2,
@@ -3206,7 +3321,11 @@ function describeRelation(r: DesignIR["relations"][number]): string {
 /* Typography fit                                                               */
 /* -------------------------------------------------------------------------- */
 
-/** Mean glyph width as a fraction of font size, matching `estimateHeight`. */
+/**
+ * Mean glyph width as a fraction of font size. The estimate lives in
+ * `estimateTextRunWidth` (tracking- and uppercase-aware); this constant remains
+ * for readers comparing the two heuristics' bases.
+ */
 const MEAN_GLYPH_RATIO = 0.55;
 
 /**
@@ -3259,7 +3378,9 @@ function checkTextFit(
       const runs = spec.text.split(/\s+/).filter((r) => r.length > 0);
       let longest = "";
       for (const r of runs) if (r.length > longest.length) longest = r;
-      const runWidth = Math.ceil(longest.length * fontSize * MEAN_GLYPH_RATIO);
+      // Shared width estimate (tracking + uppercase aware), so this check
+      // agrees with the measurement the layout and the emitters used.
+      const runWidth = Math.ceil(estimateTextRunWidth(longest, fontSize, spec.letterSpacing ?? 0));
 
       if (runWidth <= box.w + 1) continue;
 
@@ -3659,6 +3780,138 @@ function fitFillRegions(args: {
 }
 
 /**
+ * The automatic canvas-fit pass: shrinks an overflowing region stack back
+ * inside the canvas and re-stacks it.
+ *
+ * This is the repair counterpart of the geometry *report* in
+ * `assertResolvedGeometry`. Every earlier pass is one-directional by design —
+ * `fitRegionsToContent` only grows, `fitFillRegions` only shrinks `fill`
+ * regions — so a stack of fixed heights that grew (or was declared) past the
+ * canvas edge reached the checks with nothing left to fix it, and the compile
+ * could only refuse a screen a reflow would have saved.
+ *
+ * Shrinking is water-filled toward a per-region floor (see `fitStackToCanvas`):
+ * first toward `MIN_STACK_REGION_H` so no region is crushed below usable, and
+ * — only if even that cannot fit — toward whatever the region's own content
+ * needs. If the content genuinely does not fit the canvas, the overflow
+ * survives and the geometry check reports it honestly; a repair that hides a
+ * real overflow would be worse than the report.
+ *
+ * Returns how many regions changed, which the caller reports as `reflowed` —
+ * a repair the compiler made on its own initiative is part of the payload's
+ * story, not something to hide.
+ */
+function canvasFitReflow(args: {
+  regions: ResolvedRegion[];
+  boxes: Map<string, PlacedBox>;
+  operations: Operation[];
+  canvasH: number;
+  gutter: number;
+  grid: number;
+  /** Ids the relation solver positioned; their geometry is contract, not adjustable. */
+  frozen?: ReadonlySet<string>;
+}): number {
+  const { regions, boxes, operations, canvasH, gutter, grid, frozen } = args;
+
+  const shiftBox = (id: string, dy: number): void => {
+    const box = boxes.get(id);
+    if (box) boxes.set(id, { ...box, y: box.y + dy });
+  };
+
+  // Columns, not one list — same reasoning as `fitFillRegions`: a side-rail
+  // shell's full-height rail must not compete with its content column for the
+  // same canvas height.
+  const columns = new Map<number, ResolvedRegion[]>();
+  for (const r of regions) {
+    if (frozen?.has(r.id)) continue;
+    const list = columns.get(r.x);
+    if (list) list.push(r);
+    else columns.set(r.x, [r]);
+  }
+
+  /** The height a region's own content needs, or null when it holds none. */
+  const contentNeed = (region: ResolvedRegion): number | null => {
+    const pad = normalizePadding(region.padding, grid);
+    let bottom = Number.NEGATIVE_INFINITY;
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (box) bottom = Math.max(bottom, box.y + box.h);
+    }
+    if (bottom === Number.NEGATIVE_INFINITY) return null;
+    return Math.max(1, Math.ceil(bottom - region.y + pad.bottom));
+  };
+
+  // A region cannot give back space its content is standing in — the repair
+  // would trade one overflow report for a pile of containment findings.
+  const shrinkableOf = (region: ResolvedRegion, floor: "usable" | "content"): boolean => {
+    if (region.height === "fill" || region.height === "hug") return false;
+    const need = contentNeed(region);
+    if (need === null) return floor === "usable" ? region.h > MIN_STACK_REGION_H : region.h > 1;
+    const minH = floor === "usable" ? Math.max(MIN_STACK_REGION_H, need) : Math.max(1, need);
+    return region.h > minH + 0.5;
+  };
+  const floorOf = (region: ResolvedRegion, floor: "usable" | "content"): number => {
+    if (region.height === "fill" || region.height === "hug") return region.h;
+    const need = contentNeed(region);
+    if (need === null) return floor === "usable" ? MIN_STACK_REGION_H : 1;
+    return floor === "usable" ? Math.max(MIN_STACK_REGION_H, need) : Math.max(1, need);
+  };
+
+  let changed = 0;
+  for (const stack of columns.values()) {
+    // A frozen (relation-placed) region sharing this column makes re-stacking
+    // unsafe — a shrunken stack could slide onto or under the frozen region —
+    // so the column keeps its geometry and the checks report any real spill.
+    if (regions.some((r) => r.x === stack[0]!.x && frozen?.has(r.id))) continue;
+    const ordered = [...stack].sort((a, b) => a.y - b.y);
+    const beforeGeom = new Map(ordered.map((r) => [r.id, { y: r.y, h: r.h }]));
+    const bottom = Math.max(...ordered.map((r) => r.y + r.h));
+    // Pull back to the canvas edge, not to 1px short of spilling past it.
+    const overflow = bottom - canvasH + CANVAS_TOLERANCE;
+    if (overflow <= 0) continue;
+
+    // Two attempts: first respect a usable minimum per region; if the canvas
+    // genuinely cannot afford that, fit beats aesthetics and the floor drops
+    // to what each region's content needs.
+    for (const floor of ["usable", "content"] as const) {
+      const refit = fitStackToCanvas({
+        heights: ordered.map((r) => r.h),
+        shrinkable: ordered.map((r) => shrinkableOf(r, floor)),
+        mins: ordered.map((r) => floorOf(r, floor)),
+        canvasH: canvasH,
+        gutter,
+      });
+      if (refit.changed === 0) continue;
+      ordered.forEach((region, i) => {
+        region.h = Math.round(refit.heights[i]!);
+      });
+      break;
+    }
+
+    // Re-stack from the top, carrying content and patching the already-emitted
+    // region frames (region ops are root-parented, so no origin conversion).
+    let y = ordered[0]!.y;
+    for (const region of ordered) {
+      const dy = Math.round(y) - region.y;
+      if (dy !== 0) {
+        region.y = Math.round(y);
+        for (const id of [region.id, ...region.children]) shiftBox(id, dy);
+        patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      }
+      y += region.h + gutter;
+    }
+    const newBottom = Math.max(...ordered.map((r) => r.y + r.h));
+    if (newBottom < bottom - 0.5 || ordered.some((r) => {
+      const was = beforeGeom.get(r.id)!;
+      return Math.abs(was.y - r.y) > 0.5 || Math.abs(was.h - r.h) > 0.5;
+    })) {
+      changed += ordered.length;
+    }
+  }
+  return changed;
+}
+
+/**
  * Carries a region's text along when a relation moves or resizes that region.
  *
  * Flow placed each text node against the region's pre-relation box, so the node
@@ -3738,6 +3991,36 @@ function patchPosition(operations: Operation[], id: string, x: number, y: number
   }
 }
 
+/** Uppercase runs measure wider than the mixed-case mean the 0.56 ratio assumes. */
+const UPPERCASE_WIDTH_FACTOR = 1.08;
+
+/** A run of letters already in caps (so a preset transform will widen it). */
+function upperFactor(text: string): number {
+  return text.length > 0 && text === text.toUpperCase() && /[A-Z]/.test(text) ? UPPERCASE_WIDTH_FACTOR : 1;
+}
+
+/**
+ * Estimated rendered width of a one-line text run, in px.
+ *
+ * One source of truth for every width estimate the compiler makes (`hugWidth`,
+ * `estimateHeight`'s wrap arithmetic, `checkTextFit`), because two estimates
+ * that disagree is exactly the drift the trace check exists to catch.
+ *
+ * Two things the older estimates ignored, both visible as silent clipping:
+ *
+ *  - `letterSpacing`, which shared/ir.ts documents in PIXELS and the plugin
+ *    applies as `{ unit: "PIXELS" }` — Figma adds it after every glyph, so a
+ *    tracked label is `length × tracking` px wider than its untracked self,
+ *    not a negligible percentage.
+ *  - uppercase transforms (`navUpper` and friends): caps glyphs run roughly 8%
+ *    wider than the mixed-case mean, a modest, bounded correction measured on
+ *    the tracked-rail live artifact rather than a font-metric pretence.
+ */
+export function estimateTextRunWidth(text: string, fontSize: number, letterSpacing = 0): number {
+  const len = Math.max(1, text.length);
+  return len * fontSize * 0.56 * upperFactor(text) + Math.max(0, letterSpacing) * len;
+}
+
 /**
  * Estimates the width of a hug-sized pill, button or nav item.
  *
@@ -3745,9 +4028,8 @@ function patchPosition(operations: Operation[], id: string, x: number, y: number
  * component has to be measured up front. Deliberately generous — a slightly
  * wide pill looks intentional, a clipped one looks broken.
  */
-function hugWidth(text: string, { fontSize, paddingX }: { fontSize: number; paddingX: number }): number {
-  const charWidth = fontSize * 0.56;
-  return Math.ceil(Math.max(1, text.length) * charWidth + paddingX * 2);
+function hugWidth(text: string, { fontSize, paddingX, letterSpacing = 0 }: { fontSize: number; paddingX: number; letterSpacing?: number }): number {
+  return Math.ceil(estimateTextRunWidth(text, fontSize, letterSpacing) + paddingX * 2);
 }
 
 /** Two-decimal coordinate formatting for computed diagram geometry. */
@@ -3865,7 +4147,12 @@ function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleSc
   const display = spec.role === "title" || spec.role === "eyebrow" ? titleScale : 1;
   const size = (spec.size ?? scale.size) * typeScale * display;
   const usable = Math.max(40, spec.maxWidth ?? width);
-  const charsPerLine = Math.max(8, Math.floor(usable / (size * 0.55)));
+  // Per-character pitch includes the tracking (pixels, added after every glyph)
+  // and the uppercase widening a preset transform will apply — a tracked caps
+  // label wraps earlier than its untracked lowercase self, and every estimate
+  // that ignored this clipped its last word (the letter-spaced rail labels).
+  const pitch = Math.max(1, size * 0.55 * upperFactor(spec.text) + Math.max(0, spec.letterSpacing ?? 0));
+  const charsPerLine = Math.max(8, Math.floor(usable / pitch));
   const lines = Math.max(1, Math.ceil(spec.text.length / charsPerLine));
   return Math.round(lines * size * 1.4 + 4);
 }
@@ -3903,10 +4190,14 @@ function resolvedSize(
     // the operation trace reports the disagreement.
     return { ...box, w: Math.max(1, Math.round(spec.width)), h: Math.max(1, Math.round(spec.height)) };
   }
-  if (spec.kind === "text" && spec.maxWidth !== undefined && spec.maxWidth > 0) {
-    // Never wider than the column it was packed into: a maxWidth larger than the
-    // available space is not a request to overflow.
-    return { ...box, w: Math.min(box.w, Math.round(spec.maxWidth)) };
+  if (spec.kind === "text") {
+    // Same formula the emitter uses (`textEmittedWidth`): the resolved box is
+    // the emitted width, by construction rather than by coincidence. The 40px
+    // floor applies here too, so a narrow column and a tiny maxWidth cannot
+    // make the two answers disagree — except for a degenerate column, which
+    // keeps its raw (zero) extent so the no-room check still sees it.
+    if (box.w <= 0.5) return box;
+    return { ...box, w: textEmittedWidth(spec, box.w) };
   }
   return box;
 }
@@ -3998,7 +4289,10 @@ function hugSize(
     // change that can quietly redefine what a component means.
     case "navItem": {
       const label = look.navUpper ? str("label", "Item").toUpperCase() : str("label", "Item");
-      return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }), h: Math.round(36 * typeScale) };
+      // The preset's nav tracking reaches the label at emit time, so the hug
+      // estimate must carry it too: a tracked rail label measured untracked
+      // hugged narrower than the text it holds, and the last word clipped.
+      return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5, letterSpacing: look.navTracking }), h: Math.round(36 * typeScale) };
     }
     case "statusPill": {
       const label = str("label", "Status");

@@ -304,6 +304,19 @@ function chooseArchetype(shape: ContentShape, brief: NormalizedBrief): Archetype
       alignment: "loose",
       rejected: [{ archetype: "dashboard", why: "An overview of tiles does not show why one option wins." }],
     }),
+    deploy: () => ({
+      archetype: "list-detail",
+      rationale:
+        "Launching onto the fleet compares candidates in rows beside the automatic placement recommendation; the fit verdict and the commit step must both be visible.",
+      density: "balanced",
+      whitespace: "even",
+      focalRole: "the automatic placement recommendation: where the model runs and whether it fits",
+      alignment: "strong",
+      rejected: [
+        { archetype: "dashboard", why: "A grid of metrics carries no fit verdict and no commit action." },
+        { archetype: "form-led", why: "A form would present placement as manual configuration instead of a recommendation." },
+      ],
+    }),
     inspect: () => ({
       archetype: "data-dense",
       rationale:

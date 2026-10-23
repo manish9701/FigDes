@@ -14,7 +14,7 @@
  * happens in a call that costs one message, not an undo.
  */
 import { z } from "zod";
-import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
+import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, isActionBearing, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
 import { bestPattern } from "../design/grammar/matcher";
 import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
@@ -115,6 +115,26 @@ export const PlanScreenArgs = z
 
     alsoConsider: z.array(z.string().min(2).max(200)).max(3).optional().describe("Other plausible primary decisions, to compare compositions."),
     /**
+     * Action intent: the primary action the screen exists to commit.
+     *
+     * When present and no planned region already carries an action, the plan
+     * adds an action region rather than leaving the decision's commit step to
+     * whatever chrome has room. Omitted by callers who leave the action to
+     * their own downstream placement (the pipeline, which already places the
+     * brief's primary action in the header band) — their behaviour is unchanged.
+     */
+    primaryAction: z.string().max(160).optional().describe("The one action this screen exists to commit, e.g. 'Launch deployment'."),
+    /** Secondary actions, recorded with the intent; the pipeline places them in the header band. */
+    secondaryActions: z.array(z.string().max(160)).max(8).optional(),
+    /**
+     * State intent: states this screen has to express ("selected",
+     * "validating", "cluster degraded"...). Merged into the art direction's
+     * interaction states, so a caller-declared state is never dropped.
+     */
+    states: z.array(z.string().max(40)).max(6).optional(),
+    /** The primary object the screen is about, when the caller names one. Recorded with the intent. */
+    primaryObject: z.string().max(160).optional(),
+    /**
      * Return full structural variants alongside the recommendation (FigDes §6).
      *
      * Each variant is a real plan recomputed for that composition — regions with
@@ -168,6 +188,17 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     // program downstream: direction biases pattern matching, density sets gaps.
     ...(args.visualDirection !== undefined ? { visualDirection: args.visualDirection } : {}),
     ...(args.artDirection?.density !== undefined ? { densityPreference: args.artDirection.density } : {}),
+    // Action/state intent travels into the planner: primaryAction earns an
+    // action region when no shell region carries one, and states merge into
+    // the art direction's interaction states.
+    ...(args.primaryAction !== undefined ? { primaryAction: args.primaryAction } : {}),
+    ...(args.secondaryActions !== undefined ? { secondaryActions: args.secondaryActions } : {}),
+    ...(args.states !== undefined ? { states: args.states } : {}),
+    ...(args.primaryObject !== undefined ? { primaryObject: args.primaryObject } : {}),
+    // The archetype is resolved inside the planner too (priority compiles into
+    // the plan's required information); an unknown name still fails here first
+    // with the known list.
+    ...(args.archetype !== undefined ? { archetype: args.archetype } : {}),
     // Deck format overrides any canvas size: slides are fixed 1920x1080, and a
     // custom size here would promise geometry the build cannot produce.
     ...(args.format === "deck" ? { canvas: { width: 1920, height: 1080, grid: 8 } } : args.canvas !== undefined ? { canvas: args.canvas } : {}),
@@ -195,6 +226,14 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       rule: "exo.no-generic-saas",
       therefore: "Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. Build the spatial/instrument shell natively; reserve design_runtime for reusable content inside it.",
     });
+  }
+
+  // Plan-time completeness signal (not a mutation gate): a deployment plan
+  // must carry the automatic placement recommendation and a primary action.
+  // Checked on the plan, before any content exists, where a gap is still one
+  // cheap message to the caller instead of a missing screen later.
+  for (const finding of deployCompleteness(plan)) {
+    plan.warnings.push(finding);
   }
 
   // A requested spatial/topology composition with list-detail regions is a
@@ -307,18 +346,31 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       composition: plan.composition,
       ...(plan.intent.goal !== undefined ? { goal: plan.intent.goal } : {}),
       ...(plan.intent.audience !== undefined ? { audience: plan.intent.audience } : {}),
+      ...(plan.intent.primaryAction !== undefined ? { primaryAction: plan.intent.primaryAction } : {}),
+      ...(plan.intent.primaryObject !== undefined ? { primaryObject: plan.intent.primaryObject } : {}),
     },
 
-    ...(archetype !== undefined
+    /**
+     * The archetype the plan follows — stated explicitly or inferred from the
+     * decision — with its priority items. Priority is plan material now: it is
+     * also compiled into `requiredInformation` below.
+     */
+    ...(plan.archetype !== undefined
       ? {
           archetype: {
-            name: archetype.name,
-            objective: archetype.objective,
-            priority: archetype.priority,
-            antiPatterns: archetype.antiPatterns,
+            name: plan.archetype.name,
+            objective: plan.archetype.objective,
+            priority: plan.archetype.priority,
+            antiPatterns: plan.archetype.antiPatterns,
           },
         }
       : {}),
+
+    /**
+     * Every information item the plan is required to carry: what the caller
+     * stated plus the resolved archetype's priority items, deduped.
+     */
+    requiredInformation: plan.requiredInformation,
 
     /**
      * The named screen template this plan follows.
@@ -377,6 +429,8 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       ...(plan.intent.visualDirection !== undefined ? { visualDirection: plan.intent.visualDirection } : { visualDirection: null }),
       ...(plan.intent.audience !== undefined ? { audience: plan.intent.audience } : { audience: null }),
       ...(plan.intent.goal !== undefined ? { goal: plan.intent.goal } : {}),
+      ...(plan.intent.states !== undefined ? { states: plan.intent.states } : {}),
+      ...(plan.intent.secondaryActions !== undefined ? { secondaryActions: plan.intent.secondaryActions } : {}),
     },
 
     /** The art director's decisions: focal, hierarchy, strategies, states, risks. */
@@ -429,7 +483,7 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       ? { deckOutline: (plan as unknown as Record<string, unknown>).deckOutline }
       : {}),
 
-    warnings: [...(archetype !== undefined ? archetype.antiPatterns.map((a) => `Archetype '${archetype.name}' forbids: ${a}.`) : []), ...plan.warnings],
+    warnings: [...(plan.archetype !== undefined ? plan.archetype.antiPatterns.map((a) => `Archetype '${plan.archetype!.name}' forbids: ${a}.`) : []), ...plan.warnings],
 
     ...(opts.notes !== undefined && opts.notes.length > 0 ? { projectMemory: opts.notes } : {}),
     ...(opts.screen !== undefined ? { screen: opts.screen } : {}),
@@ -456,6 +510,41 @@ function isGenericDashboardShape(plan: { regions: Array<{ id: string; role: stri
   const hasTableContent = plan.regions.some((r) => (r.id === "content" || r.id === "results") && (r.composition === "table" || r.composition === "canvas"));
   const hasInspector = ids.has("inspector");
   return hasChrome && hasTableContent && hasInspector;
+}
+
+/**
+ * Plan-time completeness for deployment decisions (a signal, not a gate).
+ *
+ * A deployment plan owes its reader two things beyond the generic shell: the
+ * automatic placement recommendation (an inspector carrying placement, the
+ * requires-vs-available memory comparison and the fit verdict) and a primary
+ * action — a region or slot the decision is committed through. When either is
+ * absent the plan still stands, but it says so rather than letting the caller
+ * discover the gap in a render.
+ */
+function deployCompleteness(plan: {
+  intent: { decisionKind: string };
+  archetype?: { name: string };
+  regions: Array<{ id: string; role: string; because: string }>;
+}): string[] {
+  const isDeploy = plan.intent.decisionKind === "deploy" || plan.archetype?.name === "model-fit" || plan.archetype?.name === "deployment";
+  if (!isDeploy) return [];
+
+  const findings: string[] = [];
+  const hasPlacement = plan.regions.some(
+    (r) => r.role === "inspector" && /placement|recommend|fit|requires vs available/i.test(r.because),
+  );
+  if (!hasPlacement) {
+    findings.push(
+      "plan-completeness:deploy: no region carries the automatic placement recommendation — an inspector should state where the model runs, required vs available memory, and the fit verdict.",
+    );
+  }
+  if (!plan.regions.some((r) => isActionBearing(r))) {
+    findings.push(
+      "plan-completeness:deploy: no primary action — pass primaryAction so the launch/commit step gets a region, or place it deliberately downstream.",
+    );
+  }
+  return findings;
 }
 
 /** One sentence on what switching composition costs. */

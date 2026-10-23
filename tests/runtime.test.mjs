@@ -2547,3 +2547,92 @@ test("deck slides never carry layout grids", () => {
   });
   assert.ok(!result.operations.some((o) => o.type === "setLayoutGrid"), "slides have no layoutGrids in the Figma API");
 });
+
+/* -------------------------------------------------------------------------- */
+/* Geometry-compiler regressions: canvas-fit reflow, tracked text, parenting, */
+/* and the emitted-vs-resolved width contract.                                */
+/* -------------------------------------------------------------------------- */
+
+test("the all-fixed side-rail stack that overflowed the canvas is pulled back to fit", () => {
+  // The reported failure: an inspector at (248, 940) on a 1440x900 canvas.
+  // Four fixed heights totalling more than the canvas must be reflowed into
+  // the canvas, reported through `reflowed`, not shipped and then refused.
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "navigation", id: "nav", args: { width: 216 } },
+      { fn: "header", id: "head", args: { height: 420 } },
+      { fn: "frame", id: "work", args: { height: 456 } },
+      { fn: "inspector", id: "inspector", args: { height: 340 } },
+    ],
+    content: [],
+  });
+  const compiled = compileIR(result.ir);
+  for (const region of compiled.regions) {
+    assert.ok(
+      region.y >= -1 && region.y + region.h <= 901,
+      `region ${region.id} spills the canvas: y=${region.y} h=${region.h}`,
+    );
+    assert.ok(region.h > 0, `region ${region.id} was crushed to nothing by the reflow`);
+  }
+  assert.ok(result.reflowed > 0, "the automatic reflow must be reported, not silent");
+  assert.deepEqual(compiled.violations.filter((v) => v.rule === "geometry"), [], "no geometry violation once the reflow pulled the stack back");
+  assert.equal(compiled.applicable, true, "a repaired layout applies");
+});
+
+test("a tracked uppercase nav label that cannot fit its rail is detected, not clipped", () => {
+  // quiet-instrument sets navTracking 50 and uppercase case: the label renders
+  // far wider than the untracked estimate, which is how "OPERATIONS" clipped.
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    visualIntent: { style: "quiet-instrument" },
+    regions: [{ fn: "navigation", id: "nav", args: { width: 216 } }],
+    content: [{ fn: "navItem", id: "nav-models", parent: "nav", args: { label: "MODELS", icon: "box" } }],
+  });
+  const label = result.operations.find((o) => o.id === "nav-models");
+  assert.ok(label && label.width > 216, `the tracked label must measure wider than the untracked estimate, got width ${label?.width}`);
+  assert.equal(result.applicable, false, "a label that cannot fit its rail must block, not clip");
+  assert.ok(
+    result.violations.some((v) => v.rule === "containment"),
+    `the overflow must surface as a containment violation, got: ${JSON.stringify(result.violations.map((v) => v.rule))}`,
+  );
+});
+
+test("relation-patched content inside an offset region lands parent-local", () => {
+  // work sits at canvas (248, 0). A rightOf relation against label-ops must
+  // emit label-wide at parent-local x=128, never at the canvas-absolute 376.
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [
+      { fn: "navigation", id: "nav", args: { width: 216 } },
+      { fn: "frame", id: "work", args: { width: 600, height: 400 } },
+    ],
+    content: [
+      { fn: "text", id: "label-ops", parent: "work", args: { text: "OPERATIONS", maxWidth: 120 } },
+      { fn: "text", id: "label-wide", parent: "work", args: { text: "3 machines online", maxWidth: 120 } },
+    ],
+    relations: [{ id: "label-wide", rightOf: "label-ops", gap: 8 }],
+  });
+  const wide = result.operations.find((o) => o.id === "label-wide");
+  assert.ok(wide, "the constrained text op is emitted");
+  assert.equal(wide.x, 128, `the op must be parent-local (120 + gap 8), got x=${wide.x}`);
+  assert.ok(
+    !result.violations.some((v) => v.rule === "containment" && v.message.includes("label-wide")),
+    `parent-local geometry keeps the node inside its region, got: ${JSON.stringify(result.violations)}`,
+  );
+});
+
+test("an unknown parent id blocks the build rather than silently adopting the node", () => {
+  const result = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "r1", args: {} }],
+    content: [{ fn: "text", id: "t1", parent: "nope", args: { text: "hi" } }],
+  });
+  assert.ok(result.warnings.some((w) => w.includes("nope")), "the adoption is still named in a warning");
+  assert.equal(result.ir.regions[0].children.includes("t1"), true, "the node is still placed somewhere testable");
+  assert.equal(result.applicable, false, "a mistyped parent must block, not silently succeed");
+  assert.ok(
+    result.violations.some((v) => v.rule === "parent" && v.message.includes("nope")),
+    `the unknown parent must surface as a parent violation, got: ${JSON.stringify(result.violations.map((v) => v.rule))}`,
+  );
+});

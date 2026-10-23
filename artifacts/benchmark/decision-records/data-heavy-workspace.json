@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "data-heavy-workspace",
-  "recordedAt": "2026-10-22T04:44:32.750Z",
+  "recordedAt": "2026-10-23T02:37:56.802Z",
   "brief": {
     "screen": "Follow-up queue",
     "product": "ops-ledger",
@@ -39,7 +39,7 @@
     },
     {
       "id": "composition-strategy",
-      "why": "archetype: Choosing between options needs the options beside enough detail to choose well. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
+      "why": "archetype: Choosing between options needs the options beside enough detail to choose well. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape; overridden by a composition descriptor when the direction states one.; visual-intent.rhythm: The archetype's whitespace contract; overridden by a composition descriptor when the direction states one.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
     }
   ],
   "discoveries": [

@@ -616,6 +616,22 @@ export interface PlacedBox extends ResolvedBox {
   id: string;
 }
 
+/**
+ * A connector's resolved route, reported alongside the geometry it was solved
+ * against. Carried on the compile result so the dispatch-time preflight can
+ * re-prove the endpoints land on the nodes they name (preflight-blocking's
+ * connector class) instead of silently skipping for lack of evidence.
+ */
+export interface ConnectorRoute {
+  id: string;
+  from: string;
+  to: string;
+  /** Resolved route endpoints, canvas-absolute like every resolved box. */
+  endpoints: Array<{ x: number; y: number }>;
+  /** Where a label was anchored, or null when the connector has none. */
+  labelAt?: { x: number; y: number } | null;
+}
+
 export interface CompileResult {
   /** Ordered operations, ready to hand to the transaction executor. */
   operations: unknown[];
@@ -637,6 +653,11 @@ export interface CompileResult {
   applicable: boolean;
   /** Why `applicable` is false. Empty when it is true. */
   inapplicableReasons: string[];
+  /**
+   * Every routed connector with its resolved endpoints and label anchor, so the
+   * dispatch-time preflight can re-prove them against the final geometry.
+   */
+  connectorRoutes: ConnectorRoute[];
   stats: {
     regionCount: number;
     contentCount: number;

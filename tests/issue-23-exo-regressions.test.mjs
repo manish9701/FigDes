@@ -108,7 +108,7 @@ const wideInstanceProgram = {
   ],
 };
 
-/** Text whose maxWidth sits under the emitter's floor → operation-trace. */
+/** Text whose maxWidth sits under the floor → one consistent width, no drift. */
 const narrowTextProgram = {
   canvas: CANVAS,
   regions: [{ fn: "inspector", id: "table", args: { width: 640, height: "fill", padding: 16 } }],
@@ -177,9 +177,19 @@ const DETECTORS = {
   },
 
   "text-emitted-width-vs-resolved-bounds": () => {
+    // Since the text-width unification, emitted and resolved widths share one
+    // formula (`textEmittedWidth`), so the contradiction can no longer ship —
+    // a path that skips resolution now blocks as `text-bounds`. The detector
+    // pins the positive control: a maxWidth under the floor emits at the floor,
+    // with no operation-trace drift and no emitted/resolved disagreement.
     const result = executeRuntime(narrowTextProgram);
-    const hit = result.violations.find((v) => v.rule === "operation-trace" && v.message.includes("resolved box"));
-    assert.ok(hit, `text emitted wider than its resolved bounds must surface as an operation-trace violation, got: ${violationSummary(result)}`);
+    assert.ok(
+      !result.violations.some((v) => v.rule === "operation-trace" && v.message.includes("resolved box")),
+      `emitted text width must agree with the resolved box (one formula), got: ${violationSummary(result)}`,
+    );
+    const op = result.operations.find((o) => o.id === "col-note");
+    assert.ok(op, "the text op is emitted");
+    assert.equal(op.width, 40, "a maxWidth under the floor emits at the floor, matching the resolved box");
   },
 
   "connector-endpoints-not-aligned": () => {

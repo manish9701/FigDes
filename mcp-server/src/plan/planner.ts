@@ -80,6 +80,31 @@ export interface ScreenIntent {
    * it never reorders regions or changes grow.
    */
   densityPreference?: "low" | "medium" | "high";
+  /**
+   * A known screen archetype by name ("model-fit", "deployment"...), when the
+   * caller states one. Resolved with archetypeFor; its priority items compile
+   * into the plan's required information so the archetype is plan material,
+   * not just echoed metadata.
+   */
+  archetype?: string;
+  /**
+   * The primary action the screen exists to commit ("Launch deployment").
+   *
+   * When present and no region already carries an action, the planner gives it
+   * a region of its own — the decision's commit step is not left to whatever
+   * chrome happens to have room.
+   */
+  primaryAction?: string;
+  /** Secondary actions, recorded with the intent; the pipeline places them in the header band. */
+  secondaryActions?: string[];
+  /**
+   * The states this screen has to express ("selected", "validating",
+   * "cluster degraded"...). Merged into the art direction's interaction
+   * states, so a caller-declared state is never silently dropped.
+   */
+  states?: string[];
+  /** The primary object the screen is about, when the caller names one. Recorded with the intent. */
+  primaryObject?: string;
   canvas?: { width?: number; height?: number; grid?: number };
   name?: string;
 }
@@ -98,6 +123,7 @@ export interface ScreenIntent {
  */
 type DecisionKind =
   | "select"        // choosing between options -> comparison surface
+  | "deploy"        // launching onto infrastructure -> candidates + automatic placement + launch action
   | "monitor"       // watching state over time -> instrument
   | "configure"     // setting something -> form + preview
   | "explore"       // finding something -> list + filters
@@ -118,6 +144,24 @@ const DECISION_PATTERNS: Array<{ kind: DecisionKind; pattern: RegExp }> = [
    * so an explicit comparison ("compare pressure readings") still compares.
    */
   { kind: "topology", pattern: /\bpressur\w*|under pressure|needs attention|weak link|bottleneck|hotspot|which .* needs action\b/i },
+  /**
+   * Launching something onto infrastructure is a decision with prerequisites,
+   * a fit check and a commit action — not a generic selection. Checked before
+   * `select` because the generic choosing words otherwise swallow it: "Choose
+   * a model deployment that fits the discovered compute cluster." reads as a
+   * `select` and gets a bare option list with no placement, no fit and no
+   * launch step.
+   *
+   * Deliberately conservative: bare "launch"/"ship" appears in many
+   * non-deployment contexts ("launch the marketing site"), so those verbs only
+   * count when the object is infrastructure the fleet runs (model, cluster,
+   * fleet, node, machine, shard, device). Explicit deployment wording
+   * (deploy/deployment/rollout) is unambiguous on its own.
+   */
+  {
+    kind: "deploy",
+    pattern: /\bdeploy\w*\b|\broll\s?out\b|\brollout\b|\b(?:launch|ship)\b(?=[^.!?]*\b(?:models?|clusters?|fleets?|nodes?|machines?|shards?|devices?)\b)|\b(?:models?|clusters?|fleets?|nodes?|machines?|shards?|devices?)\b(?=[^.!?]*\b(?:launch|ship)\b)/i,
+  },
   { kind: "select", pattern: /\b(select|choose|pick|which|what model|run what|switch to)\b/i },
   /**
    * Deliberately narrow.
@@ -146,6 +190,16 @@ export function classifyDecision(primaryDecision: string): DecisionKind {
     if (pattern.test(primaryDecision)) return kind;
   }
   return "inspect";
+}
+
+/**
+ * True when a region already carries the screen's primary action — either the
+ * planner's own action region, or a shell region whose reason declares the
+ * launch/commit step. Used both when honouring action intent and by the
+ * plan-completeness check.
+ */
+export function isActionBearing(region: { id: string; because: string }): boolean {
+  return region.id === "action" || /\b(launch|commit|primary|approve)\s+action\b/i.test(region.because);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -188,6 +242,19 @@ const SHELLS: Record<DecisionKind, (intent: ScreenIntent) => PlannedRegion[]> = 
       { id: "inspector", role: "inspector", composition: "split-view", width: 360, height: "fill", grow: 0, gap: 24, because: "detail for the currently focused option" },
     ];
   },
+
+  /* Launching a model onto the fleet: the candidates compare in rows, and the
+     inspector carries the automatic placement recommendation — where the model
+     should run, required vs available memory, and the fit verdict. Placement is
+     recommended automatically (EXO product truth); the screen never presents
+     manual shard dragging as the way to place a model. The launch action itself
+     arrives as an action region when the caller names it (see planScreen). */
+  deploy: (intent) => [
+    { id: "nav", role: "navigation", composition: "instrument", width: 240, height: "fill", grow: 0, because: "orientation: where am I in the product" },
+    { id: "header", role: "header", composition: "editorial", width: "fill", height: 72, grow: 0, padding: 24, because: `the deployment decision, stated: "${intent.primaryDecision}"` },
+    { id: "candidates", role: "content", composition: "table", width: "fill", height: "fill", grow: 1, gap: 16, padding: 24, because: "the candidate deployments and models, each row carrying its fit verdict so the choice reads across rows rather than as a gallery" },
+    { id: "placement", role: "inspector", composition: "split-view", width: 360, height: "fill", grow: 0, gap: 24, because: "the automatic placement recommendation for the selected candidate: where it should run, required vs available memory, and the fit verdict — placement is recommended automatically, never arranged by dragging shards by hand" },
+  ],
 
   /* Watching state: an instrument. Status rail for at-a-glance, primary visual for
      the thing being watched. */
@@ -267,6 +334,7 @@ export const SCREEN_TEMPLATES: ScreenTemplate[] = [
   { name: "runtime", kinds: ["configure", "author"], why: "controls beside a live preview, so a change is never a leap of faith" },
   { name: "telemetry", kinds: ["monitor"], why: "state at a glance above the signal, data beneath it" },
   { name: "integration", kinds: ["integration"], why: "providers listed with state, endpoint detail for the selection" },
+  { name: "deployment-fit", kinds: ["deploy"], why: "candidates compared in rows beside the automatic placement recommendation, with the launch action committed in the open" },
 ];
 
 /** Names the screen template for a decision kind. Every kind has exactly one. */
@@ -323,6 +391,32 @@ export const SCREEN_ARCHETYPES: ScreenArchetype[] = [
 export function archetypeFor(name: string): ScreenArchetype | undefined {
   const key = name.toLowerCase().replace(/[^a-z0-9]+/g, "");
   return SCREEN_ARCHETYPES.find((a) => a.name.replace(/[^a-z0-9]+/g, "") === key);
+}
+
+/**
+ * Infers the archetype from the decision itself, when the caller did not name
+ * one. Deterministic and deliberately narrow: it fires only for the `deploy`
+ * kind, which no existing classification produces, so no other screen's plan
+ * changes. A deployment decision about models is the model-fit screen (its
+ * priorities — fit verdict, requires-vs-available, recommended config, run
+ * action — are exactly what the plan must carry); one about the cluster or
+ * fleet itself is the deployment screen.
+ */
+function inferArchetypeFromDecision(kind: DecisionKind, decision: string): ScreenArchetype | undefined {
+  if (kind !== "deploy") return undefined;
+  if (/\bmodel\w*\b/i.test(decision)) return archetypeFor("model-fit");
+  if (/\bcluster\b|\bfleet\b|\broll\s?out\b|\brollout\b|\bshard\b/i.test(decision)) return archetypeFor("deployment");
+  return undefined;
+}
+
+/**
+ * Resolves the archetype for an intent: stated by name wins, otherwise
+ * inferred from the decision. Exported so callers (plan tools, the pipeline)
+ * resolve the same archetype the planner resolves, instead of re-deriving it.
+ */
+export function resolveArchetype(primaryDecision: string, archetype?: string): ScreenArchetype | undefined {
+  if (archetype !== undefined) return archetypeFor(archetype);
+  return inferArchetypeFromDecision(classifyDecision(primaryDecision), primaryDecision);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -482,10 +576,29 @@ export interface ScreenPlan {
     primaryDecision: string;
     decisionKind: DecisionKind;
     canvas: { width: number; height: number; grid: number };
+    /** The primary action the caller named, echoed so the build carries it. */
+    primaryAction?: string;
+    /** Secondary actions the caller named, echoed. */
+    secondaryActions?: string[];
+    /** States the caller declared, echoed. */
+    states?: string[];
+    /** The primary object the caller named, echoed. */
+    primaryObject?: string;
   };
   composition: Composition;
   /** The named screen template this plan follows (spec §14). */
   template: ScreenTemplate;
+  /**
+   * The archetype this plan follows — stated by the caller or inferred from
+   * the decision (see resolveArchetype) — when one resolves.
+   */
+  archetype?: ScreenArchetype;
+  /**
+   * Every information item the plan is required to carry: what the caller
+   * stated, plus the resolved archetype's priority items. Archetype priority
+   * was previously dead data; now it is plan material the build consumes.
+   */
+  requiredInformation: string[];
   /**
    * How the regions were determined: task-derived from the actual information,
    * or an explicit kind-shell fallback. A fallback is honest, not a failure —
@@ -602,21 +715,37 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     }
   }
 
+  // The archetype this plan follows: stated by name, else inferred from the
+  // decision. Its priority items compile into the plan's required information
+  // below, so a known screen's information priorities are plan material
+  // rather than echoed metadata.
+  const archetype = resolveArchetype(intent.primaryDecision, intent.archetype);
+
   // Task-driven derivation first: regions serve the actual information for the
   // stated decision, with the pattern as guidance. Shells are the explicit
   // fallback when there is nothing classifiable to derive from.
   // The visual direction biases pattern matching (a stated "editorial" manner
   // should pull the editorial pattern up) but never overrides the decision
   // kind: manner is a preference, the task is the requirement.
+  //
+  // `deploy` is the exception: the derivation vocabulary has no deploy-specific
+  // branch, so an unhandled kind would fall into the generic inspect shell and
+  // lose the deployment decision's structural requirements — the automatic
+  // placement recommendation, the requires-vs-available fit and the launch
+  // step. Those are product truths of the decision, not derivations from
+  // information kinds, so deploy always uses its shell.
   const patternForPlan = bestPattern(decisionKind, [intent.goal ?? intent.primaryDecision, intent.visualDirection ?? ""].join(" "));
-  const derived = deriveRegions({
-    decisionKind,
-    primaryDecision: intent.primaryDecision,
-    info: intent.availableInformation ?? [],
-    ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
-    ...(patternForPlan ? { pattern: patternForPlan } : {}),
-    ...(intent.components !== undefined ? { components: intent.components } : {}),
-  });
+  const derived =
+    decisionKind === "deploy"
+      ? null
+      : deriveRegions({
+          decisionKind,
+          primaryDecision: intent.primaryDecision,
+          info: intent.availableInformation ?? [],
+          ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
+          ...(patternForPlan ? { pattern: patternForPlan } : {}),
+          ...(intent.components !== undefined ? { components: intent.components } : {}),
+        });
   let regions: PlannedRegion[];
   let derivation: Derivation;
   if (derived) {
@@ -643,8 +772,32 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
       information: attempted,
       unclassified: attempted.filter((i) => i.kind === "unknown").map((i) => i.text),
       appliedGuidance: [],
-      note: "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
+      note:
+        decisionKind === "deploy"
+          ? "Deploy uses the deployment shell even when information is classifiable: the automatic placement recommendation, the requires-vs-available fit and the launch action are structural to the decision, not derivable from information kinds."
+          : "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
     };
+  }
+
+  // Action intent: when the caller names the primary action, it must have a
+  // place on the screen. Most shells leave the action to chrome; when no
+  // region already carries one, the action gets a region of its own — the
+  // decision's commit step is not left to whatever space is left over.
+  // Callers that name no action see no change.
+  if (intent.primaryAction !== undefined && !regions.some(isActionBearing)) {
+    regions.push({
+      id: "action",
+      role: "secondary",
+      composition: "editorial",
+      width: "fill",
+      height: 96,
+      grow: 0,
+      padding: 24,
+      because: `the primary action '${intent.primaryAction}': the decision is committed here, with the prerequisites that gate it visible beside it`,
+    });
+    derivation.appliedGuidance.push(
+      `The caller named the primary action '${intent.primaryAction}' and no shell region carries it, so an action region was added rather than hiding the commit step in chrome.`,
+    );
   }
 
   // An explicit density preference overrides pattern gap guidance only. It
@@ -767,6 +920,18 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     ...alternatives.map((a) => ({ composition: a.composition, recommended: false, why: a.trade })),
   ];
 
+  // Archetype priority becomes required information: stated items first, the
+  // archetype's priorities appended (deduped, case-insensitive), so a known
+  // screen's information priorities are plan material the build consumes.
+  const requiredInformation = [
+    ...new Set([
+      ...(intent.availableInformation ?? []),
+      ...(archetype?.priority ?? []).filter(
+        (p) => !(intent.availableInformation ?? []).some((i) => i.toLowerCase() === p.toLowerCase()),
+      ),
+    ]),
+  ];
+
   return {
     intent: {
       ...(intent.goal !== undefined ? { goal: intent.goal } : {}),
@@ -777,9 +942,15 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
       primaryDecision: intent.primaryDecision,
       decisionKind,
       canvas: { width, height, grid },
+      ...(intent.primaryAction !== undefined ? { primaryAction: intent.primaryAction } : {}),
+      ...(intent.secondaryActions !== undefined ? { secondaryActions: intent.secondaryActions } : {}),
+      ...(intent.states !== undefined ? { states: intent.states } : {}),
+      ...(intent.primaryObject !== undefined ? { primaryObject: intent.primaryObject } : {}),
     },
     composition,
     template: templateFor(decisionKind),
+    ...(archetype !== undefined ? { archetype } : {}),
+    requiredInformation,
     derivation,
     boxes: finalBoxes,
     regions,
@@ -910,6 +1081,7 @@ function directArt(
 
   const VISUALIZATION: Record<DecisionKind, string> = {
     select: "Options as rows that read across, detail beside them; comparison is alignment, not decoration.",
+    deploy: "Candidate deployments compared in rows, each with its fit verdict, beside the automatic placement recommendation — never a shard-dragging work surface.",
     compare: "Two subjects side by side on identical structure, so differences read as differences.",
     monitor: "Instrument readouts with a status rail: state at a glance, signal large, data beneath.",
     topology: "A node-link diagram with routed, labelled edges; the relationships are the content.",
@@ -931,12 +1103,40 @@ function directArt(
     "device unavailable",
     "cluster degraded",
   ];
-  const interactionStates =
-    kind === "topology" || kind === "monitor"
-      ? [...BASE_STATES, ...RUNTIME_STATES]
-      : kind === "select" || kind === "explore"
-        ? [...BASE_STATES, "focused"]
-        : BASE_STATES;
+  /**
+   * Deployment-relevant runtime states. A deployment screen expresses the
+   * model's transfer/fit lifecycle and the fleet's availability, plus the
+   * two states the decision itself passes through: validation and readiness
+   * to launch. These are advisory art-direction strings — the runtime's
+   * state-strip expansion maps recognised names and warns on unknown ones,
+   * so no exact-match consumer breaks.
+   */
+  const DEPLOY_RUNTIME_STATES = [
+    "model downloading",
+    "model preparing",
+    "model fitting",
+    "model loading",
+    "device unavailable",
+    "cluster degraded",
+    "validating",
+    "ready to launch",
+  ];
+  let interactionStates =
+    kind === "deploy"
+      ? [...BASE_STATES, "focused", ...DEPLOY_RUNTIME_STATES]
+      : kind === "topology" || kind === "monitor"
+        ? [...BASE_STATES, ...RUNTIME_STATES]
+        : kind === "select" || kind === "explore"
+          ? [...BASE_STATES, "focused"]
+          : BASE_STATES;
+  // Caller-declared states are requirements, not suggestions: merged in
+  // (deduped, case-insensitive) so a stated state is never dropped.
+  if (intent.states !== undefined) {
+    interactionStates = [
+      ...interactionStates,
+      ...intent.states.filter((s) => !interactionStates.some((x) => x.toLowerCase() === s.toLowerCase())),
+    ];
+  }
 
   const designRisks = [
     ...guardPreview.map((g) => g.therefore),
@@ -1042,6 +1242,7 @@ function buildVisualDirections(
 function compositionPrinciples(kind: DecisionKind): string[] {
   const map: Record<DecisionKind, string[]> = {
     select: ["Make one option visually selected; use alignment for comparison, not containers.", "Keep the inspector subordinate to the option field."],
+    deploy: ["The candidate rows carry their own fit verdicts, so the choice reads without opening detail.", "The placement recommendation is automatic and shown as a verdict — never present manual shard dragging as the way to place a model."],
     compare: ["Give both subjects equal structural treatment, then make the meaningful difference dominant.", "Avoid equal-weight decorative panels."],
     monitor: ["The live signal owns the canvas; telemetry supports it.", "Use one continuous instrument surface before adding cards."],
     topology: ["Relationships are the content: nodes, edges and state read as one spatial system.", "Use open space to separate clusters instead of boxing every node."],
@@ -1057,6 +1258,7 @@ function compositionPrinciples(kind: DecisionKind): string[] {
 function compositionAvoid(kind: DecisionKind): string[] {
   const map: Record<DecisionKind, string[]> = {
     select: ["marketing-card grid", "three equal KPI cards", "chat-first composition"],
+    deploy: ["manual shard dragging as the placement surface", "launch action hidden in chrome", "candidate cards without fit verdicts"],
     compare: ["generic SaaS split-card template", "decorative symmetry without semantic comparison"],
     monitor: ["KPI card wall", "static dashboard pretending to be live", "multiple competing status rails"],
     topology: ["boxed node grid", "unlabelled connector spaghetti", "sidebar replacing the topology"],
@@ -1101,7 +1303,7 @@ function nativeCompositionProfile(kind: DecisionKind, composition: Composition, 
 
 function executionProfile(kind: DecisionKind, composition: Composition): ScreenPlan["execution"] {
   const nativeKinds = new Set<DecisionKind>(["topology", "monitor", "inspect"]);
-  const hybridKinds = new Set<DecisionKind>(["compare", "select", "configure", "author"]);
+  const hybridKinds = new Set<DecisionKind>(["compare", "select", "deploy", "configure", "author"]);
   const nativeRequired = nativeKinds.has(kind) || composition === "topology" || composition === "spatial" || composition === "diagram";
   const mode = nativeRequired ? "native" : hybridKinds.has(kind) ? "hybrid" : "semantic";
   const recommendedTool = mode === "semantic" ? "design_runtime" : "figdes_use_figma";
@@ -1208,6 +1410,9 @@ function viableAlternatives(composition: Composition, kind: DecisionKind): Array
     out.push({ composition: "instrument", trade: "denser, more numeric, reads as telemetry rather than as an object" });
     out.push({ composition: "editorial", trade: "more whitespace and fewer readouts, reads as a report rather than a monitor" });
     out.push({ composition: "timeline", trade: "event timeline, better for reviewing how the state evolved" });
+  } else if (kind === "deploy") {
+    out.push({ composition: "split-view", trade: "candidates beside the placement recommendation, more context per candidate" });
+    out.push({ composition: "table", trade: "rows read across for comparison, cheaper per candidate" });
   } else if (kind === "select" || kind === "compare") {
     out.push({ composition: "table", trade: "rows read across for comparison, cheaper per option" });
     out.push({ composition: "spatial", trade: "options positioned by some measure, better when one option is clearly better" });

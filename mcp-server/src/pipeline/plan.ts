@@ -22,7 +22,7 @@
  * slots that fill each region, so the screen is reviewable before a node
  * exists.
  */
-import { planScreen, type ScreenIntent } from "../plan/planner";
+import { planScreen, resolveArchetype, type ScreenIntent } from "../plan/planner";
 import { defaultGutter, layoutRegions } from "../runtime/layout";
 import { classifyInformation, classifyInfoItem, type InfoKind } from "../design/composition/derive";
 import { compositionHintFor, detectCompositionDescriptors, COMPOSITION_VOCABULARY } from "../design/skills/composition";
@@ -246,12 +246,36 @@ export function buildCompositionPlan(
   const canvas = { width: brief.viewport.width, height: brief.viewport.height, grid: GRID, name: brief.screen };
 
   const steered = brief.desiredComposition === undefined ? steering?.selectedComposition : undefined;
+
+  /**
+   * The archetype is resolved the same way the planner resolves it (stated by
+   * name, else inferred for deploy decisions), so its priority items become
+   * plan material: they join the required information the plan and the content
+   * both carry. Archetype priority was previously dead data — echoed by
+   * plan_screen and nowhere else. Briefs that name no archetype resolve to no
+   * archetype, so every existing plan is unchanged.
+   */
+  const archetype = resolveArchetype(brief.primaryDecision, brief.archetype ?? undefined);
+  const priorityItems = (archetype?.priority ?? []).filter(
+    (p) => !brief.requiredInformation.some((r) => r.toLowerCase() === p.toLowerCase()),
+  );
+  const briefForPlan =
+    priorityItems.length > 0 ? { ...brief, requiredInformation: [...brief.requiredInformation, ...priorityItems] } : brief;
+
   const intent: ScreenIntent = {
     primaryDecision: brief.primaryDecision,
     goal: brief.purpose,
     audience: brief.audience,
-    availableInformation: [...brief.requiredInformation, ...brief.optionalInformation],
+    availableInformation: [...briefForPlan.requiredInformation, ...brief.optionalInformation],
     existingPatterns: brief.existingPatterns,
+    // The archetype name is threaded so the plan records the same resolution.
+    ...(brief.archetype !== null ? { archetype: brief.archetype } : {}),
+    // Caller-declared states merge into the art direction's interaction
+    // states (advisory only — no geometry impact). The brief's primaryAction
+    // is deliberately NOT threaded as intent: the pipeline already places it
+    // as an action slot in the header band, and passing it would add an extra
+    // action region to every planned screen and change their resolved layout.
+    ...(brief.states.length > 0 ? { states: brief.states } : {}),
     ...(brief.visualDirection !== null ? { visualDirection: brief.visualDirection } : {}),
     ...(brief.desiredComposition !== undefined
       ? { desiredComposition: brief.desiredComposition }
@@ -554,7 +578,7 @@ export function buildCompositionPlan(
 
   /* --- content slots ----------------------------------------------------- */
 
-  const { slots: content, notPlaced } = planContent(brief, regions, plan.composition);
+  const { slots: content, notPlaced } = planContent(briefForPlan, regions, plan.composition);
   const byRegion = new Map<string, ContentSlot[]>();
   for (const slot of content) {
     const list = byRegion.get(slot.regionId) ?? [];

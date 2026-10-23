@@ -37,6 +37,7 @@ import {
   VectorSpecSchema,
   VisualIntentSchema,
   type DesignIR,
+  type ConnectorRoute,
   type VisualIntent,
 } from "../../../shared/ir";
 import { compileIR, TYPE_SCALE } from "./compile";
@@ -538,6 +539,8 @@ warnings: string[];
   reflowed: number;
   /** Placed geometry by node id. Connectors are resolved against this. */
   boxes: Map<string, { id: string; x: number; y: number; w: number; h: number }>;
+  /** Routed connectors with their resolved endpoints, for the dispatch preflight. */
+  connectorRoutes?: ConnectorRoute[];
 }
 
 /**
@@ -571,6 +574,8 @@ export interface RuntimeOptions {
 
 export function executeRuntime(input: unknown, options: RuntimeOptions = {}): RuntimeResult {
   const warnings: string[] = [];
+  /** Blocking violations the interpreter itself raised (e.g. unknown parents). */
+  const parentViolations: Array<{ rule: string; message: string }> = [];
 
   // Parsed leniently so a single bad field cannot cost the user the whole
   // design. Anything unusable falls back to a sane default and is reported.
@@ -961,6 +966,19 @@ const args = call.args as Record<string, unknown>;
       const parentId = effectiveParent && regionIds.has(effectiveParent) ? effectiveParent : regions[0]!.id;
       if (effectiveParent && !regionIds.has(effectiveParent)) {
         warnings.push(`Unknown parent '${effectiveParent}' for '${id}'; placed in '${regions[0]!.id}'.`);
+        // The adoption is a *repair with a cost*, not a success: the node is now
+        // in a region the author never named, so downstream containment and
+        // placement checks would "prove" geometry about the wrong home. That
+        // makes it blocking (the `parent` class), the same way a contradiction
+        // the caller must resolve before dispatch — unknown parents no longer
+        // silently succeed.
+        parentViolations.push({
+          rule: "parent",
+          message:
+            `Content '${id}' names parent '${effectiveParent}', which is not a region in this program. ` +
+            `It was adopted into '${regions[0]!.id}' to keep the build inspectable, but the placement is not what was asked for — ` +
+            `name an existing region (or drop the parent) and build again.`,
+        });
       }
       regions.find((r) => r.id === parentId)!.children.push(id);
     }
@@ -1199,7 +1217,7 @@ case "shape": {
   // judgement — is surfaced as a warning rather than swallowed, because "nobody
   // checked" and "nothing was wrong" are different sentences.
   const guard = runGuard(options.rules ?? defaultRules(), snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
-  const violations = [...compiled.violations];
+  const violations = [...compiled.violations, ...parentViolations];
   for (const f of guard.findings) {
     if (f.verdict === "FAIL") {
       violations.push({ rule: "product", message: `${f.rule}: ${f.message}${f.evidence ? ` [${f.evidence}]` : ""}` });
@@ -1223,16 +1241,18 @@ case "shape": {
     ir,
     operations: compiled.operations,
     violations,
-    /** False when the resolved geometry, or the product guard, says otherwise. */
-    applicable: compiled.applicable && guard.stats.failures === 0,
+    /** False when the resolved geometry, an unknown parent, or the product guard says otherwise. */
+    applicable: compiled.applicable && guard.stats.failures === 0 && parentViolations.length === 0,
     inapplicableReasons: [
       ...compiled.inapplicableReasons,
+      ...parentViolations.map((v) => v.message),
       ...violations.filter((v) => v.rule === "product").map((v) => v.message),
     ],
     boxes: compiled.boxes,
     algorithms: compiled.stats.algorithms,
     constrained: compiled.stats.constrained,
     reflowed: compiled.stats.reflowed,
+    connectorRoutes: compiled.connectorRoutes,
     stats: {
       calls: regionCalls.length + parsedProgram.content.length,
       regions: compiled.stats.regionCount,

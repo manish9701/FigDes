@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "exo-model-detail",
-  "recordedAt": "2026-10-22T04:44:32.715Z",
+  "recordedAt": "2026-10-23T02:37:56.764Z",
   "brief": {
     "screen": "Model detail",
     "product": "fenek-clusters",
@@ -44,7 +44,7 @@
     },
     {
       "id": "composition-strategy",
-      "why": "archetype: Understanding one thing thoroughly wants a focused readout with supporting context in a dense column, not air. Content shape: 8 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:editorial-focus: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Numeric scanning rewards strict grid alignment; tune up alignment when values update in place."
+      "why": "archetype: Understanding one thing thoroughly wants a focused readout with supporting context in a dense column, not air. Content shape: 8 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:editorial-focus: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape; overridden by a composition descriptor when the direction states one.; visual-intent.rhythm: The archetype's whitespace contract; overridden by a composition descriptor when the direction states one.; visual-intent.alignment: Numeric scanning rewards strict grid alignment; tune up alignment when values update in place."
     }
   ],
   "discoveries": [
@@ -95,6 +95,11 @@
   ],
   "outstandingIssues": [
     {
+      "rule": "violation-geometry-01",
+      "summary": "Region 'context' spills past the bottom edge of the 1440x900 canvas: 360x196 at (258, 724).",
+      "severity": "medium"
+    },
+    {
       "rule": "plan-geometry-drift-01",
       "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1182x128.",
       "severity": "medium"
@@ -108,6 +113,11 @@
       "rule": "plan-geometry-drift-03",
       "summary": "The build did not produce the geometry the plan promised: context: planned 360x187, built 360x196.",
       "severity": "medium"
+    },
+    {
+      "rule": "not-applicable",
+      "summary": "The program does not resolve to a buildable screen.",
+      "severity": "critical"
     },
     {
       "rule": "type.space.one-rhythm",

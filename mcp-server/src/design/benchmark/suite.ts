@@ -332,6 +332,24 @@ export const EXO_REGRESSION_CASES: BenchmarkCase[] = [
 ];
 
 /* -------------------------------------------------------------------------- */
+/* Deployment-fit suite case (planner deploy classification)                   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The deployment-fit case, versioned apart exactly like the EXO regression
+ * cases above: `BENCHMARKS` (9) is frozen and length-pinned by test, so this
+ * case lives in its own array. Its id must stay in sync with
+ * `EXO_DEPLOYMENT_BRIEFS` in `benchmark/offline-briefs.ts` (same case id,
+ * decisionKind "deploy"); the planner-deployment tests assert that sync, the
+ * same way the issue #22 runner asserts the v1 lists' drift.
+ */
+export const EXO_DEPLOYMENT_SUITE_VERSION = "benchmark-deploy-fit-v1";
+
+export const EXO_DEPLOYMENT_CASES: BenchmarkCase[] = [
+  { id: "exo-deployment-fit", brief: "EXO deployment fit: choose the model deployment that fits the discovered compute cluster", decisionKind: "deploy", patternId: "comparison-field" },
+];
+
+/* -------------------------------------------------------------------------- */
 /* Three-outcome challenge scoring (Phase 3)                                    */
 /* -------------------------------------------------------------------------- */
 

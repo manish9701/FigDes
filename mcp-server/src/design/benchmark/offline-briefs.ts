@@ -37,6 +37,8 @@ export interface OfflineBrief {
   visualDirection?: string;
   antiGoals?: string[];
   states?: string[];
+  /** A known screen archetype, when the brief names one (resolved by the planner). */
+  archetype?: string;
 }
 
 export interface OfflineCaseBrief {
@@ -236,6 +238,48 @@ export const OFFLINE_BRIEFS: OfflineCaseBrief[] = [
       optionalInformation: ["alternative models ranked"],
       viewport: OFFLINE_VIEWPORT,
       visualDirection: "premium editorial",
+    },
+  },
+];
+
+/* -------------------------------------------------------------------------- */
+/* Deployment-fit regression brief (planner deploy classification)             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The deployment-fit regression brief, versioned apart like the issue #23
+ * fixtures below. `OFFLINE_BRIEFS` and the suite's `BENCHMARKS` are frozen and
+ * length-pinned by test (9 each), so this case lives in its own export; the
+ * matching suite case is `EXO_DEPLOYMENT_CASES` in `benchmark/suite.ts`, and
+ * the planner-deployment tests assert the two stay in sync.
+ */
+export const EXO_DEPLOYMENT_BRIEFS: OfflineCaseBrief[] = [
+  {
+    caseId: "exo-deployment-fit",
+    brief: {
+      product: "fenek-clusters",
+      screen: "Deployment fit",
+      purpose: "choose the model deployment that fits the discovered compute cluster and launch it",
+      primaryDecision: "Choose a model deployment that fits the discovered compute cluster.",
+      primaryAction: "Launch deployment",
+      requiredInformation: [
+        "candidate models with their memory requirements",
+        "recommended automatic placement on the discovered machines",
+        "required vs available memory on the cluster",
+        "machines online",
+        "cluster status",
+        "fit verdict for the selected model",
+        "validation gates before the deployment runs",
+      ],
+      optionalInformation: ["model version", "last deployment on the cluster"],
+      viewport: OFFLINE_VIEWPORT,
+      visualDirection: "premium technical control-room",
+      antiGoals: ["no grid of KPI cards", "manual shard dragging as the placement surface"],
+      states: ["selected", "validating", "cluster degraded"],
+      // Stated so a pipeline run resolves model-fit deterministically;
+      // planScreen also infers it from the deploy decision alone (deploy kind
+      // + model wording), so the brief is testable both ways.
+      archetype: "model-fit",
     },
   },
 ];

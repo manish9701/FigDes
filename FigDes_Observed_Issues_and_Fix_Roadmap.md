@@ -1,4 +1,4 @@
-# FigDes: Observed Issues & Engineering Fix Roadmap
+﻿# FigDes: Observed Issues & Engineering Fix Roadmap
 
 **Prepared:** 12 October 2026  
 **Repository:** [manish9701/FigDes](https://github.com/manish9701/FigDes)  
@@ -16,7 +16,7 @@ Prioritize, in order:
 3. **P1 — Validate a whole plan before sending it to Figma, with the same schema on both sides.**
 4. **P1 — Instrument and optimize the actual hot paths before increasing timeouts.**
 5. **P1 — Fix visual critic false positives and prevent repairs from degrading token consistency.**
-6. **P1 — Make the existing plan → build → render → critique → repair → final QA tools work as one reliable loop.**
+6. **P1 — Make the existing plan â†’ build â†’ render â†’ critique â†’ repair â†’ final QA tools work as one reliable loop.**
 7. **P2 — Improve native component/token reuse and reduce the cost of visual comparison.**
 
 Keep the current native Plugin API architecture. Extend the existing systems rather than building a parallel agent framework.
@@ -137,7 +137,7 @@ Do not force everything into generic cards: use components for repeated details,
 
 ### P2 — Reduce the cost of visual feedback
 
-**What I observed:** render → inspect → repair loops are essential, but repeated whole-screen, high-detail renders are expensive when only one region changed.
+**What I observed:** render â†’ inspect â†’ repair loops are essential, but repeated whole-screen, high-detail renders are expensive when only one region changed.
 
 **Fix:** add (or improve) target-region rendering, paired before/after comparisons, overlay/heat-map diffs and a concise machine-readable delta (`new overlaps`, `moved nodes`, `changed tokens`, `text overflow`, `contrast change`). Default to a low-detail full-screen thumbnail, then high-detail rendering only for the affected area or text. Keep the current hard render-budget guard.
 
@@ -161,7 +161,7 @@ Do not force everything into generic cards: use components for repeated details,
 | Order | Deliverable | Why first |
 |---|---|---|
 | 1 | Mutation journal and truthful partial-rollback state | Prevents silent corrupt/half-edited screens |
-| 2 | Stable job ID, transaction ledger and reconnect recovery | Prevents “did it apply?” ambiguity and duplicate edits |
+| 2 | Stable job ID, transaction ledger and reconnect recovery | Prevents â€œdid it apply?â€ ambiguity and duplicate edits |
 | 3 | Shared server/plugin preflight validation | Catches bad requests before they incur a Figma round trip |
 | 4 | Stage timing and operation/cache profiling | Finds the actual latency bottleneck before optimizing |
 | 5 | Semantic quality findings + token-aware targeted repair | Improves visual quality without damaging consistency |
@@ -192,3 +192,44 @@ Do not force everything into generic cards: use components for repeated details,
 - [Design intelligence implementation specification](https://github.com/manish9701/FigDes/blob/main/FigDes_Design_Intelligence_Implementation_Spec.md)
 
 **Assessment limit:** this was a targeted read-only repository review plus live FigDes use. I did not clone the repo, run its test suite, benchmark a local build, or submit code changes. Treat the cited code paths as inspected source and the speed/reliability behavior as observed in this session, not as a complete production performance study.
+
+## Planner: deployment decisions classified as generic select
+
+**Observed:** the EXO enterprise brief "Choose a model deployment that fits the discovered compute cluster." was classified as a generic select decision. The resulting plan was a bare option list: it missed the automatic placement recommendation, the model-requirements-vs-cluster-resources fit, the selection+validation states, and the launch action with its prerequisites.
+
+**Root cause:** classifyDecision (mcp-server/src/plan/planner.ts) is an ordered regex table and choose fired select before any deployment wording could matter; there was no deploy kind and no deploy shell, so no shell carried an action region or a placement/fit inspector. Archetype priority arrays (e.g. model-fit's "fit verdict / requires vs available / recommended config / run action") were dead data — only echoed in the plan_screen response, never compiled into the plan. primaryAction/states intent existed in the pipeline brief but was not accepted by plan_screen or the planner intent, so action/state intent could not reach the plan.
+
+**Fix (this session):**
+- Added a deploy decision kind whose conservative pattern (explicit deploy/deployment/rollout wording, or launch/ship only when the object is a model/cluster/fleet/node/machine/shard/device) is checked before the generic select pattern.
+- Added a deployment-fit template and a deploy shell (nav, header, candidates table with fit verdicts, placement inspector carrying the automatic placement recommendation, required-vs-available memory and the fit verdict; reasons state placement is recommended, never dragged by hand).
+- Archetype priority is now plan material: an archetype stated by name or inferred from the decision (deploy + model wording -> model-fit, deterministically, via the new resolveArchetype) compiles its priority items into the plan's requiredInformation, surfaced in the plan_screen response; the pipeline threads the brief's archetype and states the same way.
+- plan_screen now accepts primaryAction, secondaryActions, states and primaryObject intent. A named primary action with no action-bearing region earns an action region; declared states merge into the art direction's interaction states. Callers that pass neither see unchanged plans.
+- Deploy plans express the deployment runtime states (model downloading/preparing/fitting/loading, device unavailable, cluster degraded, validating, ready to launch).
+- Added a plan-time completeness signal (plan-completeness:deploy) that warns, without blocking, when a deployment plan lacks the placement recommendation or a primary action.
+- New offline regression brief exo-deployment-fit lives in EXO_DEPLOYMENT_BRIEFS (offline-briefs.ts) with its matching case in EXO_DEPLOYMENT_CASES (suite.ts), versioned apart because the frozen OFFLINE_BRIEFS/BENCHMARKS lists are length-pinned by test; tests assert the two stay in sync (tests/planner-deployment.test.mjs).
+
+**Verified:** the nine frozen benchmark briefs classify exactly as before, npm run benchmark:design stays 9/9 PASS, and the issue22 gate verdict is unchanged for every existing case (the new brief was never added to the frozen baseline inputs).
+
+## Layout compiler: fixed stacks overflowed the canvas, relation content landed outside its region, and text widths contradicted their bounds
+
+**Observed:** a 1440x900 enterprise dry run put the inspector at (248, 940) past the canvas bottom, placed nav content outside its navigation region, emitted text widths that contradicted the declared maxWidth values, clipped tracked uppercase labels ("OPERATIONS", "3 machines online", "Automatic distribution"), and reported constrained: 0 / reflowed: 0 although the compiler had detected every one of those problems.
+
+**Root causes (runtime/compiler, not the screen program):**
+- layout.ts solveAxis returns fixed sizes unclamped when no sibling is fill, and the stack/side-rail accumulators walked off the bottom edge with no canvas clamp. Detection existed (blocking geometry violation) but nothing reflowed - the compiler refused and shipped nothing, which is safe but not a fix.
+- compile.ts patched relation-constrained content with canvas-absolute coordinates written into a parent-local op slot (patchEmit without origin), displacing the node by its region origin - the "nav-models outside its navigation region" class.
+- emitText emitted spec.maxWidth verbatim while resolvedSize recorded min(box.w, maxWidth) - two formulas, contradictory geometry (the maxWidth contradiction and operation-trace drift).
+- Every width estimate (estimateHeight, hugWidth, checkTextFit) ignored letterSpacing and uppercase, while style presets emit tracked uppercase nav labels - tracked caps rendered wider than every estimate, which is how the labels clipped.
+- The runtime apply path built the preflight context with only planBoxes/overflow/sizing, so checkTextOverflow silently no-oped without textMeasurements and checkConnectors without connectors - both pieces of evidence were already in hand.
+- An unknown parent id silently adopted the node into regions[0] with a warning; downstream containment checks then "proved" geometry about the wrong home.
+- constrained/reflowed counted only manually declared relations, so an auto-repaired layout still reported zero.
+
+**Fix (this session, mcp-server/src/runtime + shared/ir.ts):**
+- fitStackToCanvas: a water-filled proportional shrink with per-region floors (MIN_STACK_REGION_H = 64) pulls an overflowing fixed stack back inside the canvas in layoutStack and layoutSideRail, and a final canvas-fit pass in compile.ts re-clamps after fitRegionsToContent growth. The repair is reported through reflowed (e.g. 3) instead of a silent refusal; if even the floors cannot fit, the overflow is returned honestly and still blocks.
+- Relation-patched content now passes the parent origin into patchEmit, so constrained content emits parent-local and stays inside its region.
+- One width formula (textEmittedWidth) is shared by emitText and resolvedSize; a path that skips resolution blocks with a text-bounds violation instead of shipping contradictory geometry.
+- estimateTextRunWidth is tracking- and uppercase-aware and is used by estimateHeight, hugWidth and checkTextFit, so the compiler and the render agree; a tracked label that cannot fit its rail now blocks with containment instead of clipping.
+- runtimePreflightContext threads textMeasurements, connectorRoutes, overflowReasons and geometryReasons into the preflight, so text-overflow and connector checks actually run on the design_runtime apply path.
+- An unknown parent id is now a blocking parent violation (still warned, still reparented for testability, but applicable: false).
+- Unknown-parent silent adoption, canvas overflow, width contradiction and tracked-label clipping are pinned by tests (tests/runtime.test.mjs, tests/issue-23-preflight.test.mjs, tests/issue-23-exo-regressions.test.mjs).
+
+**Verified:** the reported reproduction (nav 216 / header 420 / frame 456 / inspector 340 on 1440x900) now resolves with every region inside the canvas, zero violations, applicable: true and reflowed: 3; npm test suites around runtime, layout, geometry, preflight and the exo regression detectors all pass, and the frozen issue22 gate stays PASS.

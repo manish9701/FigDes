@@ -1,7 +1,7 @@
 {
   "schema": "figdes-decision-record-v1",
   "caseId": "generic-saas-dashboard",
-  "recordedAt": "2026-10-22T04:44:32.745Z",
+  "recordedAt": "2026-10-23T02:37:56.797Z",
   "brief": {
     "screen": "Dashboard",
     "product": "generic-saas",
@@ -39,7 +39,7 @@
     },
     {
       "id": "composition-strategy",
-      "why": "archetype: Connections are the point; a spatial canvas with routed connectors shows them honestly. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape.; visual-intent.rhythm: The archetype's whitespace contract.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
+      "why": "archetype: Connections are the point; a spatial canvas with routed connectors shows them honestly. Content shape: 7 information item(s), numeric readouts absent, spatial request not stated.; focal-role: The archetype names what the eye is for, so the plan's focal can be checked against it.; rejected:dashboard: Stated so the composition is a decision, not the absence of one.; visual-intent.density: From the archetype's density rule for this decision figure and content shape; overridden by a composition descriptor when the direction states one.; visual-intent.rhythm: The archetype's whitespace contract; overridden by a composition descriptor when the direction states one.; visual-intent.alignment: Editorial composition breathes: alignment stays loose so the rhythm rests with the content."
     }
   ],
   "discoveries": [
@@ -86,7 +86,7 @@
   "outstandingIssues": [
     {
       "rule": "violation-geometry-01",
-      "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x748 at (0, 170).",
+      "summary": "Region 'map' spills past the bottom edge of the 1440x900 canvas: 1440x799 at (0, 182).",
       "severity": "medium"
     },
     {
@@ -96,7 +96,7 @@
     },
     {
       "rule": "plan-geometry-drift-02",
-      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x748.",
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x799.",
       "severity": "medium"
     },
     {

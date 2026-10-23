@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 import { createHash } from "node:crypto";
-import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES } from "./interpreter";
+import { executeRuntime, PRIMITIVE_NAMES, RUNTIME_PRIMITIVES, type RuntimeResult } from "./interpreter";
 import { PRIMITIVE_ARGUMENTS, PRIMITIVE_EXAMPLES } from "./primitive-schema";
 import { compileIR } from "./compile";
 import { measureProgramText, programHasText } from "./measure";
@@ -311,6 +311,51 @@ export function reuseAdvisory(operations: Array<Record<string, unknown>>): Array
   return advisories;
 }
 
+/**
+ * Assembles the PreflightContext the runtime build path dispatches with.
+ *
+ * Issue #23: the blocking preflight classes only run when the context carries
+ * the evidence they need, and this path used to thread only the geometry trio
+ * (planBoxes / overflow / sizing) — so `checkTextOverflow` silently no-oped
+ * with no `textMeasurements` and `checkConnectors` no-oped with no
+ * `connectors`, even though both pieces of evidence were already in hand:
+ * the measured text metrics from `measureProgramText` and the routed
+ * connectors on the compile result. Both are threaded here.
+ *
+ * Two fields have no source on this path and are deliberately omitted:
+ * `geometryReasons` (nothing on the runtime path validates a deliberate
+ * geometry difference — the compile's trace check must pass cleanly) and
+ * `briefBlockers` (a `design_runtime` call carries no brief; a product-guard
+ * failure already refuses the plan upstream through `applicable: false`).
+ *
+ * Regions that declare `overflow: "allow"` get the declaration itself recorded
+ * as their reason: the compiler treats the declaration as an advisory finding,
+ * so the dispatch gate would otherwise fail closed on a permission the program
+ * explicitly stated — with a string naming the declaration, the preflight's
+ * "allowed AND justified" path matches what the compile already decided.
+ */
+export function runtimePreflightContext(
+  compiled: RuntimeResult,
+  measuredMetrics?: Map<string, { width: number; height: number }>,
+): PreflightContext {
+  const overflowReasons: Record<string, string> = {};
+  for (const r of compiled.ir.regions) {
+    if (r.overflow === "allow") {
+      overflowReasons[r.id] = `the program declared overflow:"allow" on region '${r.id}' — the overflow is deliberate and was reported, not hidden`;
+    }
+  }
+  return {
+    planBoxes: Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box])),
+    overflow: Object.fromEntries(compiled.ir.regions.map((r) => [r.id, (r.overflow ?? "forbid") as "allow" | "clip" | "forbid"])),
+    sizing: Object.fromEntries(
+      compiled.ir.regions.map((r) => [r.id, { width: r.width as number | "fill" | "hug", height: r.height as number | "fill" | "hug" }]),
+    ),
+    ...(measuredMetrics !== undefined && measuredMetrics.size > 0 ? { textMeasurements: Object.fromEntries(measuredMetrics) } : {}),
+    ...(compiled.connectorRoutes !== undefined && compiled.connectorRoutes.length > 0 ? { connectors: compiled.connectorRoutes } : {}),
+    ...(Object.keys(overflowReasons).length > 0 ? { overflowReasons } : {}),
+  };
+}
+
 export async function runRuntimeTool(
   session: Session | null,
   args: unknown,
@@ -334,12 +379,17 @@ export async function runRuntimeTool(
   const firstPass = executeRuntime(program, { rules });
   let compiled = firstPass;
   let measuredCount = 0;
+  // Hoisted so the dispatch-time preflight context can carry the measurements
+  // even when the second pass did not run: no measurements means the check has
+  // no evidence, which is different from measurements that say "fits".
+  let measuredMetrics: Map<string, { width: number; height: number }> = new Map();
   if (session !== null) {
     const widths = new Map<string, number>();
     for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
     const measured = await measureProgramText(session, program, widths);
     if (measured.metrics.size > 0) {
       measuredCount = measured.metrics.size;
+      measuredMetrics = measured.metrics;
       compiled = executeRuntime(program, { textMetrics: measured.metrics, rules });
     }
   }
@@ -467,13 +517,7 @@ export async function runRuntimeTool(
   // branch, and threaded to both dispatch paths — the chunked one, which runs
   // the blocking preflight over the WHOLE list before its first chunk, and the
   // single-transaction dispatcher, which runs it at the transaction edge.
-  const preflightContext: PreflightContext = {
-    planBoxes: Object.fromEntries([...compiled.boxes].map(([id, box]) => [id, box])),
-    overflow: Object.fromEntries(compiled.ir.regions.map((r) => [r.id, (r.overflow ?? "forbid") as "allow" | "clip" | "forbid"])),
-    sizing: Object.fromEntries(
-      compiled.ir.regions.map((r) => [r.id, { width: r.width as number | "fill" | "hug", height: r.height as number | "fill" | "hug" }]),
-    ),
-  };
+  const preflightContext = runtimePreflightContext(compiled, measuredMetrics);
 
   if (chunked === true || (chunked !== false && compiled.operations.length > CHUNK_SIZE * 2)) {
     // Auto-chunk large programs: a single 300-op transaction holds the socket

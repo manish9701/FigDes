@@ -130,7 +130,11 @@ test("P0-2: a region pushed past the canvas edge is reported, not silently drawn
   assert.match(geometry.map((v) => v.message).join(" "), /canvas/);
 });
 
-test("P0-2: stacked regions that overflow the canvas are reported", () => {
+test("P0-2: stacked regions that overflow the canvas are pulled back to fit", () => {
+  // The canvas-fit reflow: an all-fixed stack is no longer reported-and-drawn
+  // anyway — the compiler shrinks the fixed heights toward a usable minimum and
+  // re-stacks, and reports the repair through `reflowed`. (This test pinned the
+  // older report-only contract; issue's fix made the report actionable.)
   const result = executeRuntime({
     canvas: { name: "T", width: 1600, height: 1100, grid: 8 },
     regions: [
@@ -140,9 +144,16 @@ test("P0-2: stacked regions that overflow the canvas are reported", () => {
     ],
   });
   const compiled = compileIR(result.ir);
-  const geometry = violationsFor(compiled, "geometry");
-  assert.ok(geometry.length >= 2, `expected the overflowing regions to be reported, got ${JSON.stringify(geometry)}`);
-  assert.match(geometry.map((v) => v.message).join(" "), /bottom edge/);
+  const canvasH = 1100;
+  for (const region of compiled.regions) {
+    assert.ok(
+      region.y >= -1 && region.y + region.h <= canvasH + 1,
+      `region ${region.id} still spills past the canvas: ${region.y}+${region.h}`,
+    );
+    assert.ok(region.h > 0, `region ${region.id} was crushed to nothing by the reflow`);
+  }
+  assert.ok(compiled.stats.reflowed > 0, "the automatic repair must be reported, not silent");
+  assert.deepEqual(violationsFor(compiled, "geometry"), [], "a stack the reflow pulled back inside the canvas must not be reported as spilling");
 });
 
 test("P0-2: a zero-extent region names the cause rather than reporting '0x0'", () => {

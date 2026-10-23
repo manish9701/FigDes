@@ -782,3 +782,48 @@ test("a valid >120-op chunked build dispatches per-chunk transactionIds and vali
   const chunk2TextParent = sends[1].payload.operations.find((op) => op.id === "t_r2_0")?.parent;
   assert.equal(chunk2TextParent, r2RealId, `cross-chunk parent refs remap to the committed id: ${chunk2TextParent}`);
 });
+
+/* -------------------------------------------------------------------------- */
+/* The runtime build path threads the evidence the blocking checks need       */
+/* (text measurements and connector routes), so checkTextOverflow and         */
+/* checkConnectors actually run for design_runtime — they used to no-op.     */
+/* -------------------------------------------------------------------------- */
+
+test("runtimePreflightContext carries measured text so overflow blocks on the runtime path", async () => {
+  const { runtimePreflightContext } = await import("../mcp-server/dist-test/runtime/tools.js");
+  const { executeRuntime } = await import("../mcp-server/dist-test/runtime/interpreter.js");
+  const compiled = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "frame", id: "r1", args: { width: 400, height: 300 } }],
+    content: [{ fn: "text", id: "body", parent: "r1", args: { text: "filler", maxWidth: 200 } }],
+  });
+  const measured = new Map([["body", { width: 640, height: 24 }]]);
+  const context = runtimePreflightContext(compiled, measured);
+  assert.ok(context.textMeasurements && context.textMeasurements.body.width === 640, "measured widths travel with the context");
+  // Through that context, an overflow that used to slip past silently now surfaces.
+  const ops = [
+    { type: "createFrame", id: "r1", x: 0, y: 0, width: 400, height: 300, fill: "#FFFFFF" },
+    { type: "createText", id: "body", parent: "r1", x: 0, y: 0, content: "too long", width: 200, fontSize: 14 },
+  ];
+  const refused = validateTransaction(ops, context);
+  const overflowIssue = refused.issues.find((i) => i.message.startsWith("text-overflow"));
+  assert.ok(overflowIssue, `expected a text-overflow issue, got: ${JSON.stringify(refused.issues)}`);
+  assert.ok(overflowIssue.message.includes("640px") && overflowIssue.message.includes("200px"), overflowIssue.message);
+});
+
+test("runtimePreflightContext carries connector routes so endpoint checks run", async () => {
+  const { runtimePreflightContext } = await import("../mcp-server/dist-test/runtime/tools.js");
+  const { executeRuntime } = await import("../mcp-server/dist-test/runtime/interpreter.js");
+  const compiled = executeRuntime({
+    canvas: { name: "T", width: 1440, height: 900, grid: 8 },
+    regions: [{ fn: "stage", id: "map", args: { width: 600, height: 400, layout: "cluster" } }],
+    content: [
+      { fn: "deviceNode", id: "node-a", parent: "map", args: { label: "node-a", health: "healthy" } },
+      { fn: "deviceNode", id: "node-b", parent: "map", args: { label: "node-b", health: "degraded" } },
+      { fn: "connector", id: "link-1", parent: "map", args: { from: "node-a", to: "node-b", label: "24us" } },
+    ],
+  });
+  const context = runtimePreflightContext(compiled, new Map());
+  assert.ok(context.connectors && context.connectors.length > 0, `connector routes travel with the context, got: ${JSON.stringify(context.connectors)}`);
+  assert.ok(context.connectors.some((c) => c.id === "link-1"), "the declared connector is threaded through");
+});

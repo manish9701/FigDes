@@ -2707,21 +2707,18 @@ function emitComponent(
     }
 
     case "fitGauge": {
-      // A verdict with the numbers that justify it. The block stacks the pill
-      // word over its detail line inside one tone surface, sized to the wider
-      // of the two: a frame sized to the pill word alone lets the detail run
-      // out of the block and under whatever sits beside it. The detail renders
-      // in JetBrains Mono, whose fixed-width glyphs run ~0.62em per character —
-      // the Inter mean-glyph ratio under-measures it, which clipped the line.
+      // A verdict with the numbers that justify it, sized to the column it was
+      // packed into — never wider: a hug-width block that overruns its column
+      // slides under the neighbouring panel, and no region-level overflow
+      // check can see a content-level sibling collision. The detail line wraps
+      // instead (HEIGHT auto-resize at the column's inner width).
       const fits = p.fits !== false;
       const tone = fits ? TONES.success! : TONES.error!;
       const label = str("label", fits ? "Fits" : "Does not fit");
       const detail = str("detail", "");
-      const width = Math.max(
-        hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-        detail ? detail.length * Math.round(11 * typeScale) * 0.62 + grid * 4 : 0,
-        72,
-      );
+      const width = Math.max(72, Math.round(box.w));
+      const innerW = Math.max(40, width - grid * 4);
+      const lines = detail ? Math.max(1, Math.ceil((detail.length * Math.round(11 * typeScale) * 0.62) / innerW)) : 0;
       operations.push(
         op({
           type: "createFrame",
@@ -2731,7 +2728,7 @@ function emitComponent(
           x: box.x,
           y: box.y,
           width,
-          height: Math.max(40, Math.round(box.h || (detail ? grid * 9 : 40))),
+          height: Math.max(40, Math.round(box.h || (detail ? grid * 2 + 20 + lines * 15 : 40))),
           fill: tone.bg,
           stroke: tone.fg,
           strokeWeight: 1,
@@ -2743,7 +2740,7 @@ function emitComponent(
       );
       operations.push(op({ type: "createText", parent: spec.id, name: "Verdict", content: label, fontSize: fs(13), weight: 600, fill: tone.fg }));
       if (detail) {
-        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: detail, fontSize: fs(11), family: "JetBrains Mono", fill: tone.fg }));
+        operations.push(op({ type: "createText", parent: spec.id, name: "Detail", content: detail, fontSize: fs(11), family: "JetBrains Mono", fill: tone.fg, width: innerW, textAutoResize: "HEIGHT" }));
       }
       break;
     }
@@ -4227,7 +4224,17 @@ function resolvedSize(
 ): ResolvedBox {
   if (spec.kind === "component") {
     const hug = hugSize(spec, grid, typeScale, look);
-    return hug ? { ...box, ...hug } : box;
+    if (hug) return { ...box, ...hug };
+    // The fit gauge sizes to its column, and the detail line wraps: the
+    // recorded height must be the wrapped estimate the emitter will emit, or
+    // the operation trace calls the geometry a lie.
+    if (spec.type === "fitGauge" && box.w > 0.5) {
+      const detail = typeof spec.props.detail === "string" ? spec.props.detail : "";
+      const innerW = Math.max(40, Math.round(box.w) - grid * 4);
+      const lines = detail ? Math.max(1, Math.ceil((detail.length * Math.round(11 * typeScale) * 0.62) / innerW)) : 0;
+      return { ...box, w: Math.round(box.w), h: Math.max(40, detail ? grid * 2 + 20 + lines * 15 : 40) };
+    }
+    return box;
   }
   if (spec.kind === "instance") {
     // Explicit extents win over the column cell: the drawn node is the
@@ -4356,20 +4363,11 @@ function hugSize(
       return { w: Math.round(grid * 16 * typeScale), h: Math.round(grid * 10 * typeScale) };
     }
     case "fitGauge": {
-      // Same formula the emitter uses: the block is as wide as the pill word
-      // or its detail line, whichever is wider, plus the frame's horizontal
-      // padding. The detail renders in mono (~0.62em per glyph), so the mono
-      // width applies here too. The recorded box must be the emitted size or
-      // the operation trace reports the disagreement.
-      const fits = spec.props.fits !== false;
-      const label = str("label", fits ? "Fits" : "Does not fit");
-      const detail = str("detail", "");
-      const w = Math.max(
-        hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-        detail ? detail.length * Math.round(11 * typeScale) * 0.62 + grid * 4 : 0,
-        72,
-      );
-      return { w, h: Math.round((detail ? grid * 9 : 40) * typeScale) };
+      // Not a hug component any more: the block sizes to the column it was
+      // packed into (a hug block that overruns its column slides under the
+      // neighbouring panel), and the detail wraps — resolvedSize computes the
+      // wrapped height with the same formula the emitter uses.
+      return null;
     }
     default:
       return null;

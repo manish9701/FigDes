@@ -443,7 +443,14 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
     case "sectionHeader":
       return { fn: "sectionHeader", id, parent, args: { title: slot.label } };
     case "timelineEvent":
-      return { fn: "timelineEvent", id, parent, args: { title: slot.label, date: "—" } };
+      return {
+        fn: "timelineEvent",
+        id,
+        parent,
+        // The event's when rides on the brief's demo value; a hardcoded dash
+        // dropped it, so every timeline slot rendered the same dead "—".
+        args: { title: slot.label, date: slot.value ?? "—" },
+      };
     case "deviceNode":
       return { fn: "deviceNode", id, parent, args: { label: slot.label } };
     default:

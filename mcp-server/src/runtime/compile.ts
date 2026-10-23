@@ -2710,14 +2710,16 @@ function emitComponent(
       // A verdict with the numbers that justify it. The block stacks the pill
       // word over its detail line inside one tone surface, sized to the wider
       // of the two: a frame sized to the pill word alone lets the detail run
-      // out of the block and under whatever sits beside it.
+      // out of the block and under whatever sits beside it. The detail renders
+      // in JetBrains Mono, whose fixed-width glyphs run ~0.62em per character —
+      // the Inter mean-glyph ratio under-measures it, which clipped the line.
       const fits = p.fits !== false;
       const tone = fits ? TONES.success! : TONES.error!;
       const label = str("label", fits ? "Fits" : "Does not fit");
       const detail = str("detail", "");
       const width = Math.max(
         hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-        detail ? estimateTextRunWidth(detail, 11, 0) + grid * 4 : 0,
+        detail ? detail.length * Math.round(11 * typeScale) * 0.62 + grid * 4 : 0,
         72,
       );
       operations.push(
@@ -4356,14 +4358,15 @@ function hugSize(
     case "fitGauge": {
       // Same formula the emitter uses: the block is as wide as the pill word
       // or its detail line, whichever is wider, plus the frame's horizontal
-      // padding. The recorded box must be the emitted size or the operation
-      // trace reports the disagreement.
+      // padding. The detail renders in mono (~0.62em per glyph), so the mono
+      // width applies here too. The recorded box must be the emitted size or
+      // the operation trace reports the disagreement.
       const fits = spec.props.fits !== false;
       const label = str("label", fits ? "Fits" : "Does not fit");
       const detail = str("detail", "");
       const w = Math.max(
         hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }),
-        detail ? estimateTextRunWidth(detail, 11, 0) + grid * 4 : 0,
+        detail ? detail.length * Math.round(11 * typeScale) * 0.62 + grid * 4 : 0,
         72,
       );
       return { w, h: Math.round((detail ? grid * 9 : 40) * typeScale) };

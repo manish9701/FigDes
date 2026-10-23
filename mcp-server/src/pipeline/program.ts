@@ -431,10 +431,11 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
         fn: "memoryBudget",
         id,
         parent,
-        // The caption names the information the budget answers, so the
-        // required information stays on the screen and the bar reads as its
-        // answer rather than as two anonymous figures.
-        args: { title: slot.label, usedLabel: "Required", totalLabel: "Available", ...budget },
+        // The readout states the figures, so the labels stay the figures too:
+        // word labels ("Required / Available GB used") read as soup where the
+        // numbers ("16 / 1536 GB used") read as a readout. The caption naming
+        // the information is the title.
+        args: { title: slot.label, ...budget },
       };
     }
     case "panel":

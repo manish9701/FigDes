@@ -59,7 +59,9 @@ export interface ArgSpec {
 }
 
 const TONE_VALUES = ["success", "healthy", "warning", "danger", "error", "info", "neutral", "offline", "degraded", "unavailable"] as const;
-const VARIANT_VALUES = ["primary", "secondary", "destructive", "quiet", "loading", "disabled"] as const;
+const VARIANT_VALUES_EXPORT = ["primary", "secondary", "destructive", "quiet", "loading", "disabled"] as const;
+/** Visual contracts for actions. Exported: the component library reuses this table. */
+export const VARIANT_VALUES = VARIANT_VALUES_EXPORT;
 const STATE_VALUES = ["default", "active", "selected", "disabled", "loading", "hover", "pressed"] as const;
 const HEALTH_VALUES = ["healthy", "degraded", "offline", "warning", "selected", "unavailable"] as const;
 const ROUTING_VALUES = ["straight", "orthogonal", "curved"] as const;
@@ -103,7 +105,7 @@ const REGION_COMMON: ArgSpec[] = [
     name: "autoLayout",
     type: "enum",
     description:
-      "Make this region a native Figma auto-layout container ('vertical'). The children are then stacked by Figma itself, so the region can be re-laid-out by a designer without rewriting coordinates. Only honoured when every child is a fixed-extent component; a region holding text keeps absolute placement because text height is estimated, not measured.",
+      "Make this region a native Figma auto-layout container ('vertical'). The children are then stacked by Figma itself, so the region can be re-laid-out by a designer without rewriting coordinates. Only honoured when every child has a known extent: fixed-extent components, instances with explicit extents, and text measured at its drawn width (the runtime measures text between its two compile passes). A region holding text with only estimated heights keeps absolute placement.",
     values: ["vertical"],
     example: '"vertical"',
   },
@@ -239,6 +241,7 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
       "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
       '{ "State": "healthy" }',
     ),
+    bool("asComponent", "Emit a reusable exo/badge master once and instance it, instead of drawing frame+text."),
     ...STATE_COMMON,
   ],
   deviceNode: [
@@ -269,6 +272,7 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
       "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
       '{ "State": "active" }',
     ),
+    bool("asComponent", "Emit a reusable exo/navigation-item master once and instance it, instead of drawing frame+text."),
     ...STATE_COMMON,
   ],
   panel: [text("title", "Panel title."), text("surface", "Panel surface."), enumArg("tone", "Surface tone.", TONE_VALUES)],
@@ -286,6 +290,96 @@ export const PRIMITIVE_ARGUMENTS: Record<string, ArgSpec[]> = {
       "Component-set variant selection as Property=Value pairs, applied via setVariant. Only read when componentId is present.",
       '{ "State": "primary" }',
     ),
+    bool("asComponent", "Emit a reusable exo/button master once and instance it, instead of drawing frame+text. The instance links to the shared master."),
+    ...STATE_COMMON,
+  ],
+  /* ---- component-generation v1 library (issue #24) ---- */
+  iconButton: [
+    text("icon", "Icon name for the slot.", '"search"'),
+    enumArg("variant", "Visual contract for the action.", VARIANT_VALUES, '"primary"'),
+    bool("asComponent", "Emit a reusable exo/icon-button master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  textInput: [
+    text("label", "Field caption.", '"Cluster name"'),
+    text("placeholder", "Placeholder text.", '"gpu-pool-01"'),
+    text("value", "Current value."),
+    enumArg("state", "Field state.", ["default", "focused", "disabled", "error", "success", "empty"], '"default"'),
+    bool("asComponent", "Emit a reusable exo/text-input master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  select: [
+    text("label", "Select caption.", '"Region"'),
+    text("value", "Chosen value.", '"us-west"'),
+    text("placeholder", "Placeholder when nothing is chosen."),
+    structured("options", "string[]", "Available options.", '["us-west", "us-east"]'),
+    enumArg("state", "Select state.", ["default", "focused", "disabled", "error", "empty"], '"default"'),
+    bool("asComponent", "Emit a reusable exo/select master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  checkbox: [
+    text("label", "Option label.", '"Spot instances"'),
+    bool("checked", "Checked state."),
+    enumArg("state", "Checkbox state.", ["default", "disabled", "error"], '"default"'),
+    bool("asComponent", "Emit a reusable exo/checkbox master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  switch: [
+    text("label", "Switch label.", '"Autoscaling"'),
+    bool("checked", "On state."),
+    enumArg("state", "Switch state.", ["default", "disabled"], '"default"'),
+    bool("asComponent", "Emit a reusable exo/switch master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  tabs: [
+    structured("items", "string[]", "Tab labels.", '["Overview", "Metrics", "Logs"]'),
+    num("selected", "Selected tab index.", "0"),
+    enumArg("state", "Tabs state.", ["default", "disabled"], '"default"'),
+    bool("asComponent", "Emit a reusable exo/tabs master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  badge: [
+    text("label", "The word that carries the state. Never rely on colour alone.", '"Healthy"'),
+    enumArg("tone", "Colour pair for the badge.", TONE_VALUES, '"healthy"'),
+    enumArg("state", "Alias for tone.", TONE_VALUES),
+    bool("asComponent", "Emit a reusable exo/badge master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  tooltip: [
+    text("label", "Tooltip title.", '"Hint"'),
+    text("body", "Supporting line.", '"SSH into any node to inspect it."'),
+    enumArg("placement", "Placement of the tooltip.", ["top", "right", "bottom", "left"], '"top"'),
+    bool("asComponent", "Emit a reusable exo/tooltip master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  menu: [
+    structured("items", "string[]", "Menu items.", '["Rename", "Duplicate", "Delete"]'),
+    bool("open", "Whether the menu is open."),
+    num("selected", "Selected item index.", "0"),
+    bool("asComponent", "Emit a reusable exo/menu master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  dialog: [
+    text("title", "Dialog title.", '"Delete cluster?"'),
+    text("body", "Dialog body.", '"This cannot be undone."'),
+    text("action", "Primary action label.", '"Delete"'),
+    enumArg("variant", "Visual contract for the primary action.", VARIANT_VALUES, '"primary"'),
+    bool("asComponent", "Emit a reusable exo/dialog master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  navigationItem: [
+    text("label", "Nav label.", '"Cluster"'),
+    enumArg("state", "Wayfinding state.", ["default", "active", "selected", "disabled", "loading"], '"default"'),
+    bool("active", "Shorthand for state:'active'."),
+    bool("asComponent", "Emit a reusable exo/navigation-item master once and instance it."),
+    ...STATE_COMMON,
+  ],
+  tableRow: [
+    text("title", "Row title.", '"llama-70b"'),
+    text("value", "Row value.", '"4 shards"'),
+    enumArg("status", "Row status.", [...HEALTH_VALUES, "fits", "does-not-fit"], '"fits"'),
+    bool("selected", "Selected row."),
+    bool("asComponent", "Emit a reusable exo/table-row master once and instance it."),
     ...STATE_COMMON,
   ],
   divider: [

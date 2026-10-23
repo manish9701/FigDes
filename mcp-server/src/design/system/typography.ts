@@ -145,3 +145,81 @@ export function validateFonts(
 export function levelFor(system: TypographySystem, role: TypeRole): TypeLevel {
   return system.scale.find((l) => l.role === role) ?? system.scale[2]!;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Shared text-style adoption (issue #24 follow-up: style/token fidelity)      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Closed-vocabulary hints mapping a discovered shared text-style name to the
+ * type role it most likely serves. Names are matched case-insensitively;
+ * the first matching role wins, so order each alternative most-specific
+ * first. Deliberately name-based: `inspect_design_system` reports style names
+ * plus family/size/weight details, and names are the stable handle the
+ * plugin binds by (`applyStyle` accepts id or name).
+ */
+const TEXT_STYLE_ROLE_PATTERNS: Array<{ role: TypeRole; patterns: RegExp[] }> = [
+  { role: "display", patterns: [/display/i, /hero/i, /title\/xl|title\/lg/i, /\btitle\b/i] },
+  { role: "heading", patterns: [/heading/i, /title\/(md|sm)/i, /subtitle/i, /h[1-6]\b/i] },
+  { role: "body", patterns: [/\bbody\b/i, /paragraph/i, /text\/regular/i] },
+  { role: "label", patterns: [/\blabel\b/i, /button/i, /action/i, /tab/i] },
+  { role: "caption", patterns: [/caption/i, /footnote/i, /overline/i, /meta/i, /hint/i] },
+  { role: "technical", patterns: [/mono/i, /code/i, /technical/i, /data\/mono/i, /tabular/i] },
+];
+
+/** Role priority for greedy distinct assignment: focal roles claim first. */
+const ROLE_PRIORITY: TypeRole[] = ["display", "heading", "body", "label", "caption", "technical"];
+
+/**
+ * Maps discovered shared text-style names onto type roles.
+ *
+ * Each style name is claimed by at most one role and each role takes at most
+ * one style, assigned greedily in focal-first order. When styles are scarce
+ * the closest role keeps the style and the rest stay unmapped — so the
+ * caller falls back to raw fill+size for those roles rather than
+ * force-binding every label to one identical style and destroying hierarchy.
+ */
+export function mapTextStylesToRoles(styleNames: readonly string[]): Partial<Record<TypeRole, string>> {
+  const out: Partial<Record<TypeRole, string>> = {};
+  const claimed = new Set<string>();
+  for (const role of ROLE_PRIORITY) {
+    const entry = TEXT_STYLE_ROLE_PATTERNS.find((e) => e.role === role)!;
+    const hit = styleNames.find((name) => !claimed.has(name) && entry.patterns.some((p) => p.test(name)));
+    if (hit !== undefined) {
+      out[role] = hit;
+      claimed.add(hit);
+    }
+  }
+  return out;
+}
+
+export interface RoleStyleBinding {
+  /** The shared style to bind, when one was resolved. */
+  textStyleId?: string;
+  /** True when no shared style applied and the caller must use raw fill+size. */
+  fallbackToRaw: boolean;
+  /** Present on fallback: why no style bound, for the build log. */
+  warning?: string;
+}
+
+/**
+ * Resolves the text style a builder should use for one type role.
+ *
+ * Precedence: an explicitly named program `textStyleId` always wins; else
+ * the discovered role map; else raw fill+size with a warning. Never invents
+ * a binding — absent input means an explicit fallback, not a silent default.
+ */
+export function bindRoleTextStyle(
+  role: TypeRole,
+  opts: { explicitTextStyleId?: string; roleMap?: Partial<Record<TypeRole, string>> },
+): RoleStyleBinding {
+  if (opts.explicitTextStyleId && opts.explicitTextStyleId.trim().length > 0) {
+    return { textStyleId: opts.explicitTextStyleId, fallbackToRaw: false };
+  }
+  const mapped = opts.roleMap?.[role];
+  if (mapped) return { textStyleId: mapped, fallbackToRaw: false };
+  return {
+    fallbackToRaw: true,
+    warning: `No shared text style for role '${role}': using raw fill+size. Bind a discovered EXO/* style to adopt the file's type system.`,
+  };
+}

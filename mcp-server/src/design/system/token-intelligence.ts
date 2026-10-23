@@ -113,3 +113,96 @@ export function resolveTokens(input: {
 export function tokenVariable(tokens: TokenSystem, role: TokenRole): string {
   return tokens.colors[role]?.variable ?? EXO_DEFAULTS[role].variable;
 }
+
+/* -------------------------------------------------------------------------- */
+/* Token-reference preference (issue #24 follow-up: style/token fidelity)      */
+/* -------------------------------------------------------------------------- */
+
+export interface TokenConsistencyInput {
+  /** Hex fills observed on the screen under test. */
+  fills: string[];
+  /** Stroke widths observed. */
+  strokes?: number[];
+  /** Corner radii observed. */
+  radii?: number[];
+  /** Spacing steps observed. */
+  spacing?: number[];
+}
+
+export interface TokenConsistencyReport {
+  /** 0–100. 100 means every observed value already resolves to a token step. */
+  score: number;
+  /** Hex fills that have an equivalent token variable and should bind it. */
+  preferVariable: Array<{ hex: string; variable: string }>;
+  /** Strokes/radii/spacing values off the token scale. */
+  offScale: Array<{ dimension: "stroke" | "radius" | "spacing"; value: number; nearest: number | null }>;
+  evidence: string[];
+}
+
+function nearestStep(value: number, steps: number[]): number | null {
+  if (steps.length === 0) return null;
+  let best = steps[0]!;
+  for (const s of steps) if (Math.abs(s - value) < Math.abs(best - value)) best = s;
+  return best;
+}
+
+/**
+ * Token-reference preference plus strokes/radii/spacing discipline.
+ *
+ * Pure and advisory: fills matching a discovered token *value* are reported
+ * as `preferVariable` (bind the variable, drop the hex); strokes, radii and
+ * spacing are measured against the token scale with the same near-duplicate
+ * tolerances `consistency.ts` uses. A missing dimension is skipped, never
+ * failed — no token scale, no verdict.
+ */
+export function checkTokenConsistency(tokens: TokenSystem, input: TokenConsistencyInput): TokenConsistencyReport {
+  const evidence: string[] = [];
+  const preferVariable: TokenConsistencyReport["preferVariable"] = [];
+  const offScale: TokenConsistencyReport["offScale"] = [];
+  let score = 100;
+
+  const tokenEntries = Object.entries(tokens.colors) as Array<[TokenRole, { variable: string; value: string }]>;
+  const seen = new Set<string>();
+  for (const raw of input.fills ?? []) {
+    const hex = raw.toUpperCase();
+    if (seen.has(hex)) continue;
+    seen.add(hex);
+    // Already a variable reference (contains a slash): bound, not hardcoded.
+    if (raw.includes("/")) continue;
+    const match = tokenEntries.find(([, c]) => c.value.toUpperCase() === hex);
+    if (match) {
+      preferVariable.push({ hex, variable: match[1].variable });
+    }
+  }
+  if (preferVariable.length > 0) {
+    score -= Math.min(20, preferVariable.length * 5);
+    evidence.push(
+      `${preferVariable.length} hardcoded fill(s) duplicate a token value — bind the variable: ${preferVariable.slice(0, 4).map((p) => `${p.hex} → ${p.variable}`).join(", ")}`,
+    );
+  } else {
+    evidence.push("no hardcoded fill duplicates a token value");
+  }
+
+  const checks: Array<{ dimension: "stroke" | "radius" | "spacing"; values: number[]; steps: number[]; tolerance: number }> = [
+    { dimension: "stroke", values: input.strokes ?? [], steps: [0.5, 1, 1.5, 2, 3], tolerance: 0.5 },
+    { dimension: "radius", values: input.radii ?? [], steps: [tokens.radii.small, tokens.radii.medium, tokens.radii.large], tolerance: 1 },
+    { dimension: "spacing", values: input.spacing ?? [], steps: tokens.spacing, tolerance: 2 },
+  ];
+  for (const check of checks) {
+    const distinct = [...new Set(check.values)];
+    if (distinct.length === 0) continue;
+    const off = distinct.filter((v) => {
+      const near = nearestStep(v, check.steps);
+      return near === null || Math.abs(near - v) > check.tolerance;
+    });
+    for (const v of off) offScale.push({ dimension: check.dimension, value: v, nearest: nearestStep(v, check.steps) });
+    if (off.length > 0) {
+      score -= Math.min(15, off.length * 3);
+      evidence.push(`${check.dimension}: ${off.length} value(s) off the token scale (${off.slice(0, 6).join(", ")})`);
+    } else {
+      evidence.push(`${check.dimension}: on the token scale (${distinct.length} distinct)`);
+    }
+  }
+
+  return { score: Math.max(0, Math.round(score)), preferVariable, offScale, evidence };
+}

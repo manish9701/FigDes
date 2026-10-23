@@ -69,7 +69,64 @@ const REVIEW_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Findin
   { name: "text-route-collision", fn: textRouteCollision },
   { name: "connector-endpoint-ambiguous", fn: connectorEndpointAmbiguous },
   { name: "sibling-region-overlap", fn: siblingRegionOverlap },
+  { name: "fake-primitive", fn: fakePrimitive },
 ];
+
+/**
+ * Fake-primitive advisory (issue #24 follow-up: semantic-fidelity).
+ *
+ * A thin filled RECTANGLE doing a LINE/VECTOR's job, or a FRAME that merely
+ * re-draws a component the file already owns, looks right and edits wrong.
+ * Advisory severity only (`minor`/`low`): the shape is a heuristic over names
+ * and aspect ratios, never proof of intent — it advises, it never blocks or
+ * auto-fixes.
+ */
+const DIVIDER_ROLE = /divider|hairline|separator|\brule\b|under-?line/i;
+const CONNECTOR_ROLE = /connector|edge|link-line|arrow-line/i;
+const INSTANCE_LIKE_FRAME = /variant|state=|size=|component/i;
+
+function fakePrimitive(n: NodeMetrics, c: Ctx): Finding[] {
+  const thinRect =
+    n.type === "RECTANGLE" &&
+    n.h <= 2 &&
+    n.w / Math.max(1, n.h) >= 8 &&
+    (n.stroke === undefined || n.stroke === null) &&
+    (DIVIDER_ROLE.test(n.name) || CONNECTOR_ROLE.test(n.name));
+  if (thinRect) {
+    const lineWord = CONNECTOR_ROLE.test(n.name) ? "a connector edge" : "a divider";
+    return [
+      {
+        rule: "fake-primitive",
+        confidence: "low",
+        severity: "minor",
+        title: `'${n.name}' is a ${Math.round(n.w)}×${Math.round(n.h)} filled rectangle acting as ${lineWord}`,
+        evidence: { w: Math.round(n.w), h: Math.round(n.h), role: "divider-or-connector", actual: "RECTANGLE(fill)", expected: "LINE or VECTOR(stroke)" },
+        nodeIds: [n.id],
+        guidance: `Replace with a LINE or VECTOR with a stroke: a 1px filled rect cannot take endpoints, arrowheads or vector strokes, so connectors never attach and dividers cannot join the stroke system. Advisory only — confirm the role before rebuilding.`,
+      },
+    ];
+  }
+  // A FRAME whose name carries variant/instance vocabulary but which is not
+  // an instance of anything: likely a hand-redraw of an existing component.
+  if (n.type === "FRAME" && !n.instanceOf && INSTANCE_LIKE_FRAME.test(n.name)) {
+    const siblings = n.parentId ? (c.childrenOf.get(n.parentId) ?? []) : [];
+    const instanceSibling = siblings.some((s) => s.type === "INSTANCE" && s.instanceOf);
+    if (instanceSibling) {
+      return [
+        {
+          rule: "fake-primitive",
+          confidence: "low",
+          severity: "minor",
+          title: `'${n.name}' looks like a component redraw next to real instances`,
+          evidence: { actual: "FRAME", expected: "INSTANCE", siblingInstances: true },
+          nodeIds: [n.id],
+          guidance: `Prefer create_instance of the existing component over a redrawn frame, so overrides and variant links survive. Advisory only — confirm the component exists before replacing.`,
+        },
+      ];
+    }
+  }
+  return [];
+}
 
 const AUDIT_RULES: Array<{ name: string; fn: (n: NodeMetrics, c: Ctx) => Finding[] }> = [
   { name: "unstyled-text", fn: unstyledText },

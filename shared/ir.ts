@@ -95,9 +95,11 @@ export const RegionSchema = z
      *
      * When set, the region's children are stacked by Figma itself rather than
      * by absolute coordinates, so a designer can re-lay the region out in the
-     * file. The compiler only honours it when every child has a known,
-     * fixed extent — text height is estimated, not measured, and handing
-     * estimated text to Figma's own layout moves every sibling below it.
+     * file. The compiler only honours it when every child has a known extent:
+     * fixed or hugged components, instances with explicit extents, and text
+     * measured at the width it will be drawn at. Text with only estimated
+     * heights keeps absolute placement, because handing estimates to Figma's
+     * own layout moves every sibling below them.
      */
     autoLayout: z.enum(["vertical"]).optional(),
     /**
@@ -256,6 +258,19 @@ export const ComponentSpecSchema = z
         "deckOutline",
         "stat",
         "bullets",
+        // Component-generation v1 library (issue #24): reusable masters.
+        "iconButton",
+        "textInput",
+        "select",
+        "checkbox",
+        "switch",
+        "tabs",
+        "badge",
+        "tooltip",
+        "menu",
+        "dialog",
+        "navigationItem",
+        "tableRow",
       ])
       .default("panel"),
     props: z
@@ -695,5 +710,11 @@ export interface CompileResult {
      * always kept alongside this flag — declining is reported, never silent).
      */
     nativeLayoutApplied?: boolean;
+    /**
+     * How many measured text nodes sit inside an applied native auto-layout
+     * container. Zero when no container was applied or none holds text — the
+     * payload then says the layout stands on estimates or fixed extents.
+     */
+    measuredTextUsed?: number;
   };
 }

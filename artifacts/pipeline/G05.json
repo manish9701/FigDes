@@ -467,16 +467,16 @@
       "id": "connector-1-label",
       "parent": "root",
       "name": "Label connect",
-      "x": 1012.4,
-      "y": 92
+      "x": 1022.4,
+      "y": 86
     },
     {
       "type": "createText",
       "id": "connector-2-label",
       "parent": "map",
       "name": "Label connect",
-      "x": 726,
-      "y": 116
+      "x": 734,
+      "y": 123
     }
   ],
   "structuralChecks": [

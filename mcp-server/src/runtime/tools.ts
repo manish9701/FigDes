@@ -388,6 +388,11 @@ export async function runRuntimeTool(
   // resolves the widths; the plugin measures at those widths; the second
   // compile uses the measurements. Without a plugin the estimates stand, and
   // the result says so.
+  //
+  // The second pass is also what unlocks native auto-layout for text: the
+  // compiler only hands a text-holding region to Figma's own layout when every
+  // text child carries a measurement (see compile.ts), so a measured recompile
+  // that declines no container stands on the truth, not on the heuristic.
   // Checklist #14: a build is guarded against the merged rule set — built-in
   // EXO truths plus every rule recorded for this project via project_memory —
   // so a recorded rule is enforced during generation, not only at final review.

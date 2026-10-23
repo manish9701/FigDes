@@ -41,6 +41,7 @@ import {
   type VisualIntent,
 } from "../../../shared/ir";
 import { compileIR, TYPE_SCALE } from "./compile";
+import { LIBRARY_STATE_TABLES } from "./components";
 import { parseConstraint } from "./constraints";
 import { compileVisual } from "./visual";
 import { validatePrimitiveArgs } from "./primitive-schema";
@@ -84,6 +85,18 @@ export const RUNTIME_PRIMITIVES = {
   navItem: { description: "One navigable item.", kind: "content" as const },
   panel: { description: "A titled content panel.", kind: "content" as const },
   button: { description: "A primary action.", kind: "content" as const },
+  iconButton: { description: "A square button carrying only an icon.", kind: "content" as const },
+  textInput: { description: "A labelled text field.", kind: "content" as const },
+  select: { description: "A closed select with a chevron.", kind: "content" as const },
+  checkbox: { description: "A check box plus label.", kind: "content" as const },
+  switch: { description: "An on/off switch plus label.", kind: "content" as const },
+  tabs: { description: "A row of tabs.", kind: "content" as const },
+  badge: { description: "A hug status badge.", kind: "content" as const },
+  tooltip: { description: "A floating hint.", kind: "content" as const },
+  menu: { description: "A vertical menu list.", kind: "content" as const },
+  dialog: { description: "A modal dialog.", kind: "content" as const },
+  navigationItem: { description: "One navigable row.", kind: "content" as const },
+  tableRow: { description: "One table row.", kind: "content" as const },
   divider: { description: "A hairline rule.", kind: "content" as const },
   sectionHeader: { description: "A section title.", kind: "content" as const },
   sectionDivider: { description: "A labelled section divider for decks and editorial layouts.", kind: "content" as const },
@@ -217,6 +230,13 @@ const CONTENT_ARGS = new Set([
   // of them was rejected as an "unknown argument" during real EXO testing.
   "state",
   "active",
+  "checked",
+  "placeholder",
+  "options",
+  "icon",
+  "open",
+  "trigger",
+  "asComponent",
   "tone",
   "variant",
   "valueStyle",
@@ -533,6 +553,11 @@ export interface RuntimeResult {
      * payload (alongside its `auto-layout` violation), never a silent pass.
      */
     nativeLayoutApplied?: boolean;
+    /**
+     * How many measured text nodes sit inside an applied native auto-layout
+     * container. Forwarded from the compile.
+     */
+    measuredTextUsed?: number;
   };
   /** Populated when a call referenced a primitive that does not apply here. */
 warnings: string[];
@@ -927,7 +952,10 @@ regions.push({
     // described. Each sibling carries the state in its id, so the strip reads
     // without captions.
     if (
-      (call.fn === "button" || call.fn === "statusPill" || call.fn === "navItem" || call.fn === "deviceNode") &&
+      (call.fn === "button" || call.fn === "statusPill" || call.fn === "navItem" || call.fn === "deviceNode" ||
+        call.fn === "iconButton" || call.fn === "textInput" || call.fn === "select" || call.fn === "checkbox" ||
+        call.fn === "switch" || call.fn === "tabs" || call.fn === "badge" || call.fn === "tooltip" ||
+        call.fn === "menu" || call.fn === "dialog" || call.fn === "navigationItem" || call.fn === "tableRow") &&
       Array.isArray((call.args as Record<string, unknown>).states)
     ) {
       for (const item of expandStates(call, warnings)) pushCall(item);
@@ -1293,6 +1321,7 @@ case "shape": {
       layoutMs: compiled.stats.layoutMs,
       semanticUnits: parsedProgram.content.filter((c) => RUNTIME_PRIMITIVES[c.fn].kind === "content").length,
       nativeLayoutApplied: compiled.stats.nativeLayoutApplied,
+      measuredTextUsed: compiled.stats.measuredTextUsed,
     },
     warnings,
     intentNotes,
@@ -1834,6 +1863,10 @@ function extractPlanIntent(plan: Record<string, unknown> | undefined, warnings: 
  * no-op that leaves the single default instance alone.
  */
 const STATE_TABLES: Record<string, Record<string, Record<string, unknown>>> = {
+  // Component-generation v1 library (issue #24): state tables live in
+  // components.ts and are reused here, so strips exercise real rendering
+  // paths. Explicit tables below win on conflict.
+  ...LIBRARY_STATE_TABLES,
   button: {
     default: {},
     hover: { variant: "primary" },
@@ -2121,6 +2154,18 @@ function componentTypeFor(fn: PrimitiveName): DesignIR["content"][number] extend
     navItem: "navItem",
     panel: "panel",
     button: "button",
+    iconButton: "iconButton",
+    textInput: "textInput",
+    select: "select",
+    checkbox: "checkbox",
+    switch: "switch",
+    tabs: "tabs",
+    badge: "badge",
+    tooltip: "tooltip",
+    menu: "menu",
+    dialog: "dialog",
+    navigationItem: "navigationItem",
+    tableRow: "tableRow",
     divider: "divider",
     sectionHeader: "sectionHeader",
     modelRow: "modelRow",

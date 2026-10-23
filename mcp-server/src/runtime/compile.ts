@@ -15,11 +15,12 @@ import { canvasSize } from "../../../shared/ir";
 import { normalizePath, normalizeVectorPath } from "../../../shared/path";
 import { solveConstraints, expectedRelationBox, type PlacedBox } from "./constraints";
 import { checkIdentity } from "./identity";
-import { routeConnector } from "./connectors";
+import { CONNECTOR_CLEARANCE_MIN, edgeClearanceViolations, labelBoxAt, labelTangent, pickLabelPosition, routeConnector } from "./connectors";
 import { coerceLogoMark, executeLogoPlan, logoConstructionGrid, logoMarkPath, opticalAlignDy, polygonPath, starPath, type LogoPlanStep } from "./marks";
 import { resolveStyleTokens } from "./visual-presets";
 import { fitStackToCanvas, inferComposition, MIN_STACK_REGION_H, packContent, planLayoutReflowed, radial, forceDirected, defaultGutter, separateOverlaps } from "./layout";
 import { runAlgorithm } from "./algorithms";
+import { isLibraryComponent, libraryDefFor, libraryMasterEmitted } from "./components";
 
 /* -------------------------------------------------------------------------- */
 /* Typography defaults                                                         */
@@ -268,6 +269,12 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // on `stats` so a declined request is a fact in the payload, not just a
   // violation line — and the violation is always kept alongside it.
   let nativeLayoutApplied = true;
+  /** Ids of regions whose frames were emitted as native auto-layout containers. */
+  const appliedAutoLayout = new Set<string>();
+  // How many measured text nodes are laid out by a native auto-layout
+  // container. Zero when no container was applied or none of its children is
+  // text — the payload then says the layout stands on estimates or components.
+  let measuredTextUsed = 0;
   if (alignGrid > 0) {
     regions = regions.map((r) => ({
       ...r,
@@ -375,32 +382,51 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       // the region survives being re-laid-out by a designer.
       //
       // It is only honoured when the children have a *known* extent. A
-      // component's height is either fixed or hugged, and both are exact; a
-      // text node's height is estimated from a character-count heuristic, and
-      // handing an estimated height to Figma's own layout pushes every sibling
-      // below it away from where the plan promised it would be. So a region
-      // holding text keeps absolute placement, and says why.
+      // component's height is either fixed or hugged, and both are exact; an
+      // instance carries its measured extents explicitly. A text node's height
+      // is exact only when it was measured at the width it will be drawn at
+      // (`textMetrics`, filled by the runtime's measure-then-recompile second
+      // pass) — an estimate from a character-count heuristic would push every
+      // sibling below it away from where the plan promised it would be. So a
+      // region holding unmeasured text keeps absolute placement, and says why.
       const children = ir.content.filter((c) => region.children.includes(c.id));
       const wantsAutoLayout = (region as { autoLayout?: string }).autoLayout === "vertical";
       const flowRegion = region.layout === "flow";
-      const fixedExtentChildren = children.length > 0 && children.every((c) => c.kind === "component");
+      const isMeasuredText = (c: ContentSpec): boolean =>
+        c.kind === "text" && (textMetrics?.get(c.id)?.height ?? 0) > 0;
+      const fixedExtentChildren =
+        children.length > 0 &&
+        children.every((c) => c.kind === "component" || c.kind === "instance" || isMeasuredText(c));
       const autoLayout = wantsAutoLayout && flowRegion && fixedExtentChildren;
       if (wantsAutoLayout && !autoLayout) {
         // Declined, not silently passed: the violation below stays, and the
         // stats flag records the decline for callers that gate on the payload.
         nativeLayoutApplied = false;
+        const unmeasuredText = children.filter((c) => c.kind === "text" && !isMeasuredText(c)).map((c) => `'${c.id}'`);
+        const estimatedGraphics = children
+          .filter((c) => c.kind !== "component" && c.kind !== "instance" && c.kind !== "text")
+          .map((c) => `'${c.id}'`);
         violations.push({
           rule: "auto-layout",
           message:
             `Region '${region.id}' asked for a native auto-layout container, which was not applied: ` +
             (flowRegion ? "" : `its layout is '${region.layout}', not a flow. `) +
-            (children.length === 0 ? "it has no children to lay out. " : "it holds text or graphics whose extent is estimated rather than measured, so Figma's own layout would move them. "),
+            (children.length === 0 ? "it has no children to lay out. " : "") +
+            (unmeasuredText.length > 0
+              ? `its text (${unmeasuredText.join(", ")}) has only estimated heights — measure it first (the runtime measures text between its two compile passes), so Figma's own layout moves nothing. `
+              : "") +
+            (estimatedGraphics.length > 0 ? `it holds graphics (${estimatedGraphics.join(", ")}) whose extent is estimated rather than measured, so Figma's own layout would move them. ` : ""),
         });
       }
       if (autoLayout) {
         // One column: Figma's vertical auto layout is a single stack, and the
         // flow placement below already computes the same stack.
         region.columns = 1;
+        // Every measured text child in this region is now laid out by Figma
+        // itself rather than by the estimate path — counted so the payload says
+        // how much of the layout stands on measurements.
+        measuredTextUsed += children.filter((c) => c.kind === "text").length;
+        appliedAutoLayout.add(region.id);
       }
 
       operations.push(
@@ -491,7 +517,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       h: Math.max(0, region.h - pad.top - pad.bottom),
     };
 
-    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics });
+    const used = emitContent({ ir, region, content: children, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics, inAutoLayout: appliedAutoLayout.has(region.id) });
     if (used) algorithms[region.id] = used;
   }
 
@@ -820,6 +846,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       reflowed,
       traceMismatches,
       nativeLayoutApplied,
+      measuredTextUsed,
     },
   };
 }
@@ -1050,10 +1077,14 @@ function shiftNormalizedPath(path: string, dx: number, dy: number): string {
  *
  * Reads the two moveto/lineto coordinates rather than re-deriving them, so the
  * check measures what was actually emitted rather than what the router believed
- * it emitted.
+ * it emitted. Only the first subpath is read: arrowheads ride as closed
+ * subpaths after it, and their corners are not the route's ends — measuring
+ * them claimed a headed edge ended ~10px off its node, which is exactly the
+ * false "route solved against stale geometry" defect this check exists to catch.
  */
 function routeEndpoints(path: string): Array<{ x: number; y: number }> {
-  const numbers = path.match(/-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
+  const main = path.split(" M ")[0] ?? path;
+  const numbers = main.match(/-?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g);
   if (!numbers || numbers.length < 4) return [];
   const n = (i: number): number => Number(numbers[i]);
   return [
@@ -1083,6 +1114,9 @@ function emitConnectors(
 ): ConnectorRoute[] {
   const connectors = ir.content.filter((c) => c.kind === "connector");
   const labels: Array<{ id: string; text: string; x: number; y: number; weight: number; parent: string }> = [];
+  // Reserved label lanes, canvas-absolute: every accepted caption claims its
+  // box so later edges route theirs around it instead of stacking on it.
+  const reserved: Array<{ x: number; y: number; w: number; h: number }> = [];
   const routes: ConnectorRoute[] = [];
 
   // Which region each content node belongs to. Needed in deck mode, where a
@@ -1091,6 +1125,11 @@ function emitConnectors(
   for (const region of ir.regions) {
     for (const child of region.children) home.set(child, region.id);
   }
+  // Regions are never obstacles: every edge lives inside one, so measuring a
+  // route against its own parent's box would flag every connector in the file.
+  // Only placed content (machines, cards, pills) can be crossed or overlapped.
+  const regionIds = new Set(ir.regions.map((r) => r.id));
+  const nodeBoxes = new Map([...boxes].filter(([id]) => !regionIds.has(id)));
 
   for (const spec of connectors) {
     if (spec.kind !== "connector") continue;
@@ -1130,7 +1169,7 @@ function emitConnectors(
 
     const fromBox = boxes.get(spec.from);
     const toBox = boxes.get(spec.to);
-    const route = routeConnector(spec, fromBox, toBox);
+    let route = routeConnector(spec, fromBox, toBox);
     if (!route) {
       // Distinguish "you never drew it" from "you drew it but it got no
       // geometry". Collapsing both into "unknown node" sent the reader looking
@@ -1148,6 +1187,33 @@ function emitConnectors(
         message: `Connector '${spec.id}' references ${missing.map(describe).join(" and ")}. Draw the nodes before connecting them.`,
       });
       continue;
+    }
+
+    // Node-edge clearance: an edge that passes over (or within halo of) a
+    // third-party node reads as connecting to it. Try the other rectilinear
+    // routing first — straight and orthogonal jog around different obstacles —
+    // and only warn when neither clears. Advisory (`layout`, never blocking):
+    // a crowded map is a spacing judgement, not broken geometry.
+    if (route && fromBox && toBox) {
+      let offenders = edgeClearanceViolations(route.points, nodeBoxes, spec.from, spec.to);
+      const fallbackRouting = spec.routing === "straight" ? "orthogonal" : "straight";
+      if (offenders.length > 0 && (spec.routing ?? "orthogonal") !== "curved") {
+        const retry = routeConnector({ ...spec, routing: fallbackRouting }, fromBox, toBox);
+        if (retry) {
+          const retryOffenders = edgeClearanceViolations(retry.points, nodeBoxes, spec.from, spec.to);
+          if (retryOffenders.length < offenders.length) {
+            route = retry;
+            offenders = retryOffenders;
+          }
+        }
+      }
+      if (offenders.length > 0) {
+        const names = offenders.slice(0, 4).map((n) => `'${n}'`).join(", ");
+        violations.push({
+          rule: "layout",
+          message: `Connector '${spec.id}' passes within ${CONNECTOR_CLEARANCE_MIN}px of ${names}${offenders.length > 4 ? ` and ${offenders.length - 4} more` : ""}. Move the node(s) off the edge or reroute with routing:'${fallbackRouting}'.`,
+        });
+      }
     }
 
     let normalized;
@@ -1224,16 +1290,24 @@ function emitConnectors(
     );
 
     if (spec.label && route.labelAt) {
-      labels.push({ id: `${spec.id}-label`, text: spec.label, x: route.labelAt.x - origin.x, y: route.labelAt.y - origin.y, weight: spec.strokeWeight, parent });
+      // Collision-aware caption: try the free side above the edge first, then
+      // around it, never on top of a node or another caption. The obstacles are
+      // the final placed boxes (relations already ran), so a label anchored near
+      // a moved node still clears it.
+      const obstacles = [...nodeBoxes.values()].map((b) => ({ x: b.x, y: b.y, w: b.w, h: b.h }));
+      const at = pickLabelPosition(route.labelAt, labelTangent(route.points), spec.label, obstacles, reserved);
+      reserved.push(labelBoxAt(at.x, at.y, spec.label));
+      labels.push({ id: `${spec.id}-label`, text: spec.label, x: at.x - origin.x, y: at.y - origin.y, weight: spec.strokeWeight, parent });
+      const entry = routes.find((r) => r.id === spec.id);
+      if (entry) entry.labelAt = at;
     }
   }
 
-  // Labels are emitted after the lines so they sit on top of them in z-order.
-  // The +6/-14 nudge clears the line itself, but the offset is blind: on a
-  // dense topology two labels can still collide, and a midpoint near a node
-  // can overlap it. Kept as a fixed offset (not collision-solved) so labels
-  // stay deterministic; overlap here is a spacing judgement for review, not a
-  // compile failure.
+  // Z-order: vectors first, captions after. Operation order is paint order, so
+  // every connector line paints above node fills/frames (emitted earlier, in
+  // the content pass) and every caption paints above its line. A connector is
+  // kind-distinct from decorative borders and rules: its name states the routed
+  // edge, and no shape/vector/line decoration emission sets `fillArrows`.
   for (const label of labels) {
 operations.push(
         op({
@@ -1241,8 +1315,8 @@ operations.push(
           id: label.id,
           parent: label.parent,
           name: `Label ${label.text.slice(0, 24)}`,
-          x: label.x + 6,
-          y: label.y - 14,
+          x: Math.round(label.x * 100) / 100,
+          y: Math.round(label.y * 100) / 100,
           content: label.text,
         fontSize: Math.round(11 * typeScale),
         weight: 600,
@@ -1287,8 +1361,16 @@ function emitContent(args: {
   look: StyleLook;
   /** Measured text heights, when the caller could measure them. */
   textMetrics?: Map<string, { width: number; height: number }>;
+  /**
+   * True when this region's frame is a native auto-layout container.
+   *
+   * Text inside it is emitted with `textAutoResize: "HEIGHT"` so the node
+   * wraps at its emitted width and Figma's own layout stacks it — which is
+   * exact only because the gate required every text child to be measured.
+   */
+  inAutoLayout?: boolean;
 }): string | undefined {
-  const { ir, region, content, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics } = args;
+  const { ir, region, content, inner, gap, operations, composition, violations, algorithms, boxes, typeScale, titleScale, look, textMetrics, inAutoLayout } = args;
   const grid = ir.canvas.grid;
 
   const textItems = content.filter((c) => c.kind === "text");
@@ -1313,7 +1395,7 @@ function emitContent(args: {
   // Rows read across: a table of model rows laid in three columns is a card
   // wall wearing a table's name. When every flowing component is row-like,
   // stack full-width regardless of the grid grant.
-  const ROW_TYPES = new Set(["modelRow", "timelineEvent"]);
+  const ROW_TYPES = new Set(["modelRow", "timelineEvent", "tableRow"]);
   const allRows = components.length > 0 && [...textItems, ...components].every((c) => c.kind === "text" || (c.kind === "component" && ROW_TYPES.has(c.type)));
   // Destinations run across, not down. A nav rail and a mobile bottom bar hold
   // nothing but nav items, and a column of them is not navigation — four tabs
@@ -1535,7 +1617,7 @@ function emitContent(args: {
         const box: ResolvedBox = devicePlacementBox({ x: at.x, y: at.y, w, h: estimateHeight(spec, w, typeScale, titleScale, grid, look, textMetrics) }, spec);
         const final = resolvedSize(spec, box, grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
-        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look);
+        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look, inAutoLayout);
         else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
@@ -1552,7 +1634,7 @@ function emitContent(args: {
         if (!box) continue;
         const final = resolvedSize(spec, devicePlacementBox(box, spec), grid, typeScale, look);
         boxes.set(spec.id, { id: spec.id, ...final });
-        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look);
+        if (spec.kind === "text") emitText(spec, region, final, operations, violations, typeScale, titleScale, look, inAutoLayout);
         else if (spec.kind === "instance") emitInstance(spec, region, final, operations);
         else emitComponent(spec, region, final, operations, grid, typeScale, look);
       }
@@ -1606,6 +1688,7 @@ function emitText(
   typeScale = 1,
   titleScale = 1,
   look: StyleLook = DEFAULT_LOOK,
+  inAutoLayout = false,
 ): void {
   box = { ...box, x: box.x - region.x, y: box.y - region.y };
   const scale = TYPE_SCALE[spec.role] ?? TYPE_SCALE.body!;
@@ -1640,7 +1723,13 @@ function emitText(
       // A deliberately truncated text: the box stays the size the layout
       // reserved and the text is cut with an ellipsis, which is the honest
       // rendering of a string that cannot wrap.
-      ...(spec.truncate === true ? { textAutoResize: "TRUNCATE" as const } : {}),
+      //
+      // Inside a native auto-layout container the text wraps at its emitted
+      // width and lets Figma compute its height (`HEIGHT`): the container
+      // stacks the result, so the recorded estimates and the drawn rows agree
+      // by construction. This is exact only because the container's gate
+      // required every text child to be measured.
+      ...(spec.truncate === true ? { textAutoResize: "TRUNCATE" as const } : inAutoLayout ? { textAutoResize: "HEIGHT" as const } : {}),
     }),
   );
 
@@ -1917,11 +2006,39 @@ function emitComponent(
   // a TEXT property override; the frame+text path below is the fallback when
   // no component was named.
   if (
-    (spec.type === "button" || spec.type === "statusPill" || spec.type === "navItem") &&
+    (spec.type === "button" || spec.type === "statusPill" || spec.type === "navItem" || isLibraryComponent(spec.type)) &&
     typeof spec.componentId === "string" &&
     spec.componentId.length > 0
   ) {
     emitComponentInstance(spec, region, box, operations);
+    return;
+  }
+
+  // Component-generation v1 library (issue #24): when asked (`asComponent`),
+  // emit the ensure-once `exo/<type>` master and instance it, so every use
+  // site links to the same componentId and a shared change propagates.
+  // Otherwise the frame fallback below draws identical outer geometry.
+  if (isLibraryComponent(spec.type) && p.asComponent === true) {
+    const def = libraryDefFor(spec.type)!;
+    if (!libraryMasterEmitted(operations, spec.type)) {
+      for (const candidate of def.masterOps(grid)) operations.push(op(candidate));
+    }
+    const label = typeof p.label === "string" && p.label.length > 0 ? p.label : undefined;
+    operations.push(
+      op({
+        type: "createInstance",
+        id: spec.id,
+        parent: parentHint,
+        componentId: def.masterId,
+        ...(label !== undefined ? { properties: { label } } : {}),
+        x: Math.max(0, Math.round(box.x)),
+        y: Math.max(0, Math.round(box.y)),
+      }),
+    );
+    const variant = def.variantFor(p as Record<string, unknown>);
+    if (variant && Object.keys(variant).length > 0) {
+      operations.push(op({ type: "setVariant", target: spec.id, variant }));
+    }
     return;
   }
 
@@ -2138,6 +2255,28 @@ function emitComponent(
           fill: str("color", "#E0E0E0"),
         }),
       );
+      break;
+    }
+
+    case "iconButton":
+    case "textInput":
+    case "select":
+    case "checkbox":
+    case "switch":
+    case "tabs":
+    case "badge":
+    case "tooltip":
+    case "menu":
+    case "dialog":
+    case "navigationItem":
+    case "tableRow": {
+      // Frame fallback for the v1 library (issue #24): the same anatomy as the
+      // master, drawn inline with identical outer geometry, for callers that
+      // did not ask for a real component (`asComponent !== true`).
+      const libDef = libraryDefFor(spec.type)!;
+      for (const candidate of libDef.fallbackOps({ id: spec.id, parent: parentHint, box, props: p as Record<string, unknown>, grid, typeScale })) {
+        operations.push(op(candidate));
+      }
       break;
     }
 
@@ -4377,6 +4516,20 @@ const FIXED_COMPONENT_HEIGHT: Record<string, number> = {
   sectionDivider: 32,
   statusPill: 22,
   button: 40,
+  // Component-generation v1 fixed heights (issue #24): the emitter draws
+  // these extents exactly, so the layout reserves them.
+  iconButton: 40,
+  textInput: 64,
+  select: 40,
+  checkbox: 24,
+  switch: 28,
+  tabs: 40,
+  badge: 22,
+  tooltip: 64,
+  menu: 132,
+  dialog: 220,
+  navigationItem: 36,
+  tableRow: 48,
 };
 
 function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK, textMetrics?: Map<string, { width: number; height: number }>): number {
@@ -4595,6 +4748,27 @@ function hugSize(
     case "button": {
       const label = str("label", "Button");
       return { w: hugWidth(label, { fontSize: Math.round(13 * typeScale), paddingX: grid * 2 }), h: Math.round(40 * typeScale) };
+    }
+    // Component-generation v1 hug parts (issue #24): intrinsic sizes matching
+    // the master anatomy, so the layout reserves what the emitter draws.
+    case "iconButton": {
+      return { w: Math.round(40 * typeScale), h: Math.round(40 * typeScale) };
+    }
+    case "checkbox": {
+      const label = str("label", "Option");
+      return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid }), h: Math.round(24 * typeScale) };
+    }
+    case "switch": {
+      const label = str("label", "Enabled");
+      return { w: Math.round(36 * typeScale) + hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid / 2 }), h: Math.round(28 * typeScale) };
+    }
+    case "badge": {
+      const label = str("label", "Status");
+      return { w: hugWidth(label, { fontSize: Math.round(11 * typeScale), paddingX: grid }), h: Math.round(22 * typeScale) };
+    }
+    case "navigationItem": {
+      const label = str("label", "Item");
+      return { w: hugWidth(label, { fontSize: Math.round(14 * typeScale), paddingX: grid * 1.5 }), h: Math.round(36 * typeScale) };
     }
     case "deviceNode": {
       // Fixed intrinsic, same as the emitter. A device node draws at

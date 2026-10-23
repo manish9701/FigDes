@@ -450,3 +450,142 @@ export function scoreChallenge(input: {
     notVerified,
   };
 }
+
+/* -------------------------------------------------------------------------- */
+/* Semantic-fidelity scorer (issue #24 follow-up)                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Semantic fidelity: does the emitted Figma structure *mean* what the plan
+ * said, or does it merely look like it? A screen of thin filled rectangles
+ * where the plan said "dividers", frames where it promised instances, and
+ * unattached connectors can score 90 on the planner-evidence dimensions
+ * above while being uneditable soup in Figma.
+ *
+ * This is a *diagnostic*, not a weight change: `BENCHMARK_WEIGHTS` (the
+ * pinned 100-pt offline scorecard) is untouched. `scoreSemanticFidelity`
+ * returns 0–10 with per-signal evidence; `scoreBenchmarkWithFidelity`
+ * attaches it to a regular result so runners can report both numbers
+ * side by side without re-weighting history.
+ */
+
+export interface SemanticFidelityInput {
+  /** Nodes emitted for the screen (type/name/geometry/instance linkage). */
+  nodes: Array<{
+    type: string;
+    name?: string;
+    w?: number;
+    h?: number;
+    stroke?: { weight?: number } | null;
+    instanceOf?: string | null;
+    layoutMode?: string | null;
+    connectorAttached?: boolean;
+  }>;
+  /** Component/instance links the plan promised (region → component id). */
+  promisedInstances?: Array<{ regionId: string; componentId: string }>;
+  /** Connector links the plan promised (from → to). */
+  promisedConnectors?: Array<{ from: string; to: string }>;
+}
+
+export interface SemanticFidelityResult {
+  /** 0–10. */
+  score: number;
+  signals: Record<"nodeTypes" | "componentLinkage" | "strokeBounds" | "autoLayout" | "connectorAttachment", number>;
+  evidence: string[];
+}
+
+const DIVIDER_LIKE = /divider|rule|hairline|separator|connector|line/i;
+
+function isThinFilledRect(n: SemanticFidelityInput["nodes"][number]): boolean {
+  if (n.type !== "RECTANGLE") return false;
+  const w = n.w ?? 0;
+  const h = n.h ?? 0;
+  if (w <= 0 || h <= 0) return false;
+  const thin = Math.min(w, h) <= 2 && Math.max(w, h) / Math.max(1, Math.min(w, h)) >= 8;
+  return thin && (n.stroke === undefined || n.stroke === null);
+}
+
+/**
+ * Scores semantic fidelity from five signals (weights sum to 10):
+ * node types 3 (dividers as LINE/VECTOR, not thin RECTANGLEs), component
+ * linkage 2.5 (promised instances actually instanced), stroke bounds 1.5
+ * (strokes land on vector containers, not hairline fills), auto-layout 2
+ * (structural frames use auto-layout), connector attachment 1 (promised
+ * connectors attached at both ends). Unknowns are skipped, never zeroed:
+ * a report with no connectors says "no connectors promised", not 0/1.
+ */
+export function scoreSemanticFidelity(input: SemanticFidelityInput): SemanticFidelityResult {
+  const evidence: string[] = [];
+  const signals = { nodeTypes: 0, componentLinkage: 0, strokeBounds: 0, autoLayout: 0, connectorAttachment: 0 };
+
+  // Node types (0–3): divider-like nodes should be LINE/VECTOR, not thin RECTANGLEs.
+  const dividerLikes = input.nodes.filter((n) => DIVIDER_LIKE.test(n.name ?? ""));
+  const fakes = dividerLikes.filter(isThinFilledRect);
+  const dividerTotal = dividerLikes.length;
+  signals.nodeTypes =
+    dividerTotal === 0 ? 3 : Math.max(0, Math.round(((dividerTotal - fakes.length) / dividerTotal) * 3 * 10) / 10);
+  evidence.push(
+    dividerTotal === 0
+      ? "node types: no divider-like nodes to judge"
+      : `node types: ${dividerTotal - fakes.length}/${dividerTotal} divider-like nodes use a line/vector primitive`,
+  );
+
+  // Component linkage (0–2.5): promised instances resolve to INSTANCE nodes.
+  const promised = input.promisedInstances ?? [];
+  if (promised.length === 0) {
+    signals.componentLinkage = 2.5;
+    evidence.push("component linkage: no instances promised, nothing to verify");
+  } else {
+    const linked = promised.filter((p) =>
+      input.nodes.some((n) => (n.type === "INSTANCE" || n.type === "COMPONENT") && (n.instanceOf === p.componentId || (n.name ?? "").includes(p.componentId))),
+    );
+    signals.componentLinkage = Math.round((linked.length / promised.length) * 2.5 * 10) / 10;
+    evidence.push(`component linkage: ${linked.length}/${promised.length} promised instances linked`);
+  }
+
+  // Stroke bounds (0–1.5): strokes belong on enclosing vectors/frames, not hairline fills.
+  const stroked = input.nodes.filter((n) => n.stroke !== undefined && n.stroke !== null);
+  const hairlineStroked = stroked.filter((n) => (n.w ?? 99) <= 2 || (n.h ?? 99) <= 2);
+  signals.strokeBounds =
+    stroked.length === 0 ? 1.5 : Math.max(0, Math.round(((stroked.length - hairlineStroked.length) / stroked.length) * 1.5 * 10) / 10);
+  evidence.push(
+    stroked.length === 0
+      ? "stroke bounds: no strokes to judge"
+      : `stroke bounds: ${stroked.length - hairlineStroked.length}/${stroked.length} strokes on enclosing geometry`,
+  );
+
+  // Auto-layout (0–2): structural frames use auto-layout rather than absolute placement.
+  const frames = input.nodes.filter((n) => n.type === "FRAME" || n.type === "COMPONENT");
+  const auto = frames.filter((n) => n.layoutMode === "HORIZONTAL" || n.layoutMode === "VERTICAL");
+  signals.autoLayout = frames.length === 0 ? 2 : Math.max(0, Math.round((auto.length / frames.length) * 2 * 10) / 10);
+  evidence.push(
+    frames.length === 0 ? "auto-layout: no frames to judge" : `auto-layout: ${auto.length}/${frames.length} frames use auto-layout`,
+  );
+
+  // Connector attachment (0–1): promised connectors attached at both ends.
+  const connectors = input.promisedConnectors ?? [];
+  const attachedNodes = input.nodes.filter((n) => n.type === "CONNECTOR" && n.connectorAttached === true).length;
+  if (connectors.length === 0) {
+    signals.connectorAttachment = 1;
+    evidence.push("connector attachment: no connectors promised, nothing to verify");
+  } else {
+    signals.connectorAttachment = Math.max(0, Math.round((Math.min(attachedNodes, connectors.length) / connectors.length) * 10) / 10);
+    evidence.push(`connector attachment: ${Math.min(attachedNodes, connectors.length)}/${connectors.length} promised connectors attached`);
+  }
+
+  const score = Math.round((signals.nodeTypes + signals.componentLinkage + signals.strokeBounds + signals.autoLayout + signals.connectorAttachment) * 10) / 10;
+  return { score, signals, evidence };
+}
+
+export interface BenchmarkWithFidelity extends BenchmarkResult {
+  /** Semantic-fidelity diagnostic (0–10), reported alongside — not folded into — the 100-pt total. */
+  fidelity: SemanticFidelityResult;
+}
+
+/** Attaches the fidelity diagnostic to a scored benchmark without touching its total. */
+export function scoreBenchmarkWithFidelity(
+  scored: BenchmarkResult,
+  fidelityInput: SemanticFidelityInput,
+): BenchmarkWithFidelity {
+  return { ...scored, fidelity: scoreSemanticFidelity(fidelityInput) };
+}

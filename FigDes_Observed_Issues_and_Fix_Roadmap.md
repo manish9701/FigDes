@@ -235,3 +235,14 @@ Do not force everything into generic cards: use components for repeated details,
 - Unknown-parent silent adoption, canvas overflow, width contradiction and tracked-label clipping are pinned by tests (tests/runtime.test.mjs, tests/issue-23-preflight.test.mjs, tests/issue-23-exo-regressions.test.mjs).
 
 **Verified:** the reported reproduction (nav 216 / header 420 / frame 456 / inspector 340 on 1440x900) now resolves with every region inside the canvas, zero violations, applicable: true and reflowed: 3; npm test suites around runtime, layout, geometry, preflight and the exo regression detectors all pass, and the frozen issue22 gate stays PASS.
+
+## Addendum (legs 4-7): the pipeline could not reach the EXO placement primitives, and three primitive renderers shipped absolute coordinates, wrong width sources or dropped values
+
+The live E2E loop (three build-render-review rounds against the deployed fix) surfaced the next layers, each caught by visual review of the rendered frame rather than by the structural checks - which is the point of keeping structural validity and visual quality separate:
+
+- The pipeline's label-to-primitive mapping had no route to fitGauge/memoryBudget, so a deployment screen drew its fit verdict and its resource fit as labelled cards - the generic metric-card shape the product truth forbids. Model-fit/deployment archetypes now route those two phrases to the real instruments (leg 4), with args synthesized from the brief's own demo values and no fabrication when a value is absent.
+- memoryBudget emitted its track and fill rectangles with canvas-absolute x/y into a parent-local slot, so the bar overflowed its own card (leg 5); the track is now its own frame and both children are parent-local.
+- The fit gauge block hug-sized itself to the detail line's width and slid under the neighbouring panel (legs 5-7); it now sizes to its packed column and the detail wraps, with resolvedSize sharing the emitter's wrap formula so the trace cannot catch them disagreeing.
+- Word labels in the budget readout ("Required / Available GB used") and a hardcoded dash in every timelineEvent date (legs 5-7) - the readout states figures again, and the event's when comes from the brief.
+
+All regression-pinned (tests/runtime.test.mjs, tests/planner-deployment.test.mjs). The frozen issue22 gate stayed PASS through every leg.

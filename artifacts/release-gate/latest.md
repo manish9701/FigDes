@@ -1,26 +1,30 @@
 # Issue #17 — release gate
 
-**Verdict: PASS** — every mandatory assertion passed and every required artifact exists
+**Verdict: FAIL** — 2 group(s) failed
 
-Run `40bc6f89-2026-10-21T12-51-52-511Z` on commit `40bc6f893f935606140a1ccb710d2d93a88a48c0` (main), 2026-10-21T12:51:52.511Z → 2026-10-21T12:53:00.648Z, 68.1s.
+Run `2f257693-2026-10-23T15-14-49-511Z` on commit `2f257693462ce8a4e5a2159bf4fd2c50f2929aa9` (main), 2026-10-23T15:14:49.511Z → 2026-10-23T15:15:31.679Z, 42.2s.
 Node v22.17.0 on win32-x64.
+
+**Build provenance** — server `40bc6f893f93-dirty`, plugin `02c8af33ddb5-dirty`, compatibility `different-commit`, plugin version `0.3.5`, commit `2f257693462c`.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
 | **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 26/26 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 56.2s | 964/964 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.7s | 9/9 benchmark case(s) passed |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.3s | the live benchmark completed (10/10 case(s) with real renders and reviews); 1 case(s) have no golden to compare against |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.7s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **FAIL** | 28.6s | 1 failing test(s): live validator: a full evidence set, including a fresh stress render, passes |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 9.2s | 9/9 benchmark case(s) passed |
+| **fidelity** | Plan-to-build fidelity gate (First-Pass Quality Contract) | **PASS** | 0.4s | fidelity matrix passed (0/0 test(s)) |
+| **build-integrity** | Build/version integrity — the live evidence's server and plugin builds all name this commit | **FAIL** | 0.0s | build integrity FAILS for 11 of 11 live evidence record(s): data-heavy-workspace: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) \| editorial-product-page: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) \| exo-compute-topology: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c); … |
+| **live** | Live Figma evidence (render and review of a real screen) | **BLOCKED** | 1.7s | the live benchmark did not complete (10/10 case(s) produced) |
 
 ## Gauntlet cases (26/26 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
-| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 33% of the canvas; 5 regions, 16 content calls, 2 metric card(s) |
+| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 33% of the canvas; 5 regions, 17 content calls, 2 metric card(s) |
 | **A02** | The visual direction is applied across the frame, not only to the dark visualisation | #16 | **PASS** | style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 11; no invented values |
 | **A03** | A new screen lands in free canvas instead of on top of the last one | #16 | **PASS** | the screen was placed at (3280, 0), clear of 2 existing frame(s) |
 | **B01** | An asymmetric split view keeps the inspector fixed and the canvas fluid | #14 | **PASS** | canvas 816 wide at x=272, inspector 320 wide at x=1120, both at y=0 |
@@ -32,20 +36,20 @@ Node v22.17.0 on win32-x64.
 | **B08** | The compiler keeps one coordinate space and reconciles the other | #18 | **PASS** | the resolved box is page-absolute, the operation is parent-local, and the trace check agrees |
 | **C01** | Every edge contacts the node it names, and a connector inside its parent is not a defect | #14 | **PASS** | the edge resolved to both device nodes, and the reviewer did not report its parent as the endpoint |
 | **D01** | Seeded legibility defects are detected with targets and measurements | #14 | **PASS** | 2 review finding(s); contrast {"textColor":"#C9C6BC","background":"#FFFFFF","surfaceSource":"parent surface 'Nav'","ratio":1.71,"required":4.5,"fontSize":14,"bold":false,"layerName":"Cluster","proposedFill":"#7C7664","proposedRatio":4.53,"repairVerified":true}; the identifier is truncated and reported |
-| **D02** | Legitimate patterns are not reported, and the thresholds are not lowered | #14 | **PASS** | no finding against the 1 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline) |
+| **D02** | Legitimate patterns are not reported, and the thresholds are not lowered | #14 | **PASS** | no finding against the 2 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline) |
 | **E01** | The review engine finds the seeded defects and leaves the legitimate patterns alone | #14 | **PASS** | 1 true defect(s) found with node ids, 0 false positives |
 | **E02** | The reviewer tells a search field from a topology connector | #14 | **PASS** | the placeholder inside the search field and the two rules are untouched; the label on the connector is still serious and the icon button is still reported |
 | **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 7ms, worst 19ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 8ms, worst 29ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
 | **H02** | A render that fails after a successful commit is blocked, not verified | #14 | **PASS** | a successful commit with no render is 'indeterminate', not a pass |
 | **H03** | A review that could not examine the screen is INDETERMINATE, never a pass | #14 | **PASS** | an empty, a truncated, a failing, an advisory and a clean review each get their own verdict |
 | **H04** | A screen that cannot be resolved is an ambiguity, not a random selection | #18 | **PASS** | a node id is used directly, a unique name resolves, and an ambiguous or missing name asks |
-| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 38 operation(s) and 5 region(s) identical across two runs |
+| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 39 operation(s) and 5 region(s) identical across two runs |
 
 ## Coverage map
 
@@ -103,7 +107,7 @@ Stated here rather than left for someone to find. A gate that lists its gaps is 
 
 ### The live evidence was measured against a deployment, and the deployment is not the repository
 
-The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.
+The server is deployed and Figma loads the plugin bundle once, so either can be older than the commit the evidence names. The live group now says how many cases were measured against an older commit and how many cannot name their build at all, and the build-integrity group (issue #25) refuses the run outright when the recorded stamps do not name this commit. Redeploying the server and reopening the plugin panel is what ties the live evidence to the code.
 
 ### A golden is a regression reference, not an approval
 
@@ -116,6 +120,20 @@ The server has no font metrics, so a text node's height is a character-count est
 ### The native path is covered structurally, not visually
 
 The native check proves the native path executes against the real Plugin API, builds a real auto-layout frame, renders it, and cleans up after itself. It does not compare that render against a golden: the native path is model-authored, so what it builds is not a fixed reference.
+
+## Failures
+
+### regression — Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation)
+
+**Status.** FAIL
+
+**Detail.** 1 failing test(s): live validator: a full evidence set, including a fresh stress render, passes
+
+### build-integrity — Build/version integrity — the live evidence's server and plugin builds all name this commit
+
+**Status.** FAIL
+
+**Detail.** build integrity FAILS for 11 of 11 live evidence record(s): data-heavy-workspace: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) | editorial-product-page: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c) | exo-compute-topology: the server build '40bc6f893f93-dirty' and the plugin build '02c8af33ddb5-dirty' are not the same commit; the serverBuild '40bc6f893f93-dirty' does not name this repository's HEAD (2f257693462c); the pluginBuild '02c8af33ddb5-dirty' does not name this repository's HEAD (2f257693462c); …
 
 ## How to reproduce
 

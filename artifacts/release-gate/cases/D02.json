@@ -5,6 +5,6 @@
   "requirement": "A status dot with the word ONLINE, a button with a sibling text label, repeated table dividers, intentional circles and off-grid diagram nodes are not defects. The WCAG AA thresholds are unchanged.",
   "issue": "#14",
   "status": "PASS",
-  "detail": "no finding against the 1 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline)",
+  "detail": "no finding against the 2 legitimate pattern(s); thresholds unchanged (4.5:1 / 3:1, 11px baseline)",
   "raw": {}
 }

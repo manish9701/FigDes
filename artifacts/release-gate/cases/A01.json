@@ -5,7 +5,7 @@
   "requirement": "The reference screen's primary visualisation gets appropriate canvas area, the regions align intentionally, the supporting panels do not compete with the main task, and the composition does not collapse into a generic repeated-card template.",
   "issue": "#16",
   "status": "PASS",
-  "detail": "focal 'content' holds 33% of the canvas; 5 regions, 16 content calls, 2 metric card(s)",
+  "detail": "focal 'content' holds 33% of the canvas; 5 regions, 17 content calls, 2 metric card(s)",
   "raw": {
     "focal": "content",
     "focalShare": 0.335,
@@ -70,7 +70,7 @@
       32
     ],
     "metricCards": 2,
-    "contentCalls": 16,
+    "contentCalls": 17,
     "applicable": true
   }
 }

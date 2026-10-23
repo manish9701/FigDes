@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T12:51:53.213Z",
+  "generatedAt": "2026-10-23T15:14:50.189Z",
   "totals": {
     "total": 28,
     "pass": 24,
@@ -68,7 +68,7 @@
         "regions": 1,
         "content": 7,
         "operations": 14,
-        "violations": 0,
+        "violations": 3,
         "blockingViolations": []
       }
     },
@@ -87,11 +87,10 @@
           "Region 'panel' lists child 'ghost', which is not a region or content item.",
           "Content 'dup' is a child of 'panel' and 'panel'. A node has exactly one parent.",
           "Connector 'c' references 'not-a-node' (not declared anywhere in this IR). Draw the nodes before connecting them.",
-          "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
-          "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
-          "Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
-          "Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
-          "'dup' ends up at (0, -1435) relative to parent 'panel', which is canvas (0, -703), but its resolved box is (0, -1435). The operation trace and the resolved geometry disagree."
+          "Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x251 at (0, 732).",
+          "Content 'dup' is placed at (0, -869) 1000x21, outside its region 'panel' which spans (0, 449) 500x251 at (0, 449).",
+          "Content 'dup' is placed at (0, -869) 1000x21, outside its region 'panel' which spans (0, 449) 500x251 at (0, 449).",
+          "'dup' ends up at (0, -869) relative to parent 'panel', which is canvas (0, -137), but its resolved box is (0, -869). The operation trace and the resolved geometry disagree."
         ],
         "violations": [
           "identity: Region id 'panel' is declared 2 times (entries 1, 2). Region ids must be unique — two regions with one id collapse into one box, and the second is silently dropped.",
@@ -100,11 +99,10 @@
           "identity: Content 'dup' is a child of 'panel' and 'panel'. A node has exactly one parent.",
           "constraint: Constraint on 'panel' references unknown anchor 'nowhere'.",
           "connector: Connector 'c' references 'not-a-node' (not declared anywhere in this IR). Draw the nodes before connecting them.",
-          "geometry: Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
-          "geometry: Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x400 at (0, 732).",
-          "containment: Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
-          "containment: Content 'dup' is placed at (0, -1435) 1000x21, outside its region 'panel' which spans (0, 732) 500x400 at (0, 732).",
-          "operation-trace: 'dup' ends up at (0, -1435) relative to parent 'panel', which is canvas (0, -703), but its resolved box is (0, -1435). The operation trace and the resolved geometry disagree."
+          "geometry: Region 'panel' spills past the bottom edge of the 1000x700 canvas: 500x251 at (0, 732).",
+          "containment: Content 'dup' is placed at (0, -869) 1000x21, outside its region 'panel' which spans (0, 449) 500x251 at (0, 449).",
+          "containment: Content 'dup' is placed at (0, -869) 1000x21, outside its region 'panel' which spans (0, 449) 500x251 at (0, 449).",
+          "operation-trace: 'dup' ends up at (0, -869) relative to parent 'panel', which is canvas (0, -137), but its resolved box is (0, -869). The operation trace and the resolved geometry disagree."
         ]
       }
     },
@@ -319,9 +317,9 @@
         "regions": 5,
         "content": 31,
         "operations": 61,
-        "violations": 1,
+        "violations": 3,
         "blockingViolations": [
-          "geometry: Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 884)."
+          "geometry: Region 'timeline' spills past the bottom edge of the 1440x900 canvas: 1208x482 at (232, 909)."
         ]
       }
     },
@@ -350,15 +348,13 @@
       "status": "PASS",
       "detail": "all expectations met",
       "raw": {
-        "applicable": false,
+        "applicable": true,
         "traceMismatches": 0,
         "regions": 3,
         "content": 25,
         "operations": 29,
-        "violations": 1,
-        "blockingViolations": [
-          "geometry: Region 'longtext' spills past the bottom edge of the 1440x900 canvas: 320x200 at (0, 864)."
-        ]
+        "violations": 0,
+        "blockingViolations": []
       }
     },
     {

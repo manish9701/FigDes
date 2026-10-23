@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-21T12:51:53.833Z",
+  "generatedAt": "2026-10-23T15:14:50.917Z",
   "totals": {
     "total": 25,
     "pass": 25,
@@ -62,8 +62,8 @@
         "applicable": true,
         "inapplicableReasons": [],
         "violations": [
-          "typography: Text 'model' holds the unbreakable run \"qwen3-32b-instruct-quantized.gguf\", which measures about 218px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box.",
-          "typography: Text 'err' holds the unbreakable run \"ERR_MEM_PRESSURE_0X7F_DEVICE_TIMEOUT\", which measures about 238px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box."
+          "typography: Text 'model' holds the unbreakable run \"qwen3-32b-instruct-quantized.gguf\", which measures about 222px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box.",
+          "typography: Text 'err' holds the unbreakable run \"ERR_MEM_PRESSURE_0X7F_DEVICE_TIMEOUT\", which measures about 262px at 12px inside a 144px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box."
         ],
         "regions": [
           "col @ 0,0 160x700"
@@ -80,13 +80,13 @@
       "raw": {
         "applicable": false,
         "inapplicableReasons": [
-          "Region 'big' spills past the right and bottom edge of the 800x600 canvas: 1200x900 at (0, 0)."
+          "Region 'big' spills past the right edge of the 800x600 canvas: 1200x600 at (0, 0)."
         ],
         "violations": [
-          "geometry: Region 'big' spills past the right and bottom edge of the 800x600 canvas: 1200x900 at (0, 0)."
+          "geometry: Region 'big' spills past the right edge of the 800x600 canvas: 1200x600 at (0, 0)."
         ],
         "regions": [
-          "big @ 0,0 1200x900"
+          "big @ 0,0 1200x600"
         ]
       }
     },
@@ -144,7 +144,7 @@
         "violations": [
           "geometry: Content 't' resolved to 0x82 inside 'region' — padding and gap leave no room for it. Reduce the region's padding or gap, or give the region more space.",
           "operation-trace: 't' is emitted 40 wide but its resolved box is 0 wide.",
-          "typography: Text 't' holds the unbreakable run \"Squeezed\", which measures about 62px at 14px inside a 0px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box."
+          "typography: Text 't' holds the unbreakable run \"Squeezed\", which measures about 63px at 14px inside a 0px box. It cannot wrap, so it will be clipped or overflow. Shorten it, allow a break, truncate it deliberately, or give it a wider box."
         ],
         "regions": [
           "region @ 0,0 60x400"

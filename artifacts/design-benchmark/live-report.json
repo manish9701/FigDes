@@ -1,20 +1,20 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-21T12:52:59.991Z",
+  "generatedAt": "2026-10-23T15:15:30.941Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
   "foundCases": 10,
   "completeCases": 10,
   "missingCases": [],
-  "liveBenchmarkComplete": true,
-  "liveBenchmarkReason": "All 10 live cases carry screenshot, visual scores, frame ID, operation manifest, findings, repairs and unresolved notes; the 1600x1100 stress frame was rendered and reviewed after its final mutation with every issue #10 defect resolved; and the native path was exercised against the real Plugin API and cleaned up afterwards.",
+  "liveBenchmarkComplete": false,
+  "liveBenchmarkReason": "Live Figma evidence is incomplete: run the cases against a connected plugin (render → critique → repair → verify) and the native-path check, then re-run this validator. The stress frame additionally needs a render and a review bound to its final mutation. Offline structural results must not be presented as visual approval.",
   "buildDrift": [
     {
       "caseId": "data-heavy-workspace",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -23,8 +23,8 @@
     {
       "caseId": "editorial-product-page",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -33,8 +33,8 @@
     {
       "caseId": "exo-compute-topology",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -43,8 +43,8 @@
     {
       "caseId": "exo-configuration",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -53,8 +53,8 @@
     {
       "caseId": "exo-enterprise-workspace",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -63,8 +63,8 @@
     {
       "caseId": "exo-model-detail",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -73,8 +73,8 @@
     {
       "caseId": "exo-runtime-monitoring",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -83,8 +83,8 @@
     {
       "caseId": "generic-saas-dashboard",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -93,8 +93,8 @@
     {
       "caseId": "hard-stress-test",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
@@ -103,16 +103,46 @@
     {
       "caseId": "spatial-relationship",
       "measuredAtCommit": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "repoHead": "40bc6f893f935606140a1ccb710d2d93a88a48c0",
-      "stale": false,
+      "repoHead": "2f257693462ce8a4e5a2159bf4fd2c50f2929aa9",
+      "stale": true,
       "serverBuild": "40bc6f893f93-dirty",
       "pluginBuild": "02c8af33ddb5-dirty",
       "buildNamed": true,
       "note": null
     }
   ],
-  "staleCases": [],
+  "staleCases": [
+    "data-heavy-workspace",
+    "editorial-product-page",
+    "exo-compute-topology",
+    "exo-configuration",
+    "exo-enterprise-workspace",
+    "exo-model-detail",
+    "exo-runtime-monitoring",
+    "generic-saas-dashboard",
+    "hard-stress-test",
+    "spatial-relationship"
+  ],
   "casesWithoutBuild": [],
+  "mismatchCases": [
+    "data-heavy-workspace",
+    "editorial-product-page",
+    "exo-compute-topology",
+    "exo-configuration",
+    "exo-enterprise-workspace",
+    "exo-model-detail",
+    "exo-runtime-monitoring",
+    "generic-saas-dashboard",
+    "hard-stress-test",
+    "spatial-relationship"
+  ],
+  "nativePathBuild": {
+    "ok": false,
+    "reasons": [
+      "the server build stamp is missing or 'unknown' (unknown)",
+      "the plugin build stamp is missing or 'unknown' (unknown)"
+    ]
+  },
   "nativePath": {
     "status": "COMPLETE",
     "reportedStatus": "COMPLETE",

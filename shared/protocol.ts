@@ -947,6 +947,13 @@ export interface TransactionFailure {
   /** Created ids that were removed again during rollback. */
   removedIds?: string[];
   /**
+   * Per-operation durations collected before the failure (ms), slowest first.
+   * Present so a timed-out or wedged build still says which operations were
+   * slow — without it the next attempt is a blind retry. Absent on older
+   * bundles; never required for correctness.
+   */
+  timings?: TransactionTimings;
+  /**
    * Created ids that could not be removed (already gone, or unresolvable).
    * Non-empty means the document may hold partial work: inspect these ids
    * before retrying rather than assuming a clean slate.

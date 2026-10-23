@@ -69,7 +69,7 @@
     "test:issue12": "node --test tests/issue-12-stress.test.mjs",
     "acceptance": "node scripts/run-acceptance.mjs",
     "test:issue13": "node --test tests/issue-13-acceptance.test.mjs",
-    "test:issue14": "node --test tests/issue-14-regressions.test.mjs tests/issue-14-transaction-reliability.test.mjs",
+    "test:issue14": "node --test tests/issue-14-regressions.test.mjs tests/issue-14-transaction-reliability.test.mjs tests/transaction-watchdog.test.mjs",
     "test:issue15": "node --test tests/issue-15-performance.test.mjs",
     "test:issue16": "node --test tests/issue-16-pipeline.test.mjs",
     "test:issue17": "node --test tests/issue-17-release-gate.test.mjs tests/issue-17-image-regression.test.mjs tests/issue-17-text-measurement.test.mjs",

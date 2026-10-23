@@ -637,6 +637,51 @@ function parseAll(ops: unknown[]): Parsed[] {
 }
 
 /**
+ * Per-operation watchdog.
+ *
+ * A single hung Figma call (a font or image load that never settles) wedged
+ * the whole transaction until the 5-minute iframe budget fired: 10 ops
+ * applied, zero progress frames, then a blind rollback with no cause named.
+ * Racing each op against a generous budget fails fast and names the stuck
+ * operation instead.
+ *
+ * The race cannot abort the underlying Figma call, so a late settlement lands
+ * under the normal rollback path — the same guarantee as a server cancel.
+ */
+const PER_OP_WATCHDOG_MS = 60_000;
+/**
+ * Test-only override for the watchdog budget, read at call time.
+ *
+ * The mock harness sets `globalThis.__FIGDES_PER_OP_WATCHDOG_MS__` to prove
+ * the stall path without waiting out the production 60s. Production never
+ * sets it, so the budget is constant there.
+ */
+function perOpWatchdogMs(): number {
+  const override = (globalThis as { __FIGDES_PER_OP_WATCHDOG_MS__?: unknown }).__FIGDES_PER_OP_WATCHDOG_MS__;
+  return typeof override === "number" && override > 0 ? override : PER_OP_WATCHDOG_MS;
+}
+async function applyWithWatchdog(ctx: Ctx, op: Parsed, index: number): Promise<string> {
+  const budget = perOpWatchdogMs();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const watchdog = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new OperationError(
+          `Operation #${index} (${op.type}) produced no result within ${budget / 1000}s — the Figma call is hung (often a font or image load that never resolves). Nothing after this operation ran; the transaction rolls back. Retry with the SAME transactionId; if the same operation hangs again, simplify or split it (dryRun first to validate).`,
+          index,
+          op.type,
+        ),
+      );
+    }, budget);
+  });
+  try {
+    return await Promise.race([apply(ctx, op, index), watchdog]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+/**
  * Validate + execute a whole transaction.
  *
  * Undo handling uses Figma's native undo stack rather than a hand-rolled
@@ -752,7 +797,10 @@ export async function runTransaction(input: {
       const op = ordered[n]!;
       const index = parsed.indexOf(op);
       const opT0 = Date.now();
-      const note = await apply(ctx, op, index);
+      // Watchdogged: a hung Figma call fails this op in 60s with its index
+      // and type named, instead of wedging the transaction until the 5-minute
+      // iframe budget fires with nothing diagnosed.
+      const note = await applyWithWatchdog(ctx, op, index);
       perOperation.push({ index, opType: op.type, ms: Date.now() - opT0 });
       if (perOperation.length > 300) perOperation.shift();
       applied.push(`${op.type}${note ? ` ${note}` : ""}`);
@@ -816,6 +864,7 @@ export async function runTransaction(input: {
       true,
       ctx.created.map((c) => c.figmaNodeId),
       ctx,
+      perOperation,
     );
     rememberSettled(input.transactionId);
     return result;
@@ -2378,6 +2427,7 @@ async function failure(
   attempted: boolean,
   createdIds: string[] = [],
   ctx: Ctx | null = null,
+  perOperation: Array<{ index: number; opType: string; ms: number }> = [],
 ): Promise<TransactionFailure> {
   let removedIds: string[] = [];
   let orphanIds: string[] = [];
@@ -2435,6 +2485,11 @@ async function failure(
     },
     rolledBack,
     rollbackStatus,
+    // What was slow before it died, slowest first: the evidence the next
+    // attempt needs instead of a blind retry.
+    ...(perOperation.length > 0
+      ? { timings: { perOperation: [...perOperation].sort((a, b) => b.ms - a.ms).slice(0, 12) } }
+      : {}),
     ...(removedIds.length > 0 ? { removedIds } : {}),
     ...(orphanIds.length > 0 ? { orphanIds } : {}),
     ...(restoredIds.length > 0 ? { restoredIds } : {}),

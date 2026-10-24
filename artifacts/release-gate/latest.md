@@ -2,30 +2,30 @@
 
 **Verdict: PASS** — every mandatory assertion passed and every required artifact exists
 
-Run `34b513a8-2026-10-23T16-35-53-975Z` on commit `34b513a857808a42b9013892efe24acab4bd5a8d` (main), 2026-10-23T16:35:53.975Z → 2026-10-23T16:37:00.071Z, 66.1s.
+Run `dc930542-2026-10-24T05-45-11-189Z` on commit `dc9305428ca7395ab7e3f4f153406e0dcc8b61a5` (main), 2026-10-24T05:45:11.189Z → 2026-10-24T05:46:35.619Z, 84.4s.
 Node v22.17.0 on win32-x64.
 
-**Build provenance** — server `34b513a85780`, plugin `34b513a85780`, compatibility `same-commit`, plugin version `0.3.5`, commit `34b513a85780`.
+**Build provenance** — server `dc9305428ca7`, plugin `dc9305428ca7`, compatibility `same-commit`, plugin version `0.3.5`, commit `dc9305428ca7`.
 
 ## Groups
 
 | Group | What it covers | Status | Time | Detail |
 | --- | --- | --- | --- | --- |
-| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 0.6s | 26/26 case(s) passed, run twice with identical verdicts |
-| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.7s | every case(s) passed |
-| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.6s | every acceptance case passed |
-| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 54.1s | 1266/1266 test(s) passed |
-| **design-benchmark** | Offline design-planning benchmark | **PASS** | 8.4s | 9/9 benchmark case(s) passed |
-| **fidelity** | Plan-to-build fidelity gate (First-Pass Quality Contract) | **PASS** | 0.4s | fidelity matrix passed (0/0 test(s)) |
-| **build-integrity** | Build/version integrity — the live evidence's server and plugin builds all name this commit | **PASS** | 0.0s | all 11 live evidence record(s) carry server and plugin build stamps that name this repository's HEAD (34b513a85780) |
-| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.2s | the live benchmark completed (10/10 case(s) with real renders and reviews); 1 case(s) have no golden to compare against |
+| **gauntlet** | Integrated gauntlet (brief, plan, native mutation, geometry, review, repair, report) | **PASS** | 1.1s | 26/26 case(s) passed, run twice with identical verdicts |
+| **stress-matrix** | Issue #12 stress matrix | **PASS** | 0.8s | every case(s) passed |
+| **acceptance** | Issue #13 acceptance matrix | **PASS** | 0.8s | every acceptance case passed |
+| **regression** | Offline regression suites (#14 geometry and QA, #15 transactions, #16 generation) | **PASS** | 69.1s | 1283/1283 test(s) passed |
+| **design-benchmark** | Offline design-planning benchmark | **PASS** | 10.6s | 9/9 benchmark case(s) passed |
+| **fidelity** | Plan-to-build fidelity gate (First-Pass Quality Contract) | **PASS** | 0.5s | fidelity matrix passed (0/0 test(s)) |
+| **build-integrity** | Build/version integrity — the live evidence's server and plugin builds all name this commit | **PASS** | 0.0s | all 11 live evidence record(s) carry server and plugin build stamps that name this repository's HEAD (dc9305428ca7) |
+| **live** | Live Figma evidence (render and review of a real screen) | **PASS** | 1.5s | the live benchmark completed (10/10 case(s) with real renders and reviews) |
 
 ## Gauntlet cases (26/26 passed)
 
 | ID | Case | Issue | Status | Measured |
 | --- | --- | --- | --- | --- |
-| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 33% of the canvas; 5 regions, 17 content calls, 2 metric card(s) |
-| **A02** | The visual direction is applied across the frame, not only to the dark visualisation | #16 | **PASS** | style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 11; no invented values |
+| **A01** | A complex brief becomes a composed screen with a dominant primary visualisation | #16 | **PASS** | focal 'content' holds 26% of the canvas; 5 regions, 16 content calls, 0 metric card(s) |
+| **A02** | The visual direction is applied across the frame, not only to the dark visualisation | #16 | **PASS** | style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 7; no invented values |
 | **A03** | A new screen lands in free canvas instead of on top of the last one | #16 | **PASS** | the screen was placed at (3280, 0), clear of 2 existing frame(s) |
 | **B01** | An asymmetric split view keeps the inspector fixed and the canvas fluid | #14 | **PASS** | canvas 816 wide at x=272, inspector 320 wide at x=1120, both at y=0 |
 | **B02** | A five-region dashboard with thirty items keeps every child inside its parent | #14 | **PASS** | 5 regions, 32 items, every child contained |
@@ -42,14 +42,14 @@ Node v22.17.0 on win32-x64.
 | **E03** | Intended containment is not a collision; every real overlap still is | #18 | **PASS** | 5 intended containments left alone; the stray connector and the overlapping text are reported |
 | **F01** | A repair is proposed with targets, applied, re-checked, and its effect is measured | #14 | **PASS** | one targeted repair, one named target, nothing else touched |
 | **F02** | An unrepairable issue and a failed repair are not reported as fixed | #14 | **PASS** | no repair was invented, and the budget exhaustion was reported as such |
-| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 16ms, worst 17ms |
+| **G01** | The real plugin bundle applies 15/40/62/100/150-op workloads and reports the timings | #15 | **PASS** | 5 workload(s) applied atomically; median apply 12ms, worst 21ms |
 | **G02** | A validation failure, a mid-batch failure and a duplicate transaction all fail safely | #15 | **PASS** | validation, mid-batch failure and duplicate submission all behaved |
 | **G03** | Concurrent mutations against the same session do not lose or duplicate a node | #15 | **PASS** | two concurrent transactions both landed; the document holds 2 frames and no duplicates |
 | **H01** | An empty, stale, missing or disconnected inspection can never report PASS | #14 | **PASS** | every empty or missing input produced a non-PASS outcome |
 | **H02** | A render that fails after a successful commit is blocked, not verified | #14 | **PASS** | a successful commit with no render is 'indeterminate', not a pass |
 | **H03** | A review that could not examine the screen is INDETERMINATE, never a pass | #14 | **PASS** | an empty, a truncated, a failing, an advisory and a clean review each get their own verdict |
 | **H04** | A screen that cannot be resolved is an ambiguity, not a random selection | #18 | **PASS** | a node id is used directly, a unique name resolves, and an ambiguous or missing name asks |
-| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 39 operation(s) and 5 region(s) identical across two runs |
+| **I01** | Two consecutive builds of the same brief produce the same structure | #17 | **PASS** | 30 operation(s) and 5 region(s) identical across two runs |
 
 ## Coverage map
 

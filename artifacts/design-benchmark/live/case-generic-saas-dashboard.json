@@ -1,10 +1,10 @@
 {
   "caseId": "generic-saas-dashboard",
-  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-  "serverBuild": "34b513a85780",
-  "pluginBuild": "34b513a85780",
+  "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+  "serverBuild": "dc9305428ca7",
+  "pluginBuild": "dc9305428ca7",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-23T16:28:14.600Z",
+  "startedAt": "2026-10-24T05:19:30.296Z",
   "fixtures": [
     {
       "key": "all-text",
@@ -54,7 +54,8 @@
     ],
     "appliedGuidance": [
       "'nav' gap 24px from 'ObjectInspector' balanced density.",
-      "Relationship rule carried into build: Context rows reference the subject explicitly."
+      "Relationship rule carried into build: Context rows reference the subject explicitly.",
+      "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
     ],
     "note": "Derived from 2 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
   },
@@ -113,7 +114,8 @@
           "value": "+4% [fixture]"
         }
       }
-    ]
+    ],
+    "planId": "plan-mvly8u77-006-rhac"
   },
   "irRevision": "live-generic-saas-dashboard-r1",
   "operationManifest": [],
@@ -125,9 +127,7 @@
         "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
       }
     ],
-    "warnings": [
-      "Design intelligence bypassed: this program carries no plan_screen plan and declares no visualIntent.style, so no decision was classified and no composition hint was applied. Auto art-direction 'technical-editorial' was applied as a quality fallback, which is a floor, not a plan. Call plan_screen first (or design_pipeline for the whole loop) and build from its program — until then this result is undisciplined by decision classification, composition hints and the guard preview."
-    ],
+    "warnings": [],
     "applicabilityBasis": "measured",
     "textMeasurements": 8,
     "measuredTextUsed": 0,
@@ -146,7 +146,7 @@
       "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
     }
   ],
-  "runtimeMs": 627,
+  "runtimeMs": 952,
   "visualScores": null,
   "visualStatus": "PHASE_B_JUDGED_GUARD_REFUSED",
   "visualFindings": [],
@@ -154,6 +154,6 @@
   "visionPhaseB": {
     "reviewer": "direct PNG inspection (opencode Phase B pass)",
     "verdict": "GUARD_REFUSED",
-    "at": "2026-10-23T22:05:00Z"
+    "at": "2026-10-24T00:30:00Z"
   }
 }

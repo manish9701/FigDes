@@ -1,0 +1,102 @@
+{
+  "schema": "vision-phase-b-fresh",
+  "reviewer": "direct PNG inspection (opencode Phase B pass)",
+  "at": "2026-10-24T00:30:00Z",
+  "build": "dc9305428ca7",
+  "note": "Every verdict comes from looking at the saved PNG bytes, not from scores or tool responses. WATCH findings recorded, not hidden. Compared with the previous pass at 34b513a: the sparse-band redistribution is visibly live (content blocks now sit vertically balanced in their bands instead of hugging the top-left), the stress frame's state strip reads 'States — ready · degraded · offline' and the cluster's actual value reads on its own pill 'cluster health — Degraded' — the state-vs-value contradiction from the previous pass is resolved.",
+  "cases": [
+    {
+      "caseId": "exo-compute-topology",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 5 },
+      "visible": "Header 'Compute topology [fixture]' + View all; warning pill '1 needs attention'; hub-01 (1.8 TB) routed by two arrowheaded orthogonal connectors to node-01 (96 GB) and degraded node-02; the 8us label rides the left edge. The graph keeps its settled placement (graph regions are exempt from band redistribution by design), so the fill band's leftover stays below the graph.",
+      "findings": [
+        "WATCH sparse: the topology graph occupies the upper ~40% of its band; the band's lower half is empty.",
+        "MINOR the '8us' edge label sits at the run's top-left corner rather than the edge midpoint."
+      ]
+    },
+    {
+      "caseId": "exo-model-detail",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 5 },
+      "visible": "atlas-7b, Memory 41 GB, Throughput 88 tok/s as mono readouts, green 'fits' pill — the block now sits vertically balanced in its band (redistribution live), not in the top-left corner.",
+      "findings": [
+        "WATCH sparse: three items in a full-width band; the canvas is still mostly air by fixture design."
+      ]
+    },
+    {
+      "caseId": "exo-runtime-monitoring",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 5 },
+      "visible": "Real telemetry (error rate 0.4%, latency p95 240ms, GPU 92%, memory pressure 71%) + 'watching' pill; the block is vertically centred in the canvas now.",
+      "findings": [
+        "WATCH sparse: the telemetry stack is one narrow column on a full-width canvas."
+      ]
+    },
+    {
+      "caseId": "exo-configuration",
+      "verdict": "WATCH",
+      "scores": { "focal": 5, "hierarchy": 6, "composition": 4 },
+      "visible": "'Runtime policy' + 'Thresholds' rows and the dark Approve button; block vertically centred (was ~90% top-left hug).",
+      "findings": [
+        "WATCH sparse: three rows on a 1440x900 canvas; the composition is balanced but thin."
+      ]
+    },
+    {
+      "caseId": "exo-enterprise-workspace",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 5 },
+      "visible": "Nav rail (tracked-caps Fleet active/amber, Models) + 'Assigned fleet [fixture]' with degraded edge-04 highlighted and edge-09; block vertically centred.",
+      "findings": [
+        "WATCH sparse: two device rows carry the whole content band.",
+        "MINOR the header's right-side action label ('Manage') sits flush at the canvas edge and its tail is cut at the frame boundary."
+      ]
+    },
+    {
+      "caseId": "generic-saas-dashboard",
+      "verdict": "GUARD_REFUSED",
+      "scores": null,
+      "gradedBy": "the product guard's refusal; refusal golden stored at 34b513a85780 evidence and re-approved at this build",
+      "findings": []
+    },
+    {
+      "caseId": "data-heavy-workspace",
+      "verdict": "WATCH",
+      "scores": { "focal": 5, "hierarchy": 6, "composition": 4 },
+      "visible": "'Follow-ups [fixture]' with Open incidents 7 and owner pill; vertically centred block.",
+      "findings": [
+        "WATCH sparse: one metric and one pill carry the band."
+      ]
+    },
+    {
+      "caseId": "spatial-relationship",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 7, "composition": 5 },
+      "visible": "ingest → relay (pressured) → store as a vertical chain, both connectors arrowheaded and labelled (feeds / drains); the chain sits in the upper-middle of its band (graph regions keep settled placement).",
+      "findings": [
+        "WATCH sparse: the chain's band keeps a wide empty lower half."
+      ]
+    },
+    {
+      "caseId": "editorial-product-page",
+      "verdict": "WATCH",
+      "scores": { "focal": 6, "hierarchy": 6, "composition": 4 },
+      "visible": "Headline 'Run the small model first [fixture]', subline, dark 'Run atlas-7b' button; block vertically centred (was corner-hugging).",
+      "findings": [
+        "WATCH an editorial layout still owns too little canvas: the block is one narrow column at the left edge; the composition is centred but the screen reads as a placeholder rather than an announcement."
+      ]
+    },
+    {
+      "caseId": "hard-stress-test",
+      "verdict": "WATCH",
+      "scores": { "focal": 7, "hierarchy": 8, "composition": 6 },
+      "visible": "Full stress screen: nav rail with 11px EXO Labs wordmark; header with title, decision subtitle and 'Route model' primary action; the topology as a real BFS tree (device-hub centred above device-01/device-02, device-03 under device-01) with arrowheaded 'open'-labelled connectors clear of every node body; support band with label-only honest items; disclosure caption present.",
+      "findings": [
+        "RESOLVED vs previous pass: the state strip now reads 'States — ready · degraded · offline' (labelled by its set) and the cluster's actual status reads on its own pill 'cluster health — Degraded' with the warning tone — the value-vs-state contradiction is gone.",
+        "RESOLVED vs previous pass: no instrument renders a blank dash; value-less required items render as their labels.",
+        "WATCH the state strip pill carries a single reddish tone; per-state honest tones (ready→neutral, degraded→warning, offline→muted) remain runtime-side work (the interpreter's state tables).",
+        "WATCH the topology band keeps a bottom empty stretch inside its fill height (graph regions keep settled placement by design)."
+      ]
+    }
+  ]
+}

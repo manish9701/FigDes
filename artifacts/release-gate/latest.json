@@ -1,11 +1,11 @@
 {
   "schemaVersion": "release-gate-v1",
-  "runId": "34b513a8-2026-10-23T16-35-53-975Z",
-  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
+  "runId": "dc930542-2026-10-24T05-45-11-189Z",
+  "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
   "branch": "main",
-  "startedAt": "2026-10-23T16:35:53.975Z",
-  "finishedAt": "2026-10-23T16:37:00.071Z",
-  "durationMs": 66096,
+  "startedAt": "2026-10-24T05:45:11.189Z",
+  "finishedAt": "2026-10-24T05:46:35.619Z",
+  "durationMs": 84430,
   "node": "v22.17.0",
   "platform": "win32-x64",
   "config": {
@@ -22,11 +22,11 @@
     ]
   },
   "builds": {
-    "serverBuild": "34b513a85780",
-    "pluginBuild": "34b513a85780",
+    "serverBuild": "dc9305428ca7",
+    "pluginBuild": "dc9305428ca7",
     "compatibility": "same-commit",
     "pluginVersion": "0.3.5",
-    "commit": "34b513a85780"
+    "commit": "dc9305428ca7"
   },
   "verdict": "PASS",
   "verdictReason": "every mandatory assertion passed and every required artifact exists",
@@ -46,7 +46,7 @@
       "command": "node tests/issue-17-gauntlet.mjs",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 618,
+      "durationMs": 1138,
       "detail": "26/26 case(s) passed, run twice with identical verdicts",
       "extra": {
         "total": 26,
@@ -63,7 +63,7 @@
             "issue": "#16",
             "requirement": "The reference screen's primary visualisation gets appropriate canvas area, the regions align intentionally, the supporting panels do not compete with the main task, and the composition does not collapse into a generic repeated-card template.",
             "status": "PASS",
-            "detail": "focal 'content' holds 33% of the canvas; 5 regions, 17 content calls, 2 metric card(s)"
+            "detail": "focal 'content' holds 26% of the canvas; 5 regions, 16 content calls, 0 metric card(s)"
           },
           {
             "id": "A02",
@@ -72,7 +72,7 @@
             "issue": "#16",
             "requirement": "The reference screen keeps a restrained light surface system around one dark technical visualisation, and the direction reaches the whole frame. The data is declared as demo data, so no value is invented.",
             "status": "PASS",
-            "detail": "style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 11; no invented values"
+            "detail": "style 'technical-instrument' on 5/5 region(s); 1 dark surface(s) of 7; no invented values"
           },
           {
             "id": "A03",
@@ -225,7 +225,7 @@
             "issue": "#15",
             "requirement": "Representative workloads apply atomically against the mock document, and the cold and warm latency, the stage timings and the node counts are measured and reported rather than assumed.",
             "status": "PASS",
-            "detail": "5 workload(s) applied atomically; median apply 16ms, worst 17ms"
+            "detail": "5 workload(s) applied atomically; median apply 12ms, worst 21ms"
           },
           {
             "id": "G02",
@@ -288,7 +288,7 @@
             "issue": "#17",
             "requirement": "The same brief produces the same operations and the same structural verdict on two consecutive runs, so a failure can be reproduced.",
             "status": "PASS",
-            "detail": "39 operation(s) and 5 region(s) identical across two runs"
+            "detail": "30 operation(s) and 5 region(s) identical across two runs"
           }
         ]
       }
@@ -299,7 +299,7 @@
       "command": "npm run stress:matrix -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 741,
+      "durationMs": 751,
       "detail": "every case(s) passed",
       "output": "\n> figma-design-agent@0.3.5 stress:matrix\n> node scripts/run-stress-matrix.mjs --strict\n\nstress matrix: 24 PASS, 0 FAIL, 4 BLOCKED (28 total)\n  cases   24 passing, 0 open, 4 blocked\n  json    D:\\Desktop\\Figdes\\artifacts\\stress-matrix\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-12-report.md\n"
     },
@@ -309,7 +309,7 @@
       "command": "npm run acceptance -- --strict",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 587,
+      "durationMs": 766,
       "detail": "every acceptance case passed",
       "output": "\n> figma-design-agent@0.3.5 acceptance\n> node scripts/run-acceptance.mjs --strict\n\nacceptance: 25 PASS, 0 FAIL, 0 BLOCKED (25 total)\n  cases   17 offline, 8 live, 0 open\n  json    D:\\Desktop\\Figdes\\artifacts\\acceptance\\latest.json\n  report  D:\\Desktop\\Figdes\\docs\\issue-13-report.md\n"
     },
@@ -319,14 +319,14 @@
       "command": "npm test",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 54089,
-      "detail": "1266/1266 test(s) passed",
-      "tests": 1266,
-      "pass": 1266,
+      "durationMs": 69116,
+      "detail": "1283/1283 test(s) passed",
+      "tests": 1283,
+      "pass": 1283,
       "fail": 0,
       "skipped": 0,
       "failures": [],
-      "output": "een accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.3.5 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 725.6128\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 8.7425\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 21.1574\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 63.6932\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 31.9489\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 10.5221\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 38.1822\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 9.3275\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 15.1557\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 10.1218\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 7.5292\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 14.7456\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 0.7862\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 3.8439\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 20.0236\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1308.288\n"
+      "output": "een accepts an archetype instead of a decision\n  ok   design_runtime builds in chunks with per-chunk results\n  ok   design_runtime compiles a deck without touching Figma\n\n  components, targeting and tokens\n  ok   find_node resolves intent to an id with a reason\n  ok   find_node without a query explains itself\n  ok   set_variant switches the instance\n  ok   update_component edits through the master path\n  ok   seed_exo_system declares the canonical token set\n\n  review workflows\n  ok   score_design scores a program with evidence\n  ok   refine_screen runs a bounded fix loop\n  ok   diff_design reports structural deltas between snapshots\n\n  code, migration, health and flows\n  ok   export_code emits a React component with Tailwind classes\n  ok   migrate_to_tokens dryRun reports exact matches\n  ok   audit_components flags unused and duplicated components\n  ok   prototype_flow links frames in one transaction\n  ok   create_component_set combines members server-side\n\n  briefs, snapshots and the ship gate\n  ok   design_brief frames the work before any plan\n  ok   design_snapshot saves, lists and fetches versions\n  ok   final_qa gates a program with a checklist\n  ok   final_qa fails a screen with no focal hierarchy\n\n  session safety\n  ok   refuses to guess when the target file is ambiguous\n\n  67 checks passed\n\n\n> figma-design-agent@0.3.5 test:e2e\n> node --test tests/plugin-e2e.test.mjs\n\nTAP version 13\n# Subtest: the real plugin connects over a real socket\nok 1 - the real plugin connects over a real socket\n  ---\n  duration_ms: 842.0427\n  type: 'test'\n  ...\n# Subtest: inspect_selection round-trips through both processes\nok 2 - inspect_selection round-trips through both processes\n  ---\n  duration_ms: 10.6037\n  type: 'test'\n  ...\n# Subtest: inspect_design_system round-trips\nok 3 - inspect_design_system round-trips\n  ---\n  duration_ms: 28.0668\n  type: 'test'\n  ...\n# Subtest: a full runtime build lands in the real document\nok 4 - a full runtime build lands in the real document\n  ---\n  duration_ms: 71.4846\n  type: 'test'\n  ...\n# Subtest: a deck build lands real slides through the real plugin\nok 5 - a deck build lands real slides through the real plugin\n  ---\n  duration_ms: 29.5003\n  type: 'test'\n  ...\n# Subtest: review_design works on what was just built\nok 6 - review_design works on what was just built\n  ---\n  duration_ms: 13.058\n  type: 'test'\n  ...\n# Subtest: render_node produces an image through the real plugin\nok 7 - render_node produces an image through the real plugin\n  ---\n  duration_ms: 41.7556\n  type: 'test'\n  ...\n# Subtest: component discovery round-trips\nok 8 - component discovery round-trips\n  ---\n  duration_ms: 9.3204\n  type: 'test'\n  ...\n# Subtest: plan_screen works with no plugin involvement at all\nok 9 - plan_screen works with no plugin involvement at all\n  ---\n  duration_ms: 20.9124\n  type: 'test'\n  ...\n# Subtest: design_guard agrees with the planner about a metric screen\nok 10 - design_guard agrees with the planner about a metric screen\n  ---\n  duration_ms: 8.7946\n  type: 'test'\n  ...\n# Subtest: a destructive change is refused by the real tool\nok 11 - a destructive change is refused by the real tool\n  ---\n  duration_ms: 7.8366\n  type: 'test'\n  ...\n# Subtest: an approved destructive change is actually applied\nok 12 - an approved destructive change is actually applied\n  ---\n  duration_ms: 19.5484\n  type: 'test'\n  ...\n# Subtest: no unexpected error reached the plugin's log\nok 13 - no unexpected error reached the plugin's log\n  ---\n  duration_ms: 0.8388\n  type: 'test'\n  ...\n# Subtest: agent activity streams into the panel as tools run\nok 14 - agent activity streams into the panel as tools run\n  ---\n  duration_ms: 5.1266\n  type: 'test'\n  ...\n# Subtest: a render pushes its preview to the panel with no extra cost\nok 15 - a render pushes its preview to the panel with no extra cost\n  ---\n  duration_ms: 34.3109\n  type: 'test'\n  ...\n1..15\n# tests 15\n# suites 0\n# pass 15\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 1511.6193\n"
     },
     {
       "id": "design-benchmark",
@@ -334,7 +334,7 @@
       "command": "npm run benchmark:design",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 8426,
+      "durationMs": 10612,
       "detail": "9/9 benchmark case(s) passed",
       "passed": 9,
       "total": 9,
@@ -347,11 +347,11 @@
       "command": "node scripts/run-fidelity-gate.mjs",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 373,
+      "durationMs": 471,
       "detail": "fidelity matrix passed (0/0 test(s))",
       "tests": 0,
       "pass": 0,
-      "output": "es\n      ---\n      duration_ms: 0.3613\n      type: 'test'\n      ...\n    # Subtest: sub-floor type fails; a documented exception passes\n    ok 7 - sub-floor type fails; a documented exception passes\n      ---\n      duration_ms: 0.5574\n      type: 'test'\n      ...\n    # Subtest: placeholder copy fails and names the node\n    ok 8 - placeholder copy fails and names the node\n      ---\n      duration_ms: 0.4319\n      type: 'test'\n      ...\n    # Subtest: failing contrast fails and names the node\n    ok 9 - failing contrast fails and names the node\n      ---\n      duration_ms: 0.4793\n      type: 'test'\n      ...\n    # Subtest: a broken spacing rhythm fails\n    ok 10 - a broken spacing rhythm fails\n      ---\n      duration_ms: 0.8527\n      type: 'test'\n      ...\n    # Subtest: overflowing geometry fails and names the region\n    ok 11 - overflowing geometry fails and names the region\n      ---\n      duration_ms: 0.2807\n      type: 'test'\n      ...\n    # Subtest: blocking geometry violations fail the build\n    ok 12 - blocking geometry violations fail the build\n      ---\n      duration_ms: 0.2756\n      type: 'test'\n      ...\n    # Subtest: a hardcoded fill duplicating a declared token fails; bound fills pass\n    ok 13 - a hardcoded fill duplicating a declared token fails; bound fills pass\n      ---\n      duration_ms: 0.4645\n      type: 'test'\n      ...\n    # Subtest: a product-rule contradiction fails the build\n    ok 14 - a product-rule contradiction fails the build\n      ---\n      duration_ms: 0.2104\n      type: 'test'\n      ...\n    # Subtest: a low score fails even when every hard list is empty\n    ok 15 - a low score fails even when every hard list is empty\n      ---\n      duration_ms: 0.2889\n      type: 'test'\n      ...\n    1..15\nok 1 - the fidelity scorer\n  ---\n  duration_ms: 12.2359\n  type: 'suite'\n  ...\n# Subtest: the layout-type sweep\n    # Subtest: every composition verifies when the build keeps it\n    ok 1 - every composition verifies when the build keeps it\n      ---\n      duration_ms: 0.4617\n      type: 'test'\n      ...\n    1..1\nok 2 - the layout-type sweep\n  ---\n  duration_ms: 0.562\n  type: 'suite'\n  ...\n# Subtest: the release-gate wiring\n    # Subtest: benchmark_regression is advisory by default, blocking for release builds\n    ok 1 - benchmark_regression is advisory by default, blocking for release builds\n      ---\n      duration_ms: 1.4799\n      type: 'test'\n      ...\n    # Subtest: a release build with regressions fails; without comparison it pends\n    ok 2 - a release build with regressions fails; without comparison it pends\n      ---\n      duration_ms: 0.6012\n      type: 'test'\n      ...\n    # Subtest: PENDING only when the baseline is missing\n    ok 3 - PENDING only when the baseline is missing\n      ---\n      duration_ms: 0.7364\n      type: 'test'\n      ...\n    # Subtest: a regressed candidate blocks the release build\n    ok 4 - a regressed candidate blocks the release build\n      ---\n      duration_ms: 0.2968\n      type: 'test'\n      ...\n    # Subtest: an unevaluated candidate blocks the release build instead of pending\n    ok 5 - an unevaluated candidate blocks the release build instead of pending\n      ---\n      duration_ms: 0.2419\n      type: 'test'\n      ...\n    1..5\nok 3 - the release-gate wiring\n  ---\n  duration_ms: 3.5713\n  type: 'suite'\n  ...\n# Subtest: end to end: plan → runtime → fidelity\n    # Subtest: a consumer screen clears the contract\n    ok 1 - a consumer screen clears the contract\n      ---\n      duration_ms: 31.2545\n      type: 'test'\n      ...\n    # Subtest: an enterprise screen with connectors clears the contract\n    ok 2 - an enterprise screen with connectors clears the contract\n      ---\n      duration_ms: 11.6812\n      type: 'test'\n      ...\n    1..2\nok 4 - end to end: plan → runtime → fidelity\n  ---\n  duration_ms: 43.0583\n  type: 'suite'\n  ...\n1..4\n# tests 23\n# suites 4\n# pass 23\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 220.7607\n\nfidelity gate: PASS — 23/23 test(s) passed\n"
+      "output": "tches\n      ---\n      duration_ms: 0.4506\n      type: 'test'\n      ...\n    # Subtest: sub-floor type fails; a documented exception passes\n    ok 7 - sub-floor type fails; a documented exception passes\n      ---\n      duration_ms: 0.8061\n      type: 'test'\n      ...\n    # Subtest: placeholder copy fails and names the node\n    ok 8 - placeholder copy fails and names the node\n      ---\n      duration_ms: 0.5088\n      type: 'test'\n      ...\n    # Subtest: failing contrast fails and names the node\n    ok 9 - failing contrast fails and names the node\n      ---\n      duration_ms: 0.5352\n      type: 'test'\n      ...\n    # Subtest: a broken spacing rhythm fails\n    ok 10 - a broken spacing rhythm fails\n      ---\n      duration_ms: 0.7703\n      type: 'test'\n      ...\n    # Subtest: overflowing geometry fails and names the region\n    ok 11 - overflowing geometry fails and names the region\n      ---\n      duration_ms: 0.352\n      type: 'test'\n      ...\n    # Subtest: blocking geometry violations fail the build\n    ok 12 - blocking geometry violations fail the build\n      ---\n      duration_ms: 0.2924\n      type: 'test'\n      ...\n    # Subtest: a hardcoded fill duplicating a declared token fails; bound fills pass\n    ok 13 - a hardcoded fill duplicating a declared token fails; bound fills pass\n      ---\n      duration_ms: 0.499\n      type: 'test'\n      ...\n    # Subtest: a product-rule contradiction fails the build\n    ok 14 - a product-rule contradiction fails the build\n      ---\n      duration_ms: 0.222\n      type: 'test'\n      ...\n    # Subtest: a low score fails even when every hard list is empty\n    ok 15 - a low score fails even when every hard list is empty\n      ---\n      duration_ms: 0.2951\n      type: 'test'\n      ...\n    1..15\nok 1 - the fidelity scorer\n  ---\n  duration_ms: 13.8275\n  type: 'suite'\n  ...\n# Subtest: the layout-type sweep\n    # Subtest: every composition verifies when the build keeps it\n    ok 1 - every composition verifies when the build keeps it\n      ---\n      duration_ms: 0.4868\n      type: 'test'\n      ...\n    1..1\nok 2 - the layout-type sweep\n  ---\n  duration_ms: 0.5907\n  type: 'suite'\n  ...\n# Subtest: the release-gate wiring\n    # Subtest: benchmark_regression is advisory by default, blocking for release builds\n    ok 1 - benchmark_regression is advisory by default, blocking for release builds\n      ---\n      duration_ms: 1.4394\n      type: 'test'\n      ...\n    # Subtest: a release build with regressions fails; without comparison it pends\n    ok 2 - a release build with regressions fails; without comparison it pends\n      ---\n      duration_ms: 0.6482\n      type: 'test'\n      ...\n    # Subtest: PENDING only when the baseline is missing\n    ok 3 - PENDING only when the baseline is missing\n      ---\n      duration_ms: 0.814\n      type: 'test'\n      ...\n    # Subtest: a regressed candidate blocks the release build\n    ok 4 - a regressed candidate blocks the release build\n      ---\n      duration_ms: 0.3027\n      type: 'test'\n      ...\n    # Subtest: an unevaluated candidate blocks the release build instead of pending\n    ok 5 - an unevaluated candidate blocks the release build instead of pending\n      ---\n      duration_ms: 0.5146\n      type: 'test'\n      ...\n    1..5\nok 3 - the release-gate wiring\n  ---\n  duration_ms: 3.9998\n  type: 'suite'\n  ...\n# Subtest: end to end: plan → runtime → fidelity\n    # Subtest: a consumer screen clears the contract\n    ok 1 - a consumer screen clears the contract\n      ---\n      duration_ms: 44.6273\n      type: 'test'\n      ...\n    # Subtest: an enterprise screen with connectors clears the contract\n    ok 2 - an enterprise screen with connectors clears the contract\n      ---\n      duration_ms: 16.0704\n      type: 'test'\n      ...\n    1..2\nok 4 - end to end: plan → runtime → fidelity\n  ---\n  duration_ms: 60.9069\n  type: 'suite'\n  ...\n1..4\n# tests 23\n# suites 4\n# pass 23\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 280.7085\n\nfidelity gate: PASS — 23/23 test(s) passed\n"
     },
     {
       "id": "build-integrity",
@@ -360,11 +360,11 @@
       "status": "PASS",
       "exitCode": 0,
       "durationMs": 0,
-      "detail": "all 11 live evidence record(s) carry server and plugin build stamps that name this repository's HEAD (34b513a85780)",
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "detail": "all 11 live evidence record(s) carry server and plugin build stamps that name this repository's HEAD (dc9305428ca7)",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "compatibility": "same-commit",
-      "repoHead": "34b513a85780",
+      "repoHead": "dc9305428ca7",
       "checked": 11,
       "problems": []
     },
@@ -374,19 +374,17 @@
       "command": "npm run benchmark:live",
       "status": "PASS",
       "exitCode": 0,
-      "durationMs": 1235,
-      "detail": "the live benchmark completed (10/10 case(s) with real renders and reviews); 1 case(s) have no golden to compare against",
+      "durationMs": 1547,
+      "detail": "the live benchmark completed (10/10 case(s) with real renders and reviews)",
       "found": 10,
       "expected": 10,
       "missing": [],
       "stale": [],
       "unnamed": [],
       "differing": [],
-      "uncovered": [
-        "generic-saas-dashboard"
-      ],
+      "uncovered": [],
       "nativeStatus": "COMPLETE",
-      "output": "\n> figma-design-agent@0.3.5 benchmark:live\n> node scripts/run-live-benchmark.mjs\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\live-report.json\",\n  \"expectedCases\": 10,\n  \"foundCases\": 10,\n  \"completeCases\": 10,\n  \"missingCases\": [],\n  \"liveBenchmarkComplete\": true,\n  \"repoHead\": \"34b513a85780\",\n  \"staleCases\": [],\n  \"casesWithoutBuild\": [],\n  \"mismatchCases\": [],\n  \"nativePathBuild\": true,\n  \"visualRegression\": {\n    \"differing\": [],\n    \"uncovered\": [\n      \"generic-saas-dashboard\"\n    ]\n  },\n  \"nativePath\": {\n    \"status\": \"COMPLETE\",\n    \"createdNodes\": 5\n  }\n}\n"
+      "output": "\n> figma-design-agent@0.3.5 benchmark:live\n> node scripts/run-live-benchmark.mjs\n\n{\n  \"output\": \"D:\\\\Desktop\\\\Figdes\\\\artifacts\\\\design-benchmark\\\\live-report.json\",\n  \"expectedCases\": 10,\n  \"foundCases\": 10,\n  \"completeCases\": 10,\n  \"missingCases\": [],\n  \"liveBenchmarkComplete\": true,\n  \"repoHead\": \"dc9305428ca7\",\n  \"staleCases\": [],\n  \"casesWithoutBuild\": [],\n  \"mismatchCases\": [],\n  \"nativePathBuild\": true,\n  \"visualRegression\": {\n    \"differing\": [],\n    \"uncovered\": [],\n    \"refusalDrift\": []\n  },\n  \"nativePath\": {\n    \"status\": \"COMPLETE\",\n    \"createdNodes\": 5\n  }\n}\n"
     }
   ],
   "coverage": [

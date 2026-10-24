@@ -1,17 +1,17 @@
 {
   "caseId": "native-path-check",
-  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
+  "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
   "server": "https://figdes.onrender.com/mcp",
-  "startedAt": "2026-10-23T16:30:58.823Z",
-  "serverBuild": "34b513a85780",
-  "pluginBuild": "34b513a85780",
-  "rootId": "658:627",
+  "startedAt": "2026-10-24T05:24:29.975Z",
+  "serverBuild": "dc9305428ca7",
+  "pluginBuild": "dc9305428ca7",
+  "rootId": "675:2570",
   "createdNodeIds": [
-    "658:627",
-    "658:628",
-    "658:629",
-    "658:630",
-    "658:631"
+    "675:2570",
+    "675:2571",
+    "675:2572",
+    "675:2573",
+    "675:2574"
   ],
   "measured": {
     "canvas": {

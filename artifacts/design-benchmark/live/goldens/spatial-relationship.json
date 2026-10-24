@@ -1,7 +1,7 @@
 {
   "caseId": "spatial-relationship",
-  "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-  "createdAt": "2026-10-23T16:35:45.152Z",
+  "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+  "createdAt": "2026-10-24T05:24:37.253Z",
   "screenshotReference": "artifacts/design-benchmark/live/goldens/spatial-relationship.png",
   "policy": {
     "maxMeanDifference": 3,

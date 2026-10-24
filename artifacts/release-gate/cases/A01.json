@@ -5,10 +5,10 @@
   "requirement": "The reference screen's primary visualisation gets appropriate canvas area, the regions align intentionally, the supporting panels do not compete with the main task, and the composition does not collapse into a generic repeated-card template.",
   "issue": "#16",
   "status": "PASS",
-  "detail": "focal 'content' holds 33% of the canvas; 5 regions, 17 content calls, 2 metric card(s)",
+  "detail": "focal 'content' holds 26% of the canvas; 5 regions, 16 content calls, 0 metric card(s)",
   "raw": {
     "focal": "content",
-    "focalShare": 0.335,
+    "focalShare": 0.261,
     "regions": [
       {
         "id": "nav",
@@ -28,7 +28,7 @@
           "x": 272,
           "y": 0,
           "w": 1168,
-          "h": 72
+          "h": 142
         },
         "columns": 3
       },
@@ -37,9 +37,9 @@
         "role": "primary-visual",
         "bounds": {
           "x": 272,
-          "y": 104,
+          "y": 174,
           "w": 1168,
-          "h": 396
+          "h": 309
         },
         "columns": 1
       },
@@ -48,9 +48,9 @@
         "role": "inspector",
         "bounds": {
           "x": 272,
-          "y": 532,
+          "y": 515,
           "w": 360,
-          "h": 132
+          "h": 206
         },
         "columns": 1
       },
@@ -59,9 +59,9 @@
         "role": "secondary",
         "bounds": {
           "x": 272,
-          "y": 696,
+          "y": 753,
           "w": 1168,
-          "h": 264
+          "h": 206
         },
         "columns": 4
       }
@@ -69,8 +69,8 @@
     "gutters": [
       32
     ],
-    "metricCards": 2,
-    "contentCalls": 17,
+    "metricCards": 0,
+    "contentCalls": 16,
     "applicable": true
   }
 }

@@ -1,0 +1,23 @@
+{
+  "caseId": "generic-saas-dashboard",
+  "guardViolations": [
+    {
+      "rule": "product",
+      "message": "exo.no-generic-saas: contradicts: Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. [maxComponents=3]"
+    }
+  ],
+  "guardFingerprint": {
+    "count": 1,
+    "rules": [
+      "product"
+    ]
+  },
+  "signature": {
+    "reviewedNodes": null,
+    "findingCount": null,
+    "regionNames": []
+  },
+  "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+  "createdAt": "2026-10-24T05:24:36.904Z",
+  "note": "A refusal regression reference, not an approval. It records the refusal a declared negative control received, so a later run can be told that the refusal changed."
+}

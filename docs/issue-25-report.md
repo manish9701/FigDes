@@ -1,7 +1,9 @@
 # Issue #25 close-out — live EXO topology stress test
 
-Generated 2026-10-23. **Tested commit `34b513a857808a42b9013892efe24acab4bd5a8d` (main).**
-Live plugin build `34b513a85780`, live server build `34b513a85780`, compatibility `same-commit` (verified via `figma_status`, `buildSource: live`) immediately before the final evidence run.
+Generated 2026-10-24. **Tested commit `dc9305428ca7395ab7e3f4f153406e0dcc8b61a5` (main).**
+Live plugin build `dc9305428ca7`, live server build `dc9305428ca7`, compatibility `same-commit` (verified via `figma_status`, `buildSource: live`) immediately before the final evidence run.
+
+**Close-out note (2026-10-24):** the remaining list from the first close-out has been implemented and re-verified — honest state pills (the stress frame reads `cluster health — Degraded` on its own pill and `States — ready · degraded · offline` on the strip), no empty instruments, one spacing rhythm at the source, refusal-golden coverage for the negative control, sparse-band redistribution, and the plan-side content-fit pass that also fixed the #28 focal refusals (2 → 0). Full battery: 1283/1283 tests, offline benchmark 9/9, `tsc` clean. Vision evidence for this build: `vision-phase-b-dc93054.json`; the final release-gate run `dc930542-2026-10-24T05-45-11-189Z` is VERDICT: PASS with all 8 groups PASS. Reliability defects observed during the cycle (a hung rollback ledger entry and a runner arg-race) are listed at the bottom as new, separate items.
 
 ## Verdict
 
@@ -53,13 +55,15 @@ Every evidence frame is a clearly-marked disposable fixture (`FigDes Live — <c
 - Vision pass: `artifacts/design-benchmark/live/vision-phase-b-fresh.json` — every case judged by direct PNG inspection. Result: **all structurally clean** (no collisions, no clipping, no off-canvas, real content, readable labels); consistently **WATCH on sparsity** (the minimal fixture programs hug the top-left, leaving 60–90% empty canvas — recorded, not hidden), plus two named stress-frame findings: a red `ready` state pill beside a brief value of `Degraded`, and support metrics rendering blank dashes.
 - Goldens: the three genuinely-changed cases (`exo-compute-topology`, `hard-stress-test`, `spatial-relationship`) were re-stored as reviewed references through the explicit-approval path (`node scripts/update-live-goldens.mjs --approve`), per the repo's golden policy.
 
-## Consolidated remaining failures (honest list)
+## Consolidated remaining failures (honest list, after the follow-up run)
 
-1. **Composition (scored 5/10 in the issue's evidence)** — the fixture screens remain under-composed: sparse top-left clustering with large empty bands. This is fixture minimalism plus real planner composition weakness; it is recorded in `vision-phase-b-fresh.json` and is the top remaining quality item, not a pass.
-2. **The stress frame's `ready` state pill contradicts its stated `Degraded` cluster value** — the state-marker source (state expansion) needs to derive from the brief's value, not the default state.
-3. **Support metrics that lack brief values render blank dashes** — they should be omitted or carry the disclosure rather than empty instrumentation.
-4. **`generic-saas-dashboard` has no golden to compare against** (it is guard-refused evidence; its grading is the refusal itself — a golden reference for the refusal record would complete live coverage).
-5. **`type.space.one-rhythm` (high)** — the deployment-fit plan stacks three sibling-gap values (8/16/24px); respacing or a stated reason per break is still owed.
-6. **`plan-matches-build` drift (medium, advisory)** — planned vs built geometry differs in three regions (the build grows regions to fit content); the honest receipt reports it rather than hiding it.
+1. **Composition (scored 5/10 in the issue's evidence)** — improved but not closed: the fixtures are now vertically balanced (redistribution live), and the stress frame's composition scored 6/10 in `vision-phase-b-dc93054.json`, but the screens remain under-composed relative to their canvas. This is fixture minimalism plus real planner composition weakness; still the top remaining quality item, recorded, not a pass.
+2. **State-strip tones** — the strip pill carries a single reddish tone; per-state honest tones (ready→neutral, degraded→warning, offline→muted) are runtime-side (the interpreter's state tables) and remain owed.
+3. **`generic-saas-dashboard` live golden** — now covered by a refusal golden (`goldens/generic-saas-dashboard.refusal.json`, fingerprint + signature compared, drift reported); the stale pre-guard PNG reference is left untouched and unused by the refusal branch.
+4. ~~`type.space.one-rhythm` (high)~~ — resolved at the source: sibling-region gaps default to ONE rhythm step (grid × 2), a region keeps another step only when its `because` states a spacing rationale; the criteria audit exempts explained regions and still fails unstated odd gaps.
+5. **`plan-matches-build` drift (medium, advisory)** — fixed at the root by the plan-side content-fit pass (plan bounds == built bounds on the failing briefs); the honest receipt keeps reporting any residual drift rather than hiding it.
+6. **NEW reliability defects observed during the cycle** (separate from #25's scope, recorded here for consolidation):
+   - a cancelled `create_design` transaction's rollback hung: the document was left clean, but the ledger entry stayed `applying` for 5+ minutes and never reached a terminal state;
+   - the live loop's arg parsing swallowed unknown `--*` flags as case ids (`--only x` ran nothing), and two concurrent loop runs raced on the same case record.
 
 Issues #17 (release gauntlet) and #23 (pipeline requirements) were exercised through their existing runners here — no duplicate harness was created, and neither is closed by this fixture.

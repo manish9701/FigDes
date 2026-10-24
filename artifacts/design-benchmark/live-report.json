@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-23T16:36:59.412Z",
+  "generatedAt": "2026-10-24T05:46:34.404Z",
   "runner": "FigDes live benchmark validator",
   "mode": "live-plugin",
   "expectedCases": 10,
@@ -12,101 +12,101 @@
   "buildDrift": [
     {
       "caseId": "data-heavy-workspace",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "editorial-product-page",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-compute-topology",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-configuration",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-enterprise-workspace",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-model-detail",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "exo-runtime-monitoring",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "generic-saas-dashboard",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "hard-stress-test",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     },
     {
       "caseId": "spatial-relationship",
-      "measuredAtCommit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-      "repoHead": "34b513a857808a42b9013892efe24acab4bd5a8d",
+      "measuredAtCommit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+      "repoHead": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
       "stale": false,
-      "serverBuild": "34b513a85780",
-      "pluginBuild": "34b513a85780",
+      "serverBuild": "dc9305428ca7",
+      "pluginBuild": "dc9305428ca7",
       "buildNamed": true,
       "note": null
     }
@@ -122,7 +122,7 @@
     "status": "COMPLETE",
     "reportedStatus": "COMPLETE",
     "cleanupVerified": true,
-    "rootId": "658:627",
+    "rootId": "675:2570",
     "createdNodes": 5,
     "measured": {
       "canvas": {
@@ -140,8 +140,8 @@
       "framesAfter": 0,
       "leftBehind": 0
     },
-    "serverBuild": "34b513a85780",
-    "pluginBuild": "34b513a85780",
+    "serverBuild": "dc9305428ca7",
+    "pluginBuild": "dc9305428ca7",
     "note": "The native path ran against the real Plugin API and the frame it created was removed again. A check that leaves debris behind is not a check."
   },
   "visualRegression": {
@@ -187,9 +187,9 @@
         "measured": {
           "width": 1024,
           "height": 640,
-          "meanDifference": 0,
+          "meanDifference": 0.001,
           "changedPixelShare": 0,
-          "maxDifference": 0
+          "maxDifference": 15
         },
         "reason": null
       },
@@ -251,8 +251,11 @@
       },
       {
         "caseId": "generic-saas-dashboard",
-        "verdict": "no-render",
-        "reason": "the case has no screenshot to compare"
+        "verdict": "match",
+        "refusalGolden": true,
+        "guardDrift": false,
+        "structureChanged": false,
+        "reason": null
       },
       {
         "caseId": "hard-stress-test",
@@ -284,10 +287,9 @@
       }
     ],
     "differing": [],
-    "uncovered": [
-      "generic-saas-dashboard"
-    ],
-    "note": "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it."
+    "uncovered": [],
+    "refusalDrift": [],
+    "note": "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it. A declared negative control has no PNG — its golden is its recorded refusal (goldens/<id>.refusal.json), and a refusal that stops matching that reference is reported under refusalDrift."
   },
   "stressFrame": {
     "caseId": "hard-stress-test",
@@ -345,9 +347,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -357,9 +359,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -369,9 +371,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -381,9 +383,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -393,9 +395,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -405,9 +407,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -417,9 +419,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -435,9 +437,9 @@
         }
       ],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -447,9 +449,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     },
@@ -459,9 +461,9 @@
       "status": "COMPLETE",
       "missing": [],
       "build": {
-        "commit": "34b513a857808a42b9013892efe24acab4bd5a8d",
-        "serverBuild": "34b513a85780",
-        "pluginBuild": "34b513a85780",
+        "commit": "dc9305428ca7395ab7e3f4f153406e0dcc8b61a5",
+        "serverBuild": "dc9305428ca7",
+        "pluginBuild": "dc9305428ca7",
         "note": null
       }
     }

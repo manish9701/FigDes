@@ -729,6 +729,11 @@ export async function planScreenTool(session: Session | null, rawArgs: unknown):
     ...(session?.fileName !== undefined ? { fileName: session.fileName } : {}),
     ...(args.primaryDecision !== undefined ? { primaryDecision: args.primaryDecision } : {}),
     ...(program !== undefined && program !== null ? { program } : {}),
+    // Issue #30 (workflow contract) — the registration retains the issued
+    // payload too, so a build that arrives carrying ONLY the planId can
+    // inherit the plan (regions, style, constraints, composition contract)
+    // instead of wearing the id as a badge with nothing behind it.
+    plan: result,
   });
   result["planId"] = planId;
   if (program !== null && typeof program === "object" && !Array.isArray(program)) {

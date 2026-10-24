@@ -24,6 +24,9 @@ import { runGuard, snapshotFromIR } from "../memory/guard";
 import { defaultRules } from "../memory/rules-exo";
 import { assessIRIntelligence, assessRuntimeIntelligence, planlessScreenRefusal, programRegionCount } from "../design/intelligence-gate";
 import { recordPlanlessScreenRefusal, recordProvenanceWaiver } from "../metrics";
+import { contentRevision } from "../design/quality/revision";
+import { checkCapabilityTruth } from "../memory/capability-truth";
+import { resolvePlan } from "../plan/registry";
 import { inferComposition } from "./layout";
 import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
@@ -272,10 +275,17 @@ export function runtimeCatalogue() {
  * - an explicit `visualIntent.style` always wins;
  * - the choice is deterministic, so the same program rebuilds identically.
  */
-export function applyAutoArtDirection(program: unknown): { program: unknown; direction: ReturnType<typeof inferArtDirection> } {
+/**
+ * @param opts.fromPlan — the program's decisions come from a plan_screen plan
+ *   (issue #30): already art-directed by the planner, so the generic fallback
+ *   direction must not be bolted onto it. The old signature is preserved for
+ *   callers that pass no options.
+ */
+export function applyAutoArtDirection(program: unknown, opts?: { fromPlan?: boolean }): { program: unknown; direction: ReturnType<typeof inferArtDirection> } {
   if (program === null || typeof program !== "object" || Array.isArray(program)) {
     return { program, direction: null };
   }
+  if (opts?.fromPlan === true) return { program, direction: null };
   const p = program as Record<string, unknown>;
   // A plan already carries the planner's art direction; never double-direct.
   if (p["plan"] !== undefined) return { program, direction: null };
@@ -373,6 +383,113 @@ export function runtimePreflightContext(
   };
 }
 
+/**
+ * Issue #30 (workflow contract) — plan handoff that carries the plan.
+ *
+ * A program that arrived with ONLY a planId used to prove just "a plan
+ * exists": the registry kept a digest, so regions, style, constraints and the
+ * composition contract all had to be re-stated by the caller — the exact
+ * context loss the handoff was blamed for. The registry now retains the
+ * issued payload, so:
+ *
+ * - a program with a resolvable planId but no own regions inherits the whole
+ *   plan (hydrated) — the same channel an inline `program.plan` uses, so
+ *   regions/visualIntent/compositionContract all flow from the plan without
+ *   the caller re-stating anything;
+ * - a program with its own regions and a resolvable planId gets the plan's
+ *   visualIntent backfilled ONLY when it declares none (the caller's own
+ *   intent always wins), so the plan's manner is kept while its geometry is
+ *   not imposed;
+ * - a program carrying a planId the server never issued (and neither an
+ *   inline plan nor regions) is left as-is — runRuntimeTool refuses it: an
+ *   invented id is exactly what a model that skipped plan_screen mints, and
+ *   provenance fails closed.
+ */
+export function hydratePlanFromRegistry(
+  program: unknown,
+  fileKey: string | null,
+): { program: unknown; planId: string | null; resolved: boolean; planStored: boolean; hydrated: boolean; styleBackfilled: boolean } {
+  const bare = (planId: string | null, resolved: boolean, planStored: boolean) => ({
+    program,
+    planId,
+    resolved,
+    planStored,
+    hydrated: false,
+    styleBackfilled: false,
+  });
+  if (program === null || typeof program !== "object" || Array.isArray(program)) return bare(null, false, false);
+  const p = program as Record<string, unknown>;
+  const inline = p["plan"];
+  const planId =
+    typeof p["planId"] === "string"
+      ? (p["planId"] as string)
+      : inline !== null && typeof inline === "object" && !Array.isArray(inline) && typeof (inline as Record<string, unknown>)["planId"] === "string"
+        ? ((inline as Record<string, unknown>)["planId"] as string)
+        : null;
+  if (planId === null) return bare(null, false, false);
+  const registered = resolvePlan(planId, fileKey);
+  if (registered === null) return bare(planId, false, false);
+  const issuedPlan = registered.plan !== null && typeof registered.plan === "object" && !Array.isArray(registered.plan) ? registered.plan : null;
+  let next = program;
+  let hydrated = false;
+  let styleBackfilled = false;
+  const hasOwnRegions = Array.isArray(p["regions"]) && (p["regions"] as unknown[]).length > 0;
+  if (issuedPlan !== null && p["plan"] === undefined && !hasOwnRegions) {
+    next = { ...p, plan: issuedPlan };
+    hydrated = true;
+  } else if (issuedPlan !== null && p["plan"] === undefined && hasOwnRegions) {
+    const issuedProgram =
+      registered.program !== null && typeof registered.program === "object" && !Array.isArray(registered.program)
+        ? (registered.program as Record<string, unknown>)
+        : null;
+    const issuedIntent =
+      issuedProgram !== null && issuedProgram["visualIntent"] !== null && typeof issuedProgram["visualIntent"] === "object" && !Array.isArray(issuedProgram["visualIntent"])
+        ? (issuedProgram["visualIntent"] as Record<string, unknown>)
+        : null;
+    // Only fill what the caller did not state: a program's own intent wins.
+    if (issuedIntent !== null && p["visualIntent"] === undefined) {
+      next = { ...p, visualIntent: issuedIntent };
+      styleBackfilled = true;
+    }
+  }
+  return { program: next, planId, resolved: true, planStored: issuedPlan !== null, hydrated, styleBackfilled };
+}
+
+/** Issue #30: true when a capability-truth verdict refuses a live build. */
+function capabilityTrustBlocks(capabilityTruth: ReturnType<typeof checkCapabilityTruth> | null): boolean {
+  return capabilityTruth?.verdict === "FAIL";
+}
+
+/**
+ * Issue #30 — the post-build worksheet. Build success used to close the
+ * payload with nothing demanded: no render, no critique, no verification —
+ * so a weak client stopped at the build, and the screen's only sighting of
+ * Figma was the compile's own plan. The worksheet names the exact follow-ups
+ * (with the created node id) and states the rule plainly: "built" is not
+ * "verified" until the rendered output has been looked at and the
+ * revision-bound final gate has passed.
+ */
+function verificationWorksheet(createdRoot: string | null): {
+  verification: { status: string; requirement: string; because: string; next: string[]; rule: string };
+} {
+  const nodeRef = createdRoot !== null ? createdRoot : "the created screen frame";
+  return {
+    verification: {
+      status: "built-not-verified",
+      requirement: "render → critique → repair → verify",
+      because:
+        "The screen is committed to Figma, but nothing yet proves it is visible as designed: no render has been inspected, no critique has run, nothing was repaired, and no final gate has passed.",
+      next: [
+        `1. render_design { nodeId: "${nodeRef}", detail: "low" } — the render evidence. Judge hierarchy, spacing, alignment, typography, contrast, density and composition against the real image, not the compile's plan.`,
+        `2. review_design { target: { nodeId: "${nodeRef}" } } — the free structural checks (overlap, clipping, bounds) before spending a render.`,
+        `3. critique_visual on that render — visual findings tied to specific regions; apply targeted repairs (modify_design), or let refine_screen run the bounded repair loop server-side until the weaknesses clear.`,
+        `4. final_qa { program: <this program>, nodeId: "${nodeRef}" } — the revision-bound final gate. Do not call the screen done without its PASS: the gate refuses verdicts whose render evidence is missing or stale.`,
+      ],
+      rule: "Report the real outcome and the remaining failures, not a passing claim: build success alone is not visual success, and a screen nobody has rendered has not been seen.",
+    },
+  };
+}
+
 export async function runRuntimeTool(
   session: Session | null,
   args: unknown,
@@ -381,7 +498,47 @@ export async function runRuntimeTool(
   const parsed = RuntimeArgs.parse(args);
   const { dryRun, description, transactionId, approved, reason, chunked } = parsed;
 
-  const { program, direction } = applyAutoArtDirection(parsed.program);
+  /**
+   * Issue #30 — the plan travels WITH its build. Hydration runs before
+   * anything reads the program: a planId-only build inherits the issued plan
+   * here, so every downstream gate (intelligence, planless, compile, handoff)
+   * sees the inherited program, not a bare id. The caller's own regions and
+   * own visualIntent are never overwritten — backfill is for fields the
+   * caller did not state.
+   */
+  const provenance = hydratePlanFromRegistry(parsed.program, session?.fileKey ?? null);
+  const program = provenance.program;
+
+  // A bare planId that resolves to nothing is a badge with no plan behind it —
+  // exactly what a model that skipped plan_screen mints. Refuse before any
+  // compile; fail closed, name the fix.
+  const programRecord = program !== null && typeof program === "object" && !Array.isArray(program) ? (program as Record<string, unknown>) : null;
+  const carriesOwnRegions = programRecord !== null && Array.isArray(programRecord["regions"]) && (programRecord["regions"] as unknown[]).length > 0;
+  const carriesInlinePlan = programRecord !== null && programRecord["plan"] !== undefined;
+  const bareUnresolvedPlan =
+    provenance.planId !== null && (!provenance.resolved || !provenance.planStored) && !carriesOwnRegions && !carriesInlinePlan;
+  if (bareUnresolvedPlan) {
+    return {
+      status: "refused",
+      refusedBy: "plan-handoff",
+      planRefused: true,
+      problems: [
+        provenance.resolved
+          ? `The program carries planId '${provenance.planId}', and the registry holds only a digest for it — no issued payload was retained (registered by an older build).`
+          : `The program carries planId '${provenance.planId}', which resolves to nothing this server issued (invented, evicted, or issued for another file).`,
+      ],
+      howToProceed:
+        "A planId alone is provenance only when the registry can produce the plan it was attached to. " +
+        "Re-run plan_screen for this screen and build from its result.program (which carries the planId AND regions, style and the composition contract), " +
+        "or send the actual regions you intend to build.",
+    };
+  }
+
+  const { program: styledProgram, direction } = applyAutoArtDirection(program, {
+    // A plan-issued build is already art-directed by the planner: the generic
+    // auto fallback must never bolt a style preset onto it (issue #30).
+    fromPlan: provenance.resolved,
+  });
 
   // Issue #24 — the intelligence gate. A program that carries no plan_screen
   // plan and declares no visualIntent.style bypasses decision classification,
@@ -389,7 +546,7 @@ export async function runRuntimeTool(
   // now it is a first-class verdict on the payload (`intelligence.applied`)
   // with a warning naming the fix. The build still proceeds on the auto
   // art-direction fallback — disclosure, not a block.
-  const intelligence = assessRuntimeIntelligence(parsed.program, {
+  const intelligence = assessRuntimeIntelligence(program, {
     ...(direction !== null ? { autoStyle: direction.style } : {}),
     fileKey: session?.fileKey ?? null,
   });
@@ -400,7 +557,7 @@ export async function runRuntimeTool(
   // generic, mediocre screens get made. Small builds (one region — a card, a
   // panel) keep the fallback, dry runs stay open, and an approved+reason
   // waiver still dispatches this one call — counted in the metrics.
-  const regionCount = programRegionCount(parsed.program);
+  const regionCount = programRegionCount(program);
   if (!intelligence.applied && regionCount >= PLANDLESS_SCREEN_MIN_REGIONS && dryRun !== true) {
     if (approved === true && typeof reason === "string" && reason.trim().length > 0) {
       recordProvenanceWaiver();
@@ -425,7 +582,7 @@ export async function runRuntimeTool(
   // so a recorded rule is enforced during generation, not only at final review.
   const { memory: projectMemory } = loadMemory(projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined));
   const rules = effectiveRules(projectMemory);
-  const firstPass = executeRuntime(program, { rules });
+  const firstPass = executeRuntime(styledProgram, { rules });
   let compiled = firstPass;
   let measuredCount = 0;
   // Hoisted so the dispatch-time preflight context can carry the measurements
@@ -438,11 +595,11 @@ export async function runRuntimeTool(
     // Issue #25 RC1: the first pass's operations are handed to the measurement
     // so text emitted by primitives (deviceNode labels, statusPills, connector
     // labels, metrics) is measured too — not just direct `fn:"text"` calls.
-    const measured = await measureProgramText(session, program, widths, firstPass.operations as unknown[]);
+    const measured = await measureProgramText(session, styledProgram, widths, firstPass.operations as unknown[]);
     if (measured.metrics.size > 0) {
       measuredCount = measured.metrics.size;
       measuredMetrics = measured.metrics;
-      compiled = executeRuntime(program, { textMetrics: measured.metrics, rules });
+      compiled = executeRuntime(styledProgram, { textMetrics: measured.metrics, rules });
     }
   }
 
@@ -450,6 +607,13 @@ export async function runRuntimeTool(
   if (compiled.warnings.length > 0) {
     console.log(`[runtime] ${compiled.warnings.length} warning(s): ${compiled.warnings.join("; ")}`);
   }
+
+  /**
+   * Issue #30 — the dry-run evidence ledger keys on the caller's program
+   * fingerprint, so a later live call of the SAME program can be gated by what
+   * its dry run actually reported instead of being re-derived blind.
+   */
+  const programFingerprint = contentRevision(parsed.program);
 
   const advisories = reuseAdvisory(compiled.operations as Array<Record<string, unknown>>);
   /**
@@ -480,6 +644,23 @@ export async function runRuntimeTool(
    * the payload and the score can never disagree about what was built.
    */
   const appliedComposition = inferComposition(compiled.ir.regions);
+
+  /**
+   * Issue #30 — capability truth at build time. `checkCapabilityTruth` used to
+   * run only in design_guard and the pipeline's final guard, so a design_runtime
+   * build could present capabilities the product cannot back ("SSO available"
+   * with no Proposed/Planned marker, an unpinned fit verdict) and no gate saw
+   * it on the way past. Texts and layer names come from the same guard
+   * snapshot the build guard uses; a FAIL verdict refuses the live build
+   * below, exactly like a geometry or guard failure.
+   */
+  let capabilityTruth: ReturnType<typeof checkCapabilityTruth> | null = null;
+  try {
+    const snapshot = snapshotFromIR(compiled.ir, { composition: appliedComposition });
+    capabilityTruth = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });
+  } catch {
+    capabilityTruth = null; // never a crash: absent evidence reads as INDETERMINATE downstream
+  }
   /**
    * Issue #28 — the composition handoff receipt.
    *
@@ -621,13 +802,68 @@ export async function runRuntimeTool(
      * anything was left to a human judgement, never PASS.
      */
     productGuard: compiled.productGuard,
+    /**
+     * Issue #30 — plan provenance, stated on the payload: which plan this
+     * build inherited, whether it resolved, and whether the planner's intent
+     * was backfilled because the caller stated none. Traceability without
+     * relying on the caller's memory of the conversation.
+     */
+    ...(provenance.planId !== null
+      ? {
+          provenance: {
+            planId: provenance.planId,
+            resolved: provenance.resolved,
+            hydrated: provenance.hydrated,
+            ...(provenance.styleBackfilled ? { styleBackfilled: true } : {}),
+          },
+        }
+      : {}),
+    /**
+     * Issue #30 — capability truth on the same payload as the guard: an EXO
+     * claim the product cannot back is named here even on dry runs, and a
+     * FAIL verdict refuses the live build below.
+     */
+    ...(capabilityTruth !== null && capabilityTruth.verdict !== "PASS"
+      ? {
+          capabilityTruth: {
+            verdict: capabilityTruth.verdict,
+            findings: capabilityTruth.findings.map((f) => ({ id: f.id, severity: f.severity, message: f.message })),
+          },
+        }
+      : {}),
     operations: compiled.operations,
   };
 
   // A dry run compiles and validates entirely inside the server, so it must not
   // require a live plugin connection. That makes it useful while designing a
   // screen with Figma closed.
-  if (dryRun) return payload;
+  if (dryRun) {
+    /**
+     * Issue #30 — record what THIS dry run actually reported against the
+     * program fingerprint. The live build of the same program is then gated by
+     * this evidence: a not-applicable, completed-with-violations, handoff-
+     * failed or capability-FAIL dry run cannot be patched over by simply
+     * re-sending dryRun:false — the refusal state is remembered, and the
+     * caller must fix and re-run the dry run (or send a changed program).
+     */
+    const blocked = !compiled.applicable || handoffFailed || capabilityTrustBlocks(capabilityTruth);
+    const dryProblems: string[] = [
+      ...(!compiled.applicable ? compiled.inapplicableReasons.slice(0, 6) : []),
+      ...(handoffFailed ? (handoff?.findings.filter((f) => f.severity === "blocking").map((f) => f.summary) ?? []).slice(0, 4) : []),
+      ...(!blocked && compiled.violations.length > 0 ? compiled.violations.slice(0, 4).map((v) => String(v)) : []),
+      ...(capabilityTrustBlocks(capabilityTruth) ? capabilityTruth!.findings.filter((f) => f.severity === "fail").map((f) => `${f.message} Fix: ${f.fix}`) : []),
+    ].slice(0, 8);
+    const jobs = registry?.jobs as unknown as { recordDryRun?: (fp: string, record: unknown) => void } | undefined;
+    if (typeof jobs?.recordDryRun === "function") {
+      jobs.recordDryRun(programFingerprint, {
+        status: blocked ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
+        applicable: !blocked,
+        problems: dryProblems,
+        at: Date.now(),
+      });
+    }
+    return payload;
+  }
 
   // A non-applicable plan is refused before it reaches Figma. Building it would
   // draw regions outside the canvas and connectors to nowhere while reporting
@@ -655,6 +891,26 @@ export async function runRuntimeTool(
     throw new Error(
       "A live Figma plugin is required to build. Open the Design Agent plugin in Figma, or pass dryRun=true to compile without connecting.",
     );
+  }
+
+  /**
+   * Issue #30 — a capability-truth FAIL refuses the live build exactly like a
+   * geometry failure: the screen would present something the product cannot
+   * back, and no amount of visual polish repairs that. The findings name the
+   * claim and the honest fix on the payload.
+   */
+  if (capabilityTrustBlocks(capabilityTruth)) {
+    const fails = capabilityTruth!.findings.filter((f) => f.severity === "fail");
+    return {
+      ...payload,
+      status: "refused",
+      refusedBy: "capability-truth",
+      howToProceed:
+        "This plan was not built: the screen presents capability claims the EXO product cannot back (capability truth: FAIL). " +
+        "Mark every named claim visibly as Proposed/Planned/Estimate beside an uncertainty marker the screen itself carries, or state only confirmed capabilities. " +
+        "Re-run with dryRun:true to inspect the operations without committing.",
+      problems: fails.map((f) => `${f.message} Fix: ${f.fix}`),
+    };
   }
 
   // Auto-placement: the compiler puts every root frame at the origin, so
@@ -709,6 +965,30 @@ export async function runRuntimeTool(
     ...(reason !== undefined ? { reason } : {}),
   };
 
+  /**
+   * Issue #30 — the dry-run evidence gate. If THIS exact program already had a
+   * dry run and it reported anything other than a clean completion
+   * (not-applicable, completed-with-violations, capability FAIL), the live
+   * build is refused: the caller fixes the named problems and re-runs the dry
+   * run until it completes cleanly — or sends a changed program, which changes
+   * the fingerprint. A previously-unresolved dry run can no longer be patched
+   * over by re-sending dryRun:false.
+   */
+  const dryJobs = registry?.jobs as unknown as { lastDryRun?: (fp: string) => { status?: string; problems?: string[] } | undefined } | undefined;
+  const dryEvidence = typeof dryJobs?.lastDryRun === "function" ? dryJobs.lastDryRun(programFingerprint) : undefined;
+  if (dryEvidence !== undefined && dryEvidence.status !== undefined && dryEvidence.status !== "completed") {
+    return {
+      ...payload,
+      ...(placement !== null ? { placement } : {}),
+      status: "refused",
+      refusedBy: "dry-run-evidence",
+      problems: dryEvidence.problems ?? ["the recorded dry run did not complete cleanly"],
+      howToProceed:
+        `A dry run of THIS build already reported '${dryEvidence.status}', and a live build is not dispatched over failed or unresolved validation. ` +
+        `Fix the named problems, re-run with dryRun:true until it completes cleanly, then apply. A changed program gets a fresh gate (the gate keys on the program fingerprint).`,
+    };
+  }
+
   if (chunked === true || (chunked !== false && compiled.operations.length > CHUNK_SIZE * 2)) {
     // Auto-chunk large programs: a single 300-op transaction holds the socket
     // silent for a minute+ and risks losing everything to one bad op. Chunked
@@ -731,7 +1011,7 @@ export async function runRuntimeTool(
         completed: false,
       };
     }
-    const built = await runChunked(session, registry, compiled.operations, description, preflightContext, dispatchScoreGuard);
+    const built = await runChunked(session, registry, compiled.operations, description, preflightContext, dispatchScoreGuard, provenance.planId ?? undefined);
     // A blocking preflight verdict comes back as a structured refusal: nothing
     // built, no chunk sent, plan inspectable for repair.
     if (built.refusal !== undefined) {
@@ -744,6 +1024,7 @@ export async function runRuntimeTool(
       autoChunked: chunked !== true,
       status: built.completed ? payload.status : "completed-with-failed-chunks",
       chunks: built.chunks,
+      ...verificationWorksheet(null),
     };
   }
 
@@ -777,15 +1058,30 @@ export async function runRuntimeTool(
   // Issue #26: the dispatch also carries the score/guard evidence collected
   // above, so a FAIL verdict (or critical weak spots) refuses the apply at
   // the transaction edge unless waived with approved:true plus a reason.
+  //
+  // Issue #30: the dispatch records the plan provenance on the ledger, so
+  // the plan_screen planId → the transaction that built from it is a real
+  // chain instead of living only in the caller's memory.
   const transaction = await dispatchTransaction(registry, session, "create_design", {
     description: description ?? "Design runtime execution",
     operations: compiled.operations,
     ...(transactionId !== undefined ? { transactionId } : {}),
     preflight: preflightContext,
     scoreGuard: dispatchScoreGuard,
+    ...(provenance.planId !== null ? { planId: provenance.planId } : {}),
   });
 
-  return { ...payload, ...(placement !== null ? { placement } : {}), transaction };
+  const createdRoot =
+    transaction.status === "success" && transaction.createdNodes.length > 0 && typeof transaction.createdNodes[0]?.figmaNodeId === "string"
+      ? transaction.createdNodes[0].figmaNodeId
+      : null;
+
+  return {
+    ...payload,
+    ...(placement !== null ? { placement } : {}),
+    transaction,
+    ...verificationWorksheet(createdRoot),
+  };
 }
 
 /**
@@ -943,6 +1239,8 @@ export async function runChunked(
   description: string | undefined,
   preflight?: PreflightContext,
   scoreGuard?: ScoreGuardEvidence,
+  /** Issue #30: plan provenance recorded on every chunk's ledger entry. */
+  planId?: string,
 ): Promise<ChunkedBuild> {
   const chunks: ChunkedBuild["chunks"] = [];
 
@@ -1006,6 +1304,7 @@ export async function runChunked(
         transactionId,
         preflight: chunkPreflight,
         ...(scoreGuard !== undefined ? { scoreGuard } : {}),
+        ...(planId !== undefined ? { planId } : {}),
       });
     } catch (err) {
       // The dispatcher refuses failed chunks by throwing; the chunked contract

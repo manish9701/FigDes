@@ -594,6 +594,22 @@ export class Session {
  * report the correct job state and resume or safely retry without duplicating
  * created nodes.
  */
+
+/**
+ * Issue #30 — a stored dry-run verdict, keyed by program fingerprint.
+ *
+ * `status` uses the payload's own status vocabulary ("completed",
+ * "completed-with-violations", "not-applicable"); `problems` carries the
+ * first named causes so the evidence gate can quote what went wrong instead
+ * of a bare count.
+ */
+export interface DryRunRecord {
+  status: string;
+  applicable: boolean;
+  problems: string[];
+  at: number;
+}
+
 export class JobLedger {
   private readonly jobs = new Map<string, JobRecord>();
   /** Completed transaction results for idempotent retry (bounded). */
@@ -736,7 +752,7 @@ export class JobLedger {
     }
   }
 
-  begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string }): JobRecord {
+  begin(input: { transactionId: string; tool: string; session: Session; operationCount: number; requestId?: string; planId?: string }): JobRecord {
     // A re-dispatch of the same id is a new attempt. Late results belonging to
     // the previous one must not be able to overwrite this attempt's state, so
     // the counter is monotonic across attempts rather than reset per record.
@@ -754,6 +770,10 @@ export class JobLedger {
       attempt,
       updatedAt: Date.now(),
       ...(input.requestId ? { requestId: input.requestId } : {}),
+      // Issue #30: the plan provenance travels with the job, so the ledger
+      // answers "which plan did this screen come from" instead of only the
+      // caller being able to assert it.
+      ...(input.planId !== undefined ? { planId: input.planId } : {}),
     };
     this.jobs.set(input.transactionId, rec);
     this.order.push(input.transactionId);
@@ -780,6 +800,41 @@ export class JobLedger {
   /** Whether a transaction id had a ledger record that was since evicted. */
   wasEvicted(transactionId: string): boolean {
     return this.evicted.has(transactionId);
+  }
+
+  /**
+   * Issue #30 — what each program fingerprint's most recent dry run reported.
+   *
+   * The dry-run evidence gate in design_runtime keys on this: the live build
+   * of a program whose dry run reported not-applicable, completed-with-
+   * violations or a capability FAIL is refused, and the caller must fix and
+   * re-run the dry run (or send a changed program — a new fingerprint) before
+   * anything dispatches. Without a stored verdict, re-sending the identical
+   * program with dryRun:false silently skipped past the failure the previous
+   * run had proven.
+   *
+   * In-memory only, bounded like the job window: a server restart clears it,
+   * which fails open exactly once — after a restart, never mid-session.
+   */
+  private dryRuns = new Map<string, DryRunRecord>();
+  private dryRunOrder: string[] = [];
+
+  recordDryRun(fingerprint: string, record: DryRunRecord): void {
+    if (this.dryRuns.has(fingerprint)) {
+      // Overwrite in place to keep insertion (eviction) order stable.
+      this.dryRunOrder = this.dryRunOrder.filter((f) => f !== fingerprint);
+    }
+    this.dryRunOrder.push(fingerprint);
+    this.dryRuns.set(fingerprint, record);
+    if (this.dryRunOrder.length > 100) {
+      const drop = this.dryRunOrder.splice(0, this.dryRunOrder.length - 100);
+      for (const id of drop) this.dryRuns.delete(id);
+    }
+  }
+
+  /** The most recent dry-run verdict recorded for this exact program, if any. */
+  lastDryRun(fingerprint: string): DryRunRecord | undefined {
+    return this.dryRuns.get(fingerprint);
   }
 
   update(transactionId: string, patch: Partial<JobRecord>): JobRecord | undefined {

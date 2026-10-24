@@ -34,6 +34,18 @@ export interface RegisteredPlan {
   issuedAt: number;
   /** Digest of the issued program skeleton, for audit comparison. */
   programHash: string;
+  /**
+   * The issued program skeleton itself (issue #30, workflow contract).
+   *
+   * A planId used to prove only that A plan ran; the build got nothing from it
+   * and the caller had to re-state every region, style and constraint — the
+   * exact "context loss" the workflow handoff was blamed for. Now the
+   * registration retains the issued skeleton, so a build that carries ONLY the
+   * planId can inherit the plan for real instead of wearing it as a badge.
+   */
+  program: unknown;
+  /** The whole plan payload the planning tool returned, when it had one. */
+  plan: unknown;
 }
 
 const MAX_PLANS = 200;
@@ -90,7 +102,7 @@ function hashProgram(program: unknown): string {
  * payload; build tools accept it as the build's provenance.
  */
 export function registerPlan(
-  payload: { fileKey?: string | null; fileName?: string | null; primaryDecision?: string; program?: unknown } = {},
+  payload: { fileKey?: string | null; fileName?: string | null; primaryDecision?: string; program?: unknown; plan?: unknown } = {},
 ): RegisteredPlan {
   seq += 1;
   const plan: RegisteredPlan = {
@@ -100,6 +112,8 @@ export function registerPlan(
     primaryDecision: payload.primaryDecision ?? "",
     issuedAt: Date.now(),
     programHash: hashProgram(payload.program),
+    program: payload.program ?? null,
+    plan: payload.plan ?? null,
   };
   issued.set(plan.planId, plan);
   // Bounded: drop the oldest quarter when over capacity so a long-lived

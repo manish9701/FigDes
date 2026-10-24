@@ -128,7 +128,7 @@ export async function dispatchTransaction(
   registry: SessionRegistry,
   session: Session,
   tool: "create_design" | "modify_design" | "update_component" | "native_design",
-  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext; scoreGuard?: ScoreGuardEvidence },
+  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext; scoreGuard?: ScoreGuardEvidence; /** Issue #30: plan provenance for the ledger chain. */ planId?: string },
 ): Promise<TransactionResult> {
   const transactionId = payload.transactionId ?? `txn_${randomUUID().slice(0, 8)}`;
   const ops = payload.operations as unknown[];
@@ -145,7 +145,7 @@ export async function dispatchTransaction(
     const summary = blockingBrief.slice(0, 5).map((b) => b.message).join("; ");
     const label = `blocked: brief carries ${blockingBrief.length} blocking contradiction(s)`;
     recordPreflightCatch(blockingBrief.length);
-    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
     registry.jobs.complete(transactionId, "failed", { error: summary, label });
     throw new Error(
       `Refused before dispatch: the brief carries ${blockingBrief.length} blocking contradiction(s), so nothing may be built from it ` +
@@ -164,7 +164,7 @@ export async function dispatchTransaction(
   if (guardBlock !== null) {
     const label = "blocked: score-guard refused (FAIL verdict or critical weak spots)";
     recordPreflightCatch(1);
-    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
     registry.jobs.complete(transactionId, "failed", { error: guardBlock, label });
     throw new Error(
       `Refused before dispatch: ${guardBlock}\n` +
@@ -200,7 +200,7 @@ export async function dispatchTransaction(
   const preflight = validateTransaction(ops, payload.preflight);
   if (!preflight.ok) {
     recordPreflightCatch(preflight.issues.length);
-    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
     const first = preflight.issues[0]!;
     // The ledger note names the check that blocked, so a get_job_status after
     // the refusal answers "why was nothing created" without re-reading the error.
@@ -213,7 +213,7 @@ export async function dispatchTransaction(
     );
   }
 
-  registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length });
+  registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
   registry.jobs.update(transactionId, { state: "preflight", label: `preflight passed (${ops.length} ops)` });
   registry.jobs.update(transactionId, { state: "applying", done: 0, label: "dispatching" });
 

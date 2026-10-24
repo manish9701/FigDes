@@ -10,6 +10,7 @@
  * the picture rather than leaving the caller to guess.
  */
 import type { Session } from "./sessions";
+import { recordRender } from "./metrics";
 import type { RenderResult } from "../../shared/protocol";
 
 export interface RenderArgs {
@@ -31,6 +32,7 @@ export interface RenderResponse {
 const MIME = { png: "image/png", jpg: "image/jpeg" } as const;
 
 export async function renderDesign(session: Session, args: RenderArgs): Promise<RenderResponse> {
+  const startedAt = Date.now();
   const result = (await session.request("render_node", {
     nodeId: args.nodeId,
     maxWidth: args.maxWidth,
@@ -44,6 +46,12 @@ export async function renderDesign(session: Session, args: RenderArgs): Promise<
       content: [{ type: "text", text: "The plugin returned no image data for that node." }],
     };
   }
+
+  // Issue #30 — the render counter was defined and never called, so the one
+  // metric that would show "are builds actually followed by a render?" was
+  // always zero. Renders are now counted (token cost, bytes, latency) here,
+  // where the image and the bill are both in hand.
+  recordRender(result.estimatedTokens, result.base64Length, Date.now() - startedAt);
 
   // The image block first: models weight the leading content most heavily, and
   // the accompanying text should read as commentary rather than as data.
@@ -96,6 +104,8 @@ function describe(r: RenderResult): string {
   lines.push(
     "Judge hierarchy, balance, density, alignment and whether the main relationship reads clearly. " +
       "Structural defects are better found with review_design, which is free.",
+    "Workflow (issue #30): a build result reports 'built-not-verified' — act on what this image shows (critique, targeted repairs), then " +
+      "run final_qa with the program and node id before calling the screen done; a screen nobody has rendered has not been seen.",
   );
 
   return lines.join("\n");

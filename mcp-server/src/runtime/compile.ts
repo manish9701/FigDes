@@ -779,6 +779,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       boxes,
       operations,
       canvasH: canvasSize(canvas.height, 900),
+      canvasW: canvasSize(canvas.width, 1440),
       gutter: defaultGutter(canvas.grid) * rhythmScale,
       grid: canvas.grid,
       frozen: ir.relations.length > 0 ? solverTouched : undefined,
@@ -4544,6 +4545,11 @@ function fitFillRegions(args: {
  * survives and the geometry check reports it honestly; a repair that hides a
  * real overflow would be worse than the report.
  *
+ * Issue #30 adds the horizontal counterpart: a ROW of side-by-side regions
+ * whose combined widths run past the right canvas edge is repaired by peeling
+ * width off the right (see below), so one overflow class no longer depends on
+ * which axis it happens to point at.
+ *
  * Returns how many regions changed, which the caller reports as `reflowed` —
  * a repair the compiler made on its own initiative is part of the payload's
  * story, not something to hide.
@@ -4553,12 +4559,13 @@ function canvasFitReflow(args: {
   boxes: Map<string, PlacedBox>;
   operations: Operation[];
   canvasH: number;
+  canvasW: number;
   gutter: number;
   grid: number;
   /** Ids the relation solver positioned; their geometry is contract, not adjustable. */
   frozen?: ReadonlySet<string>;
 }): number {
-  const { regions, boxes, operations, canvasH, gutter, grid, frozen } = args;
+  const { regions, boxes, operations, canvasH, canvasW, gutter, grid, frozen } = args;
 
   const shiftBox = (id: string, dy: number): void => {
     const box = boxes.get(id);
@@ -4668,6 +4675,98 @@ function canvasFitReflow(args: {
     })) {
       changed += ordered.length;
     }
+  }
+
+  /* ------------------------- rows: the horizontal mirror (issue #30) ------------------------- */
+
+  // The same repair right for the other axis. A row of side-by-side regions
+  // whose widths run past the RIGHT canvas edge used to be unrepairable — the
+  // columns loop only shrinks heights — so `assertResolvedGeometry` could only
+  // refuse a wide fixed-width row a repair would have saved.
+  //
+  // Rows peel width from the right, NOT proportionally, for a geometric
+  // reason: an interior region's width contributes nothing to the row's max
+  // right edge, so shrinking it would narrow the design without moving that
+  // edge one pixel. Only the region that currently OWNS the max right edge
+  // does. Width is taken right-to-left, each region down to its floor, until
+  // the edge is inside the canvas or the row genuinely cannot fit.
+
+  /** The width a region's own content needs (children's right edge + pad.right), or null when it holds none. */
+  const widthNeed = (region: ResolvedRegion): number | null => {
+    const pad = normalizePadding(region.padding, grid);
+    let right = Number.NEGATIVE_INFINITY;
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (box) right = Math.max(right, box.x + box.w);
+    }
+    if (right === Number.NEGATIVE_INFINITY) return null;
+    return Math.max(1, Math.ceil(right - region.x + pad.right));
+  };
+
+  const rows = new Map<number, ResolvedRegion[]>();
+  for (const r of regions) {
+    if (frozen?.has(r.id)) continue;
+    const list = rows.get(r.y);
+    if (list) list.push(r);
+    else rows.set(r.y, [r]);
+  }
+
+  for (const row of rows.values()) {
+    // Same rule as columns: a frozen (relation-placed) region sharing this row
+    // makes width repair unsafe — its geometry is the contract the relations
+    // declare — so the row keeps its geometry and the checks report any spill.
+    if (regions.some((r) => r.y === row[0]!.y && frozen?.has(r.id))) continue;
+    const rightmost = [...row].sort((a, b) => b.x + b.w - (a.x + a.w));
+    const beforeW = new Map(row.map((r) => [r.id, r.w]));
+    const maxRight = Math.max(...row.map((r) => r.x + r.w));
+    // The exact spill past the edge — no tolerance inflation. A row that ends
+    // flush (or within the checker's tolerance) is clean, and peeling a pixel
+    // off it would trade true geometry for a 1px-short lie the tiling tests
+    // would catch. fitStackToCanvas's vertical math makes the same choice.
+    const overflow = maxRight - canvasW;
+    if (overflow <= 0) continue;
+
+    let shrunk = false;
+    // Two floors, the same ladder as heights: usable minimum first, then —
+    // only if the canvas genuinely cannot afford that — what the content
+    // itself needs, so the repair cannot mint containment findings.
+    for (const floor of ["usable", "content"] as const) {
+      let remaining = overflow;
+      for (const region of rightmost) {
+        if (remaining <= 1e-6) break;
+        const need = widthNeed(region);
+        const minW =
+          floor === "usable"
+            ? need === null
+              ? MIN_STACK_REGION_H
+              : Math.max(MIN_STACK_REGION_H, need)
+            : need === null
+              ? 1
+              : Math.max(1, need);
+        const headroom = region.w - minW;
+        if (headroom < 1) continue;
+        const take = Math.min(Math.ceil(remaining), Math.floor(headroom));
+        if (take < 1) continue;
+        region.w = Math.max(minW, Math.round(region.w - take));
+        remaining -= take;
+        shrunk = true;
+      }
+      if (remaining <= 1e-6) break;
+    }
+    if (!shrunk) continue;
+
+    // Patch what changed: region frames keep their origin (nothing moved),
+    // the resolved boxes carry the refit width, and children stay exactly
+    // where they were — the content floor guaranteed they still fit.
+    for (const region of row) {
+      const was = beforeW.get(region.id)!;
+      if (Math.abs(was - region.w) > 0.5) {
+        const selfBox = boxes.get(region.id);
+        if (selfBox) boxes.set(region.id, { ...selfBox, x: region.x, y: region.y, w: region.w, h: region.h });
+        patchEmit(operations, region.id, { x: region.x, y: region.y, width: region.w, height: region.h });
+      }
+    }
+    changed += row.length;
   }
   return changed;
 }

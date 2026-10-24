@@ -86,6 +86,14 @@ export function fitStackToCanvas(args: {
   gutter: number;
   /** Optional per-region floor (e.g. a content floor). Defaults to `MIN_STACK_REGION_H`. */
   mins?: number[];
+  /**
+   * Issue #30 — shrink toward this exact overflow instead of deriving it from
+   * the stack's own extent. A vertical stack starts at y=0, so
+   * `sum + gaps − canvasH` IS its overflow; a horizontal row starts wherever
+   * its leftmost region sits, so the caller measures `maxRight − canvasW`
+   * and passes it here. Heights math is unchanged when absent.
+   */
+  overflowOverride?: number;
 }): { heights: number[]; changed: number } {
   const { heights, shrinkable, canvasH, gutter } = args;
   const out = heights.slice();
@@ -93,7 +101,7 @@ export function fitStackToCanvas(args: {
   if (n === 0) return { heights: out, changed: 0 };
 
   const gaps = gutter * Math.max(0, n - 1);
-  let overflow = out.reduce((a, b) => a + b, 0) + gaps - canvasH;
+  let overflow = args.overflowOverride ?? out.reduce((a, b) => a + b, 0) + gaps - canvasH;
   if (overflow <= 1e-6) return { heights: out, changed: 0 };
 
   const floorOf = (i: number): number => {

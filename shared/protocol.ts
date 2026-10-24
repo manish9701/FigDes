@@ -1011,6 +1011,17 @@ export interface JobRecord {
    * committed retry can be relabelled with the previous attempt's outcome.
    */
   attempt?: number;
+  /**
+   * The plan_screen planId the build inherited, when it was sent at all
+   * (issue #30, workflow contract).
+   *
+   * Without it, "this screen was built from that plan" lives only in the
+   * caller's memory — plan → build traceability stops at the tool call. With
+   * it, `get_job_status` can show the plan provenance of any committed
+   * screen in the ledger window, and the chain plan → transaction is
+   * inspectable instead of asserted.
+   */
+  planId?: string;
 }
 
 export interface PreflightIssue {

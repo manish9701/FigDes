@@ -38,6 +38,8 @@ const INSTRUCTIONS = [
   "   decision, infers the composition, and returns a 2D composition model, an ordered region list where",
   "   every region says why it exists, and a five-pass build plan. It creates nothing, so a wrong",
   "   composition costs one message instead of an undo. Never open a screen with create_design.",
+  "   Its response carries a planId the server issued: build from its program (the planId travels with it)",
+  "   or pass the planId to your build tool — build tools refuse screens with no verified plan provenance.",
   "   For a fuller intake use design_brief first, then hand its decision to plan_screen.",
   "   Compare plan_screen's structural variants before committing to one composition.",
   "   When the user has given a real brief (purpose, information, primary action, visual direction),",

@@ -41,41 +41,67 @@ export const transactionTotalMs: DurationSample[] = [];
 export const inspectMs: DurationSample[] = [];
 export const renderMs: DurationSample[] = [];
 
-export const counters = {
-  toolCalls: 0,
-  toolTimeouts: 0,
-  socketDisconnects: 0,
-  reconnects: 0,
-  unknownSessionErrors: 0,
-  rollbacksFull: 0,
-  rollbacksPartial: 0,
-  preflightCatches: 0,
-  duplicateRetries: 0,
-  renders: 0,
-  renderTokens: 0,
-  renderBytes: 0,
-  /* --- First-Pass Quality Contract (issue #26): outcomes that used to be
-         computed per call and discarded are aggregated here, so a run can say
-         "verified with zero repairs" and mean it across runs. --- */
-  /** Built screens verified with zero repairs attempted. */
-  firstPassAccepted: 0,
-  /** Built screens with zero repairs attempted (the acceptance denominator). */
-  firstPassTotal: 0,
-  /** Pipeline visual checks that failed. */
-  visualQAFailures: 0,
-  /** Runs whose payload carried intelligence-applied:true. */
-  intelligenceAppliedCount: 0,
-  /** Runs that disclosed design-intelligence provenance either way. */
-  intelligenceTotal: 0,
-  /** Runs whose plan carried a composition hint. */
-  compositionHintAppliedCount: 0,
-  /** Runs that disclosed composition-hint provenance either way. */
-  hintTotal: 0,
-  /** Repair self-verifications that passed (no unresolved, no regression). */
-  repairVerificationPass: 0,
-  /** Repair self-verifications that failed. */
-  repairVerificationFail: 0,
-};
+/**
+ * The counters are process-global, not module-global.
+ *
+ * Like the plan registry (issue #29): the server is built one-bundle for
+ * production and per-area bundles for the test suites, and a module-level
+ * object would give each bundle its own counters — a waiver recorded by the
+ * tools bundle would be invisible in the metrics bundle's snapshot. A
+ * symbol-keyed global keeps one set of counters per process whichever bundle
+ * imports this module.
+ */
+const COUNTER_KEY = Symbol.for("figdes.contractCounters");
+
+function zeroedCounters() {
+  return {
+    toolCalls: 0,
+    toolTimeouts: 0,
+    socketDisconnects: 0,
+    reconnects: 0,
+    unknownSessionErrors: 0,
+    rollbacksFull: 0,
+    rollbacksPartial: 0,
+    preflightCatches: 0,
+    duplicateRetries: 0,
+    renders: 0,
+    renderTokens: 0,
+    renderBytes: 0,
+    /* --- First-Pass Quality Contract (issue #26): outcomes that used to be
+           computed per call and discarded are aggregated here, so a run can say
+           "verified with zero repairs" and mean it across runs. --- */
+    /** Built screens verified with zero repairs attempted. */
+    firstPassAccepted: 0,
+    /** Built screens with zero repairs attempted (the acceptance denominator). */
+    firstPassTotal: 0,
+    /** Pipeline visual checks that failed. */
+    visualQAFailures: 0,
+    /** Runs whose payload carried intelligence-applied:true. */
+    intelligenceAppliedCount: 0,
+    /** Runs that disclosed design-intelligence provenance either way. */
+    intelligenceTotal: 0,
+    /** Runs whose plan carried a composition hint. */
+    compositionHintAppliedCount: 0,
+    /** Runs that disclosed composition-hint provenance either way. */
+    hintTotal: 0,
+    /* --- Plan registry (issue #29): the bypass paths the gates now refuse are
+          counted, so a weak client's skip-the-plan rate is visible instead of
+          silent. --- */
+    /** Planless screen-scale builds refused at the design_runtime gate. */
+    planlessScreenRefusals: 0,
+    /** Raw mutating calls dispatched only after an approved+reason waiver. */
+    intelligenceBypassWaivers: 0,
+    /** Repair self-verifications that passed (no unresolved, no regression). */
+    repairVerificationPass: 0,
+    /** Repair self-verifications that failed. */
+    repairVerificationFail: 0,
+  };
+}
+
+type CounterTable = ReturnType<typeof zeroedCounters>;
+
+export const counters: CounterTable = ((globalThis as unknown as Record<symbol, CounterTable | undefined>)[COUNTER_KEY] ??=
+  zeroedCounters());
 
 export function recordToolCall(tool: string, ms: number, opts?: { ops?: number; nodes?: number }): void {
   counters.toolCalls += 1;
@@ -163,6 +189,16 @@ export function recordRepairVerification(verdict: string): void {
   else if (verdict === "FAIL") counters.repairVerificationFail += 1;
 }
 
+/** Records a planless screen-scale build refused at the runtime gate (issue #29). */
+export function recordPlanlessScreenRefusal(): void {
+  counters.planlessScreenRefusals += 1;
+}
+
+/** Records a raw mutating call dispatched after an approved+reason waiver (issue #29). */
+export function recordProvenanceWaiver(): void {
+  counters.intelligenceBypassWaivers += 1;
+}
+
 /** Resets only the contract counters, so tests can aggregate deterministically. */
 export function resetContractCounters(): void {
   counters.firstPassAccepted = 0;
@@ -172,6 +208,8 @@ export function resetContractCounters(): void {
   counters.intelligenceTotal = 0;
   counters.compositionHintAppliedCount = 0;
   counters.hintTotal = 0;
+  counters.planlessScreenRefusals = 0;
+  counters.intelligenceBypassWaivers = 0;
   counters.repairVerificationPass = 0;
   counters.repairVerificationFail = 0;
 }
@@ -220,6 +258,8 @@ export function snapshot(): Record<string, unknown> {
       compositionHintAppliedCount: counters.compositionHintAppliedCount,
       hintTotal: counters.hintTotal,
       hintAppliedRate: rate(counters.compositionHintAppliedCount, counters.hintTotal),
+      planlessScreenRefusals: counters.planlessScreenRefusals,
+      intelligenceBypassWaivers: counters.intelligenceBypassWaivers,
       repairVerificationPass: counters.repairVerificationPass,
       repairVerificationFail: counters.repairVerificationFail,
       repairVerificationPassRate: rate(

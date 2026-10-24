@@ -20,6 +20,7 @@ import {
   assessRuntimeIntelligence,
 } from "../mcp-server/dist-test/design/intelligence-gate.js";
 import { buildPlan } from "../mcp-server/dist-test/plan/tools.js";
+import { registerPlan, resetPlanRegistry } from "../mcp-server/dist-test/plan/registry.js";
 import { compileIrTool, runRuntimeTool } from "../mcp-server/dist-test/runtime/tools.js";
 import { designPipelineTool } from "../mcp-server/dist-test/pipeline/tools.js";
 
@@ -44,10 +45,36 @@ test("the bypass warning names the fallback style when one applied", () => {
 });
 
 test("a plan-carrying program passes the gate", () => {
-  const assessment = assessRuntimeIntelligence({ plan: { regions: [] }, regions: [] });
+  // Issue #29: a plan counts when it is plan-shaped — a real plan_screen
+  // payload carries the `program` skeleton and the `intelligence` receipt.
+  const assessment = assessRuntimeIntelligence({
+    plan: { program: {}, intelligence: { applied: true, basis: "plan-screen" } },
+    regions: [],
+  });
   assert.equal(assessment.applied, true);
   assert.equal(assessment.basis, "plan");
   assert.deepEqual(assessment.warnings, []);
+});
+
+test("an invented inline plan no longer passes the gate (issue #29)", () => {
+  // A bare object is what a model improvises when it skipped plan_screen.
+  const assessment = assessRuntimeIntelligence({ plan: { decision: "show status" }, regions: [] });
+  assert.equal(assessment.applied, false);
+  assert.equal(assessment.basis, "auto-art-direction");
+});
+
+test("an unresolvable planId no longer passes the gate (issue #29)", () => {
+  const assessment = assessRuntimeIntelligence({ planId: "plan-not-issued", regions: [] });
+  assert.equal(assessment.applied, false);
+});
+
+test("a registered planId passes the gate (issue #29)", () => {
+  resetPlanRegistry();
+  const { planId } = registerPlan({ fileKey: "k1", primaryDecision: "select a model", program: {} });
+  const assessment = assessRuntimeIntelligence({ planId, regions: [] }, { fileKey: "k1" });
+  assert.equal(assessment.applied, true);
+  assert.equal(assessment.basis, "plan");
+  resetPlanRegistry();
 });
 
 test("a declared visualIntent.style passes the gate", () => {

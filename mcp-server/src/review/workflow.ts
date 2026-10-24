@@ -728,7 +728,18 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       };
     }
     const { runRuntimeTool } = await import("../runtime/tools");
-    await runRuntimeTool(session, { program: args.program, description: args.description ?? "refine_screen build phase" });
+    // Issue #29: the build phase is a full design_runtime dispatch, so it runs
+    // under the same provenance gate. An approved+reason from the refine call
+    // covers the build (single-use, counted), and a refusal comes back as the
+    // tool's own result — the loop stops before polishing a screen that was
+    // never built.
+    const built = (await runRuntimeTool(session, {
+      program: args.program,
+      description: args.description ?? "refine_screen build phase",
+      ...(args.approved !== undefined ? { approved: args.approved } : {}),
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    })) as Record<string, unknown>;
+    if (built?.["status"] === "needs-approval") return built;
   }
 
   let converged = false;

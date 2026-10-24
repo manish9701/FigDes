@@ -70,8 +70,6 @@ export const UseFigmaArgs = z
     plan: z.unknown().optional(),
     planId: z.string().max(200).optional(),
     planRef: z.string().max(200).optional(),
-    fromPlan: z.boolean().optional(),
-    intelligenceApplied: z.boolean().optional(),
   })
   .strict();
 

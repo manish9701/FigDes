@@ -34,6 +34,7 @@ import { DesignPipelineArgs, designPipelineTool } from "./pipeline/tools";
 import { projectKey } from "./memory/store";
 import { saveSnapshot, listSnapshots, getSnapshot } from "./snapshots/store";
 import { guardMutation, resolveExistingResources } from "./plan/gate";
+import { isPlanShaped, isRecord, resolvePlan } from "./plan/registry";
 import { exoSeedOperations, exoSeedCounts } from "./tokens/exo";
 import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesignTool, critiqueVisualTool, refineScreenTool, diffDesignTool, finalQaTool } from "./review/workflow";
 import { clients } from "./clients/registry";
@@ -44,7 +45,9 @@ import { assertTransaction, dispatchTransaction } from "./transaction";
 import { EditScreenArgs, editScreenTool } from "./review/edit-screen";
 import {
   recordDuplicateRetry,
+  recordPlanlessScreenRefusal,
   recordPreflightCatch,
+  recordProvenanceWaiver,
   recordRollback,
   recordToolCall,
   recordTransaction,
@@ -173,14 +176,24 @@ const CreateArgs = z
     transactionId: z.string().max(200).optional(),
     sessionId: SessionArg,
     /**
-     * Plan provenance (issue #26): the plan_screen plan this build comes from,
-     * or any marker that design intelligence ran on it. Raw operations bypass
-     * ALL design intelligence, so a non-dry-run dispatch without provenance
-     * needs an explicit approved+reason justification instead.
+     * Plan provenance (issue #26, verified in issue #29): the plan_screen
+     * plan this build comes from, or any marker that design intelligence ran
+     * on it. Raw operations bypass ALL design intelligence, so a non-dry-run
+     * dispatch without provenance needs an explicit approved+reason
+     * justification instead.
      */
     plan: z.unknown().optional().describe("plan_screen program provenance: the plan this build executes. Absent means raw operations."),
-    planId: z.string().max(200).optional().describe("Reference to the plan_screen plan this build executes, when the plan itself is not inlined."),
-    intelligenceApplied: z.boolean().optional().describe("Set when design intelligence (plan_screen plan or declared visualIntent.style) ran on this build."),
+    planId: z
+      .string()
+      .max(200)
+      .optional()
+      .describe("Reference to the plan_screen plan this build executes. Must be a planId plan_screen returned for this file — the server resolves it, a made-up id is not provenance."),
+    /**
+     * Issue #29: kept in the schema so a client that still sends the old
+     * self-report flag gets the gate's refusal rather than an opaque schema
+     * error — but the flag is ignored. Provenance is verified, not asserted.
+     */
+    intelligenceApplied: z.boolean().optional().describe("Deprecated and ignored (issue #29): self-asserted intelligence provenance is not accepted; pass planId instead."),
     /**
      * Pre-build score/guard evidence (issue #26): weak spots from score_design
      * and the verdict from design_guard for the design about to be built. A
@@ -727,33 +740,51 @@ async function viaPlugin(
 /* -------------------------------------------------------------------------- */
 
 /**
- * Whether the raw args carry plan_screen provenance or an explicit
- * design-intelligence signal.
+ * Whether the raw args carry VERIFIED plan_screen provenance (issue #29).
  *
- * Accepted markers: an inlined `plan`, a `planId`/`planRef` reference, an
- * explicit `intelligenceApplied:true` / `fromPlan:true`, or a `program`
- * carrying a plan_screen plan or a declared visualIntent.style (the
- * design_runtime program channel). Anything else is raw operations.
+ * Accepted markers, in order of strength:
+ *
+ * - a `planId`/`planRef` that resolves against the plan registry — the set of
+ *   plans this server issued. An unresolvable reference is not provenance;
+ *   it is exactly what a model invents when it skipped plan_screen, so it
+ *   fails closed.
+ * - an inlined `plan` that is plan-shaped (carries the `program` and
+ *   `intelligence` receipts a real plan payload has) — or that names a
+ *   planId which resolves.
+ * - a `program` carrying a plan-shaped `plan`, a resolvable `planId`, or a
+ *   declared `visualIntent.style` (the design_runtime program channel).
+ *
+ * Self-asserted flags (`fromPlan:true`, `intelligenceApplied:true`) are no
+ * longer accepted anywhere: a flag the calling model sets itself is
+ * self-report, not provenance.
  */
-export function hasPlanProvenance(raw: unknown): boolean {
+export function hasPlanProvenance(raw: unknown, opts: { fileKey?: string | null } = {}): boolean {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return false;
   const r = raw as Record<string, unknown>;
-  if (r["plan"] !== undefined && r["plan"] !== null) return true;
-  if (typeof r["planId"] === "string" && (r["planId"] as string).length > 0) return true;
-  if (typeof r["planRef"] === "string" && (r["planRef"] as string).length > 0) return true;
-  if (r["fromPlan"] === true || r["intelligenceApplied"] === true) return true;
+  const fileKey = opts.fileKey ?? null;
+
+  const ref = typeof r["planId"] === "string" ? r["planId"] : typeof r["planRef"] === "string" ? r["planRef"] : null;
+  if (ref !== null) return resolvePlan(ref, fileKey) !== null;
+
+  const inline = r["plan"];
+  if (isRecord(inline)) {
+    const inlineId = inline["planId"];
+    if (typeof inlineId === "string" && inlineId.length > 0) {
+      if (resolvePlan(inlineId, fileKey) !== null) return true;
+    } else if (isPlanShaped(inline)) {
+      return true;
+    }
+  }
+
   const program = r["program"];
-  if (program !== null && typeof program === "object" && !Array.isArray(program)) {
-    const p = program as Record<string, unknown>;
-    if (p["plan"] !== undefined && p["plan"] !== null) return true;
-    const intent = p["visualIntent"];
-    if (
-      intent !== null &&
-      typeof intent === "object" &&
-      !Array.isArray(intent) &&
-      typeof (intent as Record<string, unknown>)["style"] === "string" &&
-      ((intent as Record<string, unknown>)["style"] as string).length > 0
-    ) {
+  if (isRecord(program)) {
+    const programId = program["planId"];
+    if (typeof programId === "string" && programId.length > 0) {
+      return resolvePlan(programId, fileKey) !== null;
+    }
+    if (isPlanShaped(program["plan"])) return true;
+    const intent = program["visualIntent"];
+    if (isRecord(intent) && typeof intent["style"] === "string" && intent["style"].length > 0) {
       return true;
     }
   }
@@ -769,14 +800,14 @@ export function planProvenanceRefusal(operationCount: number): Record<string, un
   return {
     status: "needs-approval",
     question:
-      `This change carries no plan_screen provenance and no explicit design-intelligence signal, ` +
+      `This change carries no verified plan_screen provenance (no planId this server issued, no inlined plan, no declared visualIntent.style), ` +
       `so it would bypass decision classification, composition hints and the build-time product guard. ` +
       `Is this raw build intentional?`,
     ifApproved: "The raw operations are dispatched as-is, without design intelligence.",
     instead:
-      "Call plan_screen first (or design_pipeline for the whole loop) and build from its program — " +
-      "or use design_runtime, which carries the plan channel natively — then run design_guard(inspect:true) on the result.",
-    checkpoints: [{ gate: "plan-provenance", detail: "no plan, planId, or intelligence-applied signal on a mutating call" }],
+      "Call plan_screen first (or design_pipeline for the whole loop) — its response carries a planId, which you pass here as provenance — " +
+      "or build from its program through design_runtime, which carries the plan channel natively. Then run design_guard(inspect:true) on the result.",
+    checkpoints: [{ gate: "plan-provenance", detail: "no resolvable planId, plan-shaped plan, or intelligence-applied signal on a mutating call" }],
     measured: { operations: operationCount },
     howToProceed:
       "Nothing has been changed. If the user confirms the raw build is intentional, call this tool again with " +
@@ -790,14 +821,19 @@ export function planProvenanceRefusal(operationCount: number): Record<string, un
  * Returns a refusal payload when the call must stop, or null when it may
  * proceed. Design-time inspection stays open: dryRun creates nothing and
  * needs no provenance, and readonly native scripts are inspection-only.
+ * An approved+reason waiver dispatches this one call — and is counted, so a
+ * client's bypass rate is visible in the metrics rather than silent.
  */
 export function requirePlanProvenance(
   rawArgs: unknown,
-  opts: { approved?: boolean; reason?: string; dryRun?: boolean; readonly?: boolean; operations: unknown },
+  opts: { approved?: boolean; reason?: string; dryRun?: boolean; readonly?: boolean; operations: unknown; fileKey?: string | null },
 ): Record<string, unknown> | null {
   if (opts.dryRun === true || opts.readonly === true) return null;
-  if (hasPlanProvenance(rawArgs)) return null;
-  if (opts.approved === true && typeof opts.reason === "string" && opts.reason.trim().length > 0) return null;
+  if (hasPlanProvenance(rawArgs, { ...(opts.fileKey !== undefined ? { fileKey: opts.fileKey } : {}) })) return null;
+  if (opts.approved === true && typeof opts.reason === "string" && opts.reason.trim().length > 0) {
+    recordProvenanceWaiver();
+    return null;
+  }
   const count = Array.isArray(opts.operations) ? opts.operations.length : 0;
   return planProvenanceRefusal(count);
 }
@@ -1198,7 +1234,7 @@ export const TOOLS: ToolDefinition[] = [
     name: "design_runtime",
     title: "Build a design from semantic primitives",
     description:
-      "MANDATORY FIRST STEP: call plan_screen (or design_pipeline for the whole loop) before this, and build from its program. A raw program with no plan and no visualIntent.style bypasses decision classification, composition hints and the guard preview — the result discloses intelligence-applied:false and falls back to auto art-direction. Use this for information-led screens. Do not use it as the primary builder when plan_screen.execution.nativeRequired=true. For composition-led screens, use figdes_use_figma for the shell and reserve this for reusable semantic content inside a Hybrid composition. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. The product guard runs on every build and applicabilityBasis says what the geometry stands on. Pass dryRun=true first.",
+      "MANDATORY FIRST STEP: call plan_screen (or design_pipeline for the whole loop) before this, and build from its program — it carries a planId. A planless program that builds 3+ regions is REFUSED with a needs-approval question instead of built; smaller raw programs still build but are disclosed as intelligence-applied:false on the auto art-direction fallback. Use this for information-led screens. Do not use it as the primary builder when plan_screen.execution.nativeRequired=true. For composition-led screens, use figdes_use_figma for the shell and reserve this for reusable semantic content inside a Hybrid composition. Send a declarative program of regions (navigation, hero, header, inspector) and semantic content (metric, statusPill, deviceNode, navItem, panel, button, text, shape, vector) instead of hand-placing dozens of primitives. The layout engine computes all coordinates and the typography scale is applied for you, so you state intent rather than geometry. This is structured JSON naming built-in primitives, NOT code: there is no eval path and code will be rejected. The product guard runs on every build and applicabilityBasis says what the geometry stands on. Pass dryRun=true first.",
     inputSchema: RuntimeArgs,
     handler: async (args, registry) => {
       const parsed = RuntimeArgs.parse(args);
@@ -1553,7 +1589,7 @@ inputSchema: CompileArgs,
     name: "plan_screen",
     title: "Plan a screen before drawing it",
     description:
-      "MANDATORY FIRST STEP for any new screen — call this before design_runtime, compile_ir, create_design or figdes_use_figma. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, the art director's decisions (focal, hierarchy, strategies, states, risks), a five-pass build plan, full structural variants to compare, and a preview of which product rules the plan will trip. Accepts an archetype ('model-fit', 'topology'...) that presets objective, decision and anti-patterns. Creates nothing, so a wrong composition costs one message instead of an undo. The result carries intelligence provenance (applied:true, decisionKind, compositionHintApplied) proving classification ran. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
+      "MANDATORY FIRST STEP for any new screen — call this before design_runtime, compile_ir, create_design or figdes_use_figma. States the primary decision the user makes, infers the composition that follows from it, and returns a 2D composition model with real geometry, an ordered region list where each region says why it exists, the art director's decisions (focal, hierarchy, strategies, states, risks), a five-pass build plan, full structural variants to compare, and a preview of which product rules the plan will trip. Accepts an archetype ('model-fit', 'topology'...) that presets objective, decision and anti-patterns. Creates nothing, so a wrong composition costs one message instead of an undo. The result carries a planId this server issued — build from its program (it carries the planId) or pass the planId to your build tool, because build tools refuse unprovenanced screens. The result also carries intelligence provenance (applied:true, decisionKind, compositionHintApplied) proving classification ran. A page type is not a decision: 'dashboard' or 'overview' will be pushed back on, because page types are what produce generic layouts.",
     inputSchema: PlanScreenArgs,
     handler: async (args, registry) => {
       const parsed = PlanScreenArgs.parse(args);
@@ -1610,24 +1646,24 @@ inputSchema: CompileArgs,
       // keeps the gate open and runs the script mutation-protected; readonly
       // scripts are inspection-only and open either way.
       const raw = ((args ?? {}) as Record<string, unknown>);
-      const { plan, planId, planRef, fromPlan, intelligenceApplied, approved, reason, ...scriptArgs } = raw;
+      const { plan, planId, planRef, approved, reason, ...scriptArgs } = raw;
       void plan;
       void planId;
       void planRef;
-      void fromPlan;
-      void intelligenceApplied;
       void approved;
       void reason;
       const parsed = UseFigmaArgs.parse(scriptArgs);
+      const session = registry.resolve(parsed.sessionId);
       const provenanceGate = requirePlanProvenance(raw, {
         ...(typeof approved === "boolean" ? { approved } : {}),
         ...(typeof reason === "string" ? { reason } : {}),
         ...(parsed.readonly !== undefined ? { readonly: parsed.readonly } : {}),
         ...(parsed.dryRun === true ? { dryRun: true } : {}),
+        fileKey: session.fileKey,
         operations: [{ type: "native-script" }],
       });
       if (provenanceGate) return provenanceGate;
-      return figdesUseFigmaHandler(registry.resolve(parsed.sessionId), parsed);
+      return figdesUseFigmaHandler(session, parsed);
     }
   },
 
@@ -1919,7 +1955,7 @@ inputSchema: CompileArgs,
     name: "create_design",
     title: "Create a design in Figma (low level)",
     description:
-      "Create real native Figma nodes (frames, rectangles, ellipses, text, auto layout) from a structured operation list. Applied as one undoable transaction. Raw operations bypass ALL design intelligence (no decision classification, no composition plan, no build-time product guard) — for new screens, plan first with plan_screen or design_pipeline and prefer design_runtime; run design_guard(inspect:true) on the result afterwards. Set dryRun=true first for anything large.",
+      "Create real native Figma nodes (frames, rectangles, ellipses, text, auto layout) from a structured operation list. Applied as one undoable transaction. Raw operations bypass ALL design intelligence (no decision classification, no composition plan, no build-time product guard) — a non-dry-run call needs a planId plan_screen issued for this file (or a plan-shaped plan); otherwise it is refused unless the user approves with a reason. For new screens, plan first with plan_screen or design_pipeline and prefer design_runtime; run design_guard(inspect:true) on the result afterwards. Set dryRun=true first for anything large.",
 inputSchema: CreateArgs,
     handler: async (args, registry) => {
       const parsed = CreateArgs.parse(args);
@@ -1936,13 +1972,15 @@ inputSchema: CreateArgs,
       if (gate) return gate;
 
       // Issue #26: raw operations bypass ALL design intelligence. A non-dry-run
-      // dispatch needs plan_screen provenance (or the intelligence-applied
-      // signal) or an explicit approved+reason justification. Dry runs stay
-      // open: design-time inspection must not need approval.
+      // dispatch needs VERIFIED plan_screen provenance (a planId the server
+      // issued, or a plan-shaped plan) or an explicit approved+reason
+      // justification. Dry runs stay open: design-time inspection must not
+      // need approval.
       const provenanceGate = requirePlanProvenance(args, {
         ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
         ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
         ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
+        fileKey: session.fileKey,
         operations: parsed.operations,
       });
       if (provenanceGate) return provenanceGate;
@@ -1996,12 +2034,14 @@ inputSchema: ModifyArgs,
       if (gate) return gate;
 
       // Issue #26: same provenance gate as create_design — raw edits bypass
-      // design intelligence, so they need a plan reference or an explicit
-      // approved+reason justification. Dry runs stay open.
+      // design intelligence, so they need VERIFIED provenance (a planId the
+      // server issued, or a plan-shaped plan) or an explicit approved+reason
+      // justification. Dry runs stay open.
       const provenanceGate = requirePlanProvenance(args, {
         ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
         ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
         ...(parsed.dryRun !== undefined ? { dryRun: parsed.dryRun } : {}),
+        fileKey: session.fileKey,
         operations: parsed.operations,
       });
       if (provenanceGate) return provenanceGate;

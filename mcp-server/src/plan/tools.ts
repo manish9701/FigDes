@@ -22,6 +22,7 @@ import { compositionHintFor, resolveCompositionHintSources } from "../design/ski
 import { buildDesignContext, contextBrief } from "../design/context/design-context";
 import { toKnowledge } from "../design/system/component-intelligence";
 import { inferComposition, type Composition } from "../runtime/layout";
+import { registerPlan } from "./registry";
 import type { Session } from "../sessions";
 
 export const PlanScreenArgs = z
@@ -633,7 +634,29 @@ export async function planScreenTool(session: Session | null, rawArgs: unknown):
   const { memory } = loadMemory(key);
   const notes = notesForPrompt(memory, { limit: 6 });
 
-  return buildPlan(args, { notes });
+  const result = buildPlan(args, { notes }) as Record<string, unknown>;
+
+  // Issue #29 — register the issued plan and stamp its id where the build
+  // will find it. Provenance used to be whatever the calling model asserted
+  // about itself; now the server issues the id, remembers it, and the build
+  // tools resolve it. The id is stamped on the payload (top-level) and into
+  // the program skeleton, so a build that copies the program across stays
+  // planned even when the model never mentions the id itself.
+  const program = result["program"];
+  const { planId } = registerPlan({
+    ...(session?.fileKey !== undefined ? { fileKey: session.fileKey } : {}),
+    ...(session?.fileName !== undefined ? { fileName: session.fileName } : {}),
+    ...(args.primaryDecision !== undefined ? { primaryDecision: args.primaryDecision } : {}),
+    ...(program !== undefined && program !== null ? { program } : {}),
+  });
+  result["planId"] = planId;
+  if (program !== null && typeof program === "object" && !Array.isArray(program)) {
+    (program as Record<string, unknown>)["planId"] = planId;
+  }
+  (result["nextStep"] as unknown) =
+    "Build from result.program through design_runtime (it carries this planId), or pass planId to your build tool as provenance.";
+
+  return result;
 }
 
 export { PlanScreenArgs as planScreenArgs };

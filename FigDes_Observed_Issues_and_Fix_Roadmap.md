@@ -246,3 +246,17 @@ The live E2E loop (three build-render-review rounds against the deployed fix) su
 - Word labels in the budget readout ("Required / Available GB used") and a hardcoded dash in every timelineEvent date (legs 5-7) - the readout states figures again, and the event's when comes from the brief.
 
 All regression-pinned (tests/runtime.test.mjs, tests/planner-deployment.test.mjs). The frozen issue22 gate stayed PASS through every leg.
+
+## Issue #29: provenance was self-reported, so a weaker client could skip the plan and still build
+
+**Observed:** the design-intelligence rules survived only where the calling model chose to follow them. The gates accepted ``fromPlan:true`` / ``intelligenceApplied:true`` — flags the calling model sets about itself — and a ``planId``/``planRef`` string was accepted without ever being checked against anything. A client that skipped plan_screen (the observed weak-client failure mode) set the flag, opened every gate, and produced a generic, mediocre screen that the metrics recorded as intelligent.
+
+**Root cause:** the rules were enforced by prose (tool descriptions, server instructions) while the few server-side gates trusted self-report. A plan was never registered anywhere, so "a plan ran" was unfalsifiable.
+
+**Fix:**
+- New plan registry (mcp-server/src/plan/registry.ts): the server remembers every plan it issues; the registry is process-global so all built bundles share it. plan_screen registers and stamps the planId on its payload and into the program skeleton, so provenance travels with the build even when the model only copies the program across.
+- hasPlanProvenance now VERIFIES: a planId must resolve against the registry (and match the file); an inline plan must be plan-shaped (carry the program and intelligence receipts a real payload has); the self-asserted flags are accepted in the schema but ignored, so an old client gets the refusal rather than a schema error.
+- design_runtime refuses a planless build of a full screen (3+ regions) with a needs-approval question instead of quietly building it on the auto art-direction fallback. One-region components keep the fallback; dry runs stay open; an approved+reason waiver still dispatches the one call.
+- Both bypass paths are counted (planlessScreenRefusals, intelligenceBypassWaivers) and the counters are process-global, so a client's skip-the-plan rate is visible in figma_status instead of silent.
+
+**Verified:** new regression suite (tests/issue-29-plan-registry.test.mjs, 13 tests) covers every refusal and every pass path; the issue-24/26 gate suites updated to the verified contract and green; the smoke suite's chunked-build case now plans first and passes 67/67. Two pre-existing failures (issue-16 G01/G02/G04, issue-17 release gauntlet A01/B04) reproduce unchanged on the unmodified baseline and are unrelated.

@@ -22,7 +22,8 @@ import { preflightCheckTag, validateTransaction } from "../preflight";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromIR } from "../memory/guard";
 import { defaultRules } from "../memory/rules-exo";
-import { assessIRIntelligence, assessRuntimeIntelligence } from "../design/intelligence-gate";
+import { assessIRIntelligence, assessRuntimeIntelligence, planlessScreenRefusal, programRegionCount } from "../design/intelligence-gate";
+import { recordPlanlessScreenRefusal, recordProvenanceWaiver } from "../metrics";
 import { inferComposition } from "./layout";
 import type { PreflightContext } from "../preflight-blocking";
 import type { Session, SessionRegistry } from "../sessions";
@@ -208,6 +209,14 @@ export const RuntimeArgs = z
 
 export const CompileArgs = z.object({ ir: DesignIRSchema, dryRun: z.boolean().optional() }).strict();
 
+/**
+ * Issue #29 — how many top-level regions make a program a SCREEN rather than
+ * a component. Three is the smallest real screen shell (content + two
+ * supports); a one- or two-region program is a card, a panel, a pair — and
+ * the auto art-direction fallback keeps serving those without a plan.
+ */
+const PLANDLESS_SCREEN_MIN_REGIONS = 3;
+
 /* -------------------------------------------------------------------------- */
 /* Catalogue                                                                   */
 /* -------------------------------------------------------------------------- */
@@ -382,7 +391,24 @@ export async function runRuntimeTool(
   // art-direction fallback — disclosure, not a block.
   const intelligence = assessRuntimeIntelligence(parsed.program, {
     ...(direction !== null ? { autoStyle: direction.style } : {}),
+    fileKey: session?.fileKey ?? null,
   });
+
+  // Issue #29 — the planless-screen gate. A planless build of a FULL SCREEN
+  // (three or more regions) no longer proceeds on the fallback: that is the
+  // exact path a weak client takes when it skips plan_screen, and it is how
+  // generic, mediocre screens get made. Small builds (one region — a card, a
+  // panel) keep the fallback, dry runs stay open, and an approved+reason
+  // waiver still dispatches this one call — counted in the metrics.
+  const regionCount = programRegionCount(parsed.program);
+  if (!intelligence.applied && regionCount >= PLANDLESS_SCREEN_MIN_REGIONS && dryRun !== true) {
+    if (approved === true && typeof reason === "string" && reason.trim().length > 0) {
+      recordProvenanceWaiver();
+    } else {
+      recordPlanlessScreenRefusal();
+      return planlessScreenRefusal(regionCount);
+    }
+  }
 
   // Measure the text before the layout is computed, so the screen is laid out
   // from the heights the renderer will really produce. The first compile

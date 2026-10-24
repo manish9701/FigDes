@@ -1060,9 +1060,15 @@ await check("design_runtime builds in chunks with per-chunk results", async () =
   // off the bottom. Nothing noticed, because nothing checked. The fixture
   // encoded an impossible layout and the compiler drew it anyway — which is the
   // defect issue #11 reported, not a property worth preserving.
+  //
+  // Issue #29: this is a full screen (8 regions), so it plans first — the
+  // plan's server-issued planId is the build's provenance. A planless screen
+  // is refused now, by design.
+  const plan = (await callTool("plan_screen", { primaryDecision: "review a long board of rows" })).data;
+  assert.ok(plan?.planId, "plan_screen issued a planId");
   const { data, isError } = await callTool("design_runtime", {
     chunked: true,
-    program: { canvas: { name: "Big", width: 1440, height: 3200, grid: 8 }, regions, content },
+    program: { canvas: { name: "Big", width: 1440, height: 3200, grid: 8 }, regions, content, planId: plan.planId },
   });
 
   assert.equal(isError, false);

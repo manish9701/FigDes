@@ -262,6 +262,11 @@ for (const c of CASES) {
   try {
     if (!resumeFrame) {
       const plan = (await tool("plan_screen", { primaryDecision: c.decision, availableInformation: c.info })).data;
+      // Issue #29: the plan's server-issued planId is the build's provenance.
+      // The fixture program is stamped with it, so the design_runtime build
+      // goes through the plan registry like any planned build.
+      const program = programFor(c.id);
+      if (typeof plan?.planId === "string") program.planId = plan.planId;
       rec.candidateDirection = {
         selectedFamily: plan.composition?.family ?? plan.derivation?.strategy ?? "unknown",
         rationale: plan.derivation?.note ?? "",
@@ -269,8 +274,6 @@ for (const c of CASES) {
         candidates: [],
       };
       rec.planDerivation = plan.derivation ?? null;
-
-      const program = programFor(c.id);
       // Round 3 repair: every screen gets a headline (Hierarchy entry point)
       // and the workspace gets nav items (rail renders instead of vanishing).
       // The headline goes to the first non-navigation region, and is skipped

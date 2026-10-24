@@ -154,13 +154,30 @@ test("an explicit approved+reason justification waives the provenance gate", asy
   assert.ok(session.seen.some((s) => s.tool === "create_design"));
 });
 
-test("an inline plan passes the provenance gate without justification", async () => {
+test("an inline PLAN-SHAPED plan passes the provenance gate without justification", async () => {
   const handler = TOOL_MAP.get("create_design").handler;
   const session = fakeSession(() => SUCCESS);
   const registry = fakeRegistry(session);
-  const out = await handler({ operations: OPS, plan: { decision: "show status" } }, registry);
+  const out = await handler(
+    {
+      operations: OPS,
+      // Issue #29: provenance is verified, not asserted. A real plan payload
+      // carries the program skeleton and the intelligence receipt.
+      plan: { program: {}, intelligence: { applied: true, basis: "plan-screen" } },
+    },
+    registry,
+  );
   assert.equal(out.status, "success");
   assert.ok(session.seen.some((s) => s.tool === "create_design"));
+});
+
+test("a self-asserted intelligenceApplied flag no longer waives the gate (issue #29)", async () => {
+  const handler = TOOL_MAP.get("create_design").handler;
+  const session = fakeSession(() => SUCCESS);
+  const registry = fakeRegistry(session);
+  const out = await handler({ operations: OPS, intelligenceApplied: true }, registry);
+  assert.equal(out.status, "needs-approval", "a flag the model sets itself is not provenance");
+  assert.equal(session.seen.length, 0, "nothing was dispatched on a self-reported flag");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -252,7 +269,15 @@ test("a planned runtime program is first-pass-eligible", async () => {
   });
   const out = await runRuntimeTool(
     session,
-    { program: { ...RAW_PROGRAM, plan: { decision: "show status" } }, dryRun: true },
+    {
+      program: {
+        ...RAW_PROGRAM,
+        // Issue #29: provenance is verified, not asserted — the inline plan
+        // must be plan-shaped.
+        plan: { program: {}, intelligence: { applied: true, basis: "plan-screen" } },
+      },
+      dryRun: true,
+    },
     undefined,
   );
   assert.equal(out.intelligence.applied, true);

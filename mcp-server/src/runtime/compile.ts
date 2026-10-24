@@ -288,7 +288,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // inspector growing past the bottom edge or the map silently shrinking alone.
   // Declared relations decline banding in the shell (the solver owns geometry
   // there), so an empty list is the normal state for unchanged programs.
-  const bands: Array<{ members: readonly string[]; capH: number }> = [];
+  const bands: Array<{ members: readonly string[]; capH: number; heightKind: "fill" | "numeric" | "hug" }> = [];
   const shell = planLayoutReflowed(ir, defaultGutter(canvas.grid) * rhythmScale, {
     // A relation that declares its width or height hands the geometry to the
     // solver, so the shell declines banding — including the honest refusal of
@@ -563,7 +563,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // taller than its header spilled into the region below and read as clipped.
   // Only growth, never shrinkage; side rails (starting above) never shift.
   if (!deck) {
-    fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid, bands });
+    fitRegionsToContent({ regions, boxes, operations, grid: canvas.grid, canvasH: canvasSize(canvas.height, 900), bands });
     // …and then the other direction: `solveAxis` handed the leftover to `fill`
     // before any `hug` sibling had been measured, so the fill region can be
     // holding space that a region below it is about to need.
@@ -772,6 +772,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // Regions the relation solver positioned are frozen: their geometry is the
   // contract the relations declare, and `checkRelation` already reports one
   // that lands off-canvas rather than silently reinterpreting it.
+  let redistribution: { pixels: number; bands: number; note?: string; notes: string[] } = { pixels: 0, bands: 0, notes: [] };
   if (!deck) {
     reflowed += canvasFitReflow({
       regions,
@@ -782,6 +783,37 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       grid: canvas.grid,
       frozen: ir.relations.length > 0 ? solverTouched : undefined,
     });
+
+    // Vertical redistribution of sparse band space (issue #25, remaining item 1).
+    //
+    // Every earlier pass fits content INTO the space the bands resolved with;
+    // none asks the mirror question — is the space far bigger than the content,
+    // and should the content not sit in it? The live fixtures all passed the
+    // structural checks while their content hugged the region's top-left and
+    // 60-90% of the canvas below stayed one empty band. After every region's
+    // height is final, a band whose content fills at most 60% of it gets the
+    // leftover split around the content block: centred, per the intent —
+    // `alignment: "strong"` keeps the top-anchored placement it declared.
+    // Boxes move WITH their emitted operations (patched parent-local), so the
+    // trace check keeps proving them; no region box, fill/hug/grow declaration
+    // or content extent is stretched, so every containment check stays true.
+    redistribution = redistributeBandSpace({
+      regions,
+      boxes,
+      operations,
+      grid: canvas.grid,
+      alignmentStrong: intent?.alignment === "strong",
+      autoLayout: appliedAutoLayout,
+      relations: ir.relations,
+      ir,
+      textMetrics,
+    });
+    // The payload's one-line summary, in the intentNotes style: what was
+    // redistributed, where. Refusals live on `notes` — a band left sparse says
+    // why it was left.
+    if (redistribution.pixels > 0 && redistribution.bands > 0) {
+      redistribution.note = `canvas redistribution: ${redistribution.pixels}px of empty band height given back as breathing room across ${redistribution.bands} sparse band(s).`;
+    }
   }
 
   /* ------------------------------------------------------- connectors --- */
@@ -884,6 +916,10 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       traceMismatches,
       nativeLayoutApplied,
       measuredTextUsed,
+      // Sparse-band vertical redistribution (issue #25): present whenever a band
+      // qualified for redistribution — even when it was left alone, the notes
+      // say why — absent when no band was sparse at all.
+      ...(redistribution.pixels > 0 || redistribution.notes.length > 0 ? { redistribution } : {}),
     },
   };
 }
@@ -4093,8 +4129,13 @@ function patchEmit(
   // and a route vector left 240px above where it actually drew (issue #13, live
   // apply gate). The resolved boxes were right and the operations were stale, so
   // the mismatch check was reporting a real disagreement — the fix was here, not
-  // in the check.
-  const PATCHABLE = new Set(["createFrame", "createRectangle", "createEllipse", "createText", "createVector", "createComponent"]);
+  // in the check. `createInstance` joined for the same reason: an instance is a
+  // flow child with its own x/y against its parent region, so a pass that moves
+  // content inside its region (vertical redistribution, issue #25) or a relation
+  // that moves it left the instance behind and the trace check called the
+  // geometry a lie. width/height are written too and simply ignored by the
+  // executor for instances, which size from their component.
+  const PATCHABLE = new Set(["createFrame", "createRectangle", "createEllipse", "createText", "createVector", "createComponent", "createInstance"]);
   for (let i = operations.length - 1; i >= 0; i--) {
     const candidate = operations[i] as { type?: string; id?: string; parent?: unknown } & Record<string, unknown>;
     if (candidate.id !== id) continue;
@@ -4163,20 +4204,25 @@ function repackColumns(region: { columns?: number; layout?: string; role?: strin
  * content ran taller than the band grew the region past the canvas bottom;
  * with it, the band stays one cohesive row inside the canvas and any remaining
  * overflow is the containment finding `assertResolvedGeometry` reports, never
- * a canvas escape.
+ * a canvas escape. One exception (issue #25 Phase B): a band whose height is
+ * no member's declaration (a hug band) is not capped at the shell's floor —
+ * it grows to its content, so a content-only band hugs instead of pinning its
+ * content against a 1px frame.
  */
 function fitRegionsToContent(args: {
   regions: ResolvedRegion[];
   boxes: Map<string, PlacedBox>;
   operations: Operation[];
   grid: number;
-  bands?: ReadonlyArray<{ members: readonly string[]; capH: number }>;
+  /** Canvas height, the ceiling a hug band's content-driven growth may not pass. */
+  canvasH: number;
+  bands?: ReadonlyArray<{ members: readonly string[]; capH: number; heightKind: "fill" | "numeric" | "hug" }>;
 }): void {
   const { regions, boxes, operations, grid } = args;
 
   // Band membership by id; the first band naming a region owns it (the shell
   // never puts a region in two bands).
-  const bandOf = new Map<string, { members: readonly string[]; capH: number }>();
+  const bandOf = new Map<string, { members: readonly string[]; capH: number; heightKind: "fill" | "numeric" | "hug" }>();
   for (const band of args.bands ?? []) {
     for (const id of band.members) {
       if (!bandOf.has(id)) bandOf.set(id, band);
@@ -4237,7 +4283,22 @@ function fitRegionsToContent(args: {
         return bottom === Number.NEGATIVE_INFINITY ? m.h : Math.max(m.h, bottom - m.y + pad.bottom);
       });
       const curH = Math.max(...members.map((m) => m.h));
-      const target = Math.max(curH, Math.min(Math.max(...requireds), band.capH));
+      // What the band may grow to. A fill or numeric band stated its height:
+      // the cap is that claim, honoured exactly as before. A hug band stated
+      // nothing (issue #25 Phase B, sparse-band repair): no member declared
+      // `fill` or a fixed height, so the band's height must follow its content.
+      // The shell resolves a hug band at its 1px floor because content is
+      // unmeasured there, and the old cap — the resolved height itself — pinned
+      // it collapsed while its content stood outside (reported as containment).
+      // It grows to what its members hold, capped by the canvas bottom the way
+      // `fitStackToCanvas` floors are; the fit passes below then hand whatever
+      // the canvas can still afford to the bands that DO own content (the fill
+      // member's leftover shrinks only by what the hug band now really needs).
+      const cap =
+        band.heightKind === "hug"
+          ? Math.max(1, args.canvasH - Math.min(...members.map((m) => m.y)))
+          : band.capH;
+      const target = Math.max(curH, Math.min(Math.max(...requireds), cap));
       if (target > curH + 0.5) {
         const dyGrow = Math.round(target) - curH;
         if (dyGrow > 0) {
@@ -4611,6 +4672,187 @@ function canvasFitReflow(args: {
   return changed;
 }
 
+/* -------------------------------------------------------------------------- */
+/* Vertical redistribution of sparse band space (issue #25)                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A band counts as sparse — worth redistributing around — when its content
+ * fills at most this share of the band's inner height. Above that the leftover
+ * is the band's breathing room, already honest; below it the band is one
+ * content cluster at the top with the rest empty, which is the pattern the
+ * Phase B vision pass recorded on every live fixture.
+ */
+const SPARSE_CONTENT_SHARE = 0.6;
+
+/**
+ * Splits a sparse band's leftover height around its content instead of leaving
+ * all of it below the content.
+ *
+ * ## Why this exists
+ *
+ * The geometry pipeline was one-directional: regions are sized, content is
+ * packed from each region's top-left, and the fit passes grow or shrink the
+ * *frame* — nothing ever re-asks where the content should sit inside the final
+ * frame. So a 1440x900 inspector whose content measured ~250px drew a content
+ * cluster at the top-left and ~650px of empty canvas below it: structurally
+ * clean (every containment check passed) and visibly sparse. The Phase B vision
+ * evidence recorded exactly that on every live fixture.
+ *
+ * The mechanism is bounded and honest. A band qualifies when its flow content
+ * fills at most `SPARSE_CONTENT_SHARE` of its inner height; the content block
+ * then moves to the vertical centre of the space it actually has — the leftover
+ * is split above and below, never scaled away. Nothing else changes: no region
+ * box, no declared fill/hug/grow semantics, no content size, no invented
+ * content. Boxes and operations move together (children are patched
+ * parent-local, exactly as `fitRegionsToContent` moves them with their region),
+ * so `verifyOperationTrace` keeps proving the two agree.
+ *
+ * Refusals are reported, not silent:
+ * - `visualIntent.alignment: "strong"` declares deliberate top-anchored flow —
+ *   the band keeps its placement and says so.
+ * - content that already escapes the band is left alone: redistributing it
+ *   would trade sparsity for containment findings.
+ * - regions arranged by a graph/grid algorithm or held by Figma's own
+ *   auto-layout place their own children; redistribution does not overrule
+ *   them, it notes them.
+ * - a band whose content is pinned by a declared relation keeps the placement
+ *   the solver settled: moving it again would make `checkRelation` fail.
+ */
+function redistributeBandSpace(args: {
+  regions: ResolvedRegion[];
+  boxes: Map<string, PlacedBox>;
+  operations: Operation[];
+  grid: number;
+  /** True when `visualIntent.alignment` is `"strong"`: declared placement wins. */
+  alignmentStrong: boolean;
+  /** Regions emitted as native auto-layout containers; Figma stacks their children. */
+  autoLayout: ReadonlySet<string>;
+  /** Declared relations: any band they touch keeps the solver's placement. */
+  relations: DesignIR["relations"];
+  /** The IR, read for content kinds (text vs exact-extent children). */
+  ir: DesignIR;
+  /** Measured text heights, when the caller could measure them. */
+  textMetrics?: Map<string, { width: number; height: number }>;
+}): { pixels: number; bands: number; notes: string[] } {
+  const { regions, boxes, operations, grid, alignmentStrong, autoLayout, relations, ir, textMetrics } = args;
+  const out = { pixels: 0, bands: 0, notes: [] as string[] };
+  const contentById = new Map(ir.content.map((c) => [c.id, c]));
+
+  // Every id a relation positions or anchors — a band holding any of them is
+  // not redistributed, because the relation solver's geometry is contract and
+  // re-asking it makes the declared relation report as violated.
+  const relationTouched = new Set<string>();
+  for (const relation of relations) {
+    relationTouched.add(relation.id);
+    if (relation.rightOf !== undefined) relationTouched.add(relation.rightOf);
+    if (relation.below !== undefined) relationTouched.add(relation.below);
+  }
+
+  for (const region of regions) {
+    if (region.children.length === 0) continue;
+    const children = region.children
+      .map((id) => boxes.get(id))
+      .filter((b): b is PlacedBox => b !== undefined);
+    if (children.length === 0) continue;
+
+    const pad = normalizePadding(region.padding, grid);
+    const innerTop = region.y + pad.top;
+    const innerBottom = region.y + region.h - pad.bottom;
+    const innerH = innerBottom - innerTop;
+    if (innerH <= 0) continue;
+
+    let contentTop = Number.POSITIVE_INFINITY;
+    let contentBottom = Number.NEGATIVE_INFINITY;
+    for (const child of children) {
+      contentTop = Math.min(contentTop, child.y);
+      contentBottom = Math.max(contentBottom, child.y + child.h);
+    }
+
+    // Content that already escapes its band is left where it is: this pass
+    // trades empty space for balance, never balance for a containment finding.
+    if (contentTop < innerTop - 0.5 || contentBottom > innerBottom + 0.5) {
+      out.notes.push(
+        `band '${region.id}' kept its layout: its content does not fit the band, so redistribution would trade sparsity for containment findings.`,
+      );
+      continue;
+    }
+
+    const topGap = contentTop - innerTop;
+    const bottomGap = innerBottom - contentBottom;
+    const contentH = contentBottom - contentTop;
+    if (contentH > SPARSE_CONTENT_SHARE * innerH) continue; // not sparse — nothing to give back
+
+    if (region.layout !== "flow") {
+      out.notes.push(
+        `band '${region.id}' is arranged by the '${region.layout}' algorithm, so its children keep the placement the algorithm chose.`,
+      );
+      continue;
+    }
+    // Any region that ASKED for a native auto-layout container is skipped,
+    // whether the request was honoured or declined. Honoured: Figma stacks the
+    // children itself and the recorded boxes must agree with it. Declined: the
+    // runtime measures text between its two compile passes, and a request that
+    // flips from declined to honoured between passes would otherwise move the
+    // content twice — centred on the estimate, top-anchored once measured.
+    if (autoLayout.has(region.id) || (region as { autoLayout?: string }).autoLayout === "vertical") {
+      out.notes.push(
+        `band '${region.id}' asked for a native auto-layout container, so its children keep the stacking Figma owns.`,
+      );
+      continue;
+    }
+    if (relationTouched.has(region.id) || region.children.some((id) => relationTouched.has(id))) {
+      out.notes.push(`band '${region.id}' holds relation-pinned content, so it keeps the placement the relation solver settled.`);
+      continue;
+    }
+    // Text whose height is still the character-count estimate is skipped, the
+    // same doctrine the auto-layout gate applies: an estimate is not exact
+    // enough to balance against, and the runtime's measure-then-recompile pass
+    // would otherwise move the content twice — centred on the estimate, moved
+    // again once measured. A region with no text (components and instances
+    // have exact extents) does not need this gate.
+    const unmeasuredText = region.children.filter((id) => {
+      const child = contentById.get(id);
+      return child !== undefined && child.kind === "text" && (textMetrics?.get(id)?.height ?? 0) === 0;
+    });
+    if (unmeasuredText.length > 0) {
+      out.notes.push(
+        `band '${region.id}' holds text with only estimated heights (${unmeasuredText.map((id) => `'${id}'`).join(", ")}), so it keeps absolute placement until the text is measured.`,
+      );
+      continue;
+    }
+    if (alignmentStrong) {
+      out.notes.push(`band '${region.id}' kept its top-anchored flow: visualIntent alignment 'strong' declares the placement.`);
+      continue;
+    }
+
+    const slack = topGap + bottomGap;
+    if (slack < 2) continue; // already balanced (or too tight to move meaningfully)
+    // Centre the content block in the space it has. The clamp keeps every child
+    // inside the band even when the gaps are asymmetric.
+    let dy = Math.round((bottomGap - topGap) / 2);
+    dy = Math.max(-topGap, Math.min(dy, bottomGap));
+    if (Math.abs(dy) < 1) continue;
+
+    for (const child of children) {
+      const moved: PlacedBox = { ...child, y: child.y + dy };
+      boxes.set(child.id, moved);
+      // Parent-local patch: the create op carries the position relative to the
+      // region origin, so the origin travels with it.
+      patchEmit(
+        operations,
+        child.id,
+        { x: moved.x, y: moved.y, width: Math.max(1, Math.round(moved.w)), height: Math.max(1, Math.round(moved.h)) },
+        { x: region.x, y: region.y },
+      );
+    }
+    out.pixels += Math.abs(dy);
+    out.bands += 1;
+  }
+
+  return out;
+}
+
 /**
  * Carries a region's text along when a relation moves or resizes that region.
  *
@@ -4830,7 +5072,15 @@ const FIXED_COMPONENT_HEIGHT: Record<string, number> = {
   tableRow: 48,
 };
 
-function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK, textMetrics?: Map<string, { width: number; height: number }>): number {
+/**
+ * The compiler's own content-height estimator, exported for the pipeline's
+ * plan-side content-fit pass (issue #25/#28): the plan must state the room the
+ * content needs with the SAME arithmetic the build will apply, or the plan's
+ * declared chrome heights drift from the built ones and the composition
+ * handoff refuses the build the plan itself set up. No behaviour change here —
+ * the function is exactly the private estimator, now visible.
+ */
+export function estimateHeight(spec: ContentSpec, width: number, typeScale = 1, titleScale = 1, grid = 8, look: StyleLook = DEFAULT_LOOK, textMetrics?: Map<string, { width: number; height: number }>): number {
   if (spec.kind !== "text") {
     if (spec.kind === "component") {
       if (spec.type === "topologyMap") return Math.round(320 * typeScale);

@@ -97,12 +97,12 @@
           "x": 0,
           "y": 0,
           "w": 1440,
-          "h": 56
+          "h": 112
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 56
+          "height": 112
         },
         "grow": 0,
         "padding": {
@@ -111,7 +111,7 @@
           "bottom": 16,
           "left": 16
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -158,9 +158,9 @@
         "order": 1,
         "bounds": {
           "x": 0,
-          "y": 88,
+          "y": 144,
           "w": 1440,
-          "h": 812
+          "h": 756
         },
         "layoutMode": "free",
         "sizing": {
@@ -174,7 +174,7 @@
           "bottom": 24,
           "left": 24
         },
-        "gap": 32,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -187,7 +187,7 @@
           "slot-6-node-topology",
           "slot-7-latency"
         ],
-        "density": "low",
+        "density": "medium",
         "relationships": [
           {
             "id": "rel-map-rail",
@@ -309,7 +309,7 @@
       "coveredArea": 1249920,
       "coverage": 0.9644444444444444,
       "largestEmptyBand": 0.035555555555555556,
-      "focalShare": 0.9022222222222223,
+      "focalShare": 0.84,
       "notes": []
     }
   },
@@ -329,7 +329,7 @@
       "x": 0,
       "y": 0,
       "width": 1440,
-      "height": 181
+      "height": 112
     },
     {
       "type": "createFrame",
@@ -337,9 +337,9 @@
       "parent": "root",
       "name": "Map",
       "x": 0,
-      "y": 213,
+      "y": 144,
       "width": 1440,
-      "height": 687
+      "height": 756
     },
     {
       "type": "createText",
@@ -348,33 +348,51 @@
       "name": "Topology",
       "x": 16,
       "y": 16,
-      "width": 262
+      "width": 269
     },
     {
       "type": "createText",
       "id": "slot-heading-description",
       "parent": "rail",
       "name": "See how the cluster is wired and where t",
-      "x": 302.4,
+      "x": 300.8,
       "y": 16,
-      "width": 262
+      "width": 269
+    },
+    {
+      "type": "createText",
+      "id": "slot-4-gpu-memory",
+      "parent": "rail",
+      "name": "GPU memory",
+      "x": 585.6,
+      "y": 16,
+      "width": 269
+    },
+    {
+      "type": "createText",
+      "id": "slot-5-model-throughput",
+      "parent": "rail",
+      "name": "model throughput",
+      "x": 870.4,
+      "y": 16,
+      "width": 269
     },
     {
       "type": "createText",
       "id": "data-disclosure",
       "parent": "rail",
       "name": "Illustrative values — the screen is not ",
-      "x": 588.8,
+      "x": 1155.2,
       "y": 16,
-      "width": 262
+      "width": 269
     },
     {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "rail",
       "name": "Trace path",
-      "x": 875.2,
-      "y": 16,
+      "x": 585.6,
+      "y": 56,
       "width": 105,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -383,48 +401,6 @@
       "type": "createText",
       "parent": "slot-action-primary",
       "name": "Label"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-4-gpu-memory",
-      "parent": "rail",
-      "name": "GPU memory",
-      "x": 1161.6,
-      "y": 16,
-      "width": 262,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-gpu-memory",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-gpu-memory",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-5-model-throughput",
-      "parent": "rail",
-      "name": "model throughput",
-      "x": 588.8,
-      "y": 75,
-      "width": 262,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-model-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-model-throughput",
-      "name": "Value"
     },
     {
       "type": "createText",
@@ -440,43 +416,43 @@
       "parent": "map",
       "name": "latency",
       "x": 24,
-      "y": 146
+      "y": 130
     },
     {
       "type": "createVector",
       "id": "connector-1",
       "parent": "root",
       "name": "orthogonal connector slot-6-node-topology -> slot-4-gpu-memory",
-      "x": 836.13,
-      "y": 104.43,
-      "width": 340.54,
-      "height": 133.07
+      "x": 714.59,
+      "y": 39.5,
+      "width": 11,
+      "height": 129
     },
     {
       "type": "createVector",
       "id": "connector-2",
       "parent": "map",
-      "name": "orthogonal connector slot-6-node-topology -> slot-7-latency",
-      "x": 714.5,
+      "name": "orthogonal connector slot-6-node-topology -> slot-7-latency (nodes 16px apart, closer than the 20px the arrowheads need, so it is drawn without one)",
+      "x": 719.5,
       "y": 113.5,
-      "width": 11,
-      "height": 33
+      "width": 2,
+      "height": 17
     },
     {
       "type": "createText",
       "id": "connector-1-label",
       "parent": "root",
       "name": "Label connect",
-      "x": 1022.4,
-      "y": 86
+      "x": 726.09,
+      "y": 74
     },
     {
       "type": "createText",
       "id": "connector-2-label",
       "parent": "map",
       "name": "Label connect",
-      "x": 734,
-      "y": 123
+      "x": 716,
+      "y": 102
     }
   ],
   "structuralChecks": [
@@ -528,14 +504,14 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 96%, largest empty band 4%, focal share 90%.",
+      "detail": "coverage 96%, largest empty band 4%, focal share 84%.",
       "nodeIds": []
     },
     {
       "id": "compiled-geometry",
       "question": "Does the resolved geometry agree with the program?",
-      "status": "pass",
-      "detail": "No geometry violations.",
+      "status": "fail",
+      "detail": "layout: Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'. | layout: Connector 'connector-2' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate 'slot-6-node-topology' and 'slot-7-latency' to show direction, or set arrowEnd:false to own the plain line.",
       "nodeIds": []
     },
     {
@@ -548,8 +524,8 @@
     {
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
-      "status": "review",
-      "detail": "rail: planned 1440x56, built 1440x181; map: planned 1440x812, built 1440x687",
+      "status": "pass",
+      "detail": "Every region resolved to the size the plan promised.",
       "nodeIds": []
     },
     {
@@ -569,37 +545,46 @@
   ],
   "findings": [
     {
-      "id": "plan-geometry-drift-01",
-      "stage": "plan",
+      "id": "violation-layout-01",
+      "stage": "structure",
       "severity": "medium",
-      "confidence": 0.9,
+      "confidence": 0.8,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x181.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "summary": "Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'.",
+      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
       "evidence": {
-        "kind": "geometry",
-        "detail": "rail: planned 1440x56, built 1440x181"
+        "kind": "rule",
+        "detail": "rule: layout"
       },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "fix": "Adjust the program so the geometry resolves as intended.",
       "automatable": false
     },
     {
-      "id": "plan-geometry-drift-02",
-      "stage": "plan",
+      "id": "violation-layout-02",
+      "stage": "structure",
       "severity": "medium",
-      "confidence": 0.9,
+      "confidence": 0.8,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x687.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
+      "summary": "Connector 'connector-2' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate 'slot-6-node-topology' and 'slot-7-latency' to show direction, or set arrowEnd:false to own the plain line.",
+      "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
       "evidence": {
-        "kind": "geometry",
-        "detail": "map: planned 1440x812, built 1440x687"
+        "kind": "rule",
+        "detail": "rule: layout"
       },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
+      "fix": "Adjust the program so the geometry resolves as intended.",
       "automatable": false
     }
   ],
-  "violations": [],
+  "violations": [
+    {
+      "rule": "layout",
+      "message": "Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'."
+    },
+    {
+      "rule": "layout",
+      "message": "Connector 'connector-2' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate 'slot-6-node-topology' and 'slot-7-latency' to show direction, or set arrowEnd:false to own the plain line."
+    }
+  ],
   "applicable": true,
-  "status": "review"
+  "status": "fail"
 }

@@ -78,7 +78,7 @@
     "test:issue22": "node --test tests/issue-22-skills.test.mjs tests/issue-22-phase34.test.mjs tests/issue-22-benchmark-gate.test.mjs",
     "test:issue23": "node --test tests/issue-23-preflight.test.mjs tests/issue-23-disclosure.test.mjs tests/issue-23-quality.test.mjs tests/issue-23-exo-regressions.test.mjs",
     "test:issue24": "node --test tests/issue-24-rollback-journal.test.mjs tests/issue-24-find-roles.test.mjs tests/issue-24-server-reliability.test.mjs tests/issue-24-design-intel.test.mjs tests/issue-24-intelligence-gate.test.mjs tests/issue-24-autolayout-measured.test.mjs tests/issue-24-component-library.test.mjs tests/issue-24-style-fidelity.test.mjs tests/issue-24-topology-quality.test.mjs tests/issue-24-topology-hotfix.test.mjs",
-    "test:issue25": "node --test tests/planner-deployment.test.mjs tests/runtime.test.mjs tests/issue-23-preflight.test.mjs tests/issue-25-verdicts.test.mjs tests/issue-25-build-integrity.test.mjs",
+    "test:issue25": "node --test tests/planner-deployment.test.mjs tests/runtime.test.mjs tests/issue-23-preflight.test.mjs tests/issue-25-verdicts.test.mjs tests/issue-25-followups.test.mjs tests/issue-25-planfit.test.mjs tests/issue-25-sparse.test.mjs tests/issue-25-goldens.test.mjs tests/issue-25-build-integrity.test.mjs",
     "test:issue28": "node --test tests/issue-28-handoff.test.mjs",
     "gate": "node scripts/run-release-gate.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs",

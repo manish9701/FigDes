@@ -112,12 +112,12 @@
           "x": 0,
           "y": 0,
           "w": 1440,
-          "h": 56
+          "h": 81
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 56
+          "height": 81
         },
         "grow": 0,
         "padding": {
@@ -126,7 +126,7 @@
           "bottom": 16,
           "left": 16
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -175,9 +175,9 @@
         "order": 1,
         "bounds": {
           "x": 0,
-          "y": 88,
+          "y": 113,
           "w": 1440,
-          "h": 812
+          "h": 787
         },
         "layoutMode": "free",
         "sizing": {
@@ -191,7 +191,7 @@
           "bottom": 24,
           "left": 24
         },
-        "gap": 32,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -229,7 +229,7 @@
           "slot-32-model-throughput",
           "slot-33-network-throughput"
         ],
-        "density": "low",
+        "density": "medium",
         "relationships": [
           {
             "id": "rel-map-rail",
@@ -252,7 +252,7 @@
         "interaction": "select and inspect what is shown here",
         "why": "the relationships themselves (API latency, Warm pool size): API latency, which are the content",
         "autoLayout": false,
-        "columns": 5
+        "columns": 4
       }
     ],
     "content": [
@@ -641,7 +641,7 @@
       "coveredArea": 1249920,
       "coverage": 0.9644444444444444,
       "largestEmptyBand": 0.035555555555555556,
-      "focalShare": 0.9022222222222223,
+      "focalShare": 0.8744444444444445,
       "notes": []
     }
   },
@@ -661,7 +661,7 @@
       "x": 0,
       "y": 0,
       "width": 1440,
-      "height": 122
+      "height": 84
     },
     {
       "type": "createFrame",
@@ -669,9 +669,9 @@
       "parent": "root",
       "name": "Map",
       "x": 0,
-      "y": 146,
+      "y": 108,
       "width": 1440,
-      "height": 754
+      "height": 792
     },
     {
       "type": "createText",
@@ -680,14 +680,32 @@
       "name": "Operations",
       "x": 16,
       "y": 16,
-      "width": 215
+      "width": 221
+    },
+    {
+      "type": "createText",
+      "id": "slot-3-api-errors",
+      "parent": "rail",
+      "name": "API errors",
+      "x": 253.33,
+      "y": 16,
+      "width": 221
+    },
+    {
+      "type": "createText",
+      "id": "slot-4-api-throughput",
+      "parent": "rail",
+      "name": "API throughput",
+      "x": 490.67,
+      "y": 16,
+      "width": 221
     },
     {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "rail",
       "name": "Acknowledge incident",
-      "x": 254.67,
+      "x": 728,
       "y": 16,
       "width": 170,
       "height": 40,
@@ -700,52 +718,10 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-3-api-errors",
-      "parent": "rail",
-      "name": "API errors",
-      "x": 493.33,
-      "y": 16,
-      "width": 215,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-3-api-errors",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-3-api-errors",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-4-api-throughput",
-      "parent": "rail",
-      "name": "API throughput",
-      "x": 732,
-      "y": 16,
-      "width": 215,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-api-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-api-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
       "id": "slot-5-disk-pressure",
       "parent": "rail",
       "name": "Disk pressure",
-      "x": 970.67,
+      "x": 965.33,
       "y": 16,
       "width": 93,
       "height": 22,
@@ -761,7 +737,7 @@
       "id": "slot-6-memory-pressure",
       "parent": "rail",
       "name": "Memory pressure",
-      "x": 1209.33,
+      "x": 1202.67,
       "y": 16,
       "width": 105,
       "height": 22,
@@ -779,33 +755,51 @@
       "name": "Watch every service at once and catch th",
       "x": 24,
       "y": 24,
-      "width": 253
+      "width": 336
+    },
+    {
+      "type": "createText",
+      "id": "slot-27-deploy-frequency",
+      "parent": "map",
+      "name": "Deploy frequency",
+      "x": 376,
+      "y": 24,
+      "width": 336
+    },
+    {
+      "type": "createText",
+      "id": "slot-29-batch-backlog",
+      "parent": "map",
+      "name": "Batch backlog",
+      "x": 728,
+      "y": 24,
+      "width": 336
     },
     {
       "type": "createText",
       "id": "data-disclosure",
       "parent": "map",
       "name": "Illustrative values — the screen is not ",
-      "x": 308.8,
+      "x": 1080,
       "y": 24,
-      "width": 253
+      "width": 336
     },
     {
       "type": "createText",
       "id": "slot-7-api-latency",
       "parent": "map",
       "name": "API latency",
-      "x": 593.6,
-      "y": 24
+      "x": 24,
+      "y": 94
     },
     {
       "type": "createFrame",
       "id": "slot-8-queue-depth",
       "parent": "map",
       "name": "Queue depth",
-      "x": 878.4,
-      "y": 24,
-      "width": 253,
+      "x": 376,
+      "y": 64,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -819,9 +813,9 @@
       "id": "slot-9-queue-lag",
       "parent": "map",
       "name": "Queue lag",
-      "x": 1163.2,
-      "y": 24,
-      "width": 253,
+      "x": 728,
+      "y": 64,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -835,9 +829,9 @@
       "id": "slot-10-worker-saturation",
       "parent": "map",
       "name": "Worker saturation",
-      "x": 24,
-      "y": 136,
-      "width": 253,
+      "x": 1080,
+      "y": 75,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -851,9 +845,9 @@
       "id": "slot-11-cache-hit-rate",
       "parent": "map",
       "name": "Cache hit rate",
-      "x": 308.8,
-      "y": 91,
-      "width": 253,
+      "x": 24,
+      "y": 200,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -867,9 +861,9 @@
       "id": "slot-12-shard-balance",
       "parent": "map",
       "name": "Shard balance",
-      "x": 593.6,
-      "y": 146,
-      "width": 253,
+      "x": 376,
+      "y": 170,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -883,9 +877,9 @@
       "id": "slot-13-replica-lag",
       "parent": "map",
       "name": "Replica lag",
-      "x": 878.4,
-      "y": 146,
-      "width": 253,
+      "x": 728,
+      "y": 170,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -899,9 +893,9 @@
       "id": "slot-14-clock-skew",
       "parent": "map",
       "name": "Clock skew",
-      "x": 1163.2,
-      "y": 146,
-      "width": 253,
+      "x": 1080,
+      "y": 181,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -916,8 +910,8 @@
       "parent": "map",
       "name": "Auth failures",
       "x": 24,
-      "y": 258,
-      "width": 253,
+      "y": 306,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -931,9 +925,9 @@
       "id": "slot-16-rate-limit-rejections",
       "parent": "map",
       "name": "Rate limit rejections",
-      "x": 308.8,
-      "y": 213,
-      "width": 253,
+      "x": 376,
+      "y": 276,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -947,9 +941,9 @@
       "id": "slot-17-cold-start-time",
       "parent": "map",
       "name": "Cold start time",
-      "x": 593.6,
-      "y": 268,
-      "width": 253,
+      "x": 728,
+      "y": 276,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -963,9 +957,9 @@
       "id": "slot-18-warm-pool-size",
       "parent": "map",
       "name": "Warm pool size",
-      "x": 878.4,
-      "y": 268,
-      "width": 253,
+      "x": 1080,
+      "y": 287,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -979,9 +973,9 @@
       "id": "slot-19-inference-queue",
       "parent": "map",
       "name": "Inference queue",
-      "x": 1163.2,
-      "y": 268,
-      "width": 253,
+      "x": 24,
+      "y": 412,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -995,9 +989,9 @@
       "id": "slot-20-index-rebuild",
       "parent": "map",
       "name": "Index rebuild",
-      "x": 24,
-      "y": 380,
-      "width": 253,
+      "x": 376,
+      "y": 382,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1011,9 +1005,9 @@
       "id": "slot-21-snapshot-age",
       "parent": "map",
       "name": "Snapshot age",
-      "x": 308.8,
-      "y": 335,
-      "width": 253,
+      "x": 728,
+      "y": 382,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1027,9 +1021,9 @@
       "id": "slot-22-backup-failures",
       "parent": "map",
       "name": "Backup failures",
-      "x": 593.6,
-      "y": 390,
-      "width": 253,
+      "x": 1080,
+      "y": 393,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1043,9 +1037,9 @@
       "id": "slot-23-certificate-expiry",
       "parent": "map",
       "name": "Certificate expiry",
-      "x": 878.4,
-      "y": 390,
-      "width": 253,
+      "x": 24,
+      "y": 518,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1059,9 +1053,9 @@
       "id": "slot-24-change-failure-rate",
       "parent": "map",
       "name": "Change failure rate",
-      "x": 1163.2,
-      "y": 390,
-      "width": 253,
+      "x": 376,
+      "y": 488,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1075,9 +1069,9 @@
       "id": "slot-25-time-to-restore",
       "parent": "map",
       "name": "Time to restore",
-      "x": 24,
-      "y": 502,
-      "width": 253,
+      "x": 728,
+      "y": 488,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1088,33 +1082,12 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-27-deploy-frequency",
-      "parent": "map",
-      "name": "—",
-      "x": 308.8,
-      "y": 457,
-      "width": 253,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-27-deploy-frequency",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-27-deploy-frequency",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
       "id": "slot-28-config-drift",
       "parent": "map",
       "name": "Config drift",
-      "x": 593.6,
-      "y": 512,
-      "width": 253,
+      "x": 1080,
+      "y": 499,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1125,33 +1098,12 @@
     },
     {
       "type": "createFrame",
-      "id": "slot-29-batch-backlog",
-      "parent": "map",
-      "name": "—",
-      "x": 878.4,
-      "y": 512,
-      "width": 253,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-29-batch-backlog",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-29-batch-backlog",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
       "id": "slot-30-token-refresh-errors",
       "parent": "map",
       "name": "Token refresh errors",
-      "x": 1163.2,
-      "y": 512,
-      "width": 253,
+      "x": 24,
+      "y": 624,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1165,9 +1117,9 @@
       "id": "slot-31-model-errors",
       "parent": "map",
       "name": "Model errors",
-      "x": 24,
-      "y": 624,
-      "width": 253,
+      "x": 376,
+      "y": 594,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1181,9 +1133,9 @@
       "id": "slot-32-model-throughput",
       "parent": "map",
       "name": "Model throughput",
-      "x": 308.8,
-      "y": 579,
-      "width": 253,
+      "x": 728,
+      "y": 594,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1197,9 +1149,9 @@
       "id": "slot-33-network-throughput",
       "parent": "map",
       "name": "Network throughput",
-      "x": 593.6,
-      "y": 634,
-      "width": 253,
+      "x": 1080,
+      "y": 605,
+      "width": 336,
       "height": 90,
       "layoutMode": "VERTICAL"
     },
@@ -1258,7 +1210,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 96%, largest empty band 4%, focal share 90%.",
+      "detail": "coverage 96%, largest empty band 4%, focal share 87%.",
       "nodeIds": []
     },
     {
@@ -1279,7 +1231,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "rail: planned 1440x56, built 1440x122; map: planned 1440x812, built 1440x754",
+      "detail": "map: planned 1440x787, built 1440x792",
       "nodeIds": []
     },
     {
@@ -1304,26 +1256,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: rail: planned 1440x56, built 1440x122.",
+      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x787, built 1440x792.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "rail: planned 1440x56, built 1440x122"
-      },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
-      "automatable": false
-    },
-    {
-      "id": "plan-geometry-drift-02",
-      "stage": "plan",
-      "severity": "medium",
-      "confidence": 0.9,
-      "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: map: planned 1440x812, built 1440x754.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
-      "evidence": {
-        "kind": "geometry",
-        "detail": "map: planned 1440x812, built 1440x754"
+        "detail": "map: planned 1440x787, built 1440x792"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

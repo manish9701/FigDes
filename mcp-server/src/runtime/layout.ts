@@ -301,9 +301,10 @@ export interface ShellInput {
   reflowOut?: (changed: number) => void;
   /**
    * Collects the horizontal bands the stack layout formed (`layoutStackBanded`),
-   * one entry per band: the member ids in declaration order and the height cap —
+   * one entry per band: the member ids in declaration order, the height cap —
    * the band's own resolved height, which is also how far any of its members
-   * may grow to fit content.
+   * may grow to fit content — and the band's semantic height (`heightKind`),
+   * which tells the compiler whether the cap is a declared claim.
    *
    * The compiler consumes this so its fit passes can keep band members growing
    * together and capped. Nothing outside `layoutRegions` needs it, so bands are
@@ -321,10 +322,19 @@ export interface ShellInput {
  * stated (or the canvas leftover a fill member takes), already capped so the
  * band never runs past the canvas bottom. It is the ceiling the compiler's fit
  * passes honour when content asks a member to grow.
+ *
+ * `heightKind` says where that cap came from (issue #25 Phase B, sparse-band
+ * repair): `"fill"` — a member declared `height: "fill"`, so the cap is the
+ * canvas leftover the member owns; `"numeric"` — a member declared a fixed
+ * height, so the cap is that declaration; `"hug"` — no member declared either,
+ * so the band has no height claim of its own. A hug band resolves at the floor
+ * here (content is unmeasured in the shell) and must be grown to its content by
+ * the compiler's fit pass instead of being pinned to that floor.
  */
 export interface ResolvedBand {
   members: readonly string[];
   capH: number;
+  heightKind: "fill" | "numeric" | "hug";
 }
 
 /**
@@ -524,8 +534,12 @@ function layoutStackBanded(input: ShellInput, bands: Array<{ start: number; indi
   // Each unit's height along the stacking axis, solved exactly as the plain
   // stack solves it: fixed units keep their size, `fill` units share the
   // leftover by grow weight, `hug` units measure to zero here and grow when the
-  // compiler measures their content.
-  const stack = units.map((u) => {
+  // compiler measures their content. The band's `heightKind` is recorded per
+  // unit so the reported bands carry where their cap came from: a declared
+  // fill/numeric claim, or no claim at all (a content-only band the compiler
+  // must grow to its content).
+  const bandKindOf = new Map<number, "fill" | "numeric" | "hug">();
+  const stack = units.map((u, k) => {
     if (!u.band) {
       const r = regions[u.indices[0]!]!;
       return { id: r.id, grow: r.grow, width: r.width, height: r.height };
@@ -533,6 +547,8 @@ function layoutStackBanded(input: ShellInput, bands: Array<{ start: number; indi
     const members = u.indices.map((k) => regions[k]!);
     const fillHeight = members.some((m) => m.height === "fill");
     const numericHeights = members.map((m) => (typeof m.height === "number" ? m.height : 0)).filter((h) => h > 0);
+    const kind: "fill" | "numeric" | "hug" = fillHeight ? "fill" : numericHeights.length > 0 ? "numeric" : "hug";
+    bandKindOf.set(k, kind);
     return {
       // A band id is never emitted; the children below carry real ids.
       id: members.map((m) => m.id).join("+"),
@@ -540,7 +556,7 @@ function layoutStackBanded(input: ShellInput, bands: Array<{ start: number; indi
       // grow:0 inspector when another fill unit competes for the leftover.
       grow: Math.max(0, ...members.map((m) => growOf(m.grow))),
       width: canvasW, // not read by the column solver
-      height: fillHeight ? ("fill" as MajorSize) : numericHeights.length > 0 ? Math.max(...numericHeights) : ("hug" as MajorSize),
+      height: kind === "fill" ? ("fill" as MajorSize) : kind === "numeric" ? Math.max(...numericHeights) : ("hug" as MajorSize),
     };
   });
 
@@ -595,7 +611,7 @@ function layoutStackBanded(input: ShellInput, bands: Array<{ start: number; indi
         out.push({ ...m, x, y: Math.round(y), w: widths[mi]!, h });
         x += (widths[mi] ?? 0) + gutter;
       });
-      reported.push({ members: members.map((m) => m.id), capH: h });
+      reported.push({ members: members.map((m) => m.id), capH: h, heightKind: bandKindOf.get(k) ?? "numeric" });
     }
     y += h + gutter;
   }

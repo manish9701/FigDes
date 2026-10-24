@@ -87,12 +87,12 @@
           "x": 240,
           "y": 0,
           "w": 1200,
-          "h": 88
+          "h": 102
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 88
+          "height": 102
         },
         "grow": 0,
         "padding": {
@@ -173,7 +173,7 @@
           "bottom": 0,
           "left": 0
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -219,9 +219,9 @@
         "order": 1,
         "bounds": {
           "x": 240,
-          "y": 120,
+          "y": 134,
           "w": 1200,
-          "h": 358
+          "h": 301
         },
         "layoutMode": "free",
         "sizing": {
@@ -235,7 +235,7 @@
           "bottom": 32,
           "left": 32
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -282,9 +282,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 510,
+          "y": 467,
           "w": 360,
-          "h": 119
+          "h": 201
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -298,7 +298,7 @@
           "bottom": 0,
           "left": 0
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -340,9 +340,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 661,
+          "y": 700,
           "w": 1200,
-          "h": 239
+          "h": 201
         },
         "layoutMode": "grid",
         "sizing": {
@@ -553,10 +553,10 @@
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 1052040,
-      "coverage": 0.8117592592592593,
+      "coveredArea": 984360,
+      "coverage": 0.759537037037037,
       "largestEmptyBand": 0,
-      "focalShare": 0.3314814814814815,
+      "focalShare": 0.27870370370370373,
       "notes": []
     }
   },
@@ -596,7 +596,7 @@
       "x": 240,
       "y": 134,
       "width": 1200,
-      "height": 292
+      "height": 300
     },
     {
       "type": "createFrame",
@@ -604,9 +604,9 @@
       "parent": "root",
       "name": "Context",
       "x": 240,
-      "y": 458,
+      "y": 466,
       "width": 360,
-      "height": 205
+      "height": 201
     },
     {
       "type": "createFrame",
@@ -614,9 +614,9 @@
       "parent": "root",
       "name": "Support",
       "x": 240,
-      "y": 695,
+      "y": 699,
       "width": 1200,
-      "height": 205
+      "height": 201
     },
     {
       "type": "createText",
@@ -671,10 +671,37 @@
     },
     {
       "type": "createText",
+      "id": "slot-6-gpu-memory",
+      "parent": "support",
+      "name": "GPU memory",
+      "x": 24,
+      "y": 24,
+      "width": 218
+    },
+    {
+      "type": "createText",
+      "id": "slot-7-model-throughput",
+      "parent": "support",
+      "name": "model throughput",
+      "x": 257.6,
+      "y": 24,
+      "width": 218
+    },
+    {
+      "type": "createText",
+      "id": "slot-8-recent-deploys",
+      "parent": "support",
+      "name": "recent deploys",
+      "x": 491.20000000000005,
+      "y": 24,
+      "width": 218
+    },
+    {
+      "type": "createText",
       "id": "data-disclosure",
       "parent": "support",
       "name": "Illustrative values — the screen is not ",
-      "x": 24,
+      "x": 724.8,
       "y": 24,
       "width": 218
     },
@@ -682,10 +709,10 @@
       "type": "createFrame",
       "id": "slot-5-cluster-health",
       "parent": "support",
-      "name": "cluster health",
-      "x": 257.6,
+      "name": "cluster health — Degraded",
+      "x": 958.4000000000001,
       "y": 24,
-      "width": 103,
+      "width": 171,
       "height": 22,
       "layoutMode": "HORIZONTAL"
     },
@@ -693,90 +720,6 @@
       "type": "createText",
       "parent": "slot-5-cluster-health",
       "name": "Label"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-6-gpu-memory",
-      "parent": "support",
-      "name": "GPU memory",
-      "x": 491.20000000000005,
-      "y": 24,
-      "width": 218,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-gpu-memory",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-6-gpu-memory",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-7-model-throughput",
-      "parent": "support",
-      "name": "model throughput",
-      "x": 724.8,
-      "y": 24,
-      "width": 218,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-model-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-7-model-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-8-recent-deploys",
-      "parent": "support",
-      "name": "—",
-      "x": 958.4000000000001,
-      "y": 24,
-      "width": 218,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-8-recent-deploys",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-8-recent-deploys",
-      "name": "Title"
-    },
-    {
-      "type": "createFrame",
-      "id": "slot-9-audit-log",
-      "parent": "support",
-      "name": "—",
-      "x": 24,
-      "y": 75,
-      "width": 218,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-9-audit-log",
-      "name": "Date"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-9-audit-log",
-      "name": "Title"
     }
   ],
   "structuralChecks": [
@@ -828,7 +771,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 81%, largest empty band 0%, focal share 33%.",
+      "detail": "coverage 76%, largest empty band 0%, focal share 28%.",
       "nodeIds": []
     },
     {
@@ -848,8 +791,8 @@
     {
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
-      "status": "review",
-      "detail": "header: planned 1200x88, built 1200x102; subject: planned 1200x358, built 1200x292; context: planned 360x119, built 360x205; support: planned 1200x239, built 1200x205",
+      "status": "pass",
+      "detail": "Every region resolved to the size the plan promised.",
       "nodeIds": []
     },
     {
@@ -867,68 +810,7 @@
       "nodeIds": []
     }
   ],
-  "findings": [
-    {
-      "id": "plan-geometry-drift-01",
-      "stage": "plan",
-      "severity": "medium",
-      "confidence": 0.9,
-      "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: header: planned 1200x88, built 1200x102.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
-      "evidence": {
-        "kind": "geometry",
-        "detail": "header: planned 1200x88, built 1200x102"
-      },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
-      "automatable": false
-    },
-    {
-      "id": "plan-geometry-drift-02",
-      "stage": "plan",
-      "severity": "medium",
-      "confidence": 0.9,
-      "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x358, built 1200x292.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
-      "evidence": {
-        "kind": "geometry",
-        "detail": "subject: planned 1200x358, built 1200x292"
-      },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
-      "automatable": false
-    },
-    {
-      "id": "plan-geometry-drift-03",
-      "stage": "plan",
-      "severity": "medium",
-      "confidence": 0.9,
-      "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x119, built 360x205.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
-      "evidence": {
-        "kind": "geometry",
-        "detail": "context: planned 360x119, built 360x205"
-      },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
-      "automatable": false
-    },
-    {
-      "id": "plan-geometry-drift-04",
-      "stage": "plan",
-      "severity": "medium",
-      "confidence": 0.9,
-      "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: support: planned 1200x239, built 1200x205.",
-      "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
-      "evidence": {
-        "kind": "geometry",
-        "detail": "support: planned 1200x239, built 1200x205"
-      },
-      "fix": "Give the region the room its content needs, or reduce what it holds.",
-      "automatable": false
-    }
-  ],
+  "findings": [],
   "violations": [],
   "applicable": true,
   "status": "review"

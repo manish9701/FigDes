@@ -104,7 +104,7 @@
           "bottom": 0,
           "left": 0
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -158,12 +158,12 @@
           "x": 272,
           "y": 0,
           "w": 1168,
-          "h": 72
+          "h": 128
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 72
+          "height": 128
         },
         "grow": 0,
         "padding": {
@@ -172,7 +172,7 @@
           "bottom": 24,
           "left": 24
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -228,9 +228,9 @@
         "order": 2,
         "bounds": {
           "x": 272,
-          "y": 104,
+          "y": 160,
           "w": 1168,
-          "h": 458
+          "h": 425
         },
         "layoutMode": "grid",
         "sizing": {
@@ -302,9 +302,9 @@
         "order": 3,
         "bounds": {
           "x": 272,
-          "y": 594,
+          "y": 617,
           "w": 360,
-          "h": 306
+          "h": 283
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -318,7 +318,7 @@
           "bottom": 0,
           "left": 0
         },
-        "gap": 24,
+        "gap": 16,
         "align": {
           "primary": "start",
           "counter": "start"
@@ -483,10 +483,10 @@
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 945200,
-      "coverage": 0.729320987654321,
+      "coveredArea": 963784,
+      "coverage": 0.7436604938271605,
       "largestEmptyBand": 0,
-      "focalShare": 0.41276543209876543,
+      "focalShare": 0.3830246913580247,
       "notes": []
     }
   },
@@ -516,7 +516,7 @@
       "x": 272,
       "y": 0,
       "width": 1168,
-      "height": 141
+      "height": 133
     },
     {
       "type": "createFrame",
@@ -524,9 +524,9 @@
       "parent": "root",
       "name": "Content",
       "x": 272,
-      "y": 173,
+      "y": 165,
       "width": 1168,
-      "height": 389
+      "height": 420
     },
     {
       "type": "createFrame",
@@ -534,9 +534,9 @@
       "parent": "root",
       "name": "Inspector",
       "x": 272,
-      "y": 594,
+      "y": 617,
       "width": 1168,
-      "height": 306
+      "height": 283
     },
     {
       "type": "createText",
@@ -554,33 +554,33 @@
       "name": "Model List",
       "x": 24,
       "y": 24,
-      "width": 357
+      "width": 363
     },
     {
       "type": "createText",
       "id": "slot-heading-description",
       "parent": "header",
       "name": "Find a model that is ready to run",
-      "x": 405.33000000000004,
+      "x": 402.66999999999996,
       "y": 24,
-      "width": 357
+      "width": 363
     },
     {
       "type": "createText",
       "id": "data-disclosure",
       "parent": "header",
       "name": "Illustrative values — the screen is not ",
-      "x": 786.6700000000001,
+      "x": 781.3299999999999,
       "y": 24,
-      "width": 357
+      "width": 363
     },
     {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "header",
       "name": "Run model",
-      "x": 405.33000000000004,
-      "y": 77,
+      "x": 402.66999999999996,
+      "y": 69,
       "width": 98,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -591,46 +591,22 @@
       "name": "Label"
     },
     {
-      "type": "createFrame",
+      "type": "createText",
       "id": "slot-4-model-throughput",
       "parent": "content",
       "name": "model throughput",
       "x": 24,
       "y": 24,
-      "width": 363,
-      "height": 90,
-      "layoutMode": "VERTICAL"
+      "width": 363
     },
     {
       "type": "createText",
-      "parent": "slot-4-model-throughput",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-4-model-throughput",
-      "name": "Value"
-    },
-    {
-      "type": "createFrame",
       "id": "slot-5-gpu-memory",
       "parent": "content",
       "name": "GPU memory",
       "x": 402.66999999999996,
       "y": 24,
-      "width": 363,
-      "height": 90,
-      "layoutMode": "VERTICAL"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-gpu-memory",
-      "name": "Label"
-    },
-    {
-      "type": "createText",
-      "parent": "slot-5-gpu-memory",
-      "name": "Value"
+      "width": 363
     },
     {
       "type": "createFrame",
@@ -654,7 +630,7 @@
       "parent": "content",
       "name": "Loading…",
       "x": 24,
-      "y": 130,
+      "y": 64,
       "width": 66,
       "height": 22,
       "layoutMode": "HORIZONTAL"
@@ -668,10 +644,10 @@
       "type": "createFrame",
       "id": "slot-states-error",
       "parent": "content",
-      "name": "ready",
+      "name": "States — ready · loading · error · empty",
       "x": 402.66999999999996,
-      "y": 130,
-      "width": 47,
+      "y": 64,
+      "width": 263,
       "height": 22,
       "layoutMode": "HORIZONTAL"
     },
@@ -746,7 +722,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 73%, largest empty band 0%, focal share 41%.",
+      "detail": "coverage 74%, largest empty band 0%, focal share 38%.",
       "nodeIds": []
     },
     {
@@ -767,7 +743,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1168x72, built 1168x141; content: planned 1168x458, built 1168x389; inspector: planned 360x306, built 1168x306",
+      "detail": "header: planned 1168x128, built 1168x133; content: planned 1168x425, built 1168x420; inspector: planned 360x283, built 1168x283",
       "nodeIds": []
     },
     {
@@ -792,11 +768,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: header: planned 1168x72, built 1168x141.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1168x128, built 1168x133.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "header: planned 1168x72, built 1168x141"
+        "detail": "header: planned 1168x128, built 1168x133"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -807,11 +783,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x458, built 1168x389.",
+      "summary": "The build did not produce the geometry the plan promised: content: planned 1168x425, built 1168x420.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "content: planned 1168x458, built 1168x389"
+        "detail": "content: planned 1168x425, built 1168x420"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -822,11 +798,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x306, built 1168x306.",
+      "summary": "The build did not produce the geometry the plan promised: inspector: planned 360x283, built 1168x283.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "inspector: planned 360x306, built 1168x306"
+        "detail": "inspector: planned 360x283, built 1168x283"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

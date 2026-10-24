@@ -608,8 +608,21 @@ test("a region whose content has known extents is built as a native auto-layout 
   const result = run({
     ...PRODUCT_OVERVIEW,
     screen: "Only Components",
-    // No heading, so every region holds components only.
-    requiredInformation: ["GPU memory", "model throughput", "latency"],
+    // Issue #25 + plan content fit: the region that carries the required
+    // information holds value-stated components only — a component with a
+    // known extent is one whose value is stated (a required item with no
+    // value renders as its label text, and a region whose every readout the
+    // valueless-instrument policy omits is not built at all). The headings
+    // stay in the identity rail, where the plan puts them; the readouts land
+    // in the flow-vertical secondary band, whose every child has a fixed
+    // extent — the case a native auto-layout container exists for.
+    requiredInformation: ["shard count", "model version", "benchmark score"],
+    optionalInformation: [],
+    values: {
+      "shard count": "12 of 12 synced",
+      "model version": "v4.2-awq",
+      "benchmark score": "68.4",
+    },
   });
   const autoRegions = result.plan.regions.filter((r) => r.autoLayout);
   assert.ok(autoRegions.length > 0, "no region was built as an auto-layout container");

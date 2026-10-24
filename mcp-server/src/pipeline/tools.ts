@@ -385,7 +385,11 @@ export async function designPipelineTool(
    */
   const typeCriteria = auditTypeCriteria({
     ops: operations as Array<Record<string, unknown>>,
-    regions: plan.regions.map((r) => ({ id: r.id, gap: r.gap })),
+    // The regions' reasons ride along (issue #25 Phase B): a region whose why
+    // states a spacing rationale is the one-rhythm rule's documented
+    // exception, so the audit must see it — one rhythm rule, one definition
+    // of "documented".
+    regions: plan.regions.map((r) => ({ id: r.id, gap: r.gap, why: r.why })),
   });
   if (typeCriteria.findings.length > 0) {
     trace.findings.push(...typeCriteria.findings);

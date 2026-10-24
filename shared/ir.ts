@@ -716,5 +716,24 @@ export interface CompileResult {
      * payload then says the layout stands on estimates or fixed extents.
      */
     measuredTextUsed?: number;
+    /**
+     * Vertical redistribution of sparse band space (issue #25 Phase B).
+     *
+     * Present whenever a band qualified for redistribution — including bands
+     * that were left alone, where `notes` say why — and absent when no band was
+     * sparse. `pixels` is the height redistributed around content, `bands` the
+     * count of band rows re-centred. Nothing is stretched: only the position of
+     * content inside a band changes, never a box or a declared size.
+     */
+    redistribution?: {
+      /** Vertical px moved to balance sparse content within its band(s). */
+      pixels: number;
+      /** How many band rows were re-centred. */
+      bands: number;
+      /** The summary sentence for the payload: where the empty band height went. */
+      note?: string;
+      /** Bands that qualified but were left alone, each with the reason. */
+      notes: string[];
+    };
   };
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-10-23T16:36:57.795Z",
+  "generatedAt": "2026-10-24T04:30:12.188Z",
   "runner": "FigDes executable planning benchmark",
   "mode": "offline-planner-structural",
   "expectedCases": 9,
@@ -52,7 +52,8 @@
         "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
-          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment).",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
@@ -81,7 +82,7 @@
           "width": "fill",
           "height": 56,
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "padding": 16,
           "because": "fleet summary for the relationship field (devices, GPU health, memory pressure), read without focusing"
         },
@@ -92,7 +93,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 1,
-          "gap": 32,
+          "gap": 16,
           "padding": 24,
           "because": "the relationships themselves (devices, nodes, links (+1 more)): nodes, links, latency, which are the content"
         }
@@ -159,7 +160,8 @@
         ],
         "appliedGuidance": [
           "'nav' gap 24px from 'ObjectInspector' balanced density.",
-          "Relationship rule carried into build: Context rows reference the subject explicitly."
+          "Relationship rule carried into build: Context rows reference the subject explicitly.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 5 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
       },
@@ -188,7 +190,7 @@
           "width": 208,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "orientation"
         },
         {
@@ -198,7 +200,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 2,
-          "gap": 24,
+          "gap": 16,
           "padding": 32,
           "because": "the thing being understood (model name, memory, supported devices (+1 more)), given the most room"
         },
@@ -209,7 +211,7 @@
           "width": 360,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "surrounding state that gives the subject meaning (memory, throughput, fit state)"
         }
       ],
@@ -271,7 +273,8 @@
         "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'MonitoringInstrument' balanced density.",
-          "Relationship rule carried into build: Signal-to-source traceable."
+          "Relationship rule carried into build: Signal-to-source traceable.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 6 classified information item(s) for the 'monitor' decision; pattern 'MonitoringInstrument' applied as guidance, not structure."
       },
@@ -300,7 +303,7 @@
           "width": "fill",
           "height": 64,
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "padding": 16,
           "because": "state at a glance (GPU utilization, memory pressure, throughput (+2 more)), read without focusing"
         },
@@ -311,7 +314,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 2,
-          "gap": 24,
+          "gap": 16,
           "padding": 24,
           "because": "one continuous signal surface for GPU utilization, memory pressure, throughput (+2 more) — grouped into a single instrument, never 6 cards"
         },
@@ -386,7 +389,8 @@
         "unclassified": [],
         "appliedGuidance": [
           "'nav' gap 24px from 'ConfigurationWorkbench' balanced density.",
-          "Relationship rule carried into build: Every control maps to a visible preview change."
+          "Relationship rule carried into build: Every control maps to a visible preview change.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 6 classified information item(s) for the 'configure' decision; pattern 'ConfigurationWorkbench' applied as guidance, not structure."
       },
@@ -415,7 +419,7 @@
           "width": 240,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "orientation"
         },
         {
@@ -436,7 +440,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 1,
-          "gap": 24,
+          "gap": 16,
           "padding": 24,
           "because": "the effect of the settings, so a change is never a leap of faith"
         }
@@ -504,7 +508,8 @@
         ],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
-          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment).",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 5 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
@@ -533,7 +538,7 @@
           "width": "fill",
           "height": 56,
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "padding": 16,
           "because": "fleet summary for the relationship field (devices, health), read without focusing"
         },
@@ -544,7 +549,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 1,
-          "gap": 32,
+          "gap": 16,
           "padding": 24,
           "because": "the relationships themselves (devices, team assignments): team assignments, which are the content"
         }
@@ -612,7 +617,8 @@
         ],
         "appliedGuidance": [
           "'nav' gap 24px from 'ObjectInspector' balanced density.",
-          "Relationship rule carried into build: Context rows reference the subject explicitly."
+          "Relationship rule carried into build: Context rows reference the subject explicitly.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 3 classified information item(s) for the 'inspect' decision; pattern 'ObjectInspector' applied as guidance, not structure."
       },
@@ -641,7 +647,7 @@
           "width": 208,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "orientation"
         },
         {
@@ -651,7 +657,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 2,
-          "gap": 24,
+          "gap": 16,
           "padding": 32,
           "because": "the thing being understood (conversion), given the most room"
         },
@@ -662,7 +668,7 @@
           "width": 360,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "surrounding state that gives the subject meaning (conversion, activity)"
         }
       ],
@@ -730,7 +736,8 @@
         "appliedGuidance": [
           "'nav' gap 12px from 'ExplorationSurface' dense density.",
           "'filters' gap 12px from 'ExplorationSurface' dense density.",
-          "Relationship rule carried into build: Selection previews without navigation."
+          "Relationship rule carried into build: Selection previews without navigation.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation. Regions keeping another step with a stated spacing reason: results."
         ],
         "note": "Derived from 4 classified information item(s) for the 'explore' decision; pattern 'ExplorationSurface' applied as guidance, not structure."
       },
@@ -759,7 +766,7 @@
           "width": 240,
           "height": "fill",
           "grow": 0,
-          "gap": 12,
+          "gap": 16,
           "because": "orientation"
         },
         {
@@ -769,7 +776,7 @@
           "width": "fill",
           "height": 64,
           "grow": 0,
-          "gap": 12,
+          "gap": 16,
           "padding": 16,
           "because": "narrowing (the stated decision) before listing"
         },
@@ -842,7 +849,8 @@
         "unclassified": [],
         "appliedGuidance": [
           "'rail' gap 24px from 'SpatialTopology' balanced density.",
-          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment)."
+          "Relationship rule carried into build: Every edge labelled (latency, flow, assignment).",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 6 classified information item(s) for the 'topology' decision; pattern 'SpatialTopology' applied as guidance, not structure."
       },
@@ -871,7 +879,7 @@
           "width": "fill",
           "height": 56,
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "padding": 16,
           "because": "fleet summary for the relationship field (the stated decision), read without focusing"
         },
@@ -882,7 +890,7 @@
           "width": "fill",
           "height": "fill",
           "grow": 1,
-          "gap": 32,
+          "gap": 16,
           "padding": 24,
           "because": "the relationships themselves (nodes, edges, dependencies (+3 more)): nodes, edges, dependencies (+3 more), which are the content"
         }
@@ -951,7 +959,8 @@
         "appliedGuidance": [
           "'nav' gap 24px from 'ComparisonField' balanced density.",
           "'header' gap 24px from 'ComparisonField' balanced density.",
-          "Relationship rule carried into build: Same schema both sides."
+          "Relationship rule carried into build: Same schema both sides.",
+          "Sibling-region gaps default to one rhythm step (16px = 8px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation."
         ],
         "note": "Derived from 3 classified information item(s) for the 'compare' decision; pattern 'ComparisonField' applied as guidance, not structure."
       },
@@ -980,7 +989,7 @@
           "width": 240,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "orientation: where am I in the product"
         },
         {
@@ -990,7 +999,7 @@
           "width": "fill",
           "height": 72,
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "padding": 24,
           "because": "the decision, stated: \"Compare model run cost, latency, quality, and fit before choosing what to run\""
         },
@@ -1012,7 +1021,7 @@
           "width": 360,
           "height": "fill",
           "grow": 0,
-          "gap": 24,
+          "gap": 16,
           "because": "detail for the currently focused option (fit state)"
         }
       ],

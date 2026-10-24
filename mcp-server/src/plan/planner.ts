@@ -30,6 +30,7 @@ import type { Region } from "../../../shared/ir";
 import { defaultRules } from "../memory/rules-exo";
 import { bestPattern } from "../design/grammar/matcher";
 import { deriveRegions, classifyInformation, type Derivation } from "../design/composition/derive";
+import { namesSpacingReason } from "../design/quality/type-criteria";
 import type { ComponentKnowledge } from "../design/system/component-intelligence";
 
 /* -------------------------------------------------------------------------- */
@@ -809,6 +810,34 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
       `The caller named the primary action '${intent.primaryAction}' and no shell region carries it, so an action region was added rather than hiding the commit step in chrome.`,
     );
   }
+
+  /* --- one rhythm step between sibling regions, at the source -------------- */
+
+  // The shells used to stack three improvisations: chrome regions defaulted
+  // to the raw grid (8px) while content regions kept their shell-declared
+  // 16px and 24px steps — the deployment-fit plan carried 8/16/24px across
+  // four regions, and the type-and-space skill's one-rhythm criterion fails
+  // that HIGH ("the spacing rhythm has collapsed"). Fixed where the gaps are
+  // born: every sibling region defaults to ONE rhythm step, two grid units,
+  // unless its own reason states a spacing rationale (`namesSpacingReason`,
+  // the same predicate the criteria audit reads for documented exceptions).
+  // An explicit density preference below still overrides uniformly — one
+  // caller-stated step is still one rhythm.
+  const rhythmStep = grid * 2;
+  const rhythmExempt: string[] = [];
+  for (const r of regions) {
+    if (r.gap !== undefined && r.gap !== rhythmStep && namesSpacingReason(r.because)) {
+      rhythmExempt.push(r.id);
+      continue;
+    }
+    r.gap = rhythmStep;
+  }
+  derivation.appliedGuidance.push(
+    `Sibling-region gaps default to one rhythm step (${rhythmStep}px = ${grid}px grid × 2), so the plan carries a single spacing rhythm instead of per-region improvisation.` +
+      (rhythmExempt.length > 0
+        ? ` Regions keeping another step with a stated spacing reason: ${rhythmExempt.join(", ")}.`
+        : ""),
+  );
 
   // An explicit density preference overrides pattern gap guidance only. It
   // never reorders regions or changes grow: manner adjusts spacing, the task

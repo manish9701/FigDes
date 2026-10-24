@@ -58,6 +58,37 @@ const STRESS_CASE_ID = "hard-stress-test";
 
 /** Cases whose contract is to be refused by the product guard, and why they exist. */
 const NEGATIVE_CONTROLS = new Set(["generic-saas-dashboard"]);
+
+/**
+ * The structure of a case, as far as a golden records it.
+ *
+ * Kept identical to update-live-goldens.mjs's `signatureOf` on purpose: the two
+ * scripts must compare the same structure, or one of them is lying about drift.
+ */
+function signatureOf(caseBody) {
+  const regionNames = Array.isArray(caseBody.plan?.regions) ? caseBody.plan.regions.map((r) => r.id) : [];
+  return {
+    reviewedNodes: caseBody.reviewedNodes ?? null,
+    findingCount: Array.isArray(caseBody.structuralFindings) ? caseBody.structuralFindings.length : null,
+    regionNames,
+  };
+}
+
+/**
+ * The stable fingerprint of a recorded refusal.
+ *
+ * A violation's message is written for a human and may be reworded without the
+ * guard's behaviour changing; the violated rule ids and the violation count are
+ * what identifies the refusal. Matches update-live-goldens.mjs's
+ * `guardFingerprintOf` — one fingerprint, or the comparison means nothing.
+ */
+function guardFingerprintOf(violations) {
+  const list = Array.isArray(violations) ? violations : [];
+  return {
+    count: list.length,
+    rules: [...new Set(list.map((v) => (typeof v?.rule === "string" ? v.rule : null)).filter(Boolean))].sort(),
+  };
+}
 const STRESS_REQUIRED_EVIDENCE = [
   "canvasWidth",
   "canvasHeight",
@@ -368,6 +399,47 @@ for (const c of cases) {
   const casePath = resolve(liveDir, `case-${c.caseId}.json`);
   const goldenPath = resolve(goldensDir, `${c.caseId}.png`);
   const goldenMetaPath = resolve(goldensDir, `${c.caseId}.json`);
+
+  // A declared negative control was refused by the guard and never built: it
+  // has no frame to render and no PNG to compare. Its regression reference is
+  // the recorded refusal — goldens/<id>.refusal.json — and it counts as covered
+  // only when that golden exists AND still agrees with the record, the same
+  // rule the PNG goldens apply to structure. A mismatch is drift, reported
+  // under refusalDrift, never silently ignored.
+  if (c.outcome === "guard-refused-as-expected") {
+    const refusalPath = resolve(goldensDir, `${c.caseId}.refusal.json`);
+    if (!existsSync(casePath) || !existsSync(refusalPath)) {
+      visualRegression.push({
+        caseId: c.caseId,
+        verdict: "no-golden",
+        reason: "no refusal golden for this negative control: the recorded refusal has no reference to regress against",
+      });
+      continue;
+    }
+    const body = JSON.parse(await readFile(casePath, "utf8"));
+    const goldenRefusal = JSON.parse(await readFile(refusalPath, "utf8"));
+    const guardDrift =
+      JSON.stringify(guardFingerprintOf(goldenRefusal.guardViolations)) !==
+      JSON.stringify(guardFingerprintOf(body.guardViolations));
+    const goldenSignature = goldenRefusal.signature ?? null;
+    const signature = signatureOf(body);
+    const structureChanged =
+      goldenSignature !== null && JSON.stringify(goldenSignature) !== JSON.stringify(signature);
+    visualRegression.push({
+      caseId: c.caseId,
+      verdict: !guardDrift && !structureChanged ? "match" : "differs",
+      refusalGolden: true,
+      guardDrift,
+      structureChanged,
+      reason: guardDrift
+        ? "the recorded refusal no longer matches the refusal golden"
+        : structureChanged
+          ? "the structure changed since the refusal golden was reviewed"
+          : null,
+    });
+    continue;
+  }
+
   if (!existsSync(casePath) || !existsSync(goldenPath)) {
     visualRegression.push({ caseId: c.caseId, verdict: "no-golden", reason: "no reviewed golden for this case" });
     continue;
@@ -386,11 +458,7 @@ for (const c of cases) {
     continue;
   }
   const pixels = compareImages(await readFile(currentPath), await readFile(goldenPath));
-  const signature = {
-    reviewedNodes: body.reviewedNodes ?? null,
-    findingCount: Array.isArray(body.structuralFindings) ? body.structuralFindings.length : null,
-    regionNames: Array.isArray(body.plan?.regions) ? body.plan.regions.map((r) => r.id) : [],
-  };
+  const signature = signatureOf(body);
   const goldenSignature = existsSync(goldenMetaPath)
     ? (JSON.parse(await readFile(goldenMetaPath, "utf8")).signature ?? null)
     : null;
@@ -407,6 +475,10 @@ for (const c of cases) {
 }
 const regressionDiffs = visualRegression.filter((v) => v.verdict === "differs");
 const regressionUncovered = visualRegression.filter((v) => v.verdict === "no-golden" || v.verdict === "no-render");
+// Issue #25 close-out: a negative control whose recorded refusal no longer
+// matches its refusal golden. Listed on its own so the kind of drift is named,
+// and also counted among `differing` — a drift is a difference.
+const refusalDrift = visualRegression.filter((v) => v.refusalGolden === true && v.verdict === "differs");
 
 const report = {
   schemaVersion: 2,
@@ -434,8 +506,9 @@ const report = {
     cases: visualRegression,
     differing: regressionDiffs.map((v) => v.caseId),
     uncovered: regressionUncovered.map((v) => v.caseId),
+    refusalDrift: refusalDrift.map((v) => v.caseId),
     note:
-      "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it.",
+      "A golden is a regression reference, not an approval: the review rules judge the screen, and the golden records what it looked like when a human looked at it. A declared negative control has no PNG — its golden is its recorded refusal (goldens/<id>.refusal.json), and a refusal that stops matching that reference is reported under refusalDrift.",
   },
   stressFrame: {    caseId: STRESS_CASE_ID,
     canvas: STRESS_CANVAS,
@@ -475,6 +548,7 @@ console.log(JSON.stringify({
   visualRegression: {
     differing: report.visualRegression.differing,
     uncovered: report.visualRegression.uncovered,
+    refusalDrift: report.visualRegression.refusalDrift,
   },
   nativePath: { status: report.nativePath.status, createdNodes: report.nativePath.createdNodes },
 }, null, 2));

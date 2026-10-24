@@ -41,6 +41,23 @@ function isShouty(token: string): boolean {
 }
 
 /**
+ * Whether a region's reason text states a spacing rationale (issue #25
+ * Phase B): the documented-exception mechanism for the one-rhythm rule, the
+ * same shape as `readExceptionReason` below for the label floor. A region
+ * whose why says WHY its spacing step differs ("generous rhythm between the
+ * diagram and its support", "tighter gap so the columns read as one table")
+ * has made its case; the rule judges the regions that have not.
+ *
+ * Narrow on purpose — spacing words only. A reason that merely describes the
+ * region's content ("the relationships themselves") documents nothing about
+ * its gap.
+ */
+export function namesSpacingReason(why: string | undefined): boolean {
+  if (why === undefined) return false;
+  return /\bspac(e|es|ed|ing)\b|\bgaps?\b|\brhythm\b|\bbreathing\b|\bwhitespace\b|\bdens(e|er|est|ity)\b|\btight(er|est)?\b|\bairy\b|\bairier\b/i.test(why);
+}
+
+/**
  * Reads a documented exception off a compiled op (issue #23 §4): either
  * `exception: { reason }` or a bare justification string. Empty/missing is
  * "no exception" — the size then fails the floor.
@@ -89,7 +106,14 @@ function finding(input: {
  */
 export function auditTypeCriteria(input: {
   ops?: Array<Record<string, unknown>>;
-  regions?: Array<{ id: string; gap?: number }>;
+  /**
+   * The plan's regions carrying their gaps — and optionally their reason
+   * (`why`), which turns the one-rhythm rule's documented-exception mechanism
+   * on: a region whose reason states a spacing rationale is exempt from the
+   * rhythm collapse (issue #25 Phase B). Without `why` every gap counts as
+   * unexplained, exactly as before.
+   */
+  regions?: Array<{ id: string; gap?: number; why?: string }>;
 }): TypeCriteriaAudit {
   const findings: PipelineFinding[] = [];
   const criteria: TypeCriterionResult[] = [];
@@ -100,8 +124,19 @@ export function auditTypeCriteria(input: {
     op[key] !== undefined ? op[key] : (op["args"] as Record<string, unknown> | undefined)?.[key];
 
   const regionsWithGaps = input.regions === undefined ? [] : input.regions.filter((r) => r.gap !== undefined);
+  /**
+   * The one-rhythm audit judges the regions whose gap is UNEXPLAINED (issue
+   * #25 Phase B): a region whose reason text states a spacing rationale is a
+   * documented exception — the same mechanism the readable-labels floor uses
+   * for `exception: { reason }` — and does not count toward the rhythm
+   * collapse. The exemptions are named in the criterion detail either way, so
+   * "pass with exceptions" can never be mistaken for "no other gaps exist".
+   */
+  const readRegionWhy = (r: { why?: string }): string => (typeof r.why === "string" ? r.why : "");
+  const exemptRegions = regionsWithGaps.filter((r) => namesSpacingReason(readRegionWhy(r)));
+  const audited = regionsWithGaps.filter((r) => !exemptRegions.includes(r));
   const gaps = new Map<number, string[]>();
-  for (const region of regionsWithGaps) {
+  for (const region of audited) {
     const gap = region.gap ?? 0;
     // A zero gap means "single item / vertical stack collapse", not a rhythm
     // step, so only real gaps count.
@@ -111,10 +146,20 @@ export function auditTypeCriteria(input: {
     gaps.set(gap, list);
   }
   const distinctGaps = [...gaps.keys()].sort((a, b) => a - b);
+  /** The recorded exemptions, phrased once for reuse in details. */
+  const exemptionsNote =
+    exemptRegions.length > 0
+      ? ` ${exemptRegions.length} region(s) keep another step with a stated spacing reason and are exempt: ${exemptRegions
+          .map((r) => {
+            const why = readRegionWhy(r);
+            return `${r.id} (${why.slice(0, 60)}${why.length > 60 ? "…" : ""})`;
+          })
+          .join(", ")}.`
+      : "";
 
   /* --- one-rhythm (spacing criterion) -------------------------------------- */
 
-  if (regionsWithGaps.length >= 3 && distinctGaps.length === 2) {
+  if (audited.length >= 3 && distinctGaps.length === 2) {
     // Two gaps can be a rhythm step plus its half-step for a deliberate
     // sub-group — legal only when stated. One region carrying the odd gap
     // out names exactly who to ask.
@@ -126,9 +171,9 @@ export function auditTypeCriteria(input: {
         criterion: "one-rhythm",
         severity: "medium",
         confidence: 0.75,
-        summary: `Two sibling-region gaps on one screen: ${distinctGaps.join("px and ")}px. ${oddRegions.length} region(s) ('${oddRegions.slice(0, 3).join("', '")}') break the first gap's rhythm.`,
+        summary: `Two sibling-region gaps on one screen: ${distinctGaps.join("px and ")}px. ${oddRegions.length} region(s) ('${oddRegions.slice(0, 3).join("', '")}') break the first gap's rhythm.${exemptionsNote}`,
         why: `The type-and-space skill declares one spacing rhythm between sibling regions; two different gaps need a stated reason, and none is recorded here (issue #22, skill C, "spacing-on-rhythm").`,
-        detail: `region gaps: ${distinctGaps.map((g) => `${g}px × ${gaps.get(g)!.length}`).join(", ")} across ${regionsWithGaps.length} regions.`,
+        detail: `region gaps: ${distinctGaps.map((g) => `${g}px × ${gaps.get(g)!.length}`).join(", ")} across ${audited.length} audited regions.${exemptionsNote}`,
         fix: "Either respace the odd regions to the screen's primary gap, or record the reason the rhythm breaks (a deliberate hierarchy step) in the region's why.",
         nodeIds: oddRegions,
       }),
@@ -137,7 +182,7 @@ export function auditTypeCriteria(input: {
       id: "one-rhythm",
       criterion: "one-rhythm",
       status: "fail",
-      detail: `${distinctGaps.length} distinct sibling-region gaps (>=2 regions per gap) across ${regionsWithGaps.length} regions.`,
+      detail: `${distinctGaps.length} distinct sibling-region gaps (>=2 regions per gap) across ${audited.length} audited regions.${exemptionsNote}`,
     });
   } else if (distinctGaps.length > 2) {
     findings.push(
@@ -146,7 +191,7 @@ export function auditTypeCriteria(input: {
         criterion: "one-rhythm",
         severity: "high",
         confidence: 0.8,
-        summary: `${distinctGaps.length} different sibling-region gaps (${distinctGaps.join(", ")}px): the spacing rhythm has collapsed.`,
+        summary: `${distinctGaps.length} different sibling-region gaps (${distinctGaps.join(", ")}px): the spacing rhythm has collapsed.${exemptionsNote}`,
         why: `Three or more gap values between sibling regions is not a rhythm; it is per-region improvisation, which reads as careless even when every region is individually tidy.`,
         detail: `region gaps: ${distinctGaps.map((g) => `${g}px × ${gaps.get(g)!.length}`).join(", ")}.`,
         fix: "Respace to the compiled rhythm step, or state a reason per break.",
@@ -157,14 +202,21 @@ export function auditTypeCriteria(input: {
       id: "one-rhythm",
       criterion: "one-rhythm",
       status: "fail",
-      detail: `${distinctGaps.length} distinct gaps across ${regionsWithGaps.length} regions.`,
+      detail: `${distinctGaps.length} distinct gaps across ${audited.length} audited regions.${exemptionsNote}`,
     });
   } else if (distinctGaps.length >= 1) {
     criteria.push({
       id: "one-rhythm",
       criterion: "one-rhythm",
       status: "pass",
-      detail: `${distinctGaps.length} gap value across ${regionsWithGaps.length} regions with gaps — one rhythm.`,
+      detail: `${distinctGaps.length} gap value across ${audited.length} audited regions with gaps — one rhythm.${exemptionsNote}`,
+    });
+  } else if (exemptRegions.length > 0) {
+    criteria.push({
+      id: "one-rhythm",
+      criterion: "one-rhythm",
+      status: "pass",
+      detail: `Every region with a gap carries a stated spacing reason.${exemptionsNote}`,
     });
   } else {
     criteria.push({ id: "one-rhythm", criterion: "one-rhythm", status: "not-evaluated", detail: "No region gap evidence in the plan." });

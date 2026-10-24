@@ -10,9 +10,13 @@
  *
  * Three rules shape what goes in:
  *
- * 1. **Nothing is invented.** A metric without a real value gets a placeholder
- *    and is marked illustrative, because a screen that shows a confident number
- *    nobody supplied is a screen that lies.
+ * 1. **Nothing is invented.** A metric without a real value never renders a
+ *    confident number — and per issue #25 Phase B, an *illustrative* slot
+ *    with no value emits no empty instrument at all (a readout with no
+ *    reading is noise): it is omitted, or carried as a label-only variant
+ *    when the information is required or the emptiness is itself the state.
+ *    The disclosure policy (`disclosure.ts`, issue #23 §4) still states the
+ *    values' illustrative nature once, on the record.
  * 2. **Related content is related in the file too.** A region whose content is
  *    a column of fixed-extent components is built as a native auto-layout
  *    container, so a designer can re-lay it out in Figma instead of editing
@@ -21,7 +25,7 @@
  *    wrapping width taken from the region it lives in, so a long model id or an
  *    error message wraps instead of pushing the layout apart.
  *
- * The honest number in rule 1 is stated once, not stamped on every value: the
+ * The honest number is stated once, not stamped on every value: the
  * disclosure policy (`disclosure.ts`, issue #23 §4) decides whether the screen
  * carries ONE concise caption marking the values illustrative — or none, when
  * the caller asked for a clean concept and the report carries the truth.
@@ -112,6 +116,80 @@ function isUnbreakable(text: string): boolean {
 
 /** The value a metric shows when the brief supplied none. */
 const NO_VALUE = "—";
+
+/**
+ * The status tone a value names, in the emitter's own vocabulary.
+ *
+ * Mirrors the compiler's product-language state mapping (`stateTone` in
+ * compile.ts, shared by statusPill, deviceNode and modelRow) onto tone NAMES —
+ * never hex, because the emitter owns the palette and the pipeline only names
+ * which entry of that vocabulary applies. Same precedence as the emitter
+ * (exact tone names, then readiness words, then failure words, then warning
+ * words, then live words, then neutral), so a pipeline-derived tone and a
+ * hand-written tone resolve to the same colours.
+ */
+function toneFromValue(value: string): string {
+  const s = value.toLowerCase();
+  if (/^(success|healthy|info|neutral|warning|degraded|error|offline)$/.test(s)) return s;
+  if (/\bfits?\b|\bready\b|\bok\b|success|healthy|connected|available/.test(s)) return "success";
+  if (/fail|error|insufficient|exceed|offline|denied|unavailable|rejected/.test(s)) return "error";
+  if (/warn|degraded|stale|partial|pending|loading|progress|attention|pressure/.test(s)) return "warning";
+  if (/info|running|live|sync|refresh/.test(s)) return "info";
+  return "neutral";
+}
+
+/**
+ * Whether a value-less instrument's emptiness is itself the state.
+ *
+ * A validation-gates readout with no value yet genuinely says "the gates have
+ * not run" — the emptiness is the reading. Such a slot keeps a label-only
+ * variant instead of being dropped outright (and instead of a dash that reads
+ * as a value that does not exist).
+ */
+const EMPTINESS_IS_STATE = /\bgates?\b|validation|checklist|pending|awaiting|not yet|no value|not run|in progress/i;
+
+/**
+ * Whether a slot carries the brief's required information.
+ *
+ * The plan records it in the slot's reason ("Required for the decision: …"),
+ * which is the one honest place the requirement survives classification.
+ */
+function isRequiredSlot(slot: ContentSlot): boolean {
+  return slot.because.startsWith("Required for the decision");
+}
+
+/**
+ * The honest call for an instrument slot whose value is null and illustrative
+ * (issue #25 Phase B, defect 2).
+ *
+ * A readout with no reading is noise: a metric that renders "—" looks like a
+ * value that does not exist, and a stack of them is what the Phase B pass saw
+ * in the stress frame's support band. So the default is to OMIT the
+ * instrument and note the decision. Two exceptions keep a label-only variant
+ * instead, and the note says which:
+ *
+ * - the slot carries REQUIRED information — the label itself must stay
+ *   findable on the screen (dropping it would fail the required-information
+ *   verification), it just must not read as a fabricated value;
+ * - the emptiness itself is the state (a validation-gates slot with no value
+ *   says "the gates have not run").
+ */
+function valuelessInstrument(slot: ContentSlot, parent: string, notes: string[]): ProgramCall | null {
+  const required = isRequiredSlot(slot);
+  const emptinessIsState = EMPTINESS_IS_STATE.test(`${slot.label} ${slot.because}`);
+  if (required || emptinessIsState) {
+    notes.push(
+      required
+        ? `'${slot.id}' (${slot.label}) is required information with no value in the brief: the empty instrument was not emitted, and the information stays as a label-only text so the screen still names where the answer lands.`
+        : `'${slot.id}' (${slot.label}) has no value and the emptiness itself is the state, so a label-only variant was emitted instead of the instrument — no dash reading as a value that does not exist.`,
+    );
+    return { fn: "text", id: slot.id, parent, args: { text: slot.label, role: "body" } };
+  }
+  notes.push(
+    `'${slot.id}' (${slot.label}) is illustrative with no value: the empty instrument was omitted — a readout with no reading is noise. Supply a value in the brief to give it one.`,
+  );
+  return null;
+}
 
 /**
  * Sets every text primitive's wrapping width from the layout that was actually
@@ -228,7 +306,7 @@ export function buildProgram(
     });
 
     for (const slot of slots) {
-      const call = slotCall(slot, region, inner, brief);
+      const call = slotCall(slot, region, inner, brief, notes);
       if (call !== null) content.push(call);
     }
   }
@@ -411,8 +489,9 @@ function parseMemoryBudget(value: string | null): { used: number; total: number;
   return { used, total, remaining: Math.max(0, total - used), unit: "GB" };
 }
 
-/** Turns one content slot into a runtime call. */
-function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: NormalizedBrief): ProgramCall | null {  const id = slot.id;
+/** Turns one content slot into a runtime call. `notes` records the builder's honest decisions. */
+function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: NormalizedBrief, notes: string[]): ProgramCall | null {
+  const id = slot.id;
   const parent = region.id;
   switch (slot.primitive) {
     case "text":
@@ -445,6 +524,9 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
         },
       };
     case "metric":
+      if (slot.value === null && slot.illustrative) {
+        return valuelessInstrument(slot, parent, notes);
+      }
       return {
         fn: "metric",
         id,
@@ -455,13 +537,42 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
           ...(slot.value === null ? { valueStyle: "technical" } : {}),
         },
       };
-    case "statusPill":
-      return {
-        fn: "statusPill",
-        id,
-        parent,
-        args: { label: slot.label, ...(slot.states !== undefined ? { states: slot.states } : {}) },
-      };
+    case "statusPill": {
+      /**
+       * A status pill's meaning is its label AND its tone (issue #25 Phase B,
+       * defect 1). The brief's current value ("cluster health: Degraded")
+       * must be the pill the screen reads as the thing's status — carrying
+       * the value in the label, with the matching tone from the emitter's own
+       * vocabulary. The declared states (ready/degraded/…) belong to the
+       * state strip as state evidence, each with its own honest tone — so a
+       * value-less state strip is labelled by its SET of states, never by its
+       * first entry standing in for the current value.
+       */
+      if (slot.value !== null) {
+        return {
+          fn: "statusPill",
+          id,
+          parent,
+          args: {
+            label: `${slot.label} — ${slot.value}`,
+            tone: toneFromValue(slot.value),
+            ...(slot.states !== undefined ? { states: slot.states } : {}),
+          },
+        };
+      }
+      if (slot.states !== undefined) {
+        notes.push(
+          `The state strip '${slot.id}' carries the declared states (${slot.states.join(", ")}) for the runtime's per-state expansion. REMAINING CONCERN, runtime-side: the interaction-state expansion (interpreter.ts, outside the pipeline) defines only its own interaction vocabulary for statusPill, so declared states outside it warn-and-skip and the survivors carry the strip's base label — per-state honest tones for domain states like 'ready'/'degraded' are a fix for the runtime's state tables, not the pipeline. The value-vs-state distinction the brief needs is carried by the value pill instead.`,
+        );
+        return {
+          fn: "statusPill",
+          id,
+          parent,
+          args: { label: `States — ${slot.states.join(" · ")}`, states: slot.states },
+        };
+      }
+      return { fn: "statusPill", id, parent, args: { label: slot.label } };
+    }
     case "modelRow":
       return {
         fn: "modelRow",
@@ -477,7 +588,10 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
       const value = slot.value ?? "";
       const parts = value.split("·").map((s) => s.trim()).filter(Boolean);
       const fits = /\bfits\b/i.test(value) && !/does not fit|doesn'?t fit|no fit/i.test(value);
-      if (value === "") return { fn: "metric", id, parent, args: { label: slot.label, value: NO_VALUE, valueStyle: "technical" } };
+      if (value === "") {
+        if (slot.illustrative) return valuelessInstrument(slot, parent, notes);
+        return { fn: "metric", id, parent, args: { label: slot.label, value: NO_VALUE, valueStyle: "technical" } };
+      }
       return {
         fn: "fitGauge",
         id,
@@ -493,6 +607,7 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
       // are honest. Anything unparseable falls back to the labelled metric.
       const budget = parseMemoryBudget(slot.value);
       if (budget === null) {
+        if (slot.value === null && slot.illustrative) return valuelessInstrument(slot, parent, notes);
         return { fn: "metric", id, parent, args: { label: slot.label, value: slot.value ?? NO_VALUE, ...(slot.value === null ? { valueStyle: "technical" } : {}) } };
       }
       return {
@@ -511,6 +626,11 @@ function slotCall(slot: ContentSlot, region: RegionSpec, inner: number, brief: N
     case "sectionHeader":
       return { fn: "sectionHeader", id, parent, args: { title: slot.label } };
     case "timelineEvent":
+      // A value-less event is instrumentation with no reading, same as a
+      // value-less metric: the same policy applies (issue #25 Phase B).
+      if (slot.value === null && slot.illustrative) {
+        return valuelessInstrument(slot, parent, notes);
+      }
       return {
         fn: "timelineEvent",
         id,

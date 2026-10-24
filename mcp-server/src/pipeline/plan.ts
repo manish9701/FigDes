@@ -23,13 +23,19 @@
  * exists.
  */
 import { planScreen, resolveArchetype, type ScreenIntent } from "../plan/planner";
-import { defaultGutter, layoutRegions } from "../runtime/layout";
+import { defaultGutter, layoutRegions, packContent } from "../runtime/layout";
+// The compiler's own estimator: the plan states the room content needs with
+// the same arithmetic the build applies (issue #25/#28 plan-side content fit).
+// compile.ts imports nothing from the pipeline, so this direction is cycle-free.
+import { estimateHeight, styleLook } from "../runtime/compile";
+import type { ContentSpec } from "../../../shared/ir";
 import { classifyInformation, classifyInfoItem, type InfoKind } from "../design/composition/derive";
 import { compositionHintFor, descriptorsForRequestedComposition, COMPOSITION_VOCABULARY } from "../design/skills/composition";
 import type { CompositionDescriptor } from "../design/skills/composition";
 import type { Composition } from "../runtime/layout";
 import type { VisualIntent } from "../../../shared/ir";
 import type { ContentSlot, CompositionPlan, NormalizedBrief, RegionSpec } from "./contracts";
+import { decideDisclosure } from "./disclosure";
 
 /** Grid unit used when the brief does not name one. */
 const GRID = 8;
@@ -616,7 +622,254 @@ export function buildCompositionPlan(
 
   /* --- content slots ----------------------------------------------------- */
 
-  const { slots: content, notPlaced } = planContent(briefForPlan, regions, plan.composition, archetype?.name);
+  const planned = planContent(briefForPlan, regions, plan.composition, archetype?.name);
+  let content = planned.slots;
+  const notPlaced = planned.notPlaced;
+
+  /* --- the plan-side content fit (issues #25/#28) ------------------------- */
+
+  /**
+   * The plan and the build must agree about the room content needs.
+   *
+   * The compiler grows a fixed-height region whose content does not fit it
+   * (fitRegionsToContent) — and until now that growth was invisible to the
+   * plan: a 64px status rail or a 72px header holding the screen's title, its
+   * description and its action grew to ~126-139px at build time, pushed every
+   * fill band down, and the focal region resolved smaller than the share the
+   * plan promised. The composition handoff (issue #28) rightly refuses that
+   * build — the plan was the liar, not the build.
+   *
+   * So the plan now states the room up front, with the compiler's own
+   * estimator, in three steps:
+   *
+   * 1. **mirror the emitted content.** For every slot, what program.ts's
+   *    slotCall will actually emit — including the valueless-instrument
+   *    policy (an illustrative slot with no value is omitted, or rendered as
+   *    its label text when the information is required or the emptiness is
+   *    the state). The slot keeps its declared primitive, so the build's own
+   *    honest note about the decision still reads the same.
+   * 2. **drop regions the build would leave empty.** A region whose every
+   *    declared slot the policy omits would be built as an empty frame —
+   *    wasted canvas, and its auto-layout request ("no children to lay out")
+   *    is a violation that is pure noise. The region leaves the plan and the
+   *    omission is recorded. A region whose every SURVIVING readout is a bare
+   *    label (every real instrument omitted) is not a region either: the
+   *    labels join the identity band — the same band the plan puts the
+   *    screen's name in — and the emptied region is not built. The label-only
+   *    slots keep their primitive, so the build still emits them, with its
+   *    note, from the band that can hold them.
+   * 3. **grow declared chrome to its content.** A region with a NUMBER
+   *    declared height whose content estimates taller is grown to the
+   *    estimate — never shrunk. Then the layout is re-resolved once with the
+   *    corrected heights, so the fill bands absorb the growth exactly the way
+   *    the build's own fit passes do, and the plan's usage numbers describe
+   *    the screen that will actually be built.
+   *
+   * Same brief in, same plan out: the pass is arithmetic on the plan's own
+   * numbers, no clock, no randomness.
+   */
+  const fitNotes: string[] = [];
+
+  // The compiler's presentation multipliers, exactly as compileIR derives
+  // them: the display-type scale from the contrast intent, and the preset look
+  // from the manner the build will carry (the compiled intent's style, else
+  // the brief's words).
+  const fitLook = styleLook(intelligence?.intent.style ?? brief.visualDirection ?? undefined);
+  const fitTitleScale =
+    intelligence?.intent.contrast === "bold" ? 1.15 : intelligence?.intent.contrast === "muted" ? 0.9 : 1;
+
+  /* 1. the emitted-content mirror per region ------------------------------- */
+
+  const slotsOf = new Map<string, ContentSlot[]>();
+  const specsOf = new Map<string, EmittedSpec[]>();
+  for (const region of regions) {
+    const slots = content.filter((s) => s.regionId === region.id).sort((a, b) => a.order - b.order);
+    slotsOf.set(region.id, slots);
+    specsOf.set(region.id, slots.map((s) => emittedSpecFor(s)).filter((s): s is EmittedSpec => s !== null));
+  }
+
+  /* 2. the emptied regions -------------------------------------------------- */
+
+  /**
+   * The identity band, by the same rule planContent places the screen's name
+   * by: the header region, else the status rail, else the first region.
+   */
+  const identityBand =
+    regions.find((r) => r.role === "header") ?? regions.find((r) => r.role === "status-rail") ?? regions[0];
+  /** A slot whose valueless slotCall keeps a label-only text (never omitted). */
+  const isLabelOnlySlot = (slot: ContentSlot): boolean =>
+    slot.value === null &&
+    slot.illustrative &&
+    VALUELESS_PRIMITIVES.has(slot.primitive) &&
+    (slot.because.startsWith("Required for the decision") || EMPTINESS_IS_STATE.test(`${slot.label} ${slot.because}`));
+
+  const droppedRegions: RegionSpec[] = [];
+  for (const region of regions) {
+    const slots = slotsOf.get(region.id) ?? [];
+    if (slots.length === 0) continue; // no declared content: not this pass's call
+    const specs = specsOf.get(region.id) ?? [];
+    const labelOnly = slots.filter((s) => specs.some((spec) => spec.id === s.id && spec.kind === "text") && isLabelOnlySlot(s));
+    const realContent = specs.filter((spec) => !labelOnly.some((s) => s.id === spec.id));
+    if (realContent.length > 0) continue;
+    // Everything the build will emit from this region is bare labels (or
+    // nothing at all). The labels — if any — join the identity band, which is
+    // never dropped and never bare; the emptied region is not built.
+    if (identityBand !== undefined && labelOnly.length > 0 && identityBand.id !== region.id) {
+      for (const slot of labelOnly) {
+        slot.regionId = identityBand.id;
+        fitNotes.push(
+          `'${region.id}' would hold nothing but the label of '${slot.id}' (${slot.label}): the label joins the identity band '${identityBand.id}', and the emptied region is not built.`,
+        );
+      }
+      specsOf.set(identityBand.id, [...(specsOf.get(identityBand.id) ?? []), ...labelOnly.map((s) => emittedSpecFor(s)).filter((s): s is EmittedSpec => s !== null)]);
+    }
+    droppedRegions.push(region);
+  }
+  if (droppedRegions.length > 0) {
+    const droppedIds = new Set(droppedRegions.map((r) => r.id));
+    for (const region of droppedRegions) {
+      for (const slot of slotsOf.get(region.id) ?? []) {
+        notPlaced.push({
+          label: slot.label,
+          why: `'${slot.id}' is illustrative with no value, so no readout was emitted for it; its region '${region.id}' would have been an empty frame and is not built.`,
+        });
+      }
+    }
+    for (let i = regions.length - 1; i >= 0; i--) {
+      if (droppedIds.has(regions[i]!.id)) regions.splice(i, 1);
+    }
+    content = content.filter((s) => !droppedIds.has(s.regionId));
+    const keptHierarchy = hierarchy.filter((h) => !droppedIds.has(h.id));
+    hierarchy.splice(0, hierarchy.length, ...keptHierarchy);
+    if (focalId !== null && droppedIds.has(focalId)) {
+      // The planner's focal region is gone with its content; the focal gap
+      // -fill below names the next payload region instead of a dropped one.
+      (plan.artDirection as { focal: unknown }).focal = null;
+      warnings.push(
+        `Plan content fit: the focal region '${focalId}' was dropped with its content; the plan names a new focal region from what is left.`,
+      );
+    }
+    warnings.push(
+      `Plan content fit: ${droppedRegions.map((r) => `'${r.id}'`).join(", ")} dropped from the plan — every content slot it carried is omitted by the valueless-instrument policy, so the build would have been an empty frame.`,
+    );
+  }
+
+  /* the one disclosure rides in the region the build will place it in ------ */
+
+  const disclosureDecision = decideDisclosure(brief, { regions, content } as unknown as CompositionPlan);
+  if (disclosureDecision.call !== null) {
+    specsOf.get(disclosureDecision.call.parent)?.push({
+      kind: "text",
+      id: disclosureDecision.call.id,
+      text: disclosureDecision.call.text,
+      role: "caption",
+    });
+  }
+
+  /* 3. grow the declared chrome to its content ----------------------------- */
+
+  const grownRegions: Array<{ id: string; from: number; to: number }> = [];
+  for (const region of regions) {
+    const declared = region.sizing.height;
+    if (typeof declared !== "number") continue;
+    // A free-composition region (topology, spatial, diagram) places its
+    // content by algorithm, not by the flow packer, so the flow estimate does
+    // not describe it; such a region is also never the fixed-height chrome
+    // this pass exists for.
+    if (region.layoutMode === "free") continue;
+    const required = estimateRegionRequiredHeight(region, slotsOf.get(region.id) ?? [], specsOf.get(region.id) ?? [], fitLook, fitTitleScale, canvas.grid);
+    if (required === null || required <= declared) continue;
+    region.sizing.height = required;
+    grownRegions.push({ id: region.id, from: declared, to: required });
+  }
+  for (const g of grownRegions) {
+    fitNotes.push(
+      `Region '${g.id}' declared ${g.from}px of height, but its content estimates to ~${g.to}px: the declared height is grown to the estimate so the build's own fit pass has nothing to reconcile, and the focal region keeps the share the plan gave it.`,
+    );
+  }
+
+  // The geometry is re-resolved once with the corrected heights, using the
+  // same engine and the same inputs the build will resolve from, and every
+  // region's bounds are re-read — the fill bands absorb the chrome's growth
+  // exactly as the compiler's fit passes do, so the plan's numbers (usage,
+  // coverage, focal share) describe the screen that will be built.
+  //
+  // The grow weight is the one the interpreter will actually apply: the
+  // program's visual weights become growth there (chrome 0.15 → grow 0, rank
+  // 1 → grow 2, rank 2 → grow 1, otherwise grow 1, declared grow wins ties,
+  // and the focal region grows hardest). A re-layout that used only the
+  // declared grows would hand the fill space out on weights the build does
+  // not use — the same plan-vs-build drift this pass exists to close.
+  const chromeRole = (role: string): boolean =>
+    role === "navigation" || role === "header" || role === "footer" || role === "status-rail";
+  /** The focal region the build will grow to at least 2 — the plan's final focal, mirrored. */
+  let focalForGrow: string | null = focalId !== null && !droppedRegions.some((r) => r.id === focalId) ? focalId : null;
+  if (focalForGrow === null && regions.length >= 3) {
+    const payload = [...hierarchy]
+      .sort((a, b) => a.rank - b.rank)
+      .map((h) => regions.find((r) => r.id === h.id))
+      .find((r) => r !== undefined && r.role !== "navigation" && r.role !== "header" && r.role !== "footer" && r.role !== "status-rail");
+    if (payload !== undefined) focalForGrow = payload.id;
+  }
+  const effectiveGrowOf = (region: RegionSpec): number => {
+    let grow = region.grow;
+    const rankEntry = hierarchy.find((h) => h.id === region.id);
+    if (rankEntry !== undefined) {
+      const weight = chromeRole(region.role) ? 0.15 : rankEntry.rank === 1 ? 0.9 : rankEntry.rank === 2 ? 0.6 : 0.35;
+      grow = Math.max(grow, Math.round(weight * 2));
+    }
+    if (focalForGrow === region.id && grow < 2) grow = 2;
+    return grow;
+  };
+  if (grownRegions.length > 0 || droppedRegions.length > 0) {
+    const refit = layoutRegions({
+      regions: regions.map((r) => ({
+        id: r.id,
+        role: r.role,
+        composition: r.composition,
+        width: r.sizing.width,
+        height: r.sizing.height,
+        grow: effectiveGrowOf(r),
+        gap: r.gap,
+        padding: r.padding.top,
+      })) as unknown as Parameters<typeof layoutRegions>[0]["regions"],
+      canvasW: canvas.width,
+      canvasH: canvas.height,
+      gutter: defaultGutter(canvas.grid),
+    });
+    for (const region of regions) {
+      const box = refit.find((x) => x.id === region.id);
+      if (box === undefined) continue;
+      region.bounds = { x: box.x, y: box.y, w: box.w, h: box.h };
+    }
+    // The build's final word on a stack is integer-accumulated: the compiler's
+    // canvas-fit pass re-stacks every column from the top with the rounded
+    // heights whenever the column reaches the canvas edge — which any column
+    // holding a fill region always does (the solver distributes to the edge
+    // exactly). The plan's re-read applies the same integer stacking, so a
+    // fractional fill share cannot turn a 32px gutter into a 33px one in the
+    // plan's own numbers. A column without fills has integer heights already,
+    // so this changes nothing there.
+    const refitGutter = defaultGutter(canvas.grid);
+    const refitColumns = new Map<number, RegionSpec[]>();
+    for (const region of regions) {
+      const list = refitColumns.get(region.bounds.x) ?? [];
+      list.push(region);
+      refitColumns.set(region.bounds.x, list);
+    }
+    for (const column of refitColumns.values()) {
+      const ordered = [...column].sort((a, b) => a.bounds.y - b.bounds.y);
+      let y = ordered[0]!.bounds.y;
+      for (const region of ordered) {
+        region.bounds.y = Math.round(y);
+        y += region.bounds.h + refitGutter;
+      }
+    }
+  }
+  if (fitNotes.length > 0) {
+    warnings.push(`Plan content fit (issue #25/#28): ${fitNotes.join(" ")}`);
+  }
+
   const byRegion = new Map<string, ContentSlot[]>();
   for (const slot of content) {
     const list = byRegion.get(slot.regionId) ?? [];
@@ -1123,3 +1376,311 @@ function slug(text: string): string {
       .slice(0, 32) || "item"
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/* The plan-side content fit (issues #25/#28)                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What the build will emit for one content slot, in the shape the compiler's
+ * `estimateHeight` consumes.
+ *
+ * This is a deliberate mirror of program.ts's `slotCall` (the pipeline's own
+ * builder) — NOT a second policy: program.ts owns the mapping and the
+ * valueless-instrument policy, and this mirror exists only so the plan can
+ * state the room the emitted content needs before anything is built. When the
+ * builder's mapping changes, this mirror must follow it.
+ */
+type EmittedSpec =
+  | { kind: "text"; id: string; text: string; role: string; maxWidth?: number; truncate?: boolean }
+  | { kind: "component"; id: string; type: string; props: Record<string, unknown> };
+
+/**
+ * The valueless-instrument policy's own words (program.ts): a slot whose
+ * emptiness is itself the reading keeps a label-only variant instead of being
+ * omitted. Kept in step with program.ts's `EMPTINESS_IS_STATE`.
+ */
+const EMPTINESS_IS_STATE = /\bgates?\b|validation|checklist|pending|awaiting|not yet|no value|not run|in progress/i;
+
+/**
+ * The primitives whose value-less illustrative form the build's policy
+ * disposes of (omit, or render label-only). `text`, `button`, `statusPill`,
+ * `modelRow`, `panel`, `sectionHeader` and `deviceNode` always emit.
+ */
+const VALUELESS_PRIMITIVES = new Set(["metric", "timelineEvent", "fitGauge", "memoryBudget"]);
+
+/** The type-scale role a heading slot uses — mirror of program.ts's textRole. */
+function pipelineTextRole(slot: ContentSlot): string {
+  if (slot.id.endsWith("eyebrow")) return "eyebrow";
+  if (slot.id.endsWith("title")) return "title";
+  if (slot.id.endsWith("description")) return "subtitle";
+  if (slot.kind === "heading") return "title";
+  return "body";
+}
+
+/** Whether a string can wrap at all — mirror of program.ts's isUnbreakable. */
+function isUnbreakableLabel(text: string): boolean {
+  const longest = text.split(/\s+/).reduce((max, run) => (run.length > max.length ? run : max), "");
+  return longest.length > 28 && text.length <= longest.length + 2;
+}
+
+/** The status tone a value names — mirror of program.ts's toneFromValue. */
+function pipelineToneFromValue(value: string): string {
+  const s = value.toLowerCase();
+  if (/^(success|healthy|info|neutral|warning|degraded|error|offline)$/.test(s)) return s;
+  if (/\bfits?\b|\bready\b|\bok\b|success|healthy|connected|available/.test(s)) return "success";
+  if (/fail|error|insufficient|exceed|offline|denied|unavailable|rejected/.test(s)) return "error";
+  if (/warn|degraded|stale|partial|pending|loading|progress|attention|pressure/.test(s)) return "warning";
+  if (/info|running|live|sync|refresh/.test(s)) return "info";
+  return "neutral";
+}
+
+/**
+ * Parses a budget statement — mirror of program.ts's parseMemoryBudget, so the
+ * mirror knows when the build falls back to a labelled metric.
+ */
+function pipelineParseMemoryBudget(value: string | null): { used: number; total: number; remaining: number; unit: string } | null {
+  if (value === null) return null;
+  const match = value.match(/([\d.]+)\s*(B|KB|MB|GB|TB)\s+of\s+([\d.]+)\s*(B|KB|MB|GB|TB)/i);
+  if (!match) return null;
+  const toGB = (n: number, unit: string): number => {
+    switch (unit.toUpperCase()) {
+      case "TB": return n * 1024;
+      case "GB": return n;
+      case "MB": return n / (1024 * 1024);
+      case "KB": return n / (1024 * 1024);
+      default: return n / (1024 * 1024 * 1024);
+    }
+  };
+  const used = toGB(parseFloat(match[1]!), match[2]!);
+  const total = toGB(parseFloat(match[3]!), match[4]!);
+  if (!Number.isFinite(used) || !Number.isFinite(total) || total <= 0) return null;
+  return { used, total, remaining: Math.max(0, total - used), unit: "GB" };
+}
+
+/**
+ * What the build emits for one slot — the `slotCall` mirror. `null` is the
+ * honest "omitted": an illustrative slot with no value whose emptiness is not
+ * itself a reading emits nothing at all.
+ */
+function emittedSpecFor(slot: ContentSlot): EmittedSpec | null {
+  switch (slot.primitive) {
+    case "text":
+      return {
+        kind: "text",
+        id: slot.id,
+        text: slot.value !== null ? `${slot.label} — ${slot.value}` : slot.label,
+        role: pipelineTextRole(slot),
+        ...(isUnbreakableLabel(slot.label) ? { truncate: true } : {}),
+      };
+    case "button":
+      return {
+        kind: "component",
+        id: slot.id,
+        type: "button",
+        props: {
+          label: slot.label,
+          variant: slot.kind === "action" && slot.id.includes("primary") ? "primary" : "secondary",
+        },
+      };
+    case "metric":
+      if (slot.value === null && slot.illustrative) return valuelessPolicy(slot);
+      return {
+        kind: "component",
+        id: slot.id,
+        type: "metric",
+        props: {
+          label: slot.label,
+          value: slot.value ?? "—",
+          ...(slot.value === null ? { valueStyle: "technical" } : {}),
+        },
+      };
+    case "statusPill":
+      if (slot.value !== null) {
+        return {
+          kind: "component",
+          id: slot.id,
+          type: "statusPill",
+          props: { label: `${slot.label} — ${slot.value}`, tone: pipelineToneFromValue(slot.value) },
+        };
+      }
+      if (slot.states !== undefined) {
+        return {
+          kind: "component",
+          id: slot.id,
+          type: "statusPill",
+          props: { label: `States — ${slot.states.join(" · ")}`, states: slot.states },
+        };
+      }
+      return { kind: "component", id: slot.id, type: "statusPill", props: { label: slot.label } };
+    case "modelRow":
+      return {
+        kind: "component",
+        id: slot.id,
+        type: "modelRow",
+        props: { title: slot.label, ...(slot.value !== null ? { value: slot.value } : {}) },
+      };
+    case "fitGauge": {
+      const value = slot.value ?? "";
+      if (value === "") {
+        if (slot.illustrative) return valuelessPolicy(slot);
+        return {
+          kind: "component",
+          id: slot.id,
+          type: "metric",
+          props: { label: slot.label, value: "—", valueStyle: "technical" },
+        };
+      }
+      const parts = value.split("·").map((s) => s.trim()).filter(Boolean);
+      return {
+        kind: "component",
+        id: slot.id,
+        type: "fitGauge",
+        props: {
+          fits: /\bfits\b/i.test(value) && !/does not fit|doesn'?t fit|no fit/i.test(value),
+          verdict: parts[0] ?? "Fits",
+          detail: `${slot.label} — ${parts.slice(1).join(" · ")}`,
+        },
+      };
+    }
+    case "memoryBudget": {
+      if (pipelineParseMemoryBudget(slot.value) === null) {
+        if (slot.value === null && slot.illustrative) return valuelessPolicy(slot);
+        return {
+          kind: "component",
+          id: slot.id,
+          type: "metric",
+          props: { label: slot.label, value: slot.value ?? "—", ...(slot.value === null ? { valueStyle: "technical" } : {}) },
+        };
+      }
+      return { kind: "component", id: slot.id, type: "memoryBudget", props: { title: slot.label } };
+    }
+    case "panel":
+      return { kind: "component", id: slot.id, type: "panel", props: { title: slot.label } };
+    case "sectionHeader":
+      return { kind: "component", id: slot.id, type: "sectionHeader", props: { title: slot.label } };
+    case "timelineEvent":
+      if (slot.value === null && slot.illustrative) return valuelessPolicy(slot);
+      return {
+        kind: "component",
+        id: slot.id,
+        type: "timelineEvent",
+        props: { title: slot.label, date: slot.value ?? "—" },
+      };
+    case "deviceNode":
+      return { kind: "component", id: slot.id, type: "deviceNode", props: { label: slot.label } };
+    default:
+      return null;
+  }
+}
+
+/** The valueless-instrument policy's two outcomes (program.ts's `valuelessInstrument`). */
+function valuelessPolicy(slot: ContentSlot): EmittedSpec | null {
+  const required = slot.because.startsWith("Required for the decision");
+  const emptinessIsState = EMPTINESS_IS_STATE.test(`${slot.label} ${slot.because}`);
+  if (required || emptinessIsState) {
+    return { kind: "text", id: slot.id, text: slot.label, role: "body" };
+  }
+  return null;
+}
+
+/**
+ * The column count the compiler will pack a region's content with — mirror of
+ * emitContent's `columns` expression. The plan's own `columns` (worked out in
+ * planContent) travels to the build and wins when it is more than one; when it
+ * is one the compiler recomputes from the region's composition. The
+ * screen-level composition grant is not mirrored: a region the grant would
+ * give three columns is estimated in one column here, which estimates TALLER,
+ * never shorter — the one direction this pass is allowed to err.
+ */
+function fallbackColumnsFor(region: RegionSpec, specs: EmittedSpec[]): number {
+  const components = specs.filter((s) => s.kind === "component");
+  const ROW_TYPES = new Set(["modelRow", "timelineEvent", "tableRow"]);
+  const allRows = components.length > 0 && specs.every((s) => s.kind === "text" || (s.kind === "component" && ROW_TYPES.has(s.type)));
+  const allText = specs.length > 0 && specs.every((s) => s.kind === "text");
+  const granted = region.composition === "instrument" || region.composition === "table";
+  return !granted || allRows || allText ? 1 : 3;
+}
+
+/**
+ * The height a region's content needs, computed the way the build resolves it.
+ *
+ * Two passes, because the build has two compiles: the first estimates every
+ * item at the region's inner width (the wrapping width is not known yet), the
+ * second re-estimates the text at the column the first pass actually gave it
+ * — which is what `applyMeasuredWidths` writes back and the final compile
+ * estimates with. Each pass is packed with the same `packContent` the
+ * compiler's flow path uses, in the same item order (texts first, then
+ * components — `emitContent` builds its flow list that way), and the required
+ * height is read off the packed content's bottom the way
+ * `fitRegionsToContent` reads it: content bottom, minus the region top, plus
+ * the bottom padding.
+ *
+ * Returns null when the region holds nothing to estimate.
+ */
+function estimateRegionRequiredHeight(
+  region: RegionSpec,
+  slots: ContentSlot[],
+  specs: EmittedSpec[],
+  look: ReturnType<typeof styleLook>,
+  titleScale: number,
+  grid: number,
+): number | null {
+  if (specs.length === 0) return null;
+  const pad = region.padding;
+  const gap = region.gap;
+  const inner = {
+    x: region.bounds.x + pad.left,
+    y: region.bounds.y + pad.top,
+    w: Math.max(0, region.bounds.w - pad.left - pad.right),
+    h: Math.max(0, region.bounds.h - pad.top - pad.bottom),
+  };
+  if (inner.w <= 0) return null;
+  // The compiler forces one column when it APPLIES the native auto-layout
+  // request ("one column: Figma's vertical auto layout is a single stack").
+  // The request exists when the region is a flow-vertical stack whose slots
+  // all declare component primitives (program.ts's autoLayout flag); it is
+  // GRANTED only when every emitted child really is a fixed-extent component
+  // — a label-only readout is text the compiler cannot measure, and a
+  // declined request keeps the columns the plan declared.
+  const requestedAutoLayout =
+    slots.length > 0 && slots.every((s) => s.primitive !== "text") && region.layoutMode === "flow-vertical";
+  const granted = requestedAutoLayout && specs.length > 0 && specs.every((s) => s.kind === "component");
+  const columns = granted
+    ? 1
+    : region.columns !== undefined && region.columns > 1
+      ? region.columns
+      : fallbackColumnsFor(region, specs);
+  const asContentSpec = (s: EmittedSpec): ContentSpec => s as unknown as ContentSpec;
+  const pack = (heights: number[]): Map<string, { x: number; y: number; w: number; h: number }> =>
+    packContent({
+      region: inner,
+      items: specs.map((s, i) => ({ id: s.id, height: heights[i]! })),
+      gap,
+      columns,
+    });
+  // Pass 1: the widths pass — text estimated at the region's inner width.
+  const first = pack(specs.map((s) => estimateHeight(asContentSpec(s), inner.w, 1, titleScale, grid, look)));
+  // Pass 2: the wrapping widths the first pass resolved are the widths the
+  // final compile estimates the text at.
+  const second = pack(
+    specs.map((s, i) => {
+      if (s.kind !== "text") return first.get(s.id)?.h ?? 0;
+      const box = first.get(s.id);
+      const maxWidth = box !== undefined && box.w > 0 ? Math.max(40, Math.round(box.w)) : undefined;
+      return estimateHeight(
+        asContentSpec({ ...s, ...(maxWidth !== undefined ? { maxWidth } : {}) }),
+        inner.w,
+        1,
+        titleScale,
+        grid,
+        look,
+      );
+    }),
+  );
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const box of second.values()) bottom = Math.max(bottom, box.y + box.h);
+  if (!Number.isFinite(bottom)) return null;
+  return Math.ceil(bottom - region.bounds.y + pad.bottom);
+}
+

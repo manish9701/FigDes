@@ -82,7 +82,7 @@
     "test:issue28": "node --test tests/issue-28-handoff.test.mjs",
     "gate": "node scripts/run-release-gate.mjs",
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs",
-    "test:issue26": "node --test tests/issue-26-pipeline-gates.test.mjs tests/issue-26-dispatch-gates.test.mjs tests/issue-26-contract-metrics.test.mjs tests/issue-26-fidelity.test.mjs",
+    "test:issue26": "node --test tests/issue-26-pipeline-gates.test.mjs tests/issue-26-dispatch-gates.test.mjs tests/issue-26-contract-metrics.test.mjs tests/issue-26-fidelity.test.mjs tests/issue-26-quality-gates.test.mjs",
     "test:issue29": "node --test tests/issue-29-plan-registry.test.mjs"
   },
   "devDependencies": {

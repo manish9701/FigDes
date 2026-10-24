@@ -251,6 +251,19 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     );
   }
 
+  // Issue #26 (GitHub) — always-on generic-plan audit. The shape checks used
+  // to fire only when the caller opted in (rejectGenericDashboard) and only
+  // produced a warning; a plan that merely prescribes heading / divider /
+  // equal columns / cards without explaining why passed silently. Now every
+  // plan is audited: even card grids, no focal entry point and uniform
+  // sectioning are named as findings, each with the repair that earns the
+  // pattern — and each lands in guardPreview, so the build-time guard
+  // enforces it too, not just the plan's prose.
+  for (const finding of auditPlanShape(plan)) {
+    plan.warnings.push(`${finding.rule} (${finding.severity}): ${finding.summary} — ${finding.repair}`);
+    plan.guardPreview.push({ rule: `plan.${finding.rule}`, therefore: finding.repair });
+  }
+
   // The direction travels with the plan: the program it returns carries the
   // style into design_runtime, which applies its preset mechanics.
   if (args.visualDirection !== undefined) {
@@ -563,6 +576,74 @@ function isGenericDashboardShape(plan: { regions: Array<{ id: string; role: stri
   const hasTableContent = plan.regions.some((r) => (r.id === "content" || r.id === "results") && (r.composition === "table" || r.composition === "canvas"));
   const hasInspector = ids.has("inspector");
   return hasChrome && hasTableContent && hasInspector;
+}
+
+/** Chrome roles: they may share size because chrome is structural. */
+const CHROME_ROLES = new Set(["navigation", "header", "footer", "status-rail"]);
+
+/**
+ * Always-on generic-plan audit (issue #26, GitHub): the shape checks the
+ * pipeline's anti-generic skill runs at its plan stage, lifted to the shapes
+ * `plan_screen` itself returns. Same honest boundary as the skill: no pattern
+ * is banned outright — a finding asks the plan to EARN the pattern (a stated
+ * rationale, a deliberate asymmetry) instead of falling into it. Plan time is
+ * where a generic composition costs one message instead of an undo.
+ */
+interface PlanShapeFinding {
+  rule: string;
+  severity: "serious" | "minor";
+  summary: string;
+  repair: string;
+}
+
+export function auditPlanShape(plan: {
+  regions: Array<{ id: string; role: string; width?: number | string; height?: number | string; grow?: number }>;
+  artDirection: { focal: { id: string; why: string } | null };
+}): PlanShapeFinding[] {
+  const findings: PlanShapeFinding[] = [];
+  const tolerance = 2;
+  const content = plan.regions.filter((r) => !CHROME_ROLES.has(r.role));
+
+  // Even card grid: three or more content regions sharing one numeric width
+  // AND one numeric height (±2px) — the template's repeated tile.
+  if (content.length >= 3) {
+    const numeric = content.filter((r) => typeof r.width === "number");
+    const equalWidth = numeric.filter((r) => Math.abs((r.width as number) - (numeric[0]!.width as number)) <= tolerance);
+    const sameHeight = equalWidth.filter((r) => typeof r.height === "number" && Math.abs((r.height as number) - (equalWidth[0]!.height as number)) <= tolerance);
+    if (equalWidth.length >= 3 && sameHeight.length >= 3) {
+      findings.push({
+        rule: "even-card-grid",
+        severity: "serious",
+        summary: `${sameHeight.length} content regions are one repeated equal tile (${sameHeight[0]!.width}x${sameHeight[0]!.height} ±${tolerance}px); the screen reads as a template's card grid instead of a composition.`,
+        repair: "Break the even split deliberately: give the payload region double the width, or switch the largest one to list-detail — or state in the plan why the grid is genuinely right.",
+      });
+    }
+  }
+
+  // No focal entry point: hierarchy levels without a first thing the eye lands on.
+  if (plan.regions.length >= 3 && plan.artDirection.focal === null) {
+    findings.push({
+      rule: "no-focal",
+      severity: "serious",
+      summary: `No region is named as the thing the eye lands on first; ${plan.regions.length} regions with hierarchy levels but no entry point.`,
+      repair: "Name the highest-rank payload region as the focal, or state why no focal is right (a deck's equal slides, a settings list).",
+    });
+  }
+
+  // Uniform sectioning: every content region absorbs leftover space evenly.
+  if (content.length >= 4 && plan.artDirection.focal !== null) {
+    const grows = new Set(content.map((r) => r.grow ?? 0));
+    if (grows.size === 1 && content.every((r) => (r.grow ?? 0) > 0)) {
+      findings.push({
+        rule: "uniform-sectioning",
+        severity: "minor",
+        summary: `All ${content.length} content regions absorb leftover space evenly (grow=${[...grows][0]}); the screen sections uniformly.`,
+        repair: "Give the payload region the larger grow so whitespace is intentional; even growth flattens hierarchy.",
+      });
+    }
+  }
+
+  return findings;
 }
 
 /**

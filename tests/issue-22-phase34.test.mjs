@@ -497,6 +497,10 @@ test("an observation that PRAISES the absence of defects is not a FAIL", async (
   assert.equal(observationFails({}), false);
 });
 
+/* --- a minimal but real PNG encoder, so render fixtures are honest bytes --- */
+
+import { realScreenPng, blankPng } from "./lib/png.mjs";
+
 test("final_qa runs the render check for real instead of leaving it pending forever", async () => {
   const { finalQaTool } = await import("../mcp-server/dist-test/review/workflow.js");
   const node = {
@@ -506,7 +510,7 @@ test("final_qa runs the render check for real instead of leaving it pending fore
   const session = {
     async request(tool) {
       if (tool === "collect_metrics") return { target: "screen", scope: "screen", nodeCount: 1, nodes: [node] };
-      if (tool === "render_node") return { data: "aGVsbG8=", width: 1024, height: 640 };
+      if (tool === "render_node") return { data: realScreenPng().toString("base64"), width: 1024, height: 640 };
       throw new Error(`unexpected request ${tool}`);
     },
   };
@@ -514,11 +518,13 @@ test("final_qa runs the render check for real instead of leaving it pending fore
   const renderCheck = result.checklist.find((i) => i.check === "render succeeds");
   assert.ok(renderCheck, "the render check exists");
   assert.equal(renderCheck.pass, true, "a successful render is recorded as a pass, not left pending");
-  assert.match(renderCheck.detail, /render completed/);
+  assert.match(renderCheck.detail, /render 1024x640/, "the render evidence names the size it was taken at");
   // No failed items and no pending ones: the verdict may finally say PASS.
   assert.equal(result.failed.length, 0);
   assert.equal(result.pendingLiveChecks.length, 0, "no check stays pending when it actually ran");
   assert.equal(result.verdict, "PASS", "with every check run and passed, the verdict is PASS");
+  assert.equal(result.renderEvidence.inspected, true, "the render was sanity-checked as a real screen");
+  assert.match(result.renderEvidence.revision, /^rev-/, "the render evidence is bound to a content revision");
 });
 
 test("final_qa reports a failed render as a FAIL, not a pending check", async () => {
@@ -538,4 +544,25 @@ test("final_qa reports a failed render as a FAIL, not a pending check", async ()
   assert.equal(renderCheck.pass, false, "a failed render is a failed check");
   assert.match(renderCheck.detail, /render failed/);
   assert.equal(result.verdict, "FAIL");
+});
+
+test("final_qa refuses visual approval for a render that decodes to a blank canvas (issue #26)", async () => {
+  const { finalQaTool } = await import("../mcp-server/dist-test/review/workflow.js");
+  const node = {
+    id: "screen", name: "Screen", type: "FRAME", visible: true, depth: 0, x: 0, y: 0, w: 1440, h: 900,
+    parentId: null, fill: null, stroke: null, radius: 0, text: null,
+  };
+  const session = {
+    async request(tool) {
+      if (tool === "collect_metrics") return { target: "screen", scope: "screen", nodeCount: 1, nodes: [node] };
+      if (tool === "render_node") return { data: blankPng().toString("base64"), width: 1024, height: 640 };
+      throw new Error(`unexpected request ${tool}`);
+    },
+  };
+  const result = await finalQaTool(session, { nodeId: "screen" });
+  const sanity = result.checklist.find((i) => i.check === "render is a screen, not a blank canvas");
+  assert.ok(sanity, "the sanity check exists");
+  assert.match(sanity.detail, /empty canvas|plain fill/, "the sanity check names what it saw");
+  assert.equal(result.renderEvidence.inspected, false, "a blank render is not inspected evidence");
+  assert.equal(result.renderEvidence.rendered, true, "the render itself succeeded — the IMAGE is the failure");
 });

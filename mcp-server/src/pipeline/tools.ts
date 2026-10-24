@@ -37,6 +37,7 @@ import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromMetrics } from "../memory/tools";
 import { checkCapabilityTruth } from "../memory/capability-truth";
 import { contentRevision } from "../design/quality/revision";
+import { analyzeScreenshot, type ScreenshotAnalysis } from "../design/quality/screenshot-qa";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
 import { executeRuntime } from "../runtime/interpreter";
@@ -997,6 +998,37 @@ export async function designPipelineTool(
   }
   trace.repairs.push(...repairs);
 
+  /**
+   * Issue #26 (GitHub) — the composition-escalation gate.
+   *
+   * Two focused repair passes that leave a composition-level finding
+   * unresolved are the boundary between repairing and re-composing: the
+   * defect is the SHAPE of the screen, and no spacing or typography patch
+   * addresses a shape. When the bounded loop ends with composition-scope
+   * findings outstanding (the same scope `diagnose()` calls structural:
+   * genericity, template, distinctiveness, composition, card-wall), the
+   * result demands a return to composition exploration instead of more
+   * cosmetic patching.
+   */
+  const outstandingAfterLoop = live.findings.filter(
+    (f) => !repairs.some((r) => r.findingId === f.id && r.result === "applied"),
+  );
+  const STRUCTURAL_SCOPE = /genericity|template|distinctiv|composition|card-wall|authentic|even-card|no-focal|uniform-sectioning/i;
+  const compositionOutstanding = outstandingAfterLoop.filter((f) => STRUCTURAL_SCOPE.test(f.rule ?? f.id));
+  const compositionReviewRequired =
+    compositionOutstanding.length > 0
+      ? {
+          required: true,
+          findings: compositionOutstanding.map((f) => ({ id: f.id, rule: f.rule ?? f.id, summary: f.summary })),
+          instruction:
+            "The remaining finding(s) are composition-level: the shape is the defect, so further cosmetic repairs will not resolve them. " +
+            "Return to composition exploration — re-run plan_screen (or design_pipeline) for this screen and compare structural variants before rebuilding.",
+        }
+      : null;
+  if (compositionReviewRequired !== null) {
+    stage(trace, "report", `Composition escalation: ${compositionOutstanding.length} composition-level finding(s) outstanding after the repair loop.`);
+  }
+
   /* --- the guard, after the final repair ---------------------------------- */
 
   // The guard's verdict is about the screen as it *is*, not as it was planned.
@@ -1082,6 +1114,10 @@ export async function designPipelineTool(
     transactionId,
     nodeIds,
     report,
+    // Issue #26 (GitHub): set when the bounded repair loop left composition-
+    // scope findings outstanding — the caller must re-plan the screen, not
+    // keep patching it.
+    ...(compositionReviewRequired !== null ? { compositionReviewRequired } : {}),
     note:
       "Generated and applied is not the same as verified: read report.structurallyVerified, report.visuallyReviewed and report.remainingFindings before calling this screen done.",
     trace,
@@ -1140,6 +1176,7 @@ async function verifyLiveScreen(
   }
 
   let render: { revisionId: string | null; nodeId: string | null; detail: "low" | "high" | null; at: number } | null = null;
+  let screenshotAnalysis: ScreenshotAnalysis | null = null;
   // The render is bound to the revision of the screen it was taken of. The
   // plugin's render result carries no revision of its own, so the pipeline
   // fingerprints the measured state and binds the render to that. A render
@@ -1167,6 +1204,15 @@ async function verifyLiveScreen(
           detail: "low",
           at: Date.now(),
         };
+        // Issue #26 (GitHub): the render is sanity-checked before it can count
+        // as visual evidence. An image that decodes to a blank canvas or a
+        // plain fill means the screen was never really seen — that inspection
+        // failed, and the visual verdict treats it as a finding, not a pass.
+        try {
+          screenshotAnalysis = analyzeScreenshot(new Uint8Array(Buffer.from(result.data, "base64")));
+        } catch {
+          screenshotAnalysis = null; // decode failure is reported as a warning, never a crash
+        }
       }
     } catch {
       render = null;
@@ -1224,6 +1270,29 @@ async function verifyLiveScreen(
   checks.push(...live.checks);
   findings.push(...live.findings);
 
+  // Issue #26 (GitHub): a render that decodes to a blank canvas or a plain
+  // fill is not a screen that was reviewed — the inspection failed, and the
+  // visual verdict carries the finding instead of a pass.
+  if (screenshotAnalysis !== null && (screenshotAnalysis.renderStatus === "suspect-blank" || screenshotAnalysis.renderStatus === "suspect-uniform")) {
+    const blank = screenshotAnalysis.renderStatus === "suspect-blank";
+    const sanityFinding = {
+      id: `render-sanity.${screenshotAnalysis.renderStatus}`,
+      stage: "visual" as const,
+      severity: (blank ? "high" : "medium") as "high" | "medium",
+      confidence: 0.8,
+      nodeIds: evidence.rootNodeId !== null ? [evidence.rootNodeId] : [],
+      summary: blank
+        ? "The render decodes to a blank canvas: the built frame is empty, or the render captured nothing of it."
+        : "The render decodes to a single flat colour: the screen reads as a plain fill, not a composed screen.",
+      why: "A render the automated checks cannot see content in has not been looked at. Treating it as visual evidence would approve a screen nobody observed.",
+      evidence: { kind: "screenshot" as const, detail: screenshotAnalysis.warnings.map((w) => w.message).join("; ") },
+      fix: "Re-render the frame; if the frame is genuinely empty, the build emitted nothing and the build — not the QA — is the defect.",
+      automatable: false,
+    };
+    live.findings.push(sanityFinding);
+    findings.push(sanityFinding);
+  }
+
   if (metrics === null) {
     blocked.push({ check: "live-structure", why: "The built frame could not be measured." });
   }
@@ -1257,7 +1326,9 @@ async function verifyLiveScreen(
           ? "The screen was not rendered, so it was never looked at."
           : visualStatus === "fail"
             ? `A low-detail render of the built frame was produced, and ${visualNotable.length} visual finding(s) of note were raised against it.`
-            : "A low-detail render of the built frame was produced and returned with the pipeline result for review; the automated visual checks raised nothing above the bar.",
+            : screenshotAnalysis !== null && screenshotAnalysis.warnings.length > 0
+              ? `A low-detail render was produced (sanity ${screenshotAnalysis.renderStatus}); ${screenshotAnalysis.warnings.map((w) => w.message).join("; ")}`
+              : "A low-detail render of the built frame was produced (sanity passed) and returned with the pipeline result for review; the automated visual checks raised nothing above the bar.",
       renderRevision: render?.revisionId ?? null,
     },
     blocked,

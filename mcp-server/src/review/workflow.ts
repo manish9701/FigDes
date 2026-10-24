@@ -30,6 +30,7 @@ import { evaluateFinalGate, compatibilityOfBuilds } from "../design/quality/fina
 import { SERVER_BUILD } from "../../../shared/protocol";
 import { makeFindings, trackFindings } from "../design/quality/visual-findings";
 import { contentRevision } from "../design/quality/revision";
+import { analyzeScreenshot } from "../design/quality/screenshot-qa";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
@@ -1066,6 +1067,24 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
             "Each skipped finding names its cause. A finding with no proposed operation has to be fixed by hand, or the rule has to be taught to propose one.",
         }
       : {}),
+    /**
+     * Issue #26 (GitHub) — the composition-escalation gate: when the loop ends
+     * with findings it could not resolve (fix applied but the defect stayed,
+     * or overflow still reported), the screen's shape is the suspect. The
+     * result says so explicitly: return to composition exploration instead of
+     * another cosmetic pass.
+     */
+    ...(structuralOutstanding > 0
+      ? {
+          compositionReviewRequired: {
+            required: true,
+            unresolved: structuralOutstanding,
+            instruction:
+              "Focused repairs did not resolve these finding(s), which means the screen's composition — not its spacing or typography — is the defect. " +
+              "Stop cosmetic patching: re-run plan_screen (or design_pipeline) for this screen and compare structural variants before rebuilding.",
+          },
+        }
+      : {}),
     howToProceed: converged
       ? (compositionLed
         ? "No high-confidence structural findings remain. Run a successful low-detail render and judge the image before design_guard."
@@ -1174,6 +1193,97 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
    */
   let finalGate: ReturnType<typeof evaluateFinalGate> | null = null;
 
+  /**
+   * Issue #26 (GitHub) — live render evidence, collected once and bound.
+   *
+   * final_qa used to render the live target as a liveness probe and throw the
+   * evidence away: the final gate's required render-evidence record was
+   * derived `notEvaluated`, so the verdict could never be PASS even when the
+   * render succeeded. Now the render is EVIDENCE: bound to the content
+   * revision of the measured tree (a screenshot proves the state it depicts,
+   * and nothing mutates in between), passed through the screenshot sanity
+   * check, and fed into the final gate — a missing, failed or blank render
+   * refuses visual approval instead of going unnoticed.
+   */
+  const targetSpecified = args.target !== undefined || args.nodeId !== undefined;
+  let liveMetrics: MetricsReport | null = null;
+  let liveRevision: string | null = null;
+  let renderEvidence: {
+    ok: boolean;
+    inspected: boolean;
+    analysis: { renderStatus: string; warnings: Array<{ code: string; message: string; confidence: number }> } | null;
+    detail: string;
+    width?: number;
+    height?: number;
+  } | null = null;
+  let targetArg: Record<string, unknown> = {};
+  if (session && targetSpecified) {
+    // The plugin's collect_metrics scopes on `target` (a node id string).
+    // Passing { nodeId } is silently ignored and scans the whole file, which
+    // is how a scoped review with 0 highs became a file-wide FAIL. Normalise
+    // both shapes to { target } here.
+    targetArg = args.nodeId !== undefined
+      ? { target: args.nodeId }
+      : typeof (args.target as Record<string, unknown> | undefined)?.["nodeId"] === "string"
+        ? { target: (args.target as Record<string, unknown>)["nodeId"] as string }
+        : (args.target as Record<string, unknown>);
+    try {
+      liveMetrics = (await session.request("collect_metrics", targetArg)) as MetricsReport;
+    } catch (err) {
+      liveMetrics = null;
+      renderEvidence = { ok: false, inspected: false, analysis: null, detail: `the live measurement failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+    if (liveMetrics !== null) {
+      // The revision is a fingerprint of the measured tree — the same binding
+      // the pipeline uses, so evidence from either path is comparable.
+      liveRevision = contentRevision(
+        { target: targetArg.target, nodes: liveMetrics.nodes.map((n) => [n.id, n.x, n.y, n.w, n.h, n.fill, n.name]) },
+        "rev",
+      );
+    }
+    // The render, and its sanity check. A render that returns an image that
+    // decodes to a blank canvas has not been LOOKED at: that inspection
+    // failed, and the gate treats it exactly like a missing render.
+    if (liveMetrics !== null) {
+      try {
+        const rendered = (await session.request(
+          "render_node",
+          { nodeId: targetArg.target as string, maxWidth: 1024, detail: "low" },
+          120_000,
+        )) as { data?: string; width?: number; height?: number };
+        const gotImage = Boolean(rendered?.data);
+        let analysis: { renderStatus: string; warnings: Array<{ code: string; message: string; confidence: number }> } | null = null;
+        if (gotImage) {
+          try {
+            const bytes = new Uint8Array(Buffer.from(rendered.data as string, "base64"));
+            analysis = analyzeScreenshot(bytes);
+          } catch {
+            analysis = null; // decode failure is a warning below, not a crash
+          }
+        }
+        const sane = analysis !== null && analysis.renderStatus === "ok";
+        const blankish = analysis !== null && (analysis.renderStatus === "suspect-blank" || analysis.renderStatus === "suspect-uniform");
+        renderEvidence = {
+          ok: gotImage,
+          inspected: sane || blankish,
+          analysis,
+          detail: gotImage
+            ? analysis !== null
+              ? `render ${rendered.width}x${rendered.height}, sanity ${analysis.renderStatus}: ${analysis.warnings.map((w) => w.message).join("; ") || "no warnings"}`
+              : `render completed at ${rendered.width}x${rendered.height} (sanity check could not decode the image)`
+            : "the render returned no image",
+          ...(rendered?.width !== undefined ? { width: rendered.width } : {}),
+          ...(rendered?.height !== undefined ? { height: rendered.height } : {}),
+        };
+        // A blank/uniform render is not inspected evidence: the gate refuses
+        // visual approval for it (a blank canvas proves nothing was built).
+        if (blankish) renderEvidence.inspected = false;
+      } catch (err) {
+        renderEvidence = { ok: false, inspected: false, analysis: null, detail: `render failed: ${err instanceof Error ? err.message : String(err)}` };
+      }
+    }
+  }
+
   if (args.program !== undefined) {
     const scored = (await scoreDesignTool({ program: args.program })) as {
       overall: number;
@@ -1242,15 +1352,9 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     // input so a clean PASS has to name what was skipped.
     let accessibility: { findings: number; notChecked: string[] } | null = null;
     let a11yItems: Array<{ area: ChecklistItem["area"]; check: string; pass: boolean | null; detail: string }> = [];
-    if (session && (args.target !== undefined || args.nodeId !== undefined)) {
-      const targetArg = args.nodeId !== undefined
-        ? { target: args.nodeId }
-        : typeof (args.target as Record<string, unknown> | undefined)?.["nodeId"] === "string"
-          ? { target: (args.target as Record<string, unknown>)["nodeId"] as string }
-          : (args.target as Record<string, unknown>);
+    if (liveMetrics !== null) {
       try {
-        const live = (await session.request("collect_metrics", targetArg)) as MetricsReport;
-        const a11yInput = accessibilityInputFromMetrics(live, live.target ?? "live");
+        const a11yInput = accessibilityInputFromMetrics(liveMetrics, liveMetrics.target ?? "live");
         const a11yReport = evaluateAccessibility(a11yInput);
         accessibility = { findings: a11yReport.findings.length, notChecked: [...a11yReport.notChecked, "keyboard/focus behaviour: not verifiable from a static Figma design", "screen-reader semantics: not verifiable from a static Figma design"] };
         a11yItems = [
@@ -1263,9 +1367,13 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
         ];
       } catch (err) {
         const why = err instanceof Error ? err.message : String(err);
-        accessibility = { findings: 0, notChecked: [`the live measurement failed, so no accessibility check ran: ${why}`] };
+        accessibility = { findings: 0, notChecked: [`the accessibility evaluation could not run on the measured tree: ${why}`] };
         a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: `could not measure: ${why}` }];
       }
+    } else if (session && targetSpecified && renderEvidence !== null) {
+      const why = renderEvidence.detail;
+      accessibility = { findings: 0, notChecked: [`the live measurement failed, so no accessibility check ran: ${why}`] };
+      a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: `could not measure: ${why}` }];
     } else {
       accessibility = { findings: 0, notChecked: ["no live measurement: nothing about accessibility was evaluated"] };
       a11yItems = [{ area: "ACCESSIBILITY", check: "WCAG contrast/target-size checks", pass: null, detail: "needs the live file: run final_qa against a target" }];
@@ -1277,6 +1385,11 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     // tied to a commit — refuses PASS rather than standing as ordinary. An
     // offline, program-only run touches no live file and stays unaffected.
     const pluginBuild = session && typeof session.build === "string" ? session.build : undefined;
+    // Issue #26 (GitHub): the render-evidence gate is fed for real. A render
+    // that succeeded AND passed the screenshot sanity check is inspected
+    // evidence, revision-bound to the tree it depicts; anything else refuses
+    // visual approval instead of silently leaving the gate unevaluated.
+    const renderVerified = renderEvidence !== null && renderEvidence.ok && renderEvidence.inspected;
     finalGate = evaluateFinalGate({
       scores: {
         hierarchy: dimension("Hierarchy") * 10,
@@ -1300,6 +1413,17 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
             },
           }
         : {}),
+      ...(renderEvidence !== null
+        ? {
+            visualEvidenceVerified: renderVerified,
+            // Revision binding: the evidence must depict the revision being
+            // judged. final_qa mutates nothing between measuring and
+            // rendering, so a successful render is bound to the measured
+            // revision; a missing one has no revision to bind.
+            expectedRevision: liveRevision ?? undefined,
+            evidenceRevision: renderVerified ? liveRevision : null,
+          }
+        : {}),
     });
     items.push(
       { area: "SYSTEM", check: "design tokens consistent", pass: consistency.blocking ? false : consistency.score >= 70 ? true : null, detail: `consistency ${consistency.score}/100: ${consistency.evidence.slice(0, 2).join("; ")}` },
@@ -1318,46 +1442,53 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
     });
   }
 
-  if (session && (args.target !== undefined || args.nodeId !== undefined)) {
-    // The plugin's collect_metrics scopes on `target` (a node id string).
-    // Passing { nodeId } is silently ignored and scans the whole file, which
-    // is how a scoped review with 0 highs became a file-wide FAIL. Normalise
-    // both shapes to { target } here.
-    const targetArg = args.nodeId !== undefined
-      ? { target: args.nodeId }
-      : typeof (args.target as Record<string, unknown> | undefined)?.["nodeId"] === "string"
-        ? { target: (args.target as Record<string, unknown>)["nodeId"] as string }
-        : (args.target as Record<string, unknown>);
-    const raw = (await session.request("collect_metrics", targetArg)) as MetricsReport;
-    const findings = runRules(raw, "review");
-    const high = findings.filter((f) => f.confidence === "high");
-    const cardWall = findings.some((f) => f.rule === "card-wall");
-    /**
-     * The render check runs for real. It used to be hardcoded `pass: null`, so
-     * final_qa's own closing check stayed "pending" forever and the verdict
-     * never rose past PASS WITH LIVE CHECKS PENDING even in a session full of
-     * successful renders (recorded verbatim on the issue-22 loop). A low-detail
-     * render is one round trip, and it is the exact check the item names.
-     */
-    let renderOk = false;
-    let renderDetail: string;
-    try {
-      const rendered = (await session.request(
-        "render_node",
-        { nodeId: targetArg.target, maxWidth: 1024, detail: "low" },
-        120_000,
-      )) as { data?: string; width?: number; height?: number };
-      renderOk = Boolean(rendered?.data);
-      renderDetail = renderOk
-        ? `render completed at ${rendered.width}x${rendered.height}`
-        : "the render returned no image";
-    } catch (err) {
-      renderDetail = `render failed: ${err instanceof Error ? err.message : String(err)}`;
-    }
+  if (session && targetSpecified) {
+    // Issue #26 (GitHub): measured and rendered once above, consumed here —
+    // the old code collected metrics and rendered a second time, paying two
+    // extra round trips and leaving the evidence unbound.
+    const reviewFindings = liveMetrics !== null ? runRules(liveMetrics, "review") : [];
+    const high = reviewFindings.filter((f) => f.confidence === "high");
+    const cardWall = reviewFindings.some((f) => f.rule === "card-wall");
     items.push(
-      { area: "TECHNICAL", check: "no overflow or broken structure", pass: high.length === 0, detail: high.length === 0 ? `no high-confidence findings in ${raw.scope} (${raw.nodeCount} nodes)` : `${high.length} high-confidence in ${raw.scope}: ${high.map((f) => f.rule).join(", ")}` },
-      { area: "COMPOSITION", check: "no accidental card wall", pass: !cardWall, detail: cardWall ? "card-wall rule fired" : "no card wall detected" },
-      { area: "TECHNICAL", check: "render succeeds", pass: renderOk, detail: renderDetail },
+      {
+        area: "TECHNICAL",
+        check: "no overflow or broken structure",
+        pass: liveMetrics !== null ? high.length === 0 : false,
+        detail:
+          liveMetrics !== null
+            ? high.length === 0
+              ? `no high-confidence findings in ${liveMetrics.scope} (${liveMetrics.nodeCount} nodes)`
+              : `${high.length} high-confidence in ${liveMetrics.scope}: ${high.map((f) => f.rule).join(", ")}`
+            : (renderEvidence?.detail ?? "the live measurement failed"),
+      },
+      {
+        area: "COMPOSITION",
+        check: "no accidental card wall",
+        pass: liveMetrics !== null ? !cardWall : false,
+        detail: liveMetrics !== null ? (cardWall ? "card-wall rule fired" : "no card wall detected") : "not measured: the live measurement failed",
+      },
+      {
+        area: "TECHNICAL",
+        check: "render succeeds",
+        pass: renderEvidence?.ok === true,
+        detail: renderEvidence?.detail ?? "needs the live file: render at low detail",
+      },
+      // The screenshot sanity check, finally running in a live path: a render
+      // that decodes to a near-blank or plain-fill image is reported, never
+      // silently approved.
+      {
+        area: "VISUAL",
+        check: "render is a screen, not a blank canvas",
+        pass: renderEvidence === null ? null : renderEvidence.ok ? (renderEvidence.inspected ? true : null) : null,
+        detail:
+          renderEvidence === null
+            ? "needs the live file"
+            : renderEvidence.analysis !== null && renderEvidence.analysis.warnings.length > 0
+              ? renderEvidence.analysis.warnings.map((w) => w.message).join("; ")
+              : renderEvidence.ok
+                ? "the render decodes to a varied image (screenshot sanity passed)"
+                : "no image: the render failed",
+      },
     );
   } else {
     items.push(
@@ -1372,6 +1503,22 @@ export async function finalQaTool(session: Session | null, rawArgs: unknown): Pr
   return {
     status: "ok",
     verdict: failed.length > 0 ? "FAIL" : pending.length > 0 ? "PASS WITH LIVE CHECKS PENDING" : "PASS",
+    /**
+     * Issue #26 (GitHub): the render evidence, stated on the payload — the
+     * revision it is bound to, whether it was inspected (sanity passed), and
+     * what the sanity check saw. An approval should be traceable to the exact
+     * image it was based on.
+     */
+    ...(renderEvidence !== null || liveRevision !== null
+      ? {
+          renderEvidence: {
+            revision: liveRevision,
+            rendered: renderEvidence?.ok === true,
+            inspected: renderEvidence !== null && renderEvidence.ok && renderEvidence.inspected,
+            detail: renderEvidence?.detail ?? null,
+          },
+        }
+      : {}),
     /**
      * The truthful final gate (issue #25), no longer discarded: the verdict
      * that can never PASS on a skipped gate, every gate record, the

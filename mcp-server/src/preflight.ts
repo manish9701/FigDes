@@ -105,6 +105,51 @@ export function preflightCheckTag(issue: PreflightIssue): string {
   return match ? match[1]! : issue.opType;
 }
 
+/**
+ * Issue #30 — which preflight tags an explicit approved+reason may clear.
+ *
+ * The structural classes (schema, dup-id, dup-parent, unknown-ref, stale-ref,
+ * self-parent, page-target) are unwaivable: their answer does not depend on
+ * intent, and a transaction that fails one is broken on its face. The geometry
+ * classes (outside-bounds, text-overflow, geometry-drift, connector) are
+ * judgment calls about intent — "will this clip or contradict the plan" — and
+ * the raw build they surface on is one the caller was already asked to
+ * justify. A waived dispatch proceeds, but the findings do not disappear:
+ * they ride the committed result (and the ledger note) as warnings so the
+ * record shows what an approval let through.
+ */
+export const PREFLIGHT_WAVABLE_TAGS: ReadonlySet<string> = new Set([
+  "outside-bounds",
+  "text-overflow",
+  "geometry-drift",
+  "connector",
+]);
+
+/** The same explicit-justification shape the score guard's waiver uses. */
+export interface PreflightApproval {
+  approved?: boolean;
+  reason?: string;
+}
+
+export function preflightApprovalWaived(approval: PreflightApproval | undefined): boolean {
+  return approval?.approved === true && typeof approval.reason === "string" && approval.reason.trim().length > 0;
+}
+
+/**
+ * Splits a failed preflight into unwaivable (`hard`) and waivable (`soft`)
+ * issues by their leading tag. Mixed refusals stay refusals: an approval
+ * covers the geometry judgment calls, never the structural checks.
+ */
+export function splitPreflightIssues(issues: PreflightIssue[]): { hard: PreflightIssue[]; soft: PreflightIssue[] } {
+  const hard: PreflightIssue[] = [];
+  const soft: PreflightIssue[] = [];
+  for (const issue of issues) {
+    if (PREFLIGHT_WAVABLE_TAGS.has(preflightCheckTag(issue))) soft.push(issue);
+    else hard.push(issue);
+  }
+  return { hard, soft };
+}
+
 export function validateTransaction(operations: unknown[], context?: PreflightContext): PreflightResult {
   const issues: PreflightIssue[] = [];
   const warnings: PreflightResult["warnings"] = [];

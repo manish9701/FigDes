@@ -1269,7 +1269,21 @@ export async function runChunked(
 
   const remap = new Map<string, string>();
   const runFingerprint = createHash("sha256").update(JSON.stringify(operations)).digest("hex").slice(0, 8);
-  const chunkPreflight: PreflightContext = { briefBlockers: preflight?.briefBlockers };
+  // Issue #30 — per-chunk context carries ONLY what a chunk can honestly
+  // re-check offline: the brief blockers, which gate at the dispatch edge per
+  // chunk exactly like a single transaction. Everything else — page-absolute
+  // plan boxes, overflow permissions, measured text, connector routes — was
+  // already validated ONCE over the whole list above, and threading it here
+  // would run a CONTEXT-bearing set of geometry classes against a
+  // chunk-local replay with maps it cannot re-derive: checkChildBounds fails
+  // closed on absent permissions, so an overflow:"allow" region whose
+  // children span a chunk boundary would be refused for overflow the plan
+  // itself declared — the gate refusing testimony it already accepted.
+  // `undefined` (never an empty shell object) keeps every non-brief class
+  // honestly skipped for the slice.
+  const chunkBriefBlockers = preflight?.briefBlockers;
+  const chunkPreflight: PreflightContext | undefined =
+    chunkBriefBlockers !== undefined && chunkBriefBlockers.length > 0 ? { briefBlockers: chunkBriefBlockers } : undefined;
 
   const rewrite = (value: unknown): unknown => {
     if (typeof value === "string" && remap.has(value)) return remap.get(value)!;

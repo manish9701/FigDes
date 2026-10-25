@@ -768,9 +768,22 @@ test("a valid >120-op chunked build dispatches per-chunk transactionIds and vali
   );
 
   // The one program-level pass is the whole-list gate; chunks carry only the
-  // evidence a chunk can re-check offline.
+  // evidence a chunk can re-check offline: brief blockers (which gate at the
+  // dispatch edge per chunk), and NOTHING else — a geometry-bearing context on
+  // a chunk-local replay would fail closed on overflow permissions it cannot
+  // re-derive across the boundary (issue #30), so the chunk context is absent
+  // rather than an empty shell that would activate the geometry classes.
   assert.ok(
-    sends.every((s) => s.payload.preflight !== undefined && s.payload.preflight.planBoxes === undefined),
+    sends.every(
+      (s) =>
+        s.payload.preflight === undefined ||
+        (s.payload.preflight.planBoxes === undefined &&
+          s.payload.preflight.overflow === undefined &&
+          s.payload.preflight.overflowReasons === undefined &&
+          s.payload.preflight.textMeasurements === undefined &&
+          s.payload.preflight.connectors === undefined &&
+          s.payload.preflight.sizing === undefined),
+    ),
     "page-absolute plan evidence is not re-sent per chunk: exactly one full-list validate, at the gate",
   );
 

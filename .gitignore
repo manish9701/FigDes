@@ -23,3 +23,9 @@ dist-test/
 # Cross-run repair trace (runtime log, recreated at runtime; never commit test rows)
 artifacts/repair-history.jsonl
 
+# Per-file design decision records (issue #30) are runtime state, one per
+# fileKey, overwritten on every build — like .snapshots/, not history.
+# The committed issue-22 benchmark fixtures live under artifacts/benchmark/
+# and stay tracked.
+artifacts/decision-records/
+

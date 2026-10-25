@@ -28,6 +28,12 @@
  */
 import type { GuardFinding, ProductRule, RuleEvidence, Verdict } from "../../../shared/memory";
 import type { NodeMetrics } from "../../../shared/protocol";
+// Runtime colour helpers for the restrained-accent metric. Both are the shared
+// definitions review/score.ts and review/critique.ts already use, so the guard
+// resolves a colour exactly the way the rest of the server does — a sampler
+// unique to the guard is how two measurements of the same pixel disagree.
+import { parseColor } from "../../../shared/protocol";
+import { rgbToHsl } from "../../../shared/contrast";
 
 /* -------------------------------------------------------------------------- */
 /* The snapshot                                                                */
@@ -724,6 +730,122 @@ export function metricsFromLiveNodes(nodes: NodeMetrics[]): LiveGuardMetrics {
   return { unlabeledComponents, dominantActions, machineDataInProportionalFace, ambiguousSelections };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Restrained accents                                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Prop keys a node's style colour may live in.
+ *
+ * Verified against the IR that reaches `snapshotFromIR` (as of this change no
+ * emitter writes a `fills` field): resolved colours arrive as component props.
+ * `runtime/compile.ts` resolves button/sheen looks into `fill`/`stroke`
+ * operations rather than IR props, and authored nodes may carry `color`,
+ * `surface`, `background` or `accent` directly. `tone` is deliberately *not*
+ * read: real IR payloads put semantic words there (`"error"`, `"neutral"`),
+ * which are not colours, and a metric that guessed would be exactly the
+ * guessing this file refuses. Anything unparseable is skipped — a prop holding
+ * a token name is a colour the snapshot cannot see, see `hueFamiliesOf`.
+ */
+const COLOUR_PROP_KEYS = ["color", "surface", "background", "accent", "fill", "stroke"];
+
+/**
+ * The neutral gate, in HSL saturation.
+ *
+ * Near-greys are absence of hue on purpose. A screen's structure is supposed to
+ * be carried by neutrals with colour coming in only as emphasis, so greys,
+ * whites and blacks never count toward the family tally no matter how many of
+ * them there are. 0.12 sits comfortably below any deliberately tinted surface
+ * while keeping the zinc/neutral greys' ±1% channel noise out.
+ */
+const NEUTRAL_SATURATION = 0.12;
+
+/**
+ * Hue-family bands, in HSL degrees.
+ *
+ * Eight stable families — red/orange/yellow/green/teal/blue/purple/pink —
+ * with boundaries fixed here so the same hex always lands in the same family:
+ *
+ *   red     -15 ≤ h < 15   (the band wraps the 0° meridian; red straddles it)
+ *   orange   15 ≤ h < 45
+ *   yellow   45 ≤ h < 70
+ *   green    70 ≤ h < 160
+ *   teal    160 ≤ h < 195
+ *   blue    195 ≤ h < 255
+ *   purple  255 ≤ h < 300
+ *   pink    300 ≤ h < 345
+ *
+ * The boundaries are the ones the red/orange/yellow/teal/blue/purple/pink
+ * perceptual seams fall on, chosen once and kept stable; the rule they feed
+ * wants a small fixed family set, not a continuous hue axis, because "four
+ * families" is only meaningful if every measurement counts the same way.
+ * Angles are normalised into [-15, 345) first, so each band is a single
+ * interval and no band needs a wrap-around special case.
+ */
+const HUE_FAMILY_BANDS: ReadonlyArray<{ family: string; min: number; max: number }> = [
+  { family: "red", min: -15, max: 15 },
+  { family: "orange", min: 15, max: 45 },
+  { family: "yellow", min: 45, max: 70 },
+  { family: "green", min: 70, max: 160 },
+  { family: "teal", min: 160, max: 195 },
+  { family: "blue", min: 195, max: 255 },
+  { family: "purple", min: 255, max: 300 },
+  { family: "pink", min: 300, max: 345 },
+];
+
+/** Bands tile the circle exactly, so the loop always returns. */
+function hueFamilyOf(h: number): string {
+  const a = h >= 345 ? h - 360 : h; // [-15, 345)
+  for (const band of HUE_FAMILY_BANDS) {
+    if (a >= band.min && a < band.max) return band.family;
+  }
+  return "red"; // unreachable: the bands above tile [-15, 345) completely
+}
+
+/**
+ * How many *distinct non-neutral hue families* the resolved style colours form.
+ *
+ * The monochrome discipline is the product truth the restrained-accent rule
+ * states: an exo screen should stay within ~3 accent hue families so the
+ * surface reads as one system, not a palette showcase. Counting, precisely:
+ *
+ *   - every colour the IR exposes through `COLOUR_PROP_KEYS` contributes
+ *     exactly one family (or none, if neutral), so repeats of one hue
+ *     never inflate the count;
+ *   - near-greys (`s < NEUTRAL_SATURATION`) count as nothing at all, any
+ *     quantity of them stays clean;
+ *   - a colour the snapshot cannot resolve (token reference, semantic word
+ *     like the `tone: "error"` payloads carry) is skipped, because counting
+ *     an unmeasurable colour as "another hue" would fabricate evidence;
+ *   - a washed-out colour (`a < 0.5`) is skipped for the same reason — a
+ *     translucent tint is not an accent the surface reads as a family.
+ *
+ * `parseColor` and `rgbToHsl` are the shared definitions (see imports above);
+ * this function only composes them and adds the family bucketing.
+ */
+function hueFamiliesOf(content: Array<{ props?: Record<string, unknown> }>): number {
+  const families = new Set<string>();
+  for (const node of content) {
+    const props = node.props;
+    if (!props) continue;
+    for (const key of COLOUR_PROP_KEYS) {
+      const v = props[key];
+      if (typeof v !== "string" || v.trim().length === 0) continue;
+      let rgb: { r: number; g: number; b: number; a: number };
+      try {
+        rgb = parseColor(v);
+      } catch {
+        continue; // token reference or semantic word, not a colour
+      }
+      if (rgb.a < 0.5) continue;
+      const { h, s } = rgbToHsl(rgb);
+      if (s < NEUTRAL_SATURATION) continue;
+      families.add(hueFamilyOf(h));
+    }
+  }
+  return families.size;
+}
+
 /**
  * Builds a snapshot from a compiled runtime result.
  *
@@ -883,6 +1005,11 @@ export function snapshotFromIR(ir: {
       dominantActions,
       machineDataInProportionalFace,
       ambiguousSelections,
+      // Distinct non-neutral hue families across the resolved style colours
+      // the IR carries — the measure `exo.restrained-accent` states. Live
+      // snapshots cannot supply this (colour props do not survive the
+      // measurement), so there the rule stays unevaluated rather than guessed.
+      hueFamilies: hueFamiliesOf(ir.content),
     },
   };
 }

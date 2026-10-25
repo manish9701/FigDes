@@ -58,6 +58,15 @@ import { auditTypeCriteria } from "../design/quality/type-criteria";
 import { evaluateGenericity } from "../design/quality/genericity";
 import { planRepairs, deduplicateOperations } from "./repair";
 import { buildReport } from "./report";
+import {
+  buildDecisionRecord,
+  loadDecisionRecordForFile,
+  persistDecisionRecordForFile,
+  resumeDrift,
+  type DecisionRecordInput,
+  type ParsedDecisionRecord,
+  type ResumeDrift,
+} from "../design/decision-record";
 import type { PipelineCheck, PipelineFinding, PipelineTrace } from "./contracts";
 
 export const DesignPipelineArgs = z
@@ -177,6 +186,59 @@ export function firstBuildBlockers(
   return [...blockingStructure, ...blockingType];
 }
 
+/**
+ * Findings → the record's outstanding-issue shape (issue #30).
+ *
+ * The same `ruleId ?? rule ?? id` mapping `scripts/run-issue22-benchmark.mjs`
+ * applies when it freezes a record, so a run record and a benchmark record
+ * are two files of the same shape, not two dialects.
+ */
+function recordIssue(raw: unknown, fallbackRule: string): { rule: string; summary: string; severity: string } {
+  const f = (raw ?? null) as Record<string, unknown> | null;
+  return {
+    rule: String(f?.["ruleId"] ?? f?.["rule"] ?? f?.["id"] ?? fallbackRule ?? "unknown"),
+    summary: String(f?.["summary"] ?? f?.["why"] ?? f?.["detail"] ?? ""),
+    severity: String(f?.["severity"] ?? "critical"),
+  };
+}
+
+/**
+ * The decision-record persist hook (issue #30 — §7, "the previous design
+ * intent is not lost").
+ *
+ * Builds the record from the pipeline's complete context and persists it for
+ * the run's file identity. Best effort by contract: the record is a durable
+ * note, so a failed write (an unreadable disk, a key the store refuses,
+ * anything else) comes back as a note on the payload — the build itself is
+ * never failed by persistence. One record per file: a later run for the same
+ * file overwrites the previous one, bounding the store the way
+ * `memory/store.ts` bounds project memory (one file per key, never grows).
+ */
+async function persistPipelineDecisionRecord(
+  fileKey: string | null,
+  input: DecisionRecordInput,
+): Promise<{ file: string | null; note: string }> {
+  if (fileKey === null) {
+    return {
+      file: null,
+      note: "No decision record was persisted: the run has no file identity (a Figma fileKey or a file name), and an unkeyed store would let one run's brief masquerade as another run's intent.",
+    };
+  }
+  try {
+    const record = buildDecisionRecord(input);
+    const persisted = await persistDecisionRecordForFile(fileKey, record);
+    if (persisted.file !== null) {
+      return {
+        file: persisted.file,
+        note: `Decision record persisted to ${persisted.file} (one per file; the next run for this file reads it back on entry, so a restart does not redesign from scratch).`,
+      };
+    }
+    return { file: null, note: `The decision record could not be persisted (${persisted.problem ?? "unknown reason"}); the build is unaffected.` };
+  } catch (err) {
+    return { file: null, note: `The decision record could not be persisted (${err instanceof Error ? err.message : String(err)}); the build is unaffected.` };
+  }
+}
+
 export async function designPipelineTool(
   session: Session | null,
   registry: SessionRegistry,
@@ -193,6 +255,39 @@ export async function designPipelineTool(
   const trace = newTrace(briefId, `plan_${Date.now().toString(36)}`);
   stage(trace, "brief", `Normalized the brief: ${brief.screen}.`, [briefId]);
 
+  /* --- stage 0: the decision record on disk (issue #30) --------------------- */
+
+  /**
+   * Repairs and resumes start here: whatever a previous run of the pipeline
+   * recorded for this file is read back from disk before anything else, so a
+   * restarted session regains the recorded direction, constraints,
+   * discoveries and skills instead of redesigning from scratch. The record
+   * is keyed by the file identity (the same `projectKey` project memory
+   * keys on: fileKey first, file name for dev-mode files); a run with no
+   * file identity has nothing durable to read from and says so. This never
+   * gates: the record is context, not a precondition — a missing, corrupt
+   * or unreadable record only ever becomes a note on the payload.
+   */
+  const recordFileKey =
+    (session?.fileKey ?? "").trim().length > 0 || (session?.fileName ?? "").trim().length > 0
+      ? projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined)
+      : null;
+  let decisionRecord: ParsedDecisionRecord | null = null;
+  let decisionRecordNote: string;
+  if (recordFileKey !== null) {
+    const loaded = await loadDecisionRecordForFile(recordFileKey);
+    decisionRecord = loaded.record;
+    decisionRecordNote = loaded.record
+      ? `Decision record for file key '${recordFileKey}' loaded from ${loaded.file} (recorded for screen '${loaded.record.brief.screen}' at ${loaded.record.recordedAt}).`
+      : loaded.problem
+        ? `Decision record not usable: ${loaded.problem}`
+        : `No decision record on disk for file key '${recordFileKey}' (${loaded.file}): this run starts from the brief alone.`;
+  } else {
+    decisionRecordNote =
+      "No decision record was read: the run has no file identity (a Figma fileKey or a file name), so there is no durable key to read a record under.";
+  }
+  const decisionReadback = { decisionRecord, decisionRecordNote };
+
   const blocking = blockers.filter((b) => b.severity === "blocking");
 
   // Product rules are loaded once, before any build stage: the runtime guard at
@@ -206,6 +301,7 @@ export async function designPipelineTool(
     // point at afterwards.
     stage(trace, "brief-blocked", `${blocking.length} blocking contradiction(s) in the brief.`);
     return {
+      ...decisionReadback,
       status: "blocked",
       stage: "brief",
       brief,
@@ -238,6 +334,33 @@ export async function designPipelineTool(
       : `No skills selected for these brief signals (${intelligence.signals.join(", ") || "none"}); ${intelligence.selection.skipped.length} skipped with reasons.`,
     intelligence.selection.selected,
   );
+
+  /* --- the resume-drift guard, vs the record read back at entry (issue #30) --- */
+
+  /**
+   * §7's guard on the wire: the record's recorded direction against the
+   * intent this run recompiled. A change of manner (style/density) on a
+   * resume without a new brief is named, not silently applied. Compared only
+   * when the record is from the same screen (one record per file may hold
+   * another screen's); and additive by contract — drift is surfaced on the
+   * payload, never gated on here.
+   */
+  let decisionRecordDrift: ResumeDrift | null = null;
+  if (decisionRecord !== null && decisionRecord.brief.screen.trim().toLowerCase() === brief.screen.trim().toLowerCase()) {
+    decisionRecordDrift = resumeDrift(decisionRecord, intelligence.intent ?? null);
+    decisionRecordNote = `${decisionRecordNote} ${
+      decisionRecordDrift.drifted
+        ? `Resume drift vs the recorded intent: ${decisionRecordDrift.reasons.join("; ")}.`
+        : "The recompiled intent matches the recorded manner."
+    }`;
+    stage(
+      trace,
+      "decision-record",
+      decisionRecordDrift.drifted ? `Resume drift: ${decisionRecordDrift.reasons.join("; ")}.` : "No resume drift against the recorded intent.",
+    );
+  } else if (decisionRecord !== null) {
+    decisionRecordNote = `${decisionRecordNote} The record describes screen '${decisionRecord.brief.screen}', not this screen; it is carried for context, and no drift check was run.`;
+  }
 
   /* --- stage 1.6: composition alternatives (issue #22 §3) ------------------ */
 
@@ -549,7 +672,53 @@ export async function designPipelineTool(
       checks: structure.checks,
       findings: structure.findings,
     },
+    /**
+     * Issue #30 — the decision record read back from disk at entry, with the
+     * resume-drift check when the record and the compiled intent describe
+     * the same screen. Additive: the record is context for the caller's
+     * repair/resume decision, never a gate on this run.
+     */
+    ...decisionReadback,
+    ...(decisionRecordDrift !== null ? { decisionRecordDrift } : {}),
   };
+
+  /**
+   * Issue #30 — the record evidence both final report stages share: the
+   * brief and its constraints, the compiled intent, the skills and their
+   * reasons, the alternatives and their rejections, the discoveries. The
+   * stage-specific pieces (what still stands, repair attempts) are attached
+   * at the persist call sites.
+   */
+  const recordBaseInput = {
+    caseId: null,
+    brief: {
+      screen: brief.screen,
+      product: brief.product,
+      purpose: brief.purpose,
+      primaryDecision: brief.primaryDecision,
+      primaryAction: brief.primaryAction,
+      requiredInformation: brief.requiredInformation,
+      optionalInformation: brief.optionalInformation,
+      viewport: brief.viewport,
+      visualDirection: brief.visualDirection,
+      antiGoals: brief.antiGoals,
+    },
+    intent: intelligence.intent ?? null,
+    steeredComposition: alternatives.steeredComposition,
+    // The provenance the alternatives engine recorded, joined — the same
+    // shape the issue-22 benchmark runner freezes into its records.
+    directionRationale: alternatives.provenance.length > 0 ? alternatives.provenance.join(" | ") : null,
+    decisions: intelligence.decisions,
+    discoveries: [
+      ...intelligence.notes,
+      ...assumptions.map((a) => (typeof a?.statement === "string" ? a.statement : "")).filter((s) => s.length > 0),
+    ],
+    rejectedAlternatives: alternatives.selection.rejected.map((r) => ({
+      family: r.family ?? r.id,
+      reason: r.reason,
+      ...(typeof r.total === "number" ? { total: r.total } : {}),
+    })),
+  } satisfies Omit<DecisionRecordInput, "repairs" | "outstandingIssues">;
 
   if (mode === "plan" || dryRun) {
     // Issue #25: a plan-mode run whose required text was not measured stands
@@ -579,11 +748,32 @@ export async function designPipelineTool(
       intelligence: { applied: true, compositionHintApplied },
       trace,
     });
+
+    /* --- stage 8.II: persist the decision record (issue #30) ----------------- */
+
+    /**
+     * The plan-mode report is where this run's record context is complete:
+     * the brief and its constraints, the compiled intent, the skills and
+     * their reasons, the alternatives and their rejections, the discoveries
+     * and the structural findings. Best effort (issue #30): a failed write
+     * is a note on the payload, never a failure of the run.
+     */
+    const decisionPersist = await persistPipelineDecisionRecord(recordFileKey, {
+      ...recordBaseInput,
+      outstandingIssues: [
+        ...structure.findings.map((f) => recordIssue(f, "structure")),
+        ...typeCriteria.findings.map((f) => recordIssue(f, "type-criteria")),
+        ...visualReview.findings.map((f) => recordIssue(f, "anti-generic")),
+      ],
+    });
+
     return {
       ...common,
       status: "planned",
       dryRun: true,
       report,
+      decisionRecordPersisted: decisionPersist.file,
+      decisionRecordPersistNote: decisionPersist.note,
       note: "Nothing was created in Figma. The plan, the program and the structural verification are ready to review.",
       trace,
     };
@@ -1107,6 +1297,29 @@ export async function designPipelineTool(
     trace,
   });
 
+  /* --- stage 8.II: persist the decision record (issue #30) ------------------- */
+
+  /**
+   * The build's report stage is where the record context is complete: the
+   * brief and its constraints, the intent the direction committed to, the
+   * skills and their reasons, the alternatives and their rejections, the
+   * discoveries, what still stands after the bounded repair loop, and every
+   * repair attempt. Best effort (issue #30): a failed write is a note on the
+   * payload; it must never fail the build that produced the screen.
+   */
+  const decisionPersist = await persistPipelineDecisionRecord(recordFileKey, {
+    ...recordBaseInput,
+    outstandingIssues: remaining.map((f) => recordIssue(f, "live")),
+    // Every repair pass, resolved or not — attempts are never erased from
+    // the record, so a resume knows what was already tried.
+    repairs: trace.repairs.map((r) => ({
+      findingIds: [r.findingId],
+      result: r.result,
+      mutations: r.result === "applied" ? [{ kind: "pipeline-repair", description: r.detail }] : [],
+      notes: r.result === "applied" ? [] : [r.detail],
+    })),
+  });
+
   return {
     ...common,
     status: report.status,
@@ -1114,6 +1327,8 @@ export async function designPipelineTool(
     transactionId,
     nodeIds,
     report,
+    decisionRecordPersisted: decisionPersist.file,
+    decisionRecordPersistNote: decisionPersist.note,
     // Issue #26 (GitHub): set when the bounded repair loop left composition-
     // scope findings outstanding — the caller must re-plan the screen, not
     // keep patching it.

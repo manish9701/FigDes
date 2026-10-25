@@ -25,7 +25,8 @@ import {
 import { SessionRegistry, type Session, TransactionTimeoutError, SessionDisconnectedError } from "./sessions";
 import { runRules, summarise, evaluatedRuleCount, evaluatedRuleNames, type RuleSet } from "./review/rules";
 import { reviewVerdict, MIN_REVIEW_NODES } from "./review/verdict";
-import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue } from "./runtime/tools";
+import { CompileArgs, RuntimeArgs, compileIrTool, runRuntimeTool, runtimeCatalogue, runtimePreflightContext } from "./runtime/tools";
+import { executeRuntime } from "./runtime/interpreter";
 import { renderDesign } from "./render-tool";
 import { DesignGuardArgs, ProjectMemoryArgs, designGuardTool, projectMemoryTool } from "./memory/tools";
 import { PlanScreenArgs, planScreenTool } from "./plan/tools";
@@ -40,7 +41,8 @@ import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesign
 import { clients } from "./clients/registry";
 import { exportCode } from "./code/export";
 import { UseFigmaArgs, InspectVisualArgs, ReadContextArgs, figdesUseFigmaHandler, figdesInspectVisualHandler, figdesReadContextHandler } from "./native/use-figma";
-import { validateTransaction } from "./preflight";
+import { validateTransaction, splitPreflightIssues } from "./preflight";
+import type { PreflightContext } from "./preflight-blocking";
 import { assertTransaction, dispatchTransaction } from "./transaction";
 import { EditScreenArgs, editScreenTool } from "./review/edit-screen";
 import {
@@ -856,6 +858,66 @@ export function scoreGuardForDispatch(parsed: {
     ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
     ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
   };
+}
+
+/**
+ * Issue #30 — the preflight evidence a raw create/modify call can honestly
+ * derive from its own provenance, threaded into dispatchTransaction so the
+ * geometry blocking classes actually run on the raw path instead of skipping
+ * (they all gate on `context === undefined`).
+ *
+ * Sources, in order:
+ * 1. a `planId` (top-level or carried by the inline plan) that resolves in the
+ *    plan registry — the registered plan payload IS the build contract the
+ *    caller named, so its compiled geometry (executeRuntime over the
+ *    registered program — the same channel design_runtime ships through) is
+ *    the planBoxes / overflow / sizing evidence; checkResolvedVsEmitted then
+ *    judges the emitted ops against the plan at truth, and checkChildBounds
+ *    gets the plan's real overflow permissions instead of failing closed.
+ * 2. an inline plan-shaped `plan.program` — same derivation.
+ * 3. nothing — `{ planBoxes: {} }` seeds an empty plan, which disarms
+ *    checkResolvedVsEmitted and checkConnectors honestly (no plan to compare
+ *    against), while checkChildBounds still replay-contains the call's own
+ *    declared create chain against itself; findings from that class waivable
+ *    with approved:true + reason, the same justification the raw path
+ *    already required. This is why the handler passes approval to the
+ *    dispatcher instead of treating it as provenance-only.
+ *
+ * A registered plan whose own program cannot compile threads the empty plan:
+ * an uncompilable plan is not evidence, and the runtime path refuses such
+ * programs at compile time on its own.
+ */
+export function derivedRawPreflightContext(rawArgs: unknown, fileKey?: string | null): PreflightContext {
+  const args = isRecord(rawArgs) ? rawArgs : {};
+  let program: unknown = null;
+
+  const planId = typeof args["planId"] === "string" && args["planId"].length > 0 ? args["planId"] : null;
+  const inline = isRecord(args["plan"]) ? args["plan"] : null;
+  const inlinePlanId = inline !== null && typeof inline["planId"] === "string" && inline["planId"].length > 0 ? inline["planId"] : null;
+  const wire = planId ?? inlinePlanId;
+  if (wire !== null) {
+    // A plan issued for another file does not transfer (resolvePlan fails closed).
+    const registered = resolvePlan(wire, fileKey ?? undefined);
+    if (registered !== null) {
+      const payload = isRecord(registered.plan) ? registered.plan : null;
+      if (payload !== null && isPlanShaped(payload)) program = payload["program"];
+      else if (isRecord(registered.program)) program = registered.program;
+    }
+  }
+  if (program === null && inline !== null && isPlanShaped(inline)) program = inline["program"];
+
+  if (typeof program !== "object" || program === null || Array.isArray(program)) {
+    // Either no plan reference at all, or one that names nothing usable.
+    return { planBoxes: {} };
+  }
+  try {
+    const compiled = executeRuntime(program);
+    return runtimePreflightContext(compiled);
+  } catch {
+    // The plan's own program could not compile — thread the empty plan rather
+    // than half-truth evidence; the runtime build path refuses it separately.
+    return { planBoxes: {} };
+  }
 }
 
 export const CompareVisualsArgs = z.object({
@@ -1985,14 +2047,30 @@ inputSchema: CreateArgs,
       });
       if (provenanceGate) return provenanceGate;
 
+      // Issue #30 — thread the preflight evidence this call's provenance can
+      // support, so the geometry blocking classes run on the raw path too.
+      // A planId (or inline plan) threads the plan's compiled geometry; a
+      // raw approved build threads an empty plan so replay containment still
+      // runs, waivable on the same approval.
+      const preflightContext = derivedRawPreflightContext(args, session.fileKey);
+
       if (parsed.dryRun) {
-        // Dry runs validate without ledger noise: preflight + trace only.
-        const preflight = validateTransaction(parsed.operations as unknown[]);
-        if (!preflight.ok) {
-          recordPreflightCatch(preflight.issues.length);
+        // Dry runs validate without ledger noise: preflight + trace only. The
+        // threaded context runs the geometry classes here too. Waivable
+        // geometry findings surface as warnings — a dry run creates nothing,
+        // and inspection must not need approval — while the same finding
+        // REFUSES an unapproved dispatch and waives on an approved one. Hard
+        // (structural) findings refuse here exactly as before.
+        const evaluated = validateTransaction(parsed.operations as unknown[], preflightContext);
+        const { hard, soft } = splitPreflightIssues(evaluated.issues);
+        if (hard.length > 0) {
+          recordPreflightCatch(evaluated.issues.length);
           throw new Error(
-            `Preflight rejected the plan (${preflight.issues.length} issue(s)):\n` +
-              preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n"),
+            `Preflight rejected the plan (${evaluated.issues.length} issue(s)):\n` +
+              evaluated.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
+              (soft.length > 0
+                ? `\n(${soft.length} of these are geometry findings that an approved dispatch could waive with approved:true plus reason; the structural findings above cannot be waived.)`
+                : ""),
           );
         }
         const result = (await session.request("create_design", {
@@ -2001,13 +2079,22 @@ inputSchema: CreateArgs,
           dryRun: true,
           transactionId: parsed.transactionId,
         })) as TransactionResult;
-        return assertTransaction(result);
+        return assertTransaction({
+          ...result,
+          ...(soft.length > 0
+            ? { warnings: [...((result as { warnings?: string[] }).warnings ?? []), ...soft.map((i) => `${i.message} (dispatch without approval would be refused; waivable with approved:true plus reason)`)] }
+            : {}),
+        });
       }
 
       return dispatchTransaction(registry, session, "create_design", {
         description: parsed.description,
         operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
+        preflight: preflightContext,
+        ...(parsed.planId !== undefined ? { planId: parsed.planId } : {}),
+        ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
+        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
         ...(scoreGuardForDispatch(parsed) !== undefined ? { scoreGuard: scoreGuardForDispatch(parsed) } : {}),
       });
     },
@@ -2046,13 +2133,25 @@ inputSchema: ModifyArgs,
       });
       if (provenanceGate) return provenanceGate;
 
+      // Issue #30 — same preflight threading as create_design: the call's own
+      // provenance (planId / inline plan / approved raw) decides which
+      // geometry evidence dispatches with it.
+      const preflightContext = derivedRawPreflightContext(args, session.fileKey);
+
       if (parsed.dryRun) {
-        const preflight = validateTransaction(parsed.operations as unknown[]);
-        if (!preflight.ok) {
-          recordPreflightCatch(preflight.issues.length);
+        // Dry-run parity with create_design: threaded context runs the
+        // geometry classes; waivable findings surface as warnings, hard
+        // findings refuse.
+        const evaluated = validateTransaction(parsed.operations as unknown[], preflightContext);
+        const { hard, soft } = splitPreflightIssues(evaluated.issues);
+        if (hard.length > 0) {
+          recordPreflightCatch(evaluated.issues.length);
           throw new Error(
-            `Preflight rejected the plan (${preflight.issues.length} issue(s)):\n` +
-              preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n"),
+            `Preflight rejected the plan (${evaluated.issues.length} issue(s)):\n` +
+              evaluated.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
+              (soft.length > 0
+                ? `\n(${soft.length} of these are geometry findings that an approved dispatch could waive with approved:true plus reason; the structural findings above cannot be waived.)`
+                : ""),
           );
         }
         const result = (await session.request("modify_design", {
@@ -2062,7 +2161,12 @@ inputSchema: ModifyArgs,
           dryRun: true,
           transactionId: parsed.transactionId,
         })) as TransactionResult;
-        return assertTransaction(result);
+        return assertTransaction({
+          ...result,
+          ...(soft.length > 0
+            ? { warnings: [...((result as { warnings?: string[] }).warnings ?? []), ...soft.map((i) => `${i.message} (dispatch without approval would be refused; waivable with approved:true plus reason)`)] }
+            : {}),
+        });
       }
 
       return dispatchTransaction(registry, session, "modify_design", {
@@ -2070,6 +2174,10 @@ inputSchema: ModifyArgs,
         description: parsed.description,
         operations: parsed.operations as unknown[],
         transactionId: parsed.transactionId,
+        preflight: preflightContext,
+        ...(parsed.planId !== undefined ? { planId: parsed.planId } : {}),
+        ...(parsed.approved !== undefined ? { approved: parsed.approved } : {}),
+        ...(parsed.reason !== undefined ? { reason: parsed.reason } : {}),
         ...(scoreGuardForDispatch(parsed) !== undefined ? { scoreGuard: scoreGuardForDispatch(parsed) } : {}),
       });
     },

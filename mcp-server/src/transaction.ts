@@ -29,7 +29,7 @@ import {
   type Session,
   type SessionRegistry,
 } from "./sessions";
-import { validateTransaction, preflightCheckTag } from "./preflight";
+import { validateTransaction, preflightCheckTag, splitPreflightIssues, preflightApprovalWaived } from "./preflight";
 import type { PreflightContext } from "./preflight-blocking";
 import { withDocumentLock, DocumentLockBusyError } from "./native/lock";
 import {
@@ -128,7 +128,7 @@ export async function dispatchTransaction(
   registry: SessionRegistry,
   session: Session,
   tool: "create_design" | "modify_design" | "update_component" | "native_design",
-  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext; scoreGuard?: ScoreGuardEvidence; /** Issue #30: plan provenance for the ledger chain. */ planId?: string },
+  payload: { description?: string; operations: unknown[]; dryRun?: boolean; transactionId?: string; targets?: string[]; preflight?: PreflightContext; scoreGuard?: ScoreGuardEvidence; /** Issue #30: plan provenance for the ledger chain. */ planId?: string; /** Issue #30: explicit-justification waiver for the geometry-class preflight findings. */ approved?: boolean; reason?: string },
 ): Promise<TransactionResult> {
   const transactionId = payload.transactionId ?? `txn_${randomUUID().slice(0, 8)}`;
   const ops = payload.operations as unknown[];
@@ -197,24 +197,56 @@ export async function dispatchTransaction(
   // `preflight` context (plan boxes, overflow permissions, text measurements,
   // connectors, brief blockers). The context is evidence already gathered
   // deterministically; passing it never contacts Figma.
-  const preflight = validateTransaction(ops, payload.preflight);
+  const evaluated = validateTransaction(ops, payload.preflight);
+  // Issue #30 — the approval covers the geometry-class findings the threaded
+  // context exposes. An approved+reason dispatch (the same explicit
+  // justification the raw-provenance and score-guard gates already accept)
+  // proceeds past waivable geometry findings, which surface as warnings on
+  // the committed result instead of vanishing. Structural findings
+  // (schema / dup-id / dup-parent / unresolved and stale refs / page target)
+  // never waive: an approval about intent is not evidence about identity.
+  let waivedCount = 0;
+  let preflight = evaluated;
   if (!preflight.ok) {
-    recordPreflightCatch(preflight.issues.length);
-    registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
-    const first = preflight.issues[0]!;
-    // The ledger note names the check that blocked, so a get_job_status after
-    // the refusal answers "why was nothing created" without re-reading the error.
-    const label = `blocked: preflight (${preflightCheckTag(first)}) refused ${preflight.issues.length} issue(s)`;
-    registry.jobs.complete(transactionId, "failed", { error: first.message, label });
-    throw new Error(
-      `Preflight rejected the plan before contacting Figma (${preflight.issues.length} issue(s), blocking check: ${preflightCheckTag(first)}); nothing was created and the ledger records it as "${label}":\n` +
-        preflight.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
-        `\nFirst failure at operation #${first.index} (${first.opType}). Fix every issue and retry with the SAME transactionId.`,
-    );
+    const { hard, soft } = splitPreflightIssues(evaluated.issues);
+    const waived = hard.length === 0 && soft.length > 0 && preflightApprovalWaived(payload);
+    if (!waived) {
+      recordPreflightCatch(evaluated.issues.length);
+      registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
+      const first = (hard[0] ?? soft[0])!;
+      // The ledger note names the check that blocked, so a get_job_status after
+      // the refusal answers "why was nothing created" without re-reading the error.
+      const label = `blocked: preflight (${preflightCheckTag(first)}) refused ${evaluated.issues.length} issue(s)`;
+      registry.jobs.complete(transactionId, "failed", { error: first.message, label });
+      const waiverHint =
+        soft.length > 0
+          ? `\n(${soft.length} of these are geometry findings — outside-bounds / text-overflow / geometry-drift / connector — that an explicit approved:true plus reason could waive on this dispatch; the structural findings above cannot be waived.)`
+          : "";
+      throw new Error(
+        `Preflight rejected the plan before contacting Figma (${evaluated.issues.length} issue(s), blocking check: ${preflightCheckTag(first)}); nothing was created and the ledger records it as "${label}":\n` +
+          evaluated.issues.slice(0, 8).map((i) => `  #${i.index} (${i.opType}): ${i.message} Fix: ${i.fix}`).join("\n") +
+          `\nFirst failure at operation #${first.index} (${first.opType}). Fix every issue and retry with the SAME transactionId.` +
+          waiverHint,
+      );
+    }
+    // Waived: proceed, and keep the findings visible. They ride the result's
+    // warnings exactly how preflight.warnings already surface, and the ledger
+    // note names them so the dispatch is searchable rather than silent.
+    recordPreflightCatch(soft.length);
+    waivedCount = soft.length;
+    preflight = {
+      ...evaluated,
+      ok: true,
+      issues: [],
+      warnings: [...evaluated.warnings, ...soft.map((i) => ({ index: i.index, opType: i.opType, message: `[preflight-waived] ${i.message}` }))],
+    };
   }
 
   registry.jobs.begin({ transactionId, tool, session, operationCount: ops.length, ...(payload.planId !== undefined ? { planId: payload.planId } : {}) });
-  registry.jobs.update(transactionId, { state: "preflight", label: `preflight passed (${ops.length} ops)` });
+  registry.jobs.update(transactionId, {
+    state: "preflight",
+    label: waivedCount > 0 ? `preflight passed (${ops.length} ops; ${waivedCount} geometry finding(s) waived on approval)` : `preflight passed (${ops.length} ops)`,
+  });
   registry.jobs.update(transactionId, { state: "applying", done: 0, label: "dispatching" });
 
   const t0 = Date.now();
@@ -276,7 +308,19 @@ export async function dispatchTransaction(
         ? { apply: result.timings.apply, total: result.timings.total, operationCount: ops.length, nodeCount: result.createdNodes.length + (result.modifiedNodes?.length ?? 0) }
         : { total: ms, operationCount: ops.length },
     );
-    registry.jobs.complete(transactionId, "committed", { done: ops.length, createdIds: result.createdNodes.map((n) => n.figmaNodeId) }, result);
+    registry.jobs.complete(
+      transactionId,
+      "committed",
+      {
+        done: ops.length,
+        createdIds: result.createdNodes.map((n) => n.figmaNodeId),
+        // Issue #30: the final record stays searchable — the intermediate
+        // "preflight passed" label is overwritten by the applying update, so
+        // the waiver note rides the terminal state instead.
+        ...(waivedCount > 0 ? { label: `committed (${waivedCount} geometry finding(s) waived on approval)` } : {}),
+      },
+      result,
+    );
     return assertTransaction({ ...result, ...(preflight.warnings.length > 0 ? { warnings: [...((result as { warnings?: string[] }).warnings ?? []), ...preflight.warnings.map((w) => w.message)] } : {}) });
   }
 

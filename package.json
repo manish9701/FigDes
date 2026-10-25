@@ -84,7 +84,7 @@
     "test:productguard": "node --test tests/product-guard-regressions.test.mjs",
     "test:issue26": "node --test tests/issue-26-pipeline-gates.test.mjs tests/issue-26-dispatch-gates.test.mjs tests/issue-26-contract-metrics.test.mjs tests/issue-26-fidelity.test.mjs tests/issue-26-quality-gates.test.mjs",
     "test:issue29": "node --test tests/issue-29-plan-registry.test.mjs",
-    "test:issue30": "node --test tests/issue-30-workflow-contract.test.mjs"
+    "test:issue30": "node --test tests/issue-30-workflow-contract.test.mjs tests/issue-30-raw-preflight.test.mjs tests/issue-30-refine-critique.test.mjs tests/issue-30-exo-palette.test.mjs tests/issue-30-deck-validation.test.mjs tests/issue-30-decision-records.test.mjs"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.140.0",

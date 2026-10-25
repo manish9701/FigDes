@@ -29,6 +29,7 @@ import { planRepairs } from "../design/quality/repair-planner";
 import { evaluateFinalGate, compatibilityOfBuilds } from "../design/quality/final-gate";
 import { SERVER_BUILD } from "../../../shared/protocol";
 import { makeFindings, trackFindings } from "../design/quality/visual-findings";
+import type { VisualFinding } from "../design/quality/visual-findings";
 import { contentRevision } from "../design/quality/revision";
 import { analyzeScreenshot } from "../design/quality/screenshot-qa";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
@@ -567,6 +568,28 @@ export async function critiqueVisualTool(rawArgs: unknown, registry?: any): Prom
 /* refine_screen                                                               */
 /* -------------------------------------------------------------------------- */
 
+/**
+ * A visual finding as `critique_visual` emits it — the shape `makeFindings`
+ * produces in visual-findings.ts (which owns the interface; this schema is its
+ * validation mirror so the loop can accept it verbatim). Only `area`/`defect`
+ * are required, so the critique *input* shape (`{ area, defect, severity }`)
+ * is accepted too: ids are then minted deterministically through
+ * `makeFindings` itself, and zone-only areas are localized against the live
+ * measurement. Items are `.passthrough()` so a caller pasting a whole
+ * critique payload is not failed by a field the loop does not read.
+ */
+const VisualFindingSchema = z
+  .object({
+    id: z.string().min(1).max(64).optional(),
+    area: z.string().min(1).max(120),
+    defect: z.string().min(1).max(500),
+    severity: z.enum(["critical", "major", "minor"]).optional(),
+    nodeIds: z.array(z.string().min(1).max(64)).max(50).optional(),
+    repair: z.string().max(2000).optional(),
+    status: z.enum(["open", "resolved"]).optional(),
+  })
+  .passthrough();
+
 export const RefineArgs = z
   .object({
     sessionId: z.string().max(200).optional(),
@@ -576,6 +599,39 @@ export const RefineArgs = z
     nodeId: z.string().max(200).optional(),
     /** What the iterations should optimise for. Reported back each round. */
     visualGoals: z.array(z.string().max(200)).max(10).optional(),
+    /**
+     * Visual findings straight from critique_visual, consumed structurally
+     * instead of being restated by hand. They ride alongside the loop: they
+     * tag the rule findings they overlap, seed visualGoals, and are reported
+     * back with an explicit disposition per finding. They never add
+     * operations, never gate the build phase, and never touch the
+     * convergence arithmetic — the image judgement stays with the caller.
+     */
+    fromCritique: z
+      .object({
+        findings: z
+          .array(VisualFindingSchema)
+          .max(20)
+          .optional()
+          .describe(
+            "critique_visual's visualFindings passed through instead of retyped. Findings whose nodes overlap a rule finding tag that disposition ([vf-*]); the rest are reported needs-human or blocked. Defect texts seed visualGoals behind yours. Visual truth is never verified here: re-run critique_visual with renderReviewed.",
+          ),
+        priorFindings: z
+          .array(
+            z
+              .object({
+                id: z.string().min(1).max(64).describe("Finding id from the previous critique (vf-*)."),
+                defect: z.string().max(500).optional(),
+                area: z.string().max(120).optional(),
+              })
+              .strict(),
+          )
+          .max(30)
+          .optional()
+          .describe("Same field as critique_visual: not reconciling means the loop cannot say resolved / persisting / introduced."),
+      })
+      .strict()
+      .optional(),
     /** Node ids or rule names the loop must not touch. */
     preserve: z.array(z.string().max(200)).max(50).default([]),
     /** Hard bound. A loop without one is a loop that can run forever. */
@@ -627,6 +683,16 @@ export interface FindingDisposition {
   /** The measurements after the repair ran, when it was applied. */
   after: Record<string, unknown> | null;
   confidence: Finding["confidence"];
+  /**
+   * Issue #30 (fromCritique): visual findings that overlap this finding,
+   * as stable `[vf-*]` tags. An annotation only — never an operation, never
+   * a refusal, and never a change to the loop's convergence arithmetic or
+   * escalation trigger. `reason` keeps churning across loop phases, which is
+   * why the stable carrier is this pair of fields.
+   */
+  tags?: string[];
+  /** One line per overlapping visual finding: `[vf-*] severity: defect`. */
+  note?: string;
 }
 
 /** One-line summary of what an operation would do, for a human to judge. */
@@ -700,11 +766,112 @@ interface RefineIteration {
   verified: number;
 }
 
+/* ---- fromCritique (issue #30): critique_visual findings meet the loop ----- */
+
+/**
+ * One incoming visual finding, completed: an id always present and stable
+ * across replays, and a flag saying whether the caller already carried
+ * localized node ids (a critique *output*) or only an area the loop must
+ * localize itself (a critique *input*).
+ */
+interface VfItem {
+  id: VisualFinding["id"];
+  area: VisualFinding["area"];
+  defect: VisualFinding["defect"];
+  severity: VisualFinding["severity"];
+  nodeIds: VisualFinding["nodeIds"];
+  /** Caller gave no nodeIds: the area is localized against the measurement. */
+  needsLocalization: boolean;
+}
+
+/**
+ * Completes the fromCritique findings from the args alone.
+ *
+ * Item order is input order and ids for id-less items come out of
+ * visual-findings' own `makeFindings` (nodes do not take part in the id, so an empty
+ * tree is enough) — the same djb2 id `critique_visual` would mint, so the
+ * mapping stays in agreement with the critique that produced the findings
+ * instead of carrying a second, drifting hash. No clock, no randomness: the
+ * same args produce the same items, which is what makes the tool's approval
+ * replay-safe.
+ */
+function normalizeVfItems(findings: Array<z.infer<typeof VisualFindingSchema>>): VfItem[] {
+  if (findings.length === 0) return [];
+  const minted = makeFindings({
+    findings: findings.filter((f) => !f.id).map((f) => ({ area: f.area, defect: f.defect, severity: f.severity ?? "major" })),
+    nodes: [],
+    canvasW: 0,
+    canvasH: 0,
+  });
+  let mintedIndex = 0;
+  return findings.map((f) => {
+    const nodeIds = f.nodeIds ?? [];
+    const id = f.id ?? minted[mintedIndex++]?.id ?? `vf-${[f.area, f.defect].join("|")}`;
+    return {
+      id,
+      area: f.area,
+      defect: f.defect,
+      severity: f.severity ?? "major",
+      nodeIds,
+      needsLocalization: nodeIds.length === 0,
+    };
+  });
+}
+
+/**
+ * Localizes a zone-only finding against the live measurement, through
+ * visual-findings' existing `makeFindings` with the target node as canvas.
+ * An unmeasured area matches nothing rather than everything: a finding that
+ * cannot be pinned to layers stays needs-human in the ledger, it never gets
+ * to reshape the whole file.
+ */
+function localizeVfItem(item: VfItem, report: MetricsReport): string[] {
+  if (!item.needsLocalization) return item.nodeIds;
+  if (report.nodes.length === 0) return [];
+  const canvas =
+    report.nodes.find((n) => n.id === report.target) ??
+    report.nodes.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a));
+  const [localized] = makeFindings({
+    findings: [{ area: item.area, defect: item.defect, severity: item.severity }],
+    nodes: report.nodes.map((n) => ({ id: n.id, x: n.x, y: n.y, w: n.w, h: n.h, parentId: n.parentId })),
+    canvasW: canvas.w,
+    canvasH: canvas.h,
+  });
+  return localized?.nodeIds ?? [];
+}
+
 export async function refineScreenTool(session: Session | null, rawArgs: unknown, registry?: SessionRegistry): Promise<unknown> {
   const args = RefineArgs.parse(rawArgs);
-  const goals = args.visualGoals ?? [];
+  const userGoals = args.visualGoals ?? [];
   const preserve = new Set(args.preserve);
-  const compositionLed = goals.some((g) => /topology|spatial|visual|composition|hierarchy|runtime|instrument/i.test(g));
+
+  // Issue #30 (fromCritique): critique_visual findings are consumed
+  // structurally rather than restated by hand as visualGoals. Everything for
+  // fromCritique is computed from the args alone and carried in parallel ledgers,
+  // never in the loop's own arithmetic: identical inputs replay identically,
+  // and the loop's convergence decisions and escalation triggers are exactly
+  // what they would be without the findings.
+  const vfItems = normalizeVfItems(args.fromCritique?.findings ?? []);
+
+  // Seeded goals: each defect text joins visualGoals behind the caller's own
+  // goals (which keep priority and the same 10-goal cap), so the findings
+  // flow through the report. The seeded goals deliberately do NOT feed the
+  // composition-led gate below: a visual defect that happens to say
+  // "composition" must never escalate this loop into refusing a rebuild.
+  const seededGoals: string[] = [];
+  {
+    const taken = new Set(userGoals.map((g) => g.toLowerCase()));
+    for (const v of vfItems) {
+      if (userGoals.length + seededGoals.length >= 10) break;
+      const goal = v.defect.length > 200 ? v.defect.slice(0, 200) : v.defect;
+      const key = goal.toLowerCase();
+      if (taken.has(key)) continue;
+      taken.add(key);
+      seededGoals.push(goal);
+    }
+  }
+  const goals = [...userGoals, ...seededGoals].slice(0, 10);
+  const compositionLed = userGoals.some((g) => /topology|spatial|visual|composition|hierarchy|runtime|instrument/i.test(g));
   const iterations: RefineIteration[] = [];
 
   if (!session) {
@@ -725,7 +892,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       return {
         status: "native-review-required",
         message: "Composition-led refinement cannot silently rebuild through the semantic runtime. Build the native composition first, then use refine_screen for structural fixes and render_design for visual judgement.",
-        visualGoals: goals,
+        visualGoals: userGoals,
       };
     }
     const { runRuntimeTool } = await import("../runtime/tools");
@@ -751,6 +918,104 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   let lastFindings: LoopFinding[] = [];
   let lastActionable: LoopFinding[] = [];
   let lastAfter = new Map<string, LoopFinding>();
+
+  // Parallel ledgers for the fromCritique findings, so they ride alongside
+  // the loop's own state without ever writing to its arithmetic:
+  //   vfLinks   — which rule findings (by stable key) ever shared a node with
+  //               each visual finding, unioned across every iteration.
+  //   vfTargets — where each visual finding is currently localized.
+  //   vfTags    — which rule-finding dispositions carry which [vf-*] tag.
+  // All three only grow; the outcome ledger below reads them after the loop's
+  // own dispositions have settled.
+  const vfLinks = new Map<string, Set<string>>();
+  const vfTargets = new Map<string, string[]>();
+  const vfTags = new Map<string, { tags: Set<string>; labels: Set<string> }>();
+
+  /**
+   * The visual-findings outcome ledger.
+   *
+   * Built in the places the loop returns so every payload a caller can
+   * receive after the loop stopped reports the same shape. `structural` is
+   * the loop's own verdict where verification ran (null while it is paused
+   * or stopped before re-measuring); `stopped` names that pause. Per finding:
+   *
+   *   blocked     — it targets a preserve[] node; the loop must not touch it.
+   *   needs-human — no rule finding ever shared its nodeIds: the loop's rules
+   *                 cannot see the defect, so a human (or a better rule) has
+   *                 to act. Reported, never escalated on.
+   *   addressed   — at least one rule finding shared its nodeIds; the
+   *                 linkedFindings detail carries what actually happened to
+   *                 each of them.
+   *
+   * Nothing here feeds the convergence arithmetic: no entry the loop counts
+   * is created, no operation is added, no escalation trigger fires from
+   * these items — they are judgement, and the render was never judged by
+   * this loop, so every item is `verified: false`.
+   */
+  const vfLedger = (structural: { verdict: string; reason: string } | null, stopped: string | null): Record<string, unknown> | null => {
+    if (vfItems.length === 0) return null;
+    const items = vfItems.map((v) => {
+      const targets = vfTargets.get(v.id) ?? v.nodeIds;
+      const linked: Array<{ key: string; rule: string; disposition: string; reason: string }> = [];
+      for (const key of vfLinks.get(v.id) ?? []) {
+        const d = dispositions.get(key);
+        if (!d) continue;
+        linked.push({ key, rule: d.rule, disposition: d.disposition, reason: d.reason });
+      }
+      let disposition: string;
+      let reason: string;
+      if (targets.some((id) => preserve.has(id))) {
+        disposition = "blocked";
+        reason = `[${v.id}] targets a node in preserve[] — the loop must not touch it; judge and fix it yourself if it matters.`;
+      } else if (linked.length === 0) {
+        disposition = "needs-human";
+        reason = `[${v.id}] no rule finding shared this finding's nodeIds in the measurements the loop has run — its rules cannot see this defect, so a human (or a better rule) has to act.`;
+      } else {
+        disposition = "addressed";
+        reason = `[${v.id}] overlaps ${linked.length} rule finding(s); linkedFindings carries what happened to each.`;
+      }
+      return {
+        id: v.id,
+        area: v.area,
+        defect: v.defect,
+        severity: v.severity,
+        targets: [...targets],
+        disposition,
+        reason,
+        verified: false,
+        linkedFindings: linked,
+      };
+    });
+    const counts = { addressed: 0, needsHuman: 0, blocked: 0 };
+    for (const item of items) {
+      if (item.disposition === "addressed") counts.addressed += 1;
+      else if (item.disposition === "blocked") counts.blocked += 1;
+      else counts.needsHuman += 1;
+    }
+    const prior = args.fromCritique?.priorFindings;
+    return {
+      source: "fromCritique",
+      /**
+       * The loop's verdict speaks only for collect_metrics-measurable
+       * repairs. A structural PASS is not a visual pass: the render was
+       * never judged here, so a visually "done" claim needs the next call.
+       */
+      structuralVerdict: structural?.verdict ?? null,
+      structuralReason: structural?.reason ?? null,
+      visualVerdict: "unverified",
+      items,
+      counts,
+      goalsSeeded: seededGoals.length,
+      ...(prior ? { reconciliation: trackFindings(prior, vfItems) } : {}),
+      ...(stopped ? { stopped } : {}),
+      note: "These are image judgements carried into the structural loop: they can block nothing here. Re-run critique_visual with renderReviewed (passing these ids as priorFindings) to confirm a defect actually resolved.",
+    };
+  };
+  /** Spread helper so the section only appears when findings were supplied. */
+  const vfSection = (structural: { verdict: string; reason: string } | null, stopped: string | null): Record<string, unknown> => {
+    const ledger = vfLedger(structural, stopped);
+    return ledger ? { visualFindings: ledger } : {};
+  };
 
   for (let i = 1; i <= args.maxIterations; i++) {
     const raw = (await session.request("collect_metrics", target)) as MetricsReport;
@@ -793,6 +1058,36 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         after: null,
         confidence: f.confidence,
       });
+    }
+
+    // Issue #30: tie the fromCritique findings to whatever they overlap.
+    // Deliberately placed after this iteration's dispositions are placed (the
+    // actionable branch recreates its entries every iteration, which would
+    // wipe a note set any earlier) and before the convergence break, so it
+    // cannot influence what breaks: this is annotation only — no operation,
+    // no refusal, no arithmetic. The [vf-*] tags and notes land on the rule
+    // findings' dispositions; reason keeps its own phase text.
+    for (const v of vfItems) {
+      const targets = localizeVfItem(v, raw);
+      if (targets.length > 0) vfTargets.set(v.id, targets);
+      if (targets.length === 0) continue;
+      for (const f of findings) {
+        if (!f.nodeIds.some((id) => targets.includes(id))) continue;
+        const key = findingKey(f);
+        const linked = vfLinks.get(v.id) ?? new Set<string>();
+        linked.add(key);
+        vfLinks.set(v.id, linked);
+        const tagged = vfTags.get(key) ?? { tags: new Set<string>(), labels: new Set<string>() };
+        tagged.tags.add(`[${v.id}]`);
+        tagged.labels.add(`[${v.id}] ${v.severity}: ${v.defect}`);
+        vfTags.set(key, tagged);
+      }
+    }
+    for (const [key, tagged] of vfTags) {
+      const d = dispositions.get(key);
+      if (!d) continue;
+      d.tags = [...tagged.tags];
+      d.note = [...tagged.labels].join("\n");
     }
 
     if (actionable.length === 0) {
@@ -884,6 +1179,7 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         dispositions: [...dispositions.values()],
         error: applied.error?.message ?? "the fix transaction failed",
         howToProceed: "Inspect the target and fix by hand, or narrow preserve[] and retry.",
+        ...vfSection(null, "the fix transaction failed, so the loop stopped before re-measuring"),
       };
     }
 
@@ -936,6 +1232,10 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         verdict: "INDETERMINATE",
         verdictReason: "The repairs were applied but the screen could not be re-measured, so nothing about it has been verified.",
         howToProceed: "Re-read the target and re-run the loop; the repairs are in the file.",
+        ...vfSection(
+          { verdict: "INDETERMINATE", reason: "repairs were applied but the screen could not be re-measured, so nothing about these visual findings is verified either" },
+          null,
+        ),
       };
     }
     const after = new Map(runRules(recheck, "review").map((f) => [findingKey(f), f]));
@@ -1033,7 +1333,14 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       measured: verification.measured,
     },
     iterations,
+    // Merged list: the caller's own goals first (they keep priority), then
+    // one goal per defect text the fromCritique findings carried, capped at
+    // the same 10 the field itself enforces.
     visualGoals: goals,
+    // Issue #30: the fromCritique ledger — one explicit outcome per visual
+    // finding (addressed / needs-human / blocked), never a factor in the
+    // verdict above: the verdict stays the rule loop's own.
+    ...vfSection({ verdict: verification.verdict, reason: verification.reason }, null),
     /**
      * One line per finding: what it was, what was done, and what was measured
      * afterwards. This is the artefact that makes the loop auditable — a caller

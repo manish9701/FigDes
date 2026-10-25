@@ -65,6 +65,22 @@ export function emittedFontSize(base: number, typeScale = 1, display = 1): numbe
 }
 
 /* -------------------------------------------------------------------------- */
+/* Deck slide dimensions                                                       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Figma Slides' fixed slide extents.
+ *
+ * The deck branch assigns every region this box (one region, one slide) and the
+ * slides engine re-emits that geometry at render time, so the slide bounds are a
+ * fact of the medium rather than a program decision. Declared once because
+ * `assertSlideBounds` must check exactly what the deck branch assigns — two
+ * independent literals would let the assignment and the bounds check drift.
+ */
+const DECK_SLIDE_W = 1920;
+const DECK_SLIDE_H = 1080;
+
+/* -------------------------------------------------------------------------- */
 /* Style look (FigDes §26)                                                   */
 /* -------------------------------------------------------------------------- */
 
@@ -368,7 +384,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   const typeScale = deck ? 1920 / 1440 : 1;
 
   if (deck) {
-    regions = regions.map((r) => ({ ...r, x: 0, y: 0, w: 1920, h: 1080 }));
+    regions = regions.map((r) => ({ ...r, x: 0, y: 0, w: DECK_SLIDE_W, h: DECK_SLIDE_H }));
   }
 
   /* -------------------------------------------------------------- root --- */
@@ -857,6 +873,14 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       unresolvedRelations,
     );
     traceMismatches = verifyOperationTrace(operations, boxes, violations);
+  } else {
+    // Deck builds keep their render-time exemptions: slide geometry is
+    // recomputed by the slides engine at render time, so the operation trace is
+    // not re-verified here and text fit is not measured below. Slide bounds,
+    // by contrast, are fixed 1920x1080 and decided at compile time — content
+    // resolved off a slide renders invisible, so the bounds are asserted now
+    // rather than skipped.
+    assertSlideBounds(regions, boxes, violations);
   }
 
   checkConstraints(ir, composition, violations);
@@ -3650,6 +3674,79 @@ function assertResolvedGeometry(
       rule: "geometry",
       message: `Region '${region.id}' resolved to ${Math.round(region.w)}x${Math.round(region.h)} — it has no area and will not be drawn.`,
     });
+  }
+}
+
+/**
+ * Deck-mode bounds assertion, beside `assertResolvedGeometry`.
+ *
+ * ## Why the deck branch needs its own pass
+ *
+ * `assertResolvedGeometry` measures regions against `canvasSize(canvas.*)`, but
+ * a deck's regions are slides: fixed 1920x1080 regardless of the declared
+ * program canvas (1440x900 by default). Running the canvas pass on a deck would
+ * call correctly-sized slides spilling past a canvas they are not drawn on, and
+ * measure their content against the canvas rather than the slide. So the deck
+ * branch skipped the pass entirely, and out-of-bounds slide content compiled
+ * silently. The gaps (text fit, trace) are render-time questions the slides
+ * engine answers itself; the slide *bounds* are assigned at compile time
+ * (the deck branch maps every region to 0,0,1920,1080), so bounds are the
+ * one class of deck geometry assertion that is checkable here.
+ *
+ * Each slide is its own parent: all slides share the page origin (0,0), so a
+ * resolved child box is absolute and slide-local at once. The containment
+ * comparison and the violation shape are the same ones `assertResolvedGeometry`
+ * applies to canvas regions (`containment`, gated by the BLOCKING set, with the
+ * region's `overflow: "allow"` escape hatch mapping to the advisory
+ * `containment-allowed`), so a deck program and a canvas program speak the same
+ * vocabulary.
+ */
+function assertSlideBounds(
+  regions: ResolvedRegion[],
+  boxes: Map<string, PlacedBox>,
+  violations: CompileResult["violations"],
+): void {
+  // Slides are assigned by the deck branch, so a slide found anywhere but its
+  // slide box means something upstream moved it. Same spill vocabulary as the
+  // canvas-edge check in `assertResolvedGeometry`.
+  for (const region of regions) {
+    const spills: string[] = [];
+    if (region.x < -CANVAS_TOLERANCE) spills.push("left");
+    if (region.y < -CANVAS_TOLERANCE) spills.push("top");
+    if (region.x + region.w > DECK_SLIDE_W + CANVAS_TOLERANCE) spills.push("right");
+    if (region.y + region.h > DECK_SLIDE_H + CANVAS_TOLERANCE) spills.push("bottom");
+    if (spills.length > 0) {
+      violations.push({
+        rule: "geometry",
+        message: `Slide '${region.id}' spills past the ${spills.join(" and ")} edge of the ${DECK_SLIDE_W}x${DECK_SLIDE_H} slide: ${Math.round(region.w)}x${Math.round(region.h)} at (${Math.round(region.x)}, ${Math.round(region.y)}).`,
+      });
+    }
+  }
+
+  // Slide content must live inside the slide that owns it. Identical comparison
+  // to `assertResolvedGeometry`'s containment block, measured against the slide
+  // region rather than a canvas the slide does not share.
+  for (const region of regions) {
+    for (const child of region.children) {
+      const box = boxes.get(child);
+      if (!box || box.w <= 0 || box.h <= 0) continue;
+      const outside =
+        box.x < region.x - CANVAS_TOLERANCE ||
+        box.y < region.y - CANVAS_TOLERANCE ||
+        box.x + box.w > region.x + region.w + CANVAS_TOLERANCE ||
+        box.y + box.h > region.y + region.h + CANVAS_TOLERANCE;
+      if (!outside) continue;
+      // Same escape hatch as `assertResolvedGeometry`: the region's own
+      // `overflow` declaration is a contract about content that leaves it, and
+      // the severity vocabulary must not fork between canvas and decks.
+      const allows = (region as { overflow?: string }).overflow === "allow";
+      violations.push({
+        // Same rule label as the canvas containment violation, so the deck
+        // compile gates on the BLOCKING set exactly like a canvas compile does.
+        rule: allows ? "containment-allowed" : "containment",
+        message: `Content '${child}' is placed at (${Math.round(box.x)}, ${Math.round(box.y)}) ${Math.round(box.w)}x${Math.round(box.h)}, outside its slide '${region.id}' which spans (${Math.round(region.x)}, ${Math.round(region.y)}) ${Math.round(region.w)}x${Math.round(region.h)}.${allows ? " The slide allows overflow, so this is reported rather than refused." : ""}`,
+      });
+    }
   }
 }
 

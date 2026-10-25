@@ -635,7 +635,7 @@
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "INDETERMINATE: 13 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 14 rule(s) checked, 0 failure(s), 2 needing judgement.",
       "nodeIds": []
     }
   ],

@@ -152,6 +152,26 @@ export const EXO_RULES: ProductRule[] = [
     ],
     passesWhen: ["Selection survives a squint test"],
   },
+  {
+    id: "exo.restrained-accent",
+    rule: "Colour on an exo screen reads as one system through restrained accents.",
+    therefore: "Stay within three accent hue families so the surface reads as one instrument, not a palette showcase.",
+    severity: "warn",
+    evidence: [
+      // The monochrome discipline used to be checked only against external
+      // colours; nothing counted what the program itself resolved. "One system,
+      // not a palette showcase" is countable: distinct non-neutral hue families
+      // across the style colours the snapshot can see. Near-greys never count,
+      // and repeats of one family do not inflate — only a genuinely new hue
+      // family does. Advisory ("warn"), not blocking: a slightly bolder palette
+      // is a taste call, and a guard that hard-fails taste is a guard ignored.
+      { kind: "assert", metric: "hueFamilies", op: "<", value: 4 },
+    ],
+    passesWhen: [
+      "Accents come from no more than three hue families",
+      "Neutrals carry the structure; colour carries only state and emphasis",
+    ],
+  },
 ];
 
 /**

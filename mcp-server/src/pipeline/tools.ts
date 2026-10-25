@@ -40,6 +40,7 @@ import { contentRevision } from "../design/quality/revision";
 import { analyzeScreenshot, type ScreenshotAnalysis } from "../design/quality/screenshot-qa";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
+import { containmentOnlyPreflightContext } from "../preflight";
 import { executeRuntime } from "../runtime/interpreter";
 import { measureProgramText } from "../runtime/measure";
 import { inferComposition } from "../runtime/layout";
@@ -88,6 +89,8 @@ export const DesignPipelineArgs = z
     /** Records that a human approved a change the pipeline refused. */
     approved: z.boolean().optional(),
     reason: z.string().max(400).optional(),
+    /** Issue #30 (phase-3 close-out): the case identity (e.g. a benchmark case id) recorded in the decision record, so a run tied to a named case speaks for itself instead of `caseId: null`. */
+    caseId: z.string().min(1).max(200).optional(),
     /** Render the built frame and read it back. Default true. */
     render: z.boolean().optional(),
     /** How many targeted repairs may be applied. Default 2, 0 disables. */
@@ -690,7 +693,15 @@ export async function designPipelineTool(
    * at the persist call sites.
    */
   const recordBaseInput = {
-    caseId: null,
+    /**
+     * Issue #30 (phase-3 close-out): the record stops hardcoding `caseId:
+     * null`. A caller running the pipeline against a named case (a benchmark,
+     * a regression replay, a workspace evaluation) can pass `caseId` and the
+     * record carries it — the same identity shape the issue-22 benchmark
+     * runner freezes into its `<caseId>.json` fixtures. Still null without
+     * one: an identity nobody gave is not invented.
+     */
+    caseId: args.caseId ?? null,
     brief: {
       screen: brief.screen,
       product: brief.product,
@@ -1021,6 +1032,11 @@ export async function designPipelineTool(
         continue;
       }
       try {
+        // Issue #30 (phase-3 close-out): repairs dispatch under the same gate
+        // every other repairing path now uses — containment-only, because the
+        // repair ops were planned from measured evidence rather than a plan;
+        // structural classes still run, and a refusal surfaces as a recorded
+        // repair failure through the catch below, never as a crash.
         await dispatchTransaction(registry, session, "modify_design", {
           description: `Design pipeline repair: ${instruction.title}`,
           // A repaired finding that survives is planned again from the new
@@ -1034,6 +1050,9 @@ export async function designPipelineTool(
           // retry as applied without touching the file.
           transactionId: tries === 0 ? `${transactionId}_fix_${instruction.findingId}` : `${transactionId}_fix_${instruction.findingId}_${tries + 1}`,
           targets: instruction.targetIds,
+          preflight: containmentOnlyPreflightContext(),
+          approved: args.approved,
+          reason: args.reason,
         });
         repairs.push({ findingId: instruction.findingId, operations: instruction.operations.length, result: "applied", detail: instruction.expectedEffect });
       } catch (err) {

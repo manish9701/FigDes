@@ -111,6 +111,37 @@ test("a screen of greys plus one accent counts exactly one family", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* the unevaluated state, explicit (issue #30 phase-3 close-out)               */
+/* -------------------------------------------------------------------------- */
+
+test("a live snapshot without hueFamilies leaves the rule INDETERMINATE — and the finding names why", () => {
+  // The live (inspect) path's metric set — what `metricsFromLiveNodes`
+  // produces: no colour data, because colour props do not survive
+  // measurement. Deliberately NOT a program snapshot: this is what the
+  // guard sees when it runs over live nodes.
+  const liveish = {
+    source: "live",
+    resolved: true,
+    composition: "spatial",
+    components: [],
+    nodeNames: [],
+    texts: [],
+    metrics: { unlabeledComponents: 0, dominantActions: 1, machineDataInProportionalFace: 0, ambiguousSelections: 0 },
+  };
+  const result = runGuard(EXO_RULES, liveish);
+  assert.equal(result.verdict, "INDETERMINATE", "an unevaluated colour rule keeps the run honest at the top too");
+
+  const f = findingOf(result, "exo.restrained-accent");
+  assert.ok(f, "the palette rule ran");
+  assert.equal(f.verdict, "INDETERMINATE", "it is not smothered into a pass");
+  assert.match(f.message, /1 of its own checks need a human judgement/);
+  assert.ok(f.evidence, "the finding explains itself");
+  assert.match(String(f.evidence), /metric 'hueFamilies' was not collected/, "the missing metric is named");
+  assert.match(String(f.evidence), /unevaluated, neither pass nor fail/, "the state is labelled, never a bare verdict");
+  assert.match(String(f.evidence), /program to evaluate it/, "the caller is told where the evidence actually lives");
+});
+
+/* -------------------------------------------------------------------------- */
 /* family repeats are not families                                             */
 /* -------------------------------------------------------------------------- */
 

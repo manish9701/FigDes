@@ -862,6 +862,11 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   // Run last, on the geometry that is actually returned and actually drawn.
   // Anything earlier would be checking a layout that later passes still move.
   let traceMismatches = 0;
+  // Issue #30 (phase-3 close-out): children that escaped a region whose
+  // `overflow: "allow"` declared the escape, collected per region while the
+  // avoidance passes run so the result can surface the bleed explicitly
+  // (boundsAdvisories) instead of leaving it buried in the violations list.
+  const bleedByRegion = new Map<string, Set<string>>();
   if (!deck) {
     assertResolvedGeometry(
       ir,
@@ -871,6 +876,8 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
       canvasSize(canvas.height, 900),
       violations,
       unresolvedRelations,
+      undefined,
+      bleedByRegion,
     );
     traceMismatches = verifyOperationTrace(operations, boxes, violations);
   } else {
@@ -880,7 +887,7 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     // by contrast, are fixed 1920x1080 and decided at compile time — content
     // resolved off a slide renders invisible, so the bounds are asserted now
     // rather than skipped.
-    assertSlideBounds(regions, boxes, violations);
+    assertSlideBounds(regions, boxes, violations, bleedByRegion);
   }
 
   checkConstraints(ir, composition, violations);
@@ -922,6 +929,13 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
   ]);
   const inapplicableReasons = violations.filter((v) => BLOCKING.has(v.rule)).map((v) => v.message);
 
+  // Issue #30 (phase-3 close-out): the declared escapes, surfaced. Absent
+  // entirely when nothing bled — the payload does not grow for well-behaved
+  // screens; present, it names the count, the escaping children per region and
+  // why the run calls them deliberate rather than defects. An undeclared spill
+  // stays `containment` (blocking) and never reaches this block.
+  const bleedEntries = [...bleedByRegion.entries()].map(([region, children]) => ({ region, children: [...children] }));
+
   return {
     operations,
     regions,
@@ -930,6 +944,16 @@ export function compileIR(ir: DesignIR, textMetrics?: Map<string, { width: numbe
     applicable: inapplicableReasons.length === 0,
     inapplicableReasons,
     connectorRoutes,
+    ...(bleedEntries.length > 0
+      ? {
+          boundsAdvisories: {
+            count: bleedEntries.reduce((a, e) => a + e.children.length, 0),
+            regions: bleedEntries,
+            note:
+              'Deliberate bleed: each listed child resolves outside its region, and that region\'s constraints.overflow is "allow" — a declared escape, reported rather than refused. Without the declaration this would be a blocking `containment` violation.',
+          },
+        }
+      : {}),
     stats: {
       regionCount: regions.length,
       contentCount: ir.content.length,
@@ -3560,6 +3584,13 @@ function assertResolvedGeometry(
   unresolvedRelations: readonly string[] = [],
   /** The box relations are measured against — the canvas. */
   parent: PlacedBox = { id: "root", x: 0, y: 0, w: canvasW, h: canvasH },
+  /**
+   * Issue #30 (phase-3 close-out): collects the children that escape a region
+   * whose `overflow: "allow"` declared the escape, per region. The result
+   * surfaces them as `boundsAdvisories`, so a deliberate bleed is visible on
+   * the result instead of buried in the violations list.
+   */
+  bleed?: Map<string, Set<string>>,
 ): void {
   const span = (r: ResolvedRegion): string => `${Math.round(r.w)}x${Math.round(r.h)} at (${Math.round(r.x)}, ${Math.round(r.y)})`;
 
@@ -3619,6 +3650,13 @@ function assertResolvedGeometry(
       // diagram past its frame; the overflow is reported, but it does not
       // refuse the build.
       const allows = (region as { overflow?: string }).overflow === "allow";
+      // Issue #30 (phase-3 close-out): a declared escape is recorded as a
+      // deliberate bleed so the result can surface it explicitly.
+      if (allows && bleed) {
+        const list = bleed.get(region.id) ?? new Set<string>();
+        list.add(child);
+        bleed.set(region.id, list);
+      }
       violations.push({
         // Its own rule. Blocking by default: content that escapes its region
         // is a structural defect, not a density problem, and the review engine
@@ -3705,6 +3743,12 @@ function assertSlideBounds(
   regions: ResolvedRegion[],
   boxes: Map<string, PlacedBox>,
   violations: CompileResult["violations"],
+  /**
+   * Issue #30 (phase-3 close-out): mirrors `assertResolvedGeometry`'s bleed
+   * collector — slides declared with `overflow: "allow"` that carry children
+   * past their edge are recorded per slide and surfaced on the result.
+   */
+  bleed?: Map<string, Set<string>>,
 ): void {
   // Slides are assigned by the deck branch, so a slide found anywhere but its
   // slide box means something upstream moved it. Same spill vocabulary as the
@@ -3740,6 +3784,14 @@ function assertSlideBounds(
       // `overflow` declaration is a contract about content that leaves it, and
       // the severity vocabulary must not fork between canvas and decks.
       const allows = (region as { overflow?: string }).overflow === "allow";
+      // Issue #30 (phase-3 close-out): a declared slide bleed is recorded for
+      // boundsAdvisories, the same deliberate-visibility treatment the canvas
+      // path gives it.
+      if (allows && bleed) {
+        const list = bleed.get(region.id) ?? new Set<string>();
+        list.add(child);
+        bleed.set(region.id, list);
+      }
       violations.push({
         // Same rule label as the canvas containment violation, so the deck
         // compile gates on the BLOCKING set exactly like a canvas compile does.

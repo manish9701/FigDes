@@ -41,7 +41,7 @@ import { ScoreArgs, CritiqueArgs, RefineArgs, DiffArgs, FinalQaArgs, scoreDesign
 import { clients } from "./clients/registry";
 import { exportCode } from "./code/export";
 import { UseFigmaArgs, InspectVisualArgs, ReadContextArgs, figdesUseFigmaHandler, figdesInspectVisualHandler, figdesReadContextHandler } from "./native/use-figma";
-import { validateTransaction, splitPreflightIssues } from "./preflight";
+import { validateTransaction, splitPreflightIssues, containmentOnlyPreflightContext, preflightApprovalWaived } from "./preflight";
 import type { PreflightContext } from "./preflight-blocking";
 import { assertTransaction, dispatchTransaction } from "./transaction";
 import { EditScreenArgs, editScreenTool } from "./review/edit-screen";
@@ -1196,10 +1196,36 @@ export const TOOLS: ToolDefinition[] = [
       if ((rest as { dryRun?: boolean }).dryRun) {
         return viaPlugin(session, "update_component", rest);
       }
-      const preflight = validateTransaction((rest.operations ?? []) as unknown[]);
+      // Issue #30 (phase-3 close-out): component edits dispatch through the
+      // tracked dispatcher elsewhere; this path owns its preflight, so it
+      // threads the SAME containment-only context (component-edit ops mutate
+      // existing masters, which the replay containment cannot see, but a
+      // generated structure inside the edit is contained against its own
+      // chain) and honours the same waiver: soft-only geometry findings clear
+      // with approved+reason, structural findings never.
+      const preflight = validateTransaction((rest.operations ?? []) as unknown[], containmentOnlyPreflightContext());
       if (!preflight.ok) {
         recordPreflightCatch(preflight.issues.length);
-        throw new Error(`Preflight rejected the component edit before contacting Figma: ${preflight.issues[0]?.message ?? "invalid"} Fix: ${preflight.issues[0]?.fix ?? ""}`);
+        const { hard, soft } = splitPreflightIssues(preflight.issues);
+        const waived = hard.length === 0 && soft.length > 0 && preflightApprovalWaived(parsed);
+        if (!waived) {
+          const first = (hard[0] ?? soft[0])!;
+          const hint =
+            soft.length > 0
+              ? ` (${soft.length} of these are geometry findings — outside-bounds / text-overflow / geometry-drift / connector — that an explicit approved:true plus reason could waive on this dispatch; the structural findings cannot.)`
+              : "";
+          throw new Error(`Preflight rejected the component edit before contacting Figma: ${first.message} Fix: ${first.fix}${hint}`);
+        }
+        const t0 = Date.now();
+        const out = (await viaPlugin(session, "update_component", rest)) as Record<string, unknown>;
+        recordToolCall("update_component", Date.now() - t0, { ops: ((rest.operations ?? []) as unknown[]).length });
+        // The waived findings stay visible: they ride the result as warnings
+        // exactly how the dispatcher surfaces a waived dispatch.
+        return {
+          ...out,
+          preflightWaived: soft.length,
+          preflightWarnings: soft.map((i) => `[preflight-waived] ${i.message}`),
+        };
       }
       const t0 = Date.now();
       const out = await viaPlugin(session, "update_component", rest);
@@ -1259,6 +1285,16 @@ export const TOOLS: ToolDefinition[] = [
         description: "Seed the canonical exo token set",
         operations: operations as unknown[],
         transactionId: parsed.transactionId,
+        // Issue #30 (phase-3 close-out): the seed generates its own ops, so it
+        // dispatches under the containment-only context — the generated chain
+        // (variables, text styles, exempt swatch frames) is containment-checked
+        // against itself at the same gate every other mutating tool uses. The
+        // declaration flows both ways: threading the approval here means a
+        // deliberately overflowing seed still commits under its own
+        // approved+reason rather than dying at this gate.
+        preflight: containmentOnlyPreflightContext(),
+        approved: parsed.approved,
+        reason: parsed.reason,
       });
       return { ...result, seeded: counts };
     },
@@ -1510,6 +1546,13 @@ export const TOOLS: ToolDefinition[] = [
       const result = await dispatchTransaction(registry, session, "create_design", {
         description: `Migrate ${operations.length} fills to variables`,
         operations: operations as unknown[],
+        // Issue #30 (phase-3 close-out): generated ops from measured nodes —
+        // bindVariable ops carry no geometry, so the containment-only context
+        // threads the structural checks while every geometry class honestly
+        // skips on it.
+        preflight: containmentOnlyPreflightContext(),
+        approved: parsed.approved,
+        reason: parsed.reason,
       });
       return { ...result, matches };
     },
@@ -1610,6 +1653,13 @@ export const TOOLS: ToolDefinition[] = [
         description: parsed.description ?? `Prototype flow: ${operations.length} link(s)`,
         operations: operations as unknown[],
         transactionId: parsed.transactionId,
+        // Issue #30 (phase-3 close-out): prototypeLink ops reference existing
+        // frames and carry no geometry, so the containment-only context adds
+        // only the structural checks; the approval passthrough keeps the waiver
+        // channel identical to the raw paths.
+        preflight: containmentOnlyPreflightContext(),
+        approved: parsed.approved,
+        reason: parsed.reason,
       });
     },
   },
@@ -2008,6 +2058,15 @@ inputSchema: CompileArgs,
         operations,
         dryRun: parsed.dryRun ?? false,
         ...(parsed.transactionId !== undefined ? { transactionId: parsed.transactionId } : {}),
+        // Issue #30 (phase-3 close-out): the slide's generated chain (slide +
+        // title/body text at declared slide-relative boxes) now dispatches under
+        // the containment-only context, so a generated op that escapes the slide
+        // it declares is caught before Figma is contacted. The stylesheet-free
+        // margin geometry (160/1600/1200 inside 1920x1080) passes untouched,
+        // keeping deliberate slide bleed waivable in one argument.
+        preflight: containmentOnlyPreflightContext(),
+        approved: parsed.approved,
+        reason: parsed.reason,
       });
       return assertTransaction(result);
     },
@@ -2230,6 +2289,9 @@ inputSchema: ModifyArgs,
         sessionId: SessionArg,
         operations: z.array(z.record(z.unknown())).max(2000).optional().describe("Only for a safe retry when the ledger says the job never committed. Reuses the same transactionId."),
         description: z.string().max(1000).optional(),
+        /** Issue #30 (phase-3 close-out): the same explicit-justification waiver the raw paths accept — a geometry finding the retry's preflight surfaces clears with approved:true plus a reason, on THIS dispatch only. */
+        approved: z.boolean().optional(),
+        reason: z.string().max(400).optional(),
       })
       .strict(),
     handler: async (args, registry) => {
@@ -2240,6 +2302,8 @@ inputSchema: ModifyArgs,
             sessionId: SessionArg,
             operations: z.array(z.record(z.unknown())).max(2000).optional(),
             description: z.string().max(1000).optional(),
+            approved: z.boolean().optional(),
+            reason: z.string().max(400).optional(),
           })
           .strict()
       ).parse(args ?? {});
@@ -2266,10 +2330,20 @@ inputSchema: ModifyArgs,
           };
         }
         const session = registry.resolve(parsed.sessionId ?? job.sessionId);
+        // Issue #30 (phase-3 close-out): the retry re-threads the evidence the
+        // ledger already holds. When the job carries a planId, the same plan
+        // evidence the original dispatch ran under is derived from it; without
+        // one the containment-only fallback still containment-checks the retry's
+        // own declared chain. The approval passthrough keeps a justified retry
+        // waivable instead of stranded.
         return dispatchTransaction(registry, session, "modify_design", {
           description: parsed.description ?? `resume ${parsed.transactionId}`,
           operations: parsed.operations as unknown[],
           transactionId: parsed.transactionId,
+          ...(job.planId !== undefined ? { planId: job.planId } : {}),
+          preflight: derivedRawPreflightContext({ ...(job.planId !== undefined ? { planId: job.planId } : {}) }, session.fileKey),
+          approved: parsed.approved,
+          reason: parsed.reason,
         });
       }
       if (job.state === "rolled-back" || job.state === "partial-rollback" || job.state === "failed") {
@@ -2277,10 +2351,17 @@ inputSchema: ModifyArgs,
           return { status: "needs-retry-payload", job, howToProceed: "Pass operations with the SAME transactionId to retry safely; preflight runs before Figma is contacted." };
         }
         const session = registry.resolve(parsed.sessionId ?? job.sessionId);
+        // Issue #30 (phase-3 close-out): same evidence as the timed-out branch —
+        // stored planId when the original dispatch recorded one, containment-only
+        // otherwise + the approval passthrough.
         return dispatchTransaction(registry, session, "modify_design", {
           description: parsed.description ?? `resume ${parsed.transactionId}`,
           operations: parsed.operations as unknown[],
           transactionId: parsed.transactionId,
+          ...(job.planId !== undefined ? { planId: job.planId } : {}),
+          preflight: derivedRawPreflightContext({ ...(job.planId !== undefined ? { planId: job.planId } : {}) }, session.fileKey),
+          approved: parsed.approved,
+          reason: parsed.reason,
         });
       }
       // Still in flight (queued/preflight/applying/verifying): report, don't duplicate.

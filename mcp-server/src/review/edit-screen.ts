@@ -14,7 +14,7 @@
  */
 import { z } from "zod";
 import type { SessionRegistry, Session } from "../sessions";
-import { validateTransaction } from "../preflight";
+import { validateTransaction, splitPreflightIssues, preflightApprovalWaived, containmentOnlyPreflightContext } from "../preflight";
 import { dispatchTransaction } from "../transaction";
 import { guardMutation } from "../plan/gate";
 import { runRules } from "../review/rules";
@@ -124,17 +124,34 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
   }
 
   // Stage 2 — preflight with the shared schema. Never contacts Figma on failure.
-  const preflight = validateTransaction(args.operations as unknown[]);
+  // Issue #30 (phase-3 close-out): the pass threads the containment-only
+  // context — these are caller-authored ops with no plan behind them, so plan
+  // evidence is not claimed, but the ops' own declared create chain is
+  // containment-checked at this gate too, not only at dispatch.
+  const preflight = validateTransaction(args.operations as unknown[], containmentOnlyPreflightContext());
   if (!preflight.ok) {
     recordPreflightCatch(preflight.issues.length);
-    return {
-      status: "preflight-failed",
-      transactionId,
-      timeline: marks.log,
-      issues: preflight.issues,
-      warnings: preflight.warnings,
-      howToProceed: "Fix every issue (indices + fixes above) and retry with the SAME transactionId. Figma was not contacted.",
-    };
+    const { hard, soft } = splitPreflightIssues(preflight.issues);
+    // Issue #30 (phase-3 close-out): the early pass honours the SAME explicit
+    // waiver the dispatch below accepts — otherwise a caller who already
+    // justified a deliberate bleed would be refused here even though the
+    // transaction edge would have let them through.
+    if (hard.length === 0 && soft.length > 0 && preflightApprovalWaived(args)) {
+      marks.mark("preflight-waived", `${soft.length} geometry finding(s) waived on approval; they ride the committed result as warnings.`);
+    } else {
+      return {
+        status: "preflight-failed",
+        transactionId,
+        timeline: marks.log,
+        issues: preflight.issues,
+        warnings: preflight.warnings,
+        howToProceed:
+          (soft.length > 0
+            ? `Fix every structural issue (indices + fixes above); the ${soft.length} geometry finding(s) can alternatively be waived with approved:true plus a reason on the same call. `
+            : "") +
+          "Retry with the SAME transactionId. Figma was not contacted.",
+      };
+    }
   }
   marks.mark("preflight", `${preflight.operationCount} op(s) valid; ${preflight.warnings.length} warning(s).`);
 
@@ -195,6 +212,13 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
       description: args.description ?? `edit_screen: ${args.goals.join("; ")}`,
       operations: ops,
       transactionId: applyTid,
+      // Issue #30 (phase-3 close-out): caller-authored ops get the
+      // containment-only context, so a patch that declares an escape with no
+      // plan behind it fails closed here exactly as it would on modify_design —
+      // and approves out of it the same one-argument way.
+      preflight: containmentOnlyPreflightContext(),
+      approved: args.approved,
+      reason: args.reason,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -310,6 +334,12 @@ export async function editScreenTool(registry: SessionRegistry, rawArgs: unknown
             description: `edit_screen repair: ${high.map((f) => f.rule).join(", ")}`,
             operations: repairOps,
             transactionId: `${tid}:repair`,
+            // Issue #30 (phase-3 close-out): suggested fix ops get the same
+            // containment-only context as the main pass; a refusal surfaces as
+            // a recorded repair failure, never a crash.
+            preflight: containmentOnlyPreflightContext(),
+            approved: args.approved,
+            reason: args.reason,
           });
           if (repairResult.status === "success") {
             // Whole-screen consistency re-run after the local fix (P1).

@@ -210,6 +210,73 @@ test("the render-time exemptions are preserved for decks", () => {
   assert.equal(compiled.stats.traceMismatches, 0, "the trace recount stays zero for decks");
 });
 
+/* -------------------------------------------------------------------------- */
+/* Deliberate bleed, surfaced (issue #30 phase-3 close-out)                     */
+/* -------------------------------------------------------------------------- */
+
+test("a declared slide bleed is advisory, applicable, and surfaced as boundsAdvisories", () => {
+  const compiled = compileIR(
+    deckIR({
+      regions: [
+        {
+          id: "s1",
+          role: "slide",
+          width: "fill",
+          height: "fill",
+          overflow: "allow",
+          children: ["t1", "wide"],
+        },
+      ],
+      content: [
+        { kind: "text", id: "t1", text: "Section one", role: "title" },
+        { kind: "instance", id: "wide", componentId: "EXO-chart", width: 2400, height: 1200 },
+      ],
+    }),
+  );
+
+  const advisory = compiled.violations.filter((v) => v.rule === "containment-allowed");
+  assert.ok(advisory.length >= 1, `the declared escape is advisory: ${JSON.stringify(compiled.violations)}`);
+  assert.equal(compiled.applicable, true, "a declared escape does not refuse the build");
+
+  assert.ok(compiled.boundsAdvisories, "the result surfaces the deliberate bleed");
+  assert.ok(compiled.boundsAdvisories.count >= 1);
+  const s1 = compiled.boundsAdvisories.regions.find((r) => r.region === "s1");
+  assert.ok(s1, "the advisory names the slide that declared the escape");
+  assert.ok(s1.children.includes("wide"), `the escaping child is listed: ${JSON.stringify(s1)}`);
+  assert.doesNotMatch(
+    JSON.stringify(compiled.boundsAdvisories.regions.map((r) => r.children).flat()),
+    /^.*"t1".*$/,
+    "an in-bounds child is never mistaken for a bleeder",
+  );
+  assert.match(compiled.boundsAdvisories.note, /allow/, "the note states the declaration");
+  assert.match(compiled.boundsAdvisories.note, /containment/, "the note names what an undeclared spill would be");
+});
+
+test("an undeclared spill stays blocking and produces no boundsAdvisories", () => {
+  const compiled = compileIR(
+    deckIR({
+      regions: [{ id: "s1", role: "slide", width: "fill", height: "fill", children: ["wide"] }],
+      content: [{ kind: "instance", id: "wide", componentId: "EXO-chart", width: 2400, height: 1200 }],
+    }),
+  );
+
+  const containment = compiled.violations.filter((v) => v.rule === "containment");
+  assert.ok(containment.length >= 1, "the undeclared escape still refuses");
+  assert.equal(compiled.applicable, false, "undeclared spill is not applicable");
+  assert.equal(compiled.boundsAdvisories, undefined, "a blocked spill is a defect, never a deliberate bleed");
+});
+
+test("a clean deck with no escapes carries no boundsAdvisories at all", () => {
+  const compiled = compileIR(
+    deckIR({
+      regions: [{ id: "s1", role: "slide", width: "fill", height: "fill", children: ["t1"] }],
+      content: [{ kind: "text", id: "t1", text: "Section one", role: "title" }],
+    }),
+  );
+
+  assert.equal(compiled.boundsAdvisories, undefined, "the payload does not grow for well-behaved screens");
+});
+
 test("the gate holds end to end through the runtime interpreter", () => {
   const result = executeRuntime({
     canvas: { name: "Slides", width: 1440, height: 900, grid: 8, deck: true },

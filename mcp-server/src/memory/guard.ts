@@ -272,9 +272,21 @@ function evaluate(evidence: RuleEvidence, snapshot: GuardSnapshot): CheckOutcome
     case "assert": {
       const actual = snapshot.metrics?.[evidence.metric];
       if (actual === undefined) {
-        // No metric to compare against is *not* a pass and *not* a failure; it is
-        // an unevaluated check.
-        return { verdict: "PASS", message: `metric '${evidence.metric}' was not collected`, manual: true };
+        // No metric to compare against is *not* a pass and *not* a failure; it
+        // is an unevaluated check. Issue #30 (phase-3 close-out): the check
+        // says so in one line, and names the evaluation path that makes the
+        // verdict decidable — usually the case most worth tightening is a
+        // colour metric, which an IR the guard never saw cannot honestly
+        // supply and which is never invented here.
+        return {
+          verdict: "PASS",
+          message:
+            `metric '${evidence.metric}' was not collected by this snapshot — unevaluated, neither pass nor fail` +
+            (evidence.metric === "hueFamilies"
+              ? " (program snapshots carry it from the IR's resolved style colours; live inspect snapshots cannot, because colour props do not survive measurement — run design_guard with the program to evaluate it)"
+              : ""),
+          manual: true,
+        };
       }
       const cmp = COMPARISONS[evidence.op];
       if (!cmp) return { verdict: "PASS", message: `unknown operator '${evidence.op}'`, manual: true };
@@ -291,7 +303,9 @@ function evaluate(evidence: RuleEvidence, snapshot: GuardSnapshot): CheckOutcome
     case "implies": {
       const premise = snapshot.metrics?.[evidence.ifMetric];
       if (premise === undefined) {
-        return { verdict: "PASS", message: `metric '${evidence.ifMetric}' was not collected`, manual: true };
+        // Same unevaluated state as the assert branch: named, not smoothed
+        // over as a bare verdict.
+        return { verdict: "PASS", message: `metric '${evidence.ifMetric}' was not collected — unevaluated, neither pass nor fail`, manual: true };
       }
       const ifCmp = COMPARISONS[evidence.ifOp];
       const thenCmp = COMPARISONS[evidence.thenOp];
@@ -469,6 +483,14 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
     const breaches = outcomes.filter((o) => o.verdict === "FAIL");
     const unevaluated = outcomes.filter((o) => o.manual).length + manualOnly.length;
     if (unevaluated > 0) manual += unevaluated;
+    // Issue #30 (phase-3 close-out): the unevaluated checks' own messages land
+    // on the finding's evidence, so an INDETERMINATE outcome names what was
+    // missing and why there is no verdict — instead of a bare label whose
+    // reason only the stats table knew.
+    const unevaluatedEvidence = [
+      ...outcomes.filter((o) => o.manual).map((o) => o.message),
+      ...manualOnly.map((m) => (m.kind === "manual" ? `needs a human judgement: ${m.question}` : "")),
+    ].filter((s) => s.length > 0);
 
     // A rule with machine-checkable evidence that all held is still only PARTLY
     // checked when any of its own checks came back manual. Calling that PASS
@@ -498,7 +520,12 @@ export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardRe
           : unevaluated > 0
             ? `consistent with: ${rule.rule}, but ${unevaluated} of its own checks need a human judgement`
             : `consistent with: ${rule.rule}`,
-      evidence: breaches.length > 0 ? breaches.map((b) => b.evidence ?? b.message).join(" | ") : undefined,
+      evidence:
+        breaches.length > 0
+          ? breaches.map((b) => b.evidence ?? b.message).join(" | ")
+          : unevaluatedEvidence.length > 0
+            ? unevaluatedEvidence.join(" | ")
+            : undefined,
       nextStep: breaches.length > 0 ? rule.therefore : undefined,
     });
   }
@@ -746,6 +773,13 @@ export function metricsFromLiveNodes(nodes: NodeMetrics[]): LiveGuardMetrics {
  * which are not colours, and a metric that guessed would be exactly the
  * guessing this file refuses. Anything unparseable is skipped — a prop holding
  * a token name is a colour the snapshot cannot see, see `hueFamiliesOf`.
+ *
+ * Issue #30 (phase-3 close-out): this list is the whole honest surface, kept
+ * deliberate — every remaining colour the IR carries is reachable through
+ * these keys, and what cannot be reached (op-resolved looks, token names,
+ * semantic words) is not a colour the IR carried. Extending the metric further
+ * would mean inventing colours, which is why the rule over live snapshots
+ * stays unevaluated instead.
  */
 const COLOUR_PROP_KEYS = ["color", "surface", "background", "accent", "fill", "stroke"];
 

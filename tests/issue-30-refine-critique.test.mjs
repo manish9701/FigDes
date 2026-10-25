@@ -367,3 +367,128 @@ test("priorFindings are reconciled through trackFindings as resolved / persistin
   assert.deepEqual(r.introduced, []);
   assert.ok(typeof r.summary === "string" && r.summary.length > 0);
 });
+
+/* -------------------------------------------------------------------------- */
+/* 9. gate pauses carry the findings as pending, never pre-classified          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * 41 sibling card holders, each holding one on-scale card (radius 8) and one
+ * off-scale card (radius 12): the radius rule reports one finding per holder,
+ * targeting the off-scale card — 41 findings, 41 distinct fix targets, one
+ * above the 40-node threshold the mutation gate refuses for a single undo.
+ */
+function pairMetrics(parentCount = 41) {
+  const nodes = [box({ id: "1:1", name: "Screen", type: "FRAME", depth: 0, x: 0, y: 0, w: 2480, h: 300 })];
+  let next = 2;
+  for (let i = 0; i < parentCount; i++) {
+    const parentId = `1:${next++}`;
+    nodes.push(
+      box({ id: parentId, parentId: "1:1", type: "FRAME", name: `Card Holder ${i}`, depth: 1, x: (i % 20) * 120, y: Math.floor(i / 20) * 100, w: 100, h: 80 }),
+      box({ id: `1:${next++}`, parentId, type: "RECTANGLE", name: `Card On ${i}`, depth: 2, x: 10, y: 10, w: 80, h: 40, radius: 8 }),
+      box({ id: `1:${next++}`, parentId, type: "RECTANGLE", name: `Card Off ${i}`, depth: 2, x: 10, y: 40, w: 80, h: 30, radius: 12 }),
+    );
+  }
+  return { target: "1:1", scope: "Gate Screen", nodeCount: nodes.length, truncated: false, nodes };
+}
+
+/** A session that always reports the 41-pair tree: the first fix batch is huge. */
+function gatedSession() {
+  const session = {
+    notify() {},
+    requestIdFor() {
+      return undefined;
+    },
+    request: async (tool) => (tool === "collect_metrics" ? pairMetrics() : SUCCESS),
+  };
+  return session;
+}
+
+test("the fix gate pauses and the findings are reported as pending, not pre-classified", async () => {
+  const session = gatedSession();
+  const out = await refineScreenTool(
+    session,
+    {
+      nodeId: "1:1",
+      maxIterations: 3,
+      fromCritique: {
+        findings: [vfItem({ id: "vf-pause", defect: "card corners disagree", nodeIds: ["1:3"] })],
+        priorFindings: [{ id: "vf-pause" }],
+      },
+    },
+    ledgerRegistry(session),
+  );
+  assert.equal(out.status, "needs-approval", `the gate pauses: ${JSON.stringify(out).slice(0, 240)}`);
+  assert.ok(out.visualFindings, "the pause still carries the aggregate");
+  assert.equal(out.visualFindings.stage, "gate-pause", "the ledger states the pause, not a classification");
+  assert.deepEqual(out.visualFindings.items, [
+    {
+      id: "vf-pause",
+      area: "top-left",
+      defect: "card corners disagree",
+      severity: "major",
+      targets: ["1:3"],
+      disposition: "pending",
+      verified: false,
+    },
+  ]);
+  assert.deepEqual(out.visualFindings.counts, { pending: 1, addressed: 0, needsHuman: 0, blocked: 0 });
+  assert.deepEqual(out.visualFindings.reconciliation.persisting, ["vf-pause"], "priorFindings still reconcile");
+  assert.match(out.visualFindings.note, /paused waiting for approval/);
+  assert.equal(out.visualFindings.goalsSeeded, undefined);
+  assert.ok(out.question && out.instead, "the gate's question and alternative stay intact");
+  assert.doesNotMatch(JSON.stringify(out.visualFindings.items), /"needs-human"/, "no fabricated classification at a pause");
+  assert.equal(out.visualFindings.items[0].verified, false);
+});
+
+test("a build-phase gate pause carries the same pending aggregate", async () => {
+  const session = {
+    notify() {},
+    requestIdFor() {
+      return undefined;
+    },
+    request: async (tool) => {
+      // The variable name collides with what the file already has: the
+      // redefinition of a file-wide token is exactly what the mutation gate
+      // asks about before a build runs.
+      if (tool === "extract_design_system") {
+        return { variables: [{ name: "exo/accent", collection: "exo", type: "color" }], styleNames: { paint: [], text: [] } };
+      }
+      return SUCCESS;
+    },
+  };
+  const out = await refineScreenTool(
+    session,
+    {
+      maxIterations: 3,
+      program: {
+        canvas: { name: "Taskboard", width: 1440, height: 900, grid: 8 },
+        regions: [{ fn: "frame", id: "r1", args: { width: 800, height: 300 } }],
+        content: [{ fn: "variable", id: "tok-accent", args: { name: "exo/accent", type: "color", values: { default: "#F0B429" } } }],
+      },
+      fromCritique: {
+        findings: [vfItem({ id: "vf-build-pause", defect: "the accent reads loud", nodeIds: ["r1"] })],
+      },
+    },
+    ledgerRegistry(session),
+  );
+  assert.equal(out.status, "needs-approval", `the build pauses: ${JSON.stringify(out).slice(0, 300)}`);
+  assert.ok(out.visualFindings, "the build pause still carries the aggregate");
+  assert.equal(out.visualFindings.stage, "gate-pause", "the same pause label, whatever gate paused");
+  assert.equal(out.visualFindings.items[0].id, "vf-build-pause");
+  assert.equal(out.visualFindings.items[0].disposition, "pending");
+  assert.deepEqual(out.visualFindings.counts, { pending: 1, addressed: 0, needsHuman: 0, blocked: 0 });
+});
+
+test("a run that never pauses never carries the gate-pause stage", async () => {
+  const { session, registry } = quietSession();
+  const out = await refineScreenTool(
+    session,
+    { maxIterations: 3, fromCritique: { findings: [vfItem({ id: "vf-clean", defect: "screen feels inert", nodeIds: ["1:1"] })] } },
+    registry,
+  );
+  assert.match(out.status, /converged|budget-exhausted/, `the loop closed: ${JSON.stringify(out).slice(0, 200)}`);
+  assert.ok(out.visualFindings, "the classified ledger is still there");
+  assert.equal(out.visualFindings.stage, undefined, "no pause label leaks into a completed run");
+  assert.equal(out.visualFindings.items[0].disposition, "needs-human", "classification happened because the loop ran");
+});

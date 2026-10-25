@@ -150,6 +150,27 @@ export function splitPreflightIssues(issues: PreflightIssue[]): { hard: Prefligh
   return { hard, soft };
 }
 
+/**
+ * Issue #30 (phase-3 close-out) — the honest context for paths whose
+ * operations are SERVER-GENERATED rather than replayed from a plan: a template
+ * tool (seed_exo_system, create_slide, migrate_to_tokens, prototype_flow),
+ * a repair inside a retry loop (review fix-loop, edit_screen repair, design
+ * pipeline repair), a component-master edit, or a resume retry falling back
+ * from its stored plan.
+ *
+ * Nothing about a plan is claimed — there is no plan — so all plan-keyed
+ * evidence stays empty and the classes that need it simply skip. What the
+ * context still activates is every structural class plus `checkChildBounds`,
+ * which now containment-checks the caller's OWN declared create chain against
+ * itself: a generated op that parents a child outside the parent it also
+ * declares is caught at dispatch, exactly as a raw build would be.
+ * Geometry findings from it waive on approved+reason like everywhere else —
+ * the deliberateness gate again, never a new wall.
+ */
+export function containmentOnlyPreflightContext(): PreflightContext {
+  return { planBoxes: {} };
+}
+
 export function validateTransaction(operations: unknown[], context?: PreflightContext): PreflightResult {
   const issues: PreflightIssue[] = [];
   const warnings: PreflightResult["warnings"] = [];

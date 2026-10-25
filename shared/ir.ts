@@ -689,7 +689,23 @@ export interface CompileResult {
    * dispatch-time preflight can re-prove them against the final geometry.
    */
   connectorRoutes: ConnectorRoute[];
-  stats: {
+  /**
+   * Issue #30 (phase-3 close-out): deliberate bleed, surfaced.
+   *
+   * Populated only when at least one child resolves outside the region that
+   * owns it AND that region carries `constraints.overflow: "allow"` — the
+   * declared-escape state the compiler reports as the advisory
+   * `containment-allowed` rule. Without this block those findings lived only
+   * in `violations`; here the result states the count and the escaping
+   * children per region, so a bleed is something the caller sees and chose,
+   * not something hidden among structural warnings. Overflow without the
+   * declaration is `containment` — blocking — and never lands here.
+   */
+  boundsAdvisories?: {
+    count: number;
+    regions: Array<{ region: string; children: string[] }>;
+    note: string;
+  };  stats: {
     regionCount: number;
     contentCount: number;
     operationCount: number;

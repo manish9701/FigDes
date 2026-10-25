@@ -35,6 +35,7 @@ import { analyzeScreenshot } from "../design/quality/screenshot-qa";
 import { evaluateAccessibility, accessibilityInputFromMetrics } from "../design/quality/accessibility";
 import { guardMutation } from "../plan/gate";
 import { dispatchTransaction } from "../transaction";
+import { containmentOnlyPreflightContext } from "../preflight";
 import type { Session, SessionRegistry } from "../sessions";
 import type { Finding, MetricsReport, ReviewReport } from "../../../shared/protocol";
 
@@ -874,6 +875,47 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
   const compositionLed = userGoals.some((g) => /topology|spatial|visual|composition|hierarchy|runtime|instrument/i.test(g));
   const iterations: RefineIteration[] = [];
 
+  /**
+   * Issue #30 (phase-3 close-out) — the gate-pause aggregate.
+   *
+   * When the loop stops for approval — a gated fix batch, or the build phase's
+   * own refusal — it has not acted yet: no measurements ran past the pause and
+   * no dispositions settled, so the classified ledger below would claim
+   * knowledge it does not have (everything would read needs-human purely
+   * because the loop was never allowed to look). This reports the findings as
+   * what they are at a pause — pending — and says when the real
+   * classification will exist. `disposition: "pending"` is the honest label,
+   * not a placeholder value: it is explicitly never one of the classified
+   * states that mean "the loop judged this".
+   */
+  const vfPauseLedger = (): Record<string, unknown> | null => {
+    if (vfItems.length === 0) return null;
+    const prior = args.fromCritique?.priorFindings;
+    return {
+      source: "fromCritique",
+      stage: "gate-pause",
+      visualVerdict: "unverified",
+      items: vfItems.map((v) => ({
+        id: v.id,
+        area: v.area,
+        defect: v.defect,
+        severity: v.severity,
+        targets: [...v.nodeIds],
+        disposition: "pending",
+        verified: false,
+      })),
+      counts: { pending: vfItems.length, addressed: 0, needsHuman: 0, blocked: 0 },
+      ...(prior ? { reconciliation: trackFindings(prior, vfItems) } : {}),
+      note:
+        "The loop is paused waiting for approval — nothing past this point ran, so no classification is evidence yet. Dispositions classify after the loop proceeds: re-send with approved:true (plus a reason where the gate asked for one) and the final report will carry the settled ledger.",
+    };
+  };
+  /** Spread helper so the pause section only appears when findings were supplied. */
+  const vfPauseSection = (): Record<string, unknown> => {
+    const ledger = vfPauseLedger();
+    return ledger ? { visualFindings: ledger } : {};
+  };
+
   if (!session) {
     throw new Error("refine_screen needs a connected Figma plugin: it reviews and fixes the live document.");
   }
@@ -907,7 +949,11 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
       ...(args.approved !== undefined ? { approved: args.approved } : {}),
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     })) as Record<string, unknown>;
-    if (built?.["status"] === "needs-approval") return built;
+    // Issue #30 (phase-3 close-out): the build's own gate-pause still carries
+    // the findings as pending — the pause means the loop never ran, so the
+    // caller re-sending with approval sees what the loop is about to be
+    // judged on, labelled honestly as not-yet-classified.
+    if (built?.["status"] === "needs-approval") return { ...built, ...vfPauseSection() };
   }
 
   let converged = false;
@@ -1116,6 +1162,10 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         status: "needs-approval",
         iterations,
         dispositions: [...dispositions.values()],
+        // Issue #30 (phase-3 close-out): a pause carries the fromCritique
+        // aggregate as pending — the loop stopped before applying anything, so
+        // "needs-human everywhere" would be fabricated classification.
+        ...vfPauseSection(),
         question: gate.question,
         ifApproved: gate.ifApproved,
         instead: gate.instead,
@@ -1138,6 +1188,14 @@ export async function refineScreenTool(session: Session | null, rawArgs: unknown
         applied = await dispatchTransaction(registry, session, "modify_design", {
           description: fixDescription,
           operations: operations as unknown[],
+          // Issue #30 (phase-3 close-out): the loop's generated fix ops dispatch
+          // under the containment-only context — a suggested fix that wraps a
+          // child outside the wrapper it also declares is refused at the same
+          // edge as everywhere else, and lands as a blocked disposition through
+          // the catch below rather than as a crash.
+          preflight: containmentOnlyPreflightContext(),
+          approved: args.approved,
+          reason: args.reason,
         });
       } catch (err) {
         // The dispatcher throws on refusals and unknown outcomes instead of

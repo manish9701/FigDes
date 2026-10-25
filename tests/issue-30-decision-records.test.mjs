@@ -217,4 +217,49 @@ describe("decision-record disk persistence (issue #30)", () => {
       assert.equal(loaded.record.brief.screen, MODEL_DETAIL_CASE.brief.screen, "the newest run's record is the one on disk");
     });
   });
+
+  test("a caseId the caller passes is carried into the record instead of a hardcoded null", async () => {
+    await withStoreDir(async (dir) => {
+      const run = await designPipelineTool(sessionFor("Issue30CaseIdKeyC3"), null, {
+        brief: TOPOLOGY_CASE.brief,
+        mode: "plan",
+        caseId: "exo-compute-topology",
+      });
+      assert.equal(run.status, "planned");
+
+      const stored = JSON.parse(await readFile(join(dir, "issue30caseidkeyc3.json"), "utf8"));
+      assert.equal(stored.caseId, "exo-compute-topology", "the named case identity rides the record");
+    });
+  });
+
+  test("an unnamed run still records caseId: null — an identity nobody gave is not invented", async () => {
+    await withStoreDir(async (dir) => {
+      const run = await designPipelineTool(sessionFor("Issue30NoCaseKeyE5"), null, {
+        brief: TOPOLOGY_CASE.brief,
+        mode: "plan",
+      });
+      assert.equal(run.status, "planned");
+
+      const stored = JSON.parse(await readFile(join(dir, "issue30nocasekeye5.json"), "utf8"));
+      assert.equal(stored.caseId, null);
+    });
+  });
+
+  test("caseId survives the frozen-schema round-trip load", async () => {
+    await withStoreDir(async () => {
+      await designPipelineTool(sessionFor("Issue30RoundTripCaseF6"), null, {
+        brief: TOPOLOGY_CASE.brief,
+        mode: "plan",
+        caseId: "exo-model-detail",
+      });
+      // A restart: the same file identity reads the record back through the
+      // frozen schema — the case identity must survive it.
+      const second = await designPipelineTool(sessionFor("Issue30RoundTripCaseF6"), null, {
+        brief: TOPOLOGY_CASE.brief,
+        mode: "plan",
+      });
+      assert.ok(second.decisionRecord, "the record is regained");
+      assert.equal(second.decisionRecord.caseId, "exo-model-detail", "the case identity survives the frozen schema");
+    });
+  });
 });

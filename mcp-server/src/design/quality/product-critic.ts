@@ -377,12 +377,12 @@ export function evaluateProductCritic(input: ProductCriticInput): ProductCriticR
           // One disclosure, placed once, qualifies every value on the screen
           // (issue #23 §4).
           rationale:
-            "No data source is connected to this design; presenting placeholder values as live discovery or live telemetry misrepresents what exists. The correction is one honest sentence where the data lives, not a label on every value — repeated caveats are noise, and noise is exactly what hides the truth.",
+            "No data source is connected to this design; presenting placeholder values as live discovery or live telemetry misrepresents what exists. The correction is honest wording where the data lives — screens are clean by default (issue #23 §4 re-pin), so the provenance lives in the report and the screen must simply stop claiming a live source it does not have. Repeated caveats were the old cure and they are noise: the caption is now opt-in only.",
           evidence: ev(rev, leaks.join(","), `liveDataConnected=false; terms found in rendered labels`),
           suggestedFix:
-            "Add a single concise disclosure (e.g. \"Illustrative values — the screen is not connected to live data.\") in one place beside the data, and remove the live-sounding wording. One disclosure, not per-value labels.",
+            "Reword the live-sounding labels so the screen stops claiming a connected source (e.g. \"Live telemetry gathered from every shard\" → \"Shard telemetry sample, not a live read\"). Provenance is recorded in the report, not painted onto the design; the one on-screen caption is placed only when the build explicitly requests it (onScreenDisclosure:true).",
           verification:
-            "Confirm the screen carries exactly one concise disclosure qualifying the illustrative values, and that no live-sounding wording remains.",
+            "Confirm no label or value on the screen claims a live connection, and that the report records the illustrative data mode. A requested on-screen disclosure, if present, appears exactly once.",
         }),
       );
     }

@@ -396,11 +396,12 @@ export function buildProgram(
   // Nothing was: no text node ever carried the caveat, and the gap between
   // that sentence and the screen is what pushed reviewers to demand labels on
   // every value — a caveat storm that trains the reader to skip the one
-  // sentence that matters. The disclosure policy decides it exactly once:
-  // one concise caption in one region, none when the caller asked for a
-  // clean concept (the report keeps the truth) or the copy already discloses.
-  // The note records the decision either way, so the report stays truthful
-  // without the screen repeating itself.
+  // sentence that matters. The disclosure policy decides it exactly once, and
+  // production screens stay clean by default: no caption is painted unless
+  // the caller explicitly passed onScreenDisclosure:true (cleanConcept and
+  // content that already discloses suppress it too). The note records the
+  // decision either way, so the report stays truthful without the screen
+  // repeating itself.
   const disclosure = decideDisclosure(brief, plan);
   if (disclosure.call !== null) {
     content.push({

@@ -1,12 +1,16 @@
 /**
- * Issue #23 §4 — the disclosure policy.
+ * Issue #23 §4 — the disclosure policy, re-pinned: production screens are
+ * clean by default.
  *
- * What is under test is a sentence about honesty: a screen whose values are
- * not live says so ONCE, or not at all when the caller asked for a clean
- * concept — and the truth never disappears, because the report keeps
- * recording the illustrative data mode. Product facts are untouched by the
- * policy, so the last test re-runs the product-critic on an invented
- * live-telemetry claim and expects the same critical verdict as before.
+ * What is under test is a sentence about honesty with its polarity reversed:
+ * a screen whose values are not live says NOTHING on its surface unless the
+ * caller explicitly passed `onScreenDisclosure: true` — and the truth never
+ * disappears, because the report keeps recording the illustrative data mode.
+ * The opt-in still places exactly one caption (never per-value labels), and
+ * the product-critic's repair instruction must stop telling the loop to paint
+ * captions back onto the screen. Product facts are untouched by the policy,
+ * so the last test re-runs the product-critic on an invented live-telemetry
+ * claim and expects the same critical verdict as before.
  *
  * The fixtures are offline: brief → program (the plan is hand-built, since
  * the disclosure is a program-stage decision). No Figma, no render.
@@ -125,8 +129,8 @@ const header = region("header", "header", { sizing: { width: "fill", height: 72 
 const scope = region("scope", "primary-visual");
 const footer = region("footer", "footer", { sizing: { width: "fill", height: 48 }, grow: 0 });
 
-// No footer: the disclosure must fall to the data region (fixture for test a's
-// body assertions); the next test covers the footer-preferred ladder.
+// No footer: the opted-in disclosure must fall to the data region (fixture for
+// the opt-in body assertions); the next test covers the footer-preferred ladder.
 const defaultPlan = plan(
   header,
   scope,
@@ -135,22 +139,35 @@ const defaultPlan = plan(
 );
 
 /* -------------------------------------------------------------------------- */
-/* (a) a default illustrative screen carries exactly one disclosure            */
+/* (a) the default production screen carries NO disclosure                    */
 /* -------------------------------------------------------------------------- */
 
-test("(a) a default illustrative screen emits exactly ONE disclosure node, placed once", () => {
+test("(a) the default illustrative screen paints ZERO disclosure nodes, and the trace still records the data mode", () => {
   const { brief, built } = run(defaultPlan);
 
   assert.equal(brief.data.illustrative, true, "a demo screen must be recorded as illustrative");
-  const calls = disclosureCalls(built);
-  assert.equal(calls.length, 1, `expected exactly one disclosure, found ${calls.length}`);
-  assert.equal(
-    built.program.content.filter((c) => c.args?.text === DISCLOSURE_TEXT).length,
-    1,
-    "the disclosure copy appears in exactly one content node",
+  assert.equal(brief.onScreenDisclosure, false, "the default is a clean screen");
+  assert.equal(disclosureCalls(built).length, 0, `a production screen carries no caveat: found ${disclosureCalls(built).length}`);
+
+  // The truth does not disappear: the one build note records the illustrative
+  // data mode AND names the opt-in that would bring the caption back.
+  const notes = built.notes.filter((n) => /disclosure|illustrative/i.test(n));
+  assert.equal(notes.length, 1, `expected one data-mode note, found ${notes.length}: ${notes.join(" | ")}`);
+  assert.match(notes[0], /screens are clean by default/);
+  assert.match(notes[0], /onScreenDisclosure/);
+});
+
+test("(a) onScreenDisclosure:true places exactly ONE node — beside the data, never the chrome", () => {
+  const { brief, assumptions, built } = run(defaultPlan, { onScreenDisclosure: true });
+
+  assert.equal(brief.onScreenDisclosure, true, "the request must reach the program as stated");
+  assert.ok(
+    assumptions.some((a) => a.id === "assume-on-screen-disclosure" && a.source === "stated"),
+    "the explicit ask is recorded with provenance",
   );
 
-  // The one node is the caption the policy defines — text, role, parent.
+  const calls = disclosureCalls(built);
+  assert.equal(calls.length, 1, `expected exactly one disclosure, found ${calls.length}`);
   const only = calls[0];
   assert.equal(only.fn, "text");
   assert.equal(only.args.text, DISCLOSURE_TEXT);
@@ -160,17 +177,24 @@ test("(a) a default illustrative screen emits exactly ONE disclosure node, place
   assert.equal(only.parent, "scope", "the disclosure lands on the data region, not the chrome");
   assert.notEqual(only.parent, header.id, "a caveat in the header reads as a system error");
 
-  // The trace records the single placement, and only once.
   const notes = built.notes.filter((n) => /disclosure/i.test(n));
   assert.equal(notes.length, 1, `expected one disclosure note, found ${notes.length}: ${notes.join(" | ")}`);
   assert.match(notes[0], /one concise disclosure/);
+  assert.match(notes[0], /as explicitly requested/);
 });
 
-test("(a) when the plan carries a footer, the disclosure is footer-adjacent", () => {
+test("(a) when the plan carries a footer, the opted-in disclosure is footer-adjacent", () => {
   const footerPlan = plan(header, scope, slot("scope", "cluster health", { value: "Degraded" }), footer);
-  const { built: withFooter } = run(footerPlan);
+  const { built: withFooter } = run(footerPlan, { onScreenDisclosure: true });
   assert.equal(disclosureCalls(withFooter).length, 1);
   assert.equal(disclosureCalls(withFooter)[0].parent, footer.id, "a footer region wins the placement ladder");
+});
+
+test("(a) cleanConcept wins over onScreenDisclosure: the contradiction resolves toward the cleaner screen", () => {
+  const { brief, built } = run(defaultPlan, { cleanConcept: true, onScreenDisclosure: true });
+  assert.equal(brief.cleanConcept, true);
+  assert.equal(brief.onScreenDisclosure, false, "the no-caption request wins");
+  assert.equal(disclosureCalls(built).length, 0);
 });
 
 /* -------------------------------------------------------------------------- */
@@ -219,10 +243,10 @@ test("(c) a live-data screen carries zero disclosures and zero caveat notes", ()
 });
 
 /* -------------------------------------------------------------------------- */
-/* (d) copy that already discloses never gets a second disclosure              */
+/* (d) opted-in copy that already discloses never gets a second disclosure     */
 /* -------------------------------------------------------------------------- */
 
-test("(d) content that already carries a disclosure phrase is not disclosed twice", () => {
+test("(d) opted-in content that already carries a disclosure phrase is not disclosed twice", () => {
   const disclosingPlan = plan(
     header,
     scope,
@@ -230,7 +254,7 @@ test("(d) content that already carries a disclosure phrase is not disclosed twic
     slot("scope", "GPU throughput", { value: "8", order: 1 }),
     footer,
   );
-  const { built } = run(disclosingPlan);
+  const { built } = run(disclosingPlan, { onScreenDisclosure: true });
 
   assert.equal(disclosureCalls(built).length, 0, "no second disclosure next to one the copy already carries");
   assert.ok(
@@ -261,10 +285,10 @@ test("(d) the marker set recognises the ordinary disclosure words, and nothing e
 });
 
 /* -------------------------------------------------------------------------- */
-/* (e) the critic now asks for ONE disclosure, not a label on every value      */
+/* (e) the critic's repair instruction now rewords, it no longer paints        */
 /* -------------------------------------------------------------------------- */
 
-test("(e) the product-critic's fix demands a single concise disclosure, not per-value labels", () => {
+test("(e) the product-critic's fix demands honest rewording — it must not teach painting a caveat", () => {
   const report = evaluateProductCritic({
     revisionId: "rev-issue23",
     liveDataConnected: false,
@@ -274,11 +298,12 @@ test("(e) the product-critic's fix demands a single concise disclosure, not per-
   const finding = report.findings.find((f) => f.ruleId === "product.claims-live-data-without-source");
 
   assert.ok(finding, `expected the live-data finding; findings were: ${report.findings.map((f) => f.ruleId).join(", ")}`);
-  assert.match(finding.suggestedFix, /single concise disclosure/i);
-  assert.match(finding.suggestedFix, /not per-value labels/i);
+  assert.match(finding.suggestedFix, /[Rr]eword the live-sounding labels/);
+  assert.doesNotMatch(finding.suggestedFix, /add a single concise disclosure|add .*Illustrative values/i, "the repair loop must not be sent back to paint captions");
   assert.doesNotMatch(finding.suggestedFix, /every value|each value|label every/i, "the fix must not demand per-value labels");
-  assert.match(finding.verification, /exactly one concise disclosure/i);
-  assert.doesNotMatch(finding.verification, /every value|each value/i);
+  assert.match(finding.suggestedFix, /onScreenDisclosure/, "the only caption path left is the explicit request");
+  assert.match(finding.verification, /no label or value on the screen claims a live connection/i);
+  assert.doesNotMatch(finding.verification, /exactly one concise disclosure qualifying/i, "verification no longer asks for the painted caption by default");
 });
 
 /* -------------------------------------------------------------------------- */
@@ -297,8 +322,8 @@ test("(f) an invented live-data claim still fails at critical severity", () => {
   assert.ok(finding, "the unbacked live claim must still be caught");
   assert.equal(finding.severity, "critical", "a live claim with no source is still a critical product failure");
   assert.match(finding.summary, /implies live data/);
-  // The repair contract moved from per-value labels to one disclosure; the
+  // The repair contract moved from painting captions to rewording; the
   // severity did not. An invented fact is not forgiven — it is still called
-  // what it is, in the one sentence that may follow it.
+  // what it is.
   assert.ok(finding.severity !== "medium" && finding.severity !== "low");
 });

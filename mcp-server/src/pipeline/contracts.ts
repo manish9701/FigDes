@@ -69,16 +69,31 @@ export const BriefInputSchema = z
     /**
      * Clean visual exploration, explicitly requested (issue #23 §4).
      *
-     * True suppresses the on-screen sample-data disclosure — the report keeps
-     * recording that the values are illustrative, so truthfulness moves to
-     * the report rather than disappearing. It never grants an invented
-     * capability or a live-connection claim; those stay with the product
-     * critic and the capability-truth guard.
+     * Screens are clean by default now: the pipeline does not paint a
+     * provenance caption on a production design. True keeps its meaning as
+     * the explicit no-caption request (recorded with provenance), and wins
+     * when both this and onScreenDisclosure are set.
      */
     cleanConcept: z
       .boolean()
       .optional()
-      .describe("Request clean visual exploration: suppress the on-screen sample-data disclosure (the report still records the data as illustrative)."),
+      .describe("Request clean visual exploration: no on-screen data caveat (the report still records the data as illustrative)."),
+    /**
+     * Bring back the single on-screen data disclosure (issue #23 §4 re-pin).
+     *
+     * The pipeline never paints a provenance caption on a screen by default —
+     * the report keeps recording that the values are illustrative, so
+     * truthfulness lives in the ledger. True is the caller's explicit request
+     * to place the one concise caption ("Illustrative values — the screen is
+     * not connected to live data.") exactly once, beside the data it
+     * qualifies. It never grants an invented capability or a live-connection
+     * claim; those stay with the product critic and the capability-truth
+     * guard.
+     */
+    onScreenDisclosure: z
+      .boolean()
+      .optional()
+      .describe("Explicitly request the one on-screen illustration-values caption (screens are clean by default; the report always records the data mode)."),
     /** Navigation and interaction relationships the screen must express. */
     interactions: z
       .array(
@@ -234,6 +249,13 @@ export interface NormalizedBrief {
    * report alone records that the values are illustrative.
    */
   cleanConcept: boolean;
+  /**
+   * True when the caller explicitly asked for the one on-screen data
+   * disclosure (issue #23 §4 re-pin). Screens are clean by default — no
+   * provenance caption is painted unless this was stated; the report alone
+   * records the data mode.
+   */
+  onScreenDisclosure: boolean;
   interactions: NonNullable<BriefInput["interactions"]>;
   viewport: { width: number; height: number };
   responsive: NonNullable<BriefInput["responsive"]>;

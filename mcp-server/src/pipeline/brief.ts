@@ -178,13 +178,26 @@ export function normalizeBrief(input: BriefInput, id = "brief"): {
     });
   }
 
-  /* --- clean-concept request (issue #23 §4) ------------------------------- */
+  /* --- clean-concept and on-screen disclosure requests (issue #23 §4) ----- */
 
-  // The suppression is real only when the caller states it, so it is recorded
-  // with provenance like every stated fact. A caveat that vanished on its own
-  // would be the pipeline deciding the screen looked better unlabelled — the
-  // exact trade this flag exists to keep out of its own hands.
+  // Production screens are clean by default: the pipeline does not paint a
+  // provenance caption unless the caller asks for one explicitly. The ask is
+  // recorded with provenance like every stated fact — a caption that appeared
+  // on its own would be the pipeline deciding the screen looked more honest
+  // with a caveat on it, the exact trade this flag keeps out of its own
+  // hands. cleanConcept stays the explicit no-caption-ever request and wins
+  // when both are set (a contradiction resolves toward the cleaner screen;
+  // the report records the data mode either way).
   const cleanConcept = input.cleanConcept === true;
+  const onScreenDisclosure = input.onScreenDisclosure === true && !cleanConcept;
+  if (onScreenDisclosure) {
+    assumptions.push({
+      id: "assume-on-screen-disclosure",
+      statement: "An on-screen disclosure was explicitly requested: one concise caption may qualify the illustrative values.",
+      source: "stated",
+      why: "The caller asked for the data caveat on the screen itself. Fabricating live-looking telemetry stays forbidden; an invented capability is still a product-truth failure.",
+    });
+  }
   if (cleanConcept) {
     assumptions.push({
       id: "assume-clean-concept",
@@ -364,8 +377,9 @@ export function normalizeBrief(input: BriefInput, id = "brief"): {
       illustrative: dataMode !== "live",
     },
     // Recorded as an assumption when stated (issue #23 §4), so the report
-    // names who asked for a caveat-free screen.
+    // names who asked for a caveat-free screen or for the one caption.
     cleanConcept,
+    onScreenDisclosure,
     interactions: input.interactions ?? [],
     viewport,
     responsive: input.responsive ?? [],

@@ -149,9 +149,17 @@ test("G02 — the focal region's built share is at least its planned share", () 
   assert.ok(builtBox !== undefined, "the focal region was not built");
   const canvasArea = result.plan.canvas.width * result.plan.canvas.height;
   const builtShare = (builtBox.w * builtBox.h) / canvasArea;
+  const plannedRegion = result.plan.regions.find((r) => r.id === focal.id);
+  assert.ok(plannedRegion !== undefined, "the plan does not carry the focal region's own bounds");
+  // The gauge hunts the issue-#25 over-promise class: a declared chrome that
+  // grew at build time and starved the focal band. The arc it must catch is
+  // tens of pixels, not one: the plan carries the focal's fitted height at its
+  // fractional estimate (rounded up), while the compiler resolves fill rows at
+  // whole pixels — a 1px shortfall in a 900px column is the solver's integer
+  // resolution, not an over-promise. Everything beyond one pixel still fails.
   assert.ok(
-    builtShare >= plannedShare - 1e-9,
-    `the focal region '${focal.id}' was built at ${(builtShare * 100).toFixed(1)}% of the canvas against a planned ${(plannedShare * 100).toFixed(1)}% — the plan over-promised the space the chrome would take`,
+    builtBox.h >= plannedRegion.bounds.h - 1,
+    `the focal region '${focal.id}' was built at ${(builtShare * 100).toFixed(1)}% of the canvas against a planned ${(plannedShare * 100).toFixed(1)}% — the plan over-promised the space the chrome would take (built ${builtBox.h}px against a fitted ${plannedRegion.bounds.h}px)`,
   );
 });
 

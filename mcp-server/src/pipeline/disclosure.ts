@@ -1,43 +1,43 @@
 /**
  * The disclosure policy (issue #23 §4 — "reduce repetitive caveats without
- * faking product truth").
+ * faking product truth"; re-pinned: production screens are clean by default).
  *
  * ## The problem it decides
  *
- * Illustrative data stays honest only when the screen says so once. The
- * pressure runs the other way: every reviewer that cannot find the word
- * "sample" asks for labels, and labels multiply — a header, every panel, every
- * data row and the footer each carrying the same caveat is not honesty, it is
- * noise, and noise teaches the reader to skip exactly the sentence that keeps
- * the screen honest.
+ * Illustrative data stays honest only when the truth is recorded SOMEWHERE.
+ * The original policy painted that truth onto the screen once per build, and
+ * the default was on — which made every production screen built from
+ * placeholder values carry a visible "Illustrative values" caveat. A design
+ * deliverable that tells the reader it is a demo stops being the deliverable:
+ * production screens are built to look like the product, and the honest
+ * provenance lives in the report, not in paint.
  *
- * So the policy produces one verdict, not a count of places to write in:
+ * So the default is now silence on the surface and truth in the ledger:
  *
- * - **Nothing to disclose, nothing shown.** The disclosure exists only when
- *   the screen carries values that are not live (`brief.data.illustrative`)
- *   *and* there are values on the screen to qualify. A live screen, or a
- *   structural screen with no values, carries none.
- * - **Clean concepts are requested, not invented.** The caller can ask for
- *   clean visual exploration (`cleanConcept: true`, normalized with its own
- *   provenance in `brief.ts`). The on-screen disclosure is suppressed entirely
- *   and the report keeps the truth instead: the brief, the assumption record
- *   and the build note still say the values are illustrative. Truthfulness
- *   moves to the report; it never disappears.
- * - **At most one, in one region.** One caption: a footer region when the
- *   plan has one, else the region carrying the most illustrative values (the
- *   data the disclosure qualifies), else the last region with content — and
- *   never navigation or header chrome, where a caveat reads as a system
- *   error rather than a data note.
- * - **Deduped against the copy itself.** If the content already names the
- *   data sample/demo/illustrative/mock/placeholder/not-live, no second
+ * - **Production screens are clean by default.** No provenance caption is
+ *   painted unless the caller explicitly passes `onScreenDisclosure: true`.
+ *   The report keeps recording the illustrative data mode (assumption
+ *   records, build notes, the release gate's limitations), so a clean screen
+ *   is not a lost truth — it is the product look production runs asked for.
+ * - **Clean concepts stay an explicit request.** `cleanConcept: true` keeps
+ *   its meaning ("no caption, ever, by explicit ask") and wins when both
+ *   flags are set — a contradiction resolves toward the cleaner screen.
+ * - **The opt-in places one caption, not per-value labels.** True brings
+ *   back the single concise sentence: a footer region when the plan has one,
+ *   else the region carrying the most illustrative values, and never
+ *   navigation or header chrome, where a caveat reads as a system error
+ *   rather than a data note.
+ * - **Deduped against the copy itself.** If the opted-in content already
+ *   names the data sample/demo/mock/placeholder/not-live, no second
  *   disclosure is added. The marker vocabulary mirrors capability-truth.ts's
  *   `UNCERTAINTY_MARKERS`, narrowed to data words: proposed/planned/concept
  *   are *capability* markers that qualify a feature claim, not a statement
  *   that today's values are fixtures.
  *
  * Product facts are never weakened here and nothing here grants them: the
- * policy only ever adds the caveat, and the product-critic and capability
- * truth guards remain the judges of an invented capability claim.
+ * policy only ever adds the caveat the caller requested, and the product-
+ * critic and capability truth guards remain the judges of an invented
+ * capability claim.
  */
 import type { CompositionPlan, NormalizedBrief } from "./contracts";
 
@@ -119,6 +119,17 @@ export function decideDisclosure(
     };
   }
 
+  // Production screens are clean by default (the re-pin): no provenance
+  // caption is painted unless the caller explicitly asked. The truth does not
+  // disappear — the build note, the assumption records and the release gate
+  // all carry the data mode — but the deliverable looks like the product.
+  if (brief.onScreenDisclosure !== true) {
+    return {
+      call: null,
+      note: "Data is illustrative: screens are clean by default, so no on-screen caption was painted; the report alone records that the values are not live. Pass onScreenDisclosure:true to place the single caption.",
+    };
+  }
+
   // Dedupe against the copy the screen already carries. Scanning labels and
   // values (the material that could read as live) keeps the check honest: a
   // disclosure phrase buried in a data note does not disclose anything.
@@ -131,6 +142,9 @@ export function decideDisclosure(
     };
   }
 
+  // Targeted placement — ONE caption, in the one region that qualifies.
+  // The placement ladder and dedupe only run here, because they only matter
+  // when the caller asked for the caption to exist.
   const parent = placement(plan);
   if (parent === null) {
     return {
@@ -141,7 +155,7 @@ export function decideDisclosure(
 
   return {
     call: { id: DISCLOSURE_ID, parent, text: DISCLOSURE_TEXT },
-    note: `Data is illustrative: one concise disclosure was placed once, in region '${parent}'. It is the only on-screen caveat; the report carries the full data provenance, and per-value labels were not added.`,
+    note: `Data is illustrative: one concise disclosure was placed once, in region '${parent}', as explicitly requested. It is the only on-screen caveat; the report carries the full data provenance, and per-value labels were not added.`,
   };
 }
 

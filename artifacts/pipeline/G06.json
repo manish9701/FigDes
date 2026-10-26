@@ -7,6 +7,7 @@
   "brief": {
     "id": "brief",
     "product": "EXO Labs",
+    "profile": null,
     "screen": "Cluster Console",
     "purpose": "Operate a cluster from one console",
     "primaryDecision": "operate a cluster from one console",
@@ -25,6 +26,7 @@
       "illustrative": true
     },
     "cleanConcept": false,
+    "onScreenDisclosure": false,
     "interactions": [],
     "viewport": {
       "width": 1440,
@@ -91,12 +93,12 @@
           "x": 240,
           "y": 0,
           "w": 1200,
-          "h": 128
+          "h": 97
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 128
+          "height": 97
         },
         "grow": 0,
         "padding": {
@@ -223,9 +225,9 @@
         "order": 1,
         "bounds": {
           "x": 240,
-          "y": 160,
+          "y": 129,
           "w": 1200,
-          "h": 290
+          "h": 303
         },
         "layoutMode": "free",
         "sizing": {
@@ -286,9 +288,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 482,
+          "y": 464,
           "w": 360,
-          "h": 193
+          "h": 202
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -344,9 +346,9 @@
         "order": 2,
         "bounds": {
           "x": 240,
-          "y": 707,
+          "y": 698,
           "w": 1200,
-          "h": 193
+          "h": 202
         },
         "layoutMode": "grid",
         "sizing": {
@@ -520,10 +522,10 @@
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 989880,
-      "coverage": 0.7637962962962963,
+      "coveredArea": 982320,
+      "coverage": 0.757962962962963,
       "largestEmptyBand": 0,
-      "focalShare": 0.26851851851851855,
+      "focalShare": 0.28055555555555556,
       "notes": []
     }
   },
@@ -553,7 +555,7 @@
       "x": 234,
       "y": 0,
       "width": 1206,
-      "height": 133
+      "height": 96
     },
     {
       "type": "createFrame",
@@ -561,9 +563,9 @@
       "parent": "root",
       "name": "Subject",
       "x": 234,
-      "y": 157,
+      "y": 120,
       "width": 1206,
-      "height": 299
+      "height": 312
     },
     {
       "type": "createFrame",
@@ -571,9 +573,9 @@
       "parent": "root",
       "name": "Context",
       "x": 234,
-      "y": 480,
+      "y": 456,
       "width": 360,
-      "height": 198
+      "height": 210
     },
     {
       "type": "createFrame",
@@ -581,9 +583,9 @@
       "parent": "root",
       "name": "Support",
       "x": 234,
-      "y": 702,
+      "y": 690,
       "width": 1206,
-      "height": 198
+      "height": 210
     },
     {
       "type": "createText",
@@ -613,21 +615,12 @@
       "width": 375
     },
     {
-      "type": "createText",
-      "id": "data-disclosure",
-      "parent": "header",
-      "name": "Illustrative values — the screen is not ",
-      "x": 806.6700000000001,
-      "y": 24,
-      "width": 375
-    },
-    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "header",
       "name": "Drain node",
-      "x": 415.33000000000004,
-      "y": 69,
+      "x": 806.6700000000001,
+      "y": 24,
       "width": 97,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -720,7 +713,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 76%, largest empty band 0%, focal share 27%.",
+      "detail": "coverage 76%, largest empty band 0%, focal share 28%.",
       "nodeIds": []
     },
     {
@@ -741,7 +734,7 @@
       "id": "plan-matches-build",
       "question": "Does the built geometry match the plan?",
       "status": "review",
-      "detail": "header: planned 1200x128, built 1206x133; subject: planned 1200x290, built 1206x299; context: planned 360x193, built 360x198; support: planned 1200x193, built 1206x198",
+      "detail": "header: planned 1200x97, built 1206x96; subject: planned 1200x303, built 1206x312; context: planned 360x202, built 360x210; support: planned 1200x202, built 1206x210",
       "nodeIds": []
     },
     {
@@ -755,7 +748,7 @@
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "INDETERMINATE: 14 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 0 rule(s) checked, 0 failure(s), 0 needing judgement.",
       "nodeIds": []
     }
   ],
@@ -766,11 +759,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: header: planned 1200x128, built 1206x133.",
+      "summary": "The build did not produce the geometry the plan promised: header: planned 1200x97, built 1206x96.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "header: planned 1200x128, built 1206x133"
+        "detail": "header: planned 1200x97, built 1206x96"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -781,11 +774,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x290, built 1206x299.",
+      "summary": "The build did not produce the geometry the plan promised: subject: planned 1200x303, built 1206x312.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "subject: planned 1200x290, built 1206x299"
+        "detail": "subject: planned 1200x303, built 1206x312"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -796,11 +789,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: context: planned 360x193, built 360x198.",
+      "summary": "The build did not produce the geometry the plan promised: context: planned 360x202, built 360x210.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "context: planned 360x193, built 360x198"
+        "detail": "context: planned 360x202, built 360x210"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false
@@ -811,11 +804,11 @@
       "severity": "medium",
       "confidence": 0.9,
       "nodeIds": [],
-      "summary": "The build did not produce the geometry the plan promised: support: planned 1200x193, built 1206x198.",
+      "summary": "The build did not produce the geometry the plan promised: support: planned 1200x202, built 1206x210.",
       "why": "A region that had to grow to hold its content means the plan's share of the canvas was wrong, and every region below it moved.",
       "evidence": {
         "kind": "geometry",
-        "detail": "support: planned 1200x193, built 1206x198"
+        "detail": "support: planned 1200x202, built 1206x210"
       },
       "fix": "Give the region the room its content needs, or reduce what it holds.",
       "automatable": false

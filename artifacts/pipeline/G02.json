@@ -7,6 +7,7 @@
   "brief": {
     "id": "brief",
     "product": "EXO Labs",
+    "profile": null,
     "screen": "Model Detail",
     "purpose": "Compare a model against the cluster it has to fit",
     "primaryDecision": "compare a model against the cluster it has to fit",
@@ -26,6 +27,7 @@
       "illustrative": true
     },
     "cleanConcept": false,
+    "onScreenDisclosure": false,
     "interactions": [],
     "viewport": {
       "width": 1440,
@@ -154,12 +156,12 @@
           "x": 272,
           "y": 0,
           "w": 1168,
-          "h": 139
+          "h": 102
         },
         "layoutMode": "flow-vertical",
         "sizing": {
           "width": "fill",
-          "height": 139
+          "height": 102
         },
         "grow": 0,
         "padding": {
@@ -224,9 +226,9 @@
         "order": 2,
         "bounds": {
           "x": 272,
-          "y": 171,
+          "y": 134,
           "w": 1168,
-          "h": 285
+          "h": 301
         },
         "layoutMode": "free",
         "sizing": {
@@ -293,9 +295,9 @@
         "order": 3,
         "bounds": {
           "x": 272,
-          "y": 488,
+          "y": 467,
           "w": 360,
-          "h": 190
+          "h": 201
         },
         "layoutMode": "flow-vertical",
         "sizing": {
@@ -357,9 +359,9 @@
         "order": 3,
         "bounds": {
           "x": 272,
-          "y": 710,
+          "y": 700,
           "w": 1168,
-          "h": 190
+          "h": 201
         },
         "layoutMode": "grid",
         "sizing": {
@@ -551,10 +553,10 @@
     ],
     "usage": {
       "canvasArea": 1296000,
-      "coveredArea": 1001552,
-      "coverage": 0.7728024691358024,
+      "coveredArea": 993832,
+      "coverage": 0.7668456790123457,
       "largestEmptyBand": 0,
-      "focalShare": 0.25685185185185183,
+      "focalShare": 0.2712716049382716,
       "notes": []
     }
   },
@@ -584,7 +586,7 @@
       "x": 272,
       "y": 0,
       "width": 1168,
-      "height": 139
+      "height": 102
     },
     {
       "type": "createFrame",
@@ -592,9 +594,9 @@
       "parent": "root",
       "name": "Content",
       "x": 272,
-      "y": 171,
+      "y": 134,
       "width": 1168,
-      "height": 285
+      "height": 300
     },
     {
       "type": "createFrame",
@@ -602,9 +604,9 @@
       "parent": "root",
       "name": "Inspector",
       "x": 272,
-      "y": 488,
+      "y": 466,
       "width": 360,
-      "height": 190
+      "height": 201
     },
     {
       "type": "createFrame",
@@ -612,9 +614,9 @@
       "parent": "root",
       "name": "Support",
       "x": 272,
-      "y": 710,
+      "y": 699,
       "width": 1168,
-      "height": 190
+      "height": 201
     },
     {
       "type": "createText",
@@ -644,21 +646,12 @@
       "width": 363
     },
     {
-      "type": "createText",
-      "id": "data-disclosure",
-      "parent": "header",
-      "name": "Illustrative values — the screen is not ",
-      "x": 781.3299999999999,
-      "y": 24,
-      "width": 363
-    },
-    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "header",
       "name": "Schedule placement",
       "x": 781.3299999999999,
-      "y": 75,
+      "y": 24,
       "width": 164,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -760,7 +753,7 @@
       "id": "canvas-usage",
       "question": "Does the composition use the canvas it was given?",
       "status": "pass",
-      "detail": "coverage 77%, largest empty band 0%, focal share 26%.",
+      "detail": "coverage 77%, largest empty band 0%, focal share 27%.",
       "nodeIds": []
     },
     {
@@ -795,7 +788,7 @@
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "INDETERMINATE: 14 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 0 rule(s) checked, 0 failure(s), 0 needing judgement.",
       "nodeIds": []
     }
   ],

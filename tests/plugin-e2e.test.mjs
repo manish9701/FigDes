@@ -338,6 +338,7 @@ assert.equal(isError, false, `plan_screen failed: ${text.slice(0, 300)}`);
 test("design_guard agrees with the planner about a metric screen", async () => {
   const { data, text } = await callTool("design_guard", {
     project: "e2e",
+    profile: "exo",
     program: {
       canvas: { name: "Card wall", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],

@@ -7,6 +7,7 @@
   "brief": {
     "id": "brief",
     "product": "EXO Labs",
+    "profile": null,
     "screen": "Topology",
     "purpose": "See how the cluster is wired and where the traffic goes",
     "primaryDecision": "inspect the network topology of the fleet",
@@ -26,6 +27,7 @@
       "illustrative": true
     },
     "cleanConcept": false,
+    "onScreenDisclosure": false,
     "interactions": [
       {
         "from": "node topology",
@@ -378,21 +380,12 @@
       "width": 269
     },
     {
-      "type": "createText",
-      "id": "data-disclosure",
-      "parent": "rail",
-      "name": "Illustrative values — the screen is not ",
-      "x": 1155.2,
-      "y": 16,
-      "width": 269
-    },
-    {
       "type": "createFrame",
       "id": "slot-action-primary",
       "parent": "rail",
       "name": "Trace path",
-      "x": 585.6,
-      "y": 56,
+      "x": 1155.2,
+      "y": 16,
       "width": 105,
       "height": 40,
       "layoutMode": "HORIZONTAL"
@@ -511,7 +504,7 @@
       "id": "compiled-geometry",
       "question": "Does the resolved geometry agree with the program?",
       "status": "fail",
-      "detail": "layout: Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'. | layout: Connector 'connector-2' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate 'slot-6-node-topology' and 'slot-7-latency' to show direction, or set arrowEnd:false to own the plain line.",
+      "detail": "layout: Connector 'connector-1' passes within 8px of 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'. | layout: Connector 'connector-2' is shorter than its arrowheads need, so it is drawn as a plain line without heads. Separate 'slot-6-node-topology' and 'slot-7-latency' to show direction, or set arrowEnd:false to own the plain line.",
       "nodeIds": []
     },
     {
@@ -539,7 +532,7 @@
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "INDETERMINATE: 14 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 0 rule(s) checked, 0 failure(s), 0 needing judgement.",
       "nodeIds": []
     }
   ],
@@ -550,7 +543,7 @@
       "severity": "medium",
       "confidence": 0.8,
       "nodeIds": [],
-      "summary": "Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'.",
+      "summary": "Connector 'connector-1' passes within 8px of 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'.",
       "why": "The compiler measured this as a disagreement between what was asked for and what the geometry resolves to.",
       "evidence": {
         "kind": "rule",
@@ -578,7 +571,7 @@
   "violations": [
     {
       "rule": "layout",
-      "message": "Connector 'connector-1' passes within 8px of 'slot-action-primary', 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'."
+      "message": "Connector 'connector-1' passes within 8px of 'slot-heading-description' on its default routing. Move the node(s) off the edge or reroute with routing:'straight'."
     },
     {
       "rule": "layout",

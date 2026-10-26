@@ -27,7 +27,8 @@
 import { defaultGutter, inferComposition, layoutRegions, type Composition } from "../runtime/layout";
 import { deriveCompositionContract, type CompositionContract } from "../runtime/handoff";
 import type { Region } from "../../../shared/ir";
-import { defaultRules } from "../memory/rules-exo";
+import type { ProductRule } from "../../../shared/memory";
+import { profileForProduct } from "../memory/profiles";
 import { bestPattern } from "../design/grammar/matcher";
 import { deriveRegions, classifyInformation, type Derivation } from "../design/composition/derive";
 import { namesSpacingReason } from "../design/quality/type-criteria";
@@ -109,6 +110,28 @@ export interface ScreenIntent {
   primaryObject?: string;
   canvas?: { width?: number; height?: number; grid?: number };
   name?: string;
+  /**
+   * The resolved product profile for this project (GitHub issue #27), passed
+   * in by the tools layer after profile resolution — the planner itself never
+   * resolves one. `product` names the active profile ("exo"); its absence
+   * means a general, domain-neutral plan: no product archetype inference, no
+   * product lifecycle states, no product-specific placement truth and no
+   * product rule previews are allowed to enter.
+   */
+  product?: string;
+  /**
+   * The product truths active for this project (resolved along with the
+   * product). Preview rules reference THESE ids, never a hard-coded global
+   * set — so an unrelated project's plan cannot fire another product's rules.
+   */
+  rules?: ProductRule[];
+  /**
+   * The first-class artefact type the brief names ("editorial", "landing",
+   * "mobile", "identity"...). Artefacts shape composition at the plan level:
+   * the same decision reads differently on an editorial page than in an
+   * admin console, and the artefact decides which reading applies.
+   */
+  artefact?: string;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -245,18 +268,27 @@ const SHELLS: Record<DecisionKind, (intent: ScreenIntent) => PlannedRegion[]> = 
     ];
   },
 
-  /* Launching a model onto the fleet: the candidates compare in rows, and the
-     inspector carries the automatic placement recommendation — where the model
-     should run, required vs available memory, and the fit verdict. Placement is
-     recommended automatically (EXO product truth); the screen never presents
-     manual shard dragging as the way to place a model. The launch action itself
-     arrives as an action region when the caller names it (see planScreen). */
-  deploy: (intent) => [
-    { id: "nav", role: "navigation", composition: "instrument", width: 240, height: "fill", grow: 0, because: "orientation: where am I in the product" },
-    { id: "header", role: "header", composition: "editorial", width: "fill", height: 72, grow: 0, padding: 24, because: `the deployment decision, stated: "${intent.primaryDecision}"` },
-    { id: "candidates", role: "content", composition: "table", width: "fill", height: "fill", grow: 1, gap: 16, padding: 24, because: "the candidate deployments and models, each row carrying its fit verdict so the choice reads across rows rather than as a gallery" },
-    { id: "placement", role: "inspector", composition: "split-view", width: 360, height: "fill", grow: 0, gap: 24, because: "the automatic placement recommendation for the selected candidate: where it should run, required vs available memory, and the fit verdict — placement is recommended automatically, never arranged by dragging shards by hand" },
-  ],
+  /* Launching something onto infrastructure: the candidates compare in rows, and
+     the inspector carries the placement decision — where the thing should run,
+     required vs available capacity, and the fit verdict. When the active
+     project profile STATES a placement truth (EXO: placement is recommended
+     automatically, never dragged by hand), that truth is claimed; a general
+     project's deployment screen states it neutrally instead, because "the
+     system decides for you" is one product's truth, not the decision's. The
+     launch action itself arrives as an action region when the caller names it
+     (see planScreen). */
+  deploy: (intent) => {
+    const spec = profileForProduct(intent.product);
+    const placement = spec?.placementTruth
+      ? `the automatic placement recommendation for the selected candidate: where it should run, required vs available memory, and the fit verdict — ${spec.placementTruth}`
+      : "the placement decision for the selected candidate: where it should run, what is required against what is available, and the fit verdict — stated beside the launch, never discovered after it";
+    return [
+      { id: "nav", role: "navigation", composition: "instrument", width: 240, height: "fill", grow: 0, because: "orientation: where am I in the product" },
+      { id: "header", role: "header", composition: "editorial", width: "fill", height: 72, grow: 0, padding: 24, because: `the deployment decision, stated: "${intent.primaryDecision}"` },
+      { id: "candidates", role: "content", composition: "table", width: "fill", height: "fill", grow: 1, gap: 16, padding: 24, because: "the candidates, each row carrying what makes it eligible and its fit, so the choice reads across rows rather than as a gallery" },
+      { id: "placement", role: "inspector", composition: "split-view", width: 360, height: "fill", grow: 0, gap: 24, because: placement },
+    ];
+  },
 
   /* Watching state: an instrument. Status rail for at-a-glance, primary visual for
      the thing being watched. */
@@ -397,14 +429,18 @@ export function archetypeFor(name: string): ScreenArchetype | undefined {
 
 /**
  * Infers the archetype from the decision itself, when the caller did not name
- * one. Deterministic and deliberately narrow: it fires only for the `deploy`
- * kind, which no existing classification produces, so no other screen's plan
- * changes. A deployment decision about models is the model-fit screen (its
- * priorities — fit verdict, requires-vs-available, recommended config, run
- * action — are exactly what the plan must carry); one about the cluster or
- * fleet itself is the deployment screen.
+ * one. Deliberately narrow: it fires only for the `deploy` kind, which no
+ * existing classification produces, and ONLY while a profile that declares
+ * archetype inference is active (GitHub issue #27) — a product's known-screen
+ * inference must not apply to a general project's plan. Under the exo profile
+ * a deployment decision about models is the model-fit screen (its priorities —
+ * fit verdict, requires-vs-available, recommended config, run action — are
+ * exactly what the plan must carry); one about the cluster or fleet itself is
+ * the deployment screen.
  */
-function inferArchetypeFromDecision(kind: DecisionKind, decision: string): ScreenArchetype | undefined {
+function inferArchetypeFromDecision(kind: DecisionKind, decision: string, product: string | undefined): ScreenArchetype | undefined {
+  const spec = profileForProduct(product);
+  if (!spec?.archetypeInference) return undefined;
   if (kind !== "deploy") return undefined;
   if (/\bmodel\w*\b/i.test(decision)) return archetypeFor("model-fit");
   if (/\bcluster\b|\bfleet\b|\broll\s?out\b|\brollout\b|\bshard\b/i.test(decision)) return archetypeFor("deployment");
@@ -412,13 +448,139 @@ function inferArchetypeFromDecision(kind: DecisionKind, decision: string): Scree
 }
 
 /**
- * Resolves the archetype for an intent: stated by name wins, otherwise
- * inferred from the decision. Exported so callers (plan tools, the pipeline)
- * resolve the same archetype the planner resolves, instead of re-deriving it.
+ * Resolves the archetype for an intent: stated by name wins (explicitly
+ * requested — valid under any profile), otherwise inferred ONLY when the
+ * active product profile declares the inference. Exported so callers (plan
+ * tools, the pipeline) resolve the same archetype the planner resolves,
+ * instead of re-deriving it.
  */
-export function resolveArchetype(primaryDecision: string, archetype?: string): ScreenArchetype | undefined {
+export function resolveArchetype(primaryDecision: string, archetype?: string, product?: string): ScreenArchetype | undefined {
   if (archetype !== undefined) return archetypeFor(archetype);
-  return inferArchetypeFromDecision(classifyDecision(primaryDecision), primaryDecision);
+  return inferArchetypeFromDecision(classifyDecision(primaryDecision), primaryDecision, product);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Artefact types (GitHub issue #27 — P0)                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The artefact types an artefact-led plan can follow.
+ *
+ * Decision kind answers "what is the user doing here". Artefact type answers
+ * "what kind of thing am I designing" — and for several kinds, the artefact
+ * decides the composition, not the decision: an editorial page's structure is
+ * a reading rhythm whatever its decision; a landing page is a narrative with
+ * one conversion action; a narrow-viewport flow is one column. Treating the
+ * artefact as first-class input is what keeps FigDes from defaulting every
+ * brief into an application shell.
+ */
+export const ARTEFACT_TYPES = [
+  "product-ui", // application screens (the default decision-led path)
+  "mobile", // narrow-viewport form/workflow
+  "landing", // marketing page: narrative + one conversion action
+  "editorial", // long-form/typographic structure
+  "dataviz", // data visualisation with meaningful scales
+  "diagram", // technical/system diagram with real connections
+  "identity", // brand/identity exploration: editable vector geometry
+  "design-system", // system specimens: tokens, type ramp, components
+  "presentation", // decks: plan alongside format:'deck'
+] as const;
+
+export type ArtefactType = (typeof ARTEFACT_TYPES)[number];
+
+export function isArtefactType(artefact: string): artefact is ArtefactType {
+  return (ARTEFACT_TYPES as readonly string[]).includes(artefact);
+}
+
+interface ArtefactLayout {
+  regions: PlannedRegion[];
+  template: string;
+  why: string;
+  /** One adjustment the artefact makes to the canvas itself, when it does. */
+  canvas?: { width: number; height: number };
+}
+
+/**
+ * The composition each artefact-led type follows, with reasons.
+ *
+ * Written per type, like the decision shells: these encode actual design
+ * judgement and would reproduce the wrong thing if generated. Every region's
+ * `because` says why it exists in THIS artefact, not which slot it fills.
+ */
+const ARTEFACT_LAYOUTS: Record<Exclude<ArtefactType, "product-ui" | "presentation">, ArtefactLayout> = {
+  mobile: {
+    template: "mobile-flow",
+    why: "a narrow viewport is one column with thumb-reachable actions, never two panes side by side",
+    canvas: { width: 390, height: 844 },
+    regions: [
+      { id: "header", role: "header", composition: "editorial", width: "fill", height: 56, grow: 0, padding: 16, because: "where the flow stands: one line of orientation, no rail" },
+      { id: "steps", role: "content", composition: "editorial", width: "fill", height: "fill", grow: 1, gap: 16, padding: 16, because: "the inputs and validation, stacked one-column: readable at arm's length, thumb-reachable, with errors inline at the control" },
+      { id: "submit", role: "footer", composition: "editorial", width: "fill", height: 88, grow: 0, padding: 16, because: "the commit action, pinned and always visible: on a narrow viewport the primary action disappears into a scroll if it is not pinned" },
+    ],
+  },
+  landing: {
+    template: "landing-narrative",
+    why: "a marketing page is a narrative with one conversion action, not a product tour",
+    regions: [
+      { id: "hero", role: "primary-visual", composition: "editorial", width: "fill", height: 480, grow: 2, gap: 24, padding: 48, because: "the promise, stated once, beside the single conversion action — a visitor reads this in five seconds or leaves" },
+      { id: "proof", role: "content", composition: "editorial", width: "fill", height: 220, grow: 0, gap: 24, padding: 32, because: "the credibility band: results, names, one quote — evidence, not a second sales pitch" },
+      { id: "explain", role: "content", composition: "split-view", width: "fill", height: "fill", grow: 1, gap: 32, padding: 32, because: "how it works, narrated in order — this is where detail belongs, not in the hero" },
+      { id: "cta", role: "footer", composition: "editorial", width: "fill", height: 120, grow: 0, padding: 24, because: "the conversion action repeated once at the end of the narrative — not three CTAs competing mid-page" },
+    ],
+  },
+  editorial: {
+    template: "editorial-rhythm",
+    why: "long-form structure is a reading rhythm: one column, set for line length, with the piece's own furniture",
+    regions: [
+      { id: "masthead", role: "header", composition: "editorial", width: "fill", height: 160, grow: 0, padding: 40, because: "the piece's masthead: publication, title and standfirst — the first read leads" },
+      { id: "column", role: "content", composition: "editorial", width: 720, height: "fill", grow: 1, gap: 16, padding: 32, because: "the body, one column wide for a line length that stays readable (45-90 characters); hierarchy comes from the type ramp, not from boxes" },
+      { id: "furniture", role: "inspector", composition: "editorial", width: 280, height: "fill", grow: 0, gap: 16, because: "the piece's furniture set beside the column: pull-quotes, captions and footnotes, never competing with the body" },
+    ],
+  },
+  dataviz: {
+    template: "data-axes",
+    why: "a visualisation owes the reader real scales: axes, a legend, and the relationship the data actually has",
+    regions: [
+      { id: "titled", role: "header", composition: "editorial", width: "fill", height: 72, grow: 0, padding: 24, because: "the question the chart answers, stated plainly" },
+      { id: "chart", role: "primary-visual", composition: "instrument", width: "fill", height: "fill", grow: 1, gap: 24, padding: 24, because: "the chart itself, drawn as editable vectors with evident scales and labelled series — not rectangles approximating bars" },
+      { id: "legend", role: "inspector", composition: "split-view", width: 320, height: "fill", grow: 0, gap: 16, because: "the legend, units and data caveats beside the chart: a scale without units is decoration" },
+    ],
+  },
+  diagram: {
+    template: "relationship-map",
+    why: "a diagram is its connections: nodes and edges as one semantic structure, not shapes placed on a canvas",
+    regions: [
+      { id: "map", role: "primary-visual", composition: "topology", width: "fill", height: "fill", grow: 1, gap: 32, padding: 24, because: "the relationships themselves: nodes as connected objects carrying real edges, re-relatable when a node moves or resizes" },
+      { id: "legend", role: "inspector", composition: "split-view", width: 320, height: "fill", grow: 0, gap: 16, because: "labels, key and edge meanings: an unlabelled line shows nothing" },
+    ],
+  },
+  identity: {
+    template: "identity-exploration",
+    why: "identity work lives as geometry: marks drawn as editable vectors and specimens beside them, never a screenshot in a frame",
+    regions: [
+      { id: "marks", role: "primary-visual", composition: "canvas", width: "fill", height: "fill", grow: 1, padding: 40, because: "the mark explorations, drawn as editable vector geometry with real anchor points — the artefact of this screen is the geometry itself" },
+      { id: "palette", role: "content", composition: "editorial", width: 320, height: "fill", grow: 0, gap: 16, padding: 24, because: "the palette with names and values, and the restraint rule that governs using it" },
+      { id: "ramp", role: "inspector", composition: "split-view", width: 320, height: "fill", grow: 0, gap: 16, because: "the type ramp and lockup rules, so the identity survives outside this artboard" },
+    ],
+  },
+  "design-system": {
+    template: "system-specimens",
+    why: "a design-system artefact is its vocabulary: tokens, the type ramp and the component specimens that consume them",
+    regions: [
+      { id: "tokens", role: "content", composition: "table", width: 420, height: "fill", grow: 0, gap: 12, padding: 24, because: "the vocabulary: token names, values and where each is allowed, arranged for scanning rows" },
+      { id: "specimens", role: "primary-visual", composition: "canvas", width: "fill", height: "fill", grow: 1, gap: 32, padding: 32, because: "the components as instances, shown at real sizes with their states — a specimen that is a rebuilt rectangle lies about the system" },
+      { id: "ramp", role: "inspector", composition: "split-view", width: 320, height: "fill", grow: 0, gap: 16, because: "the type ramp with its sizes and use rules beside the specimens" },
+    ],
+  },
+};
+
+/** The artefact-led composition for a named type, or null for product-ui. */
+export function artefactLayout(artefact: string | undefined): ArtefactLayout | null {
+  if (artefact === undefined) return null;
+  if (isArtefactType(artefact) === false) return null;
+  if (artefact === "product-ui" || artefact === "presentation") return null;
+  const layout = ARTEFACT_LAYOUTS[artefact as Exclude<ArtefactType, "product-ui" | "presentation">];
+  return layout ?? null;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -464,7 +626,7 @@ function intentWarnings(intent: ScreenIntent, regions: PlannedRegion[]): string[
   }
 
   if (!intent.audience) {
-    out.push("No audience given. Density and vocabulary will default to a general consumer, which is rarely right for infrastructure tooling.");
+    out.push("No audience given. Density and vocabulary will default to a general consumer; name the audience if that is not right.");
   }
 
   return out;
@@ -586,10 +748,27 @@ export interface ScreenPlan {
     states?: string[];
     /** The primary object the caller named, echoed. */
     primaryObject?: string;
+    /** The resolved product id this plan was planned under, when one is. */
+    product?: string;
+    /** The artefact type the brief named, echoed. */
+    artefact?: string;
   };
   composition: Composition;
   /** The named screen template this plan follows (spec §14). */
   template: ScreenTemplate;
+  /**
+   * The artefact-led composition the plan follows, when the brief named an
+   * artefact that owns one (issue #27). Absent for decision-led plans.
+   */
+  artefact?: { type: string; why: string };
+  /**
+   * The product profile this plan was planned under: the resolved product
+   * (null = general, domain-neutral) and how many product rules were active
+   * for preview checks. The tools layer attaches WHERE the profile resolved
+   * from (argument, memory, key or none) as `profileSource`.
+   */
+  profile: { product: string | null; ruleCount: number };
+  profileSource?: string;
   /**
    * The archetype this plan follows — stated by the caller or inferred from
    * the decision (see resolveArchetype) — when one resolves.
@@ -701,8 +880,12 @@ export interface ArtDirection {
 export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   const intent: ScreenIntent = { ...rawIntent };
 
-  const width = typeof intent.canvas?.width === "number" ? intent.canvas.width : 1440;
-  const height = typeof intent.canvas?.height === "number" ? intent.canvas.height : 900;
+  // An artefact-led composition takes priority over the canvas default: a
+  // mobile flow plans at 390x844 unless the caller sized the canvas itself.
+  const artefact = artefactLayout(intent.artefact);
+
+  const width = typeof intent.canvas?.width === "number" ? intent.canvas.width : (artefact?.canvas?.width ?? 1440);
+  const height = typeof intent.canvas?.height === "number" ? intent.canvas.height : (artefact?.canvas?.height ?? 900);
   const grid = typeof intent.canvas?.grid === "number" && intent.canvas.grid > 0 ? intent.canvas.grid : 8;
 
   let decisionKind = classifyDecision(intent.primaryDecision);
@@ -724,68 +907,94 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
     }
   }
 
-  // The archetype this plan follows: stated by name, else inferred from the
-  // decision. Its priority items compile into the plan's required information
-  // below, so a known screen's information priorities are plan material
-  // rather than echoed metadata.
-  const archetype = resolveArchetype(intent.primaryDecision, intent.archetype);
+  // The archetype this plan follows: stated by name (valid under any
+  // profile, because it is explicitly requested), else inferred from the
+  // decision — and inference applies only while a product profile that
+  // declares it is active (issue #27). Its priority items compile into the
+  // plan's required information below, so a known screen's information
+  // priorities are plan material rather than echoed metadata.
+  const archetype = resolveArchetype(intent.primaryDecision, intent.archetype, intent.product);
 
-  // Task-driven derivation first: regions serve the actual information for the
-  // stated decision, with the pattern as guidance. Shells are the explicit
-  // fallback when there is nothing classifiable to derive from.
-  // The visual direction biases pattern matching (a stated "editorial" manner
-  // should pull the editorial pattern up) but never overrides the decision
-  // kind: manner is a preference, the task is the requirement.
-  //
-  // `deploy` is the exception: the derivation vocabulary has no deploy-specific
-  // branch, so an unhandled kind would fall into the generic inspect shell and
-  // lose the deployment decision's structural requirements — the automatic
-  // placement recommendation, the requires-vs-available fit and the launch
-  // step. Those are product truths of the decision, not derivations from
-  // information kinds, so deploy always uses its shell.
+  // Region derivation order (see below). The visual direction biases pattern
+  // matching (a stated "editorial" manner should pull the editorial pattern
+  // up) but never overrides the decision kind: manner is a preference, the
+  // task is the requirement. `deploy` still uses its shell rather than a
+  // derivation, because the placement decision, the required-vs-available fit
+  // and the launch step are structural to the decision, not derivable from
+  // information kinds — and under a product profile the shell claims that
+  // product's placement truth, never all products'.
   const patternForPlan = bestPattern(decisionKind, [intent.goal ?? intent.primaryDecision, intent.visualDirection ?? ""].join(" "));
-  const derived =
-    decisionKind === "deploy"
-      ? null
-      : deriveRegions({
-          decisionKind,
-          primaryDecision: intent.primaryDecision,
-          info: intent.availableInformation ?? [],
-          ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
-          ...(patternForPlan ? { pattern: patternForPlan } : {}),
-          ...(intent.components !== undefined ? { components: intent.components } : {}),
-        });
+
+  /**
+   * Region source, in priority order (issue #27):
+   * 1. an explicit artefact type that owns its own composition — the artefact
+   *    decides, because an editorial rhythm or a mobile flow is not the
+   *    product's decision structure, whatever the decision is;
+   * 2. the task-derived composition, which serves the actual information for
+   *    the stated decision;
+   * 3. the decision-kind shell, the explicit fallback when nothing is
+   *    classifiable to derive from.
+   */
   let regions: PlannedRegion[];
   let derivation: Derivation;
-  if (derived) {
-    regions = derived.regions.map((r) => ({
-      id: r.id,
-      role: r.role,
-      composition: r.composition,
-      width: r.width,
-      height: r.height,
-      grow: r.grow,
-      ...(r.gap !== undefined ? { gap: r.gap } : {}),
-      ...(r.padding !== undefined ? { padding: r.padding } : {}),
-      because: r.because,
-      ...(r.reuse !== undefined ? { reuse: r.reuse } : {}),
-    }));
-    derivation = derived.derivation;
-  } else {
-    regions = SHELLS[decisionKind](intent);
-    const attempted = classifyInformation(intent.availableInformation ?? []);
+  let regionSource: "artefact" | "derived" | "shell" = "derived";
+  if (artefact !== null) {
+    regions = artefact.regions.map((r) => ({ ...r }));
     derivation = {
-      strategy: "shell-fallback",
+      strategy: "artefact-composition",
       pattern: patternForPlan?.id ?? null,
-      infoKinds: [],
-      information: attempted,
-      unclassified: attempted.filter((i) => i.kind === "unknown").map((i) => i.text),
-      appliedGuidance: [],
-      note:
-        decisionKind === "deploy"
-          ? "Deploy uses the deployment shell even when information is classifiable: the automatic placement recommendation, the requires-vs-available fit and the launch action are structural to the decision, not derivable from information kinds."
-          : "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
+      infoKinds: classifyInformation(intent.availableInformation ?? []).map((i) => i.kind),
+      information: classifyInformation(intent.availableInformation ?? []),
+      unclassified: classifyInformation(intent.availableInformation ?? []).filter((i) => i.kind === "unknown").map((i) => i.text),
+      appliedGuidance: [
+        `The brief names the artefact '${intent.artefact}'; the plan follows that artefact's composition (${artefact.template}). Stated information drives the content that fills it.`,
+      ],
+      note: artefact.why,
     };
+    regionSource = "artefact";
+  } else {
+    const derived =
+      decisionKind === "deploy"
+        ? null
+        : deriveRegions({
+            decisionKind,
+            primaryDecision: intent.primaryDecision,
+            info: intent.availableInformation ?? [],
+            ...(intent.existingPatterns !== undefined ? { existingPatterns: intent.existingPatterns } : {}),
+            ...(patternForPlan ? { pattern: patternForPlan } : {}),
+            ...(intent.components !== undefined ? { components: intent.components } : {}),
+          });
+    if (derived) {
+      regions = derived.regions.map((r) => ({
+        id: r.id,
+        role: r.role,
+        composition: r.composition,
+        width: r.width,
+        height: r.height,
+        grow: r.grow,
+        ...(r.gap !== undefined ? { gap: r.gap } : {}),
+        ...(r.padding !== undefined ? { padding: r.padding } : {}),
+        because: r.because,
+        ...(r.reuse !== undefined ? { reuse: r.reuse } : {}),
+      }));
+      derivation = derived.derivation;
+    } else {
+      regions = SHELLS[decisionKind](intent);
+      const attempted = classifyInformation(intent.availableInformation ?? []);
+      derivation = {
+        strategy: "shell-fallback",
+        pattern: patternForPlan?.id ?? null,
+        infoKinds: [],
+        information: attempted,
+        unclassified: attempted.filter((i) => i.kind === "unknown").map((i) => i.text),
+        appliedGuidance: [],
+        note:
+          decisionKind === "deploy"
+            ? "Deploy uses the deployment shell even when information is classifiable: the placement decision, the required-vs-available fit and the launch action are structural to the decision, not derivable from information kinds."
+            : "No classifiable information to derive from: kind shell used explicitly. Name the data you actually have for a task-derived composition.",
+      };
+      regionSource = "shell";
+    }
   }
 
   // Action intent: when the caller names the primary action, it must have a
@@ -842,7 +1051,7 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
   // An explicit density preference overrides pattern gap guidance only. It
   // never reorders regions or changes grow: manner adjusts spacing, the task
   // still decides structure. Recorded so the override is auditable.
-  if (intent.densityPreference !== undefined && derived) {
+  if (intent.densityPreference !== undefined && regionSource === "derived") {
     const gap = intent.densityPreference === "low" ? 32 : intent.densityPreference === "high" ? 12 : 24;
     for (const r of regions) r.gap = gap;
     derivation.appliedGuidance.push(`Explicit density preference '${intent.densityPreference}': region gaps set to ${gap}px, pattern density overridden for spacing only.`);
@@ -985,9 +1194,16 @@ export function planScreen(rawIntent: ScreenIntent): ScreenPlan {
       ...(intent.secondaryActions !== undefined ? { secondaryActions: intent.secondaryActions } : {}),
       ...(intent.states !== undefined ? { states: intent.states } : {}),
       ...(intent.primaryObject !== undefined ? { primaryObject: intent.primaryObject } : {}),
+      ...(intent.product !== undefined ? { product: intent.product } : {}),
+      ...(intent.artefact !== undefined ? { artefact: intent.artefact } : {}),
     },
     composition,
-    template: templateFor(decisionKind),
+    template:
+      artefact !== null
+        ? { name: artefact.template, kinds: [], why: artefact.why }
+        : templateFor(decisionKind),
+    ...(artefact !== null ? { artefact: { type: String(intent.artefact), why: artefact.why } } : {}),
+    profile: { product: intent.product ?? null, ruleCount: (intent.rules ?? []).length },
     ...(archetype !== undefined ? { archetype } : {}),
     requiredInformation,
     derivation,
@@ -1153,39 +1369,22 @@ function directArt(
   };
 
   const BASE_STATES = ["default", "hover", "selected", "disabled", "loading", "empty", "error", "success"];
-  const RUNTIME_STATES = [
-    "device connecting",
-    "model downloading",
-    "model preparing",
-    "model fitting",
-    "model loading",
-    "inference running",
-    "device unavailable",
-    "cluster degraded",
-  ];
   /**
-   * Deployment-relevant runtime states. A deployment screen expresses the
-   * model's transfer/fit lifecycle and the fleet's availability, plus the
-   * two states the decision itself passes through: validation and readiness
-   * to launch. These are advisory art-direction strings — the runtime's
-   * state-strip expansion maps recognised names and warns on unknown ones,
-   * so no exact-match consumer breaks.
+   * Lifecycle states come from the ACTIVE product profile (issue #27): the
+   * words a product uses for its objects' states are product vocabulary, and
+   * a general project's plan carries none of it. A general deployment still
+   * expresses its two decision-level states (validation and launch
+   * readiness); everything beyond that, the brief declares via `states`,
+   * which is always merged below.
    */
-  const DEPLOY_RUNTIME_STATES = [
-    "model downloading",
-    "model preparing",
-    "model fitting",
-    "model loading",
-    "device unavailable",
-    "cluster degraded",
-    "validating",
-    "ready to launch",
-  ];
+  const spec = profileForProduct(intent.product);
+  const profileStates = (spec?.runtimeStates as Record<string, string[] | undefined> | undefined)?.[kind] ?? [];
+  const GENERAL_DEPLOY_STATES = ["validating", "ready to launch"];
   let interactionStates =
     kind === "deploy"
-      ? [...BASE_STATES, "focused", ...DEPLOY_RUNTIME_STATES]
-      : kind === "topology" || kind === "monitor"
-        ? [...BASE_STATES, ...RUNTIME_STATES]
+      ? [...BASE_STATES, "focused", ...profileStates, ...GENERAL_DEPLOY_STATES]
+      : (kind === "topology" || kind === "monitor") && profileStates.length > 0
+        ? [...BASE_STATES, ...profileStates]
         : kind === "select" || kind === "explore"
           ? [...BASE_STATES, "focused"]
           : BASE_STATES;
@@ -1211,7 +1410,7 @@ function directArt(
     hierarchy,
     componentStrategy,
     visualizationStrategy: VISUALIZATION[kind],
-    compositionPrinciples: compositionPrinciples(kind),
+    compositionPrinciples: compositionPrinciples(kind, intent.product),
     avoid: compositionAvoid(kind),
     interactionStates,
     designRisks,
@@ -1299,10 +1498,10 @@ function buildVisualDirections(
   }
   return Object.values(base).map((d) => ({ ...d, principle: d.principle + " Focal: " + focalLabel + "." }));
 }
-function compositionPrinciples(kind: DecisionKind): string[] {
+function compositionPrinciples(kind: DecisionKind, product?: string): string[] {
   const map: Record<DecisionKind, string[]> = {
     select: ["Make one option visually selected; use alignment for comparison, not containers.", "Keep the inspector subordinate to the option field."],
-    deploy: ["The candidate rows carry their own fit verdicts, so the choice reads without opening detail.", "The placement recommendation is automatic and shown as a verdict — never present manual shard dragging as the way to place a model."],
+    deploy: ["The candidate rows carry their own fit verdicts, so the choice reads without opening detail.", "The placement recommendation is automatic and shown as a verdict — the placement is computed for the user, not assembled by hand."],
     compare: ["Give both subjects equal structural treatment, then make the meaningful difference dominant.", "Avoid equal-weight decorative panels."],
     monitor: ["The live signal owns the canvas; telemetry supports it.", "Use one continuous instrument surface before adding cards."],
     topology: ["Relationships are the content: nodes, edges and state read as one spatial system.", "Use open space to separate clusters instead of boxing every node."],
@@ -1312,13 +1511,20 @@ function compositionPrinciples(kind: DecisionKind): string[] {
     integration: ["Connection state is visible in the provider field.", "Endpoint detail stays subordinate to provider choice."],
     author: ["The work surface is the screen; controls frame it.", "Do not turn the workspace into settings cards."],
   };
-  return map[kind];
+  const principles = map[kind];
+  // A product profile contributes its own placement claim (issue #27): the
+  // EXO fleet vocabulary above is an ordinary profile statement, active only
+  // under that product's projects.
+  const spec = profileForProduct(product);
+  const placementClaim = spec?.placementTruth;
+  if (kind === "deploy" && placementClaim) return [...principles, placementClaim];
+  return principles;
 }
 
 function compositionAvoid(kind: DecisionKind): string[] {
   const map: Record<DecisionKind, string[]> = {
     select: ["marketing-card grid", "three equal KPI cards", "chat-first composition"],
-    deploy: ["manual shard dragging as the placement surface", "launch action hidden in chrome", "candidate cards without fit verdicts"],
+    deploy: ["dragging placement pieces together by hand instead of using the recommendation", "launch action hidden in chrome", "candidate cards without fit verdicts"],
     compare: ["generic SaaS split-card template", "decorative symmetry without semantic comparison"],
     monitor: ["KPI card wall", "static dashboard pretending to be live", "multiple competing status rails"],
     topology: ["boxed node grid", "unlabelled connector spaghetti", "sidebar replacing the topology"],
@@ -1509,17 +1715,29 @@ function viableAlternatives(composition: Composition, kind: DecisionKind): Array
 function previewRules(regions: PlannedRegion[], intent: ScreenIntent): Array<{ rule: string; therefore: string }> {
   const out: Array<{ rule: string; therefore: string }> = [];
 
+  /**
+   * Product rules are checked ONLY against the rules the active project
+   * profile resolved (GitHub issue #27) — never against a hard-coded global
+   * set. A metric-led screen under the exo profile previews the metric-wall
+   * truth it declares; the same screen on a general project previews nothing
+   * product-specific (the always-on generic-plan audit still runs).
+   */
+  const spec = profileForProduct(intent.product);
+  const metricWallRuleId = spec?.metricWallRuleId ?? null;
+  const metricWallRule =
+    metricWallRuleId !== null
+      ? (intent.rules ?? []).find((r) => r.id === metricWallRuleId) ??
+        (spec ? spec.rules.find((r) => r.id === metricWallRuleId) : undefined)
+      : undefined;
+
   const metricish = /metric|total|count|average|avg|percentage|kpi|stat/i.test(intent.primaryDecision);
   const hasCardishRegion = regions.some((r) => r.id === "content" && (r.composition === "table" || r.composition === "canvas"));
 
-  if (metricish && hasCardishRegion) {
-    const rule = defaultRules().find((r) => r.id === "exo.no-generic-saas");
-    if (rule) {
-      out.push({
-        rule: rule.id,
-        therefore: `The decision is phrased as a metric and this plan has a content region that could become a card row. ${rule.therefore} Keep the metric as one readout inside a wider surface, not as the screen's organising idea.`,
-      });
-    }
+  if (metricish && hasCardishRegion && metricWallRule) {
+    out.push({
+      rule: metricWallRule.id,
+      therefore: `The decision is phrased as a metric and this plan has a content region that could become a card row. ${metricWallRule.therefore} Keep the metric as one readout inside a wider surface, not as the screen's organising idea.`,
+    });
   }
 
   const railCount = regions.filter((r) => r.role === "status-rail").length;

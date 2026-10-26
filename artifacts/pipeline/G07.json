@@ -7,6 +7,7 @@
   "brief": {
     "id": "brief",
     "product": "EXO Labs",
+    "profile": null,
     "screen": "Incident Console",
     "purpose": "See the health of the fleet and decide where to intervene",
     "primaryDecision": "diagnose why a job failed",
@@ -31,6 +32,7 @@
       "illustrative": true
     },
     "cleanConcept": false,
+    "onScreenDisclosure": false,
     "interactions": [],
     "viewport": {
       "width": 1440,
@@ -697,20 +699,11 @@
       "width": 218
     },
     {
-      "type": "createText",
-      "id": "data-disclosure",
-      "parent": "support",
-      "name": "Illustrative values — the screen is not ",
-      "x": 724.8,
-      "y": 24,
-      "width": 218
-    },
-    {
       "type": "createFrame",
       "id": "slot-5-cluster-health",
       "parent": "support",
       "name": "cluster health — Degraded",
-      "x": 958.4000000000001,
+      "x": 724.8,
       "y": 24,
       "width": 171,
       "height": 22,
@@ -806,7 +799,7 @@
       "id": "product-guard",
       "question": "Does the build pass the product's own rules?",
       "status": "review",
-      "detail": "INDETERMINATE: 14 rule(s) checked, 0 failure(s), 2 needing judgement.",
+      "detail": "INDETERMINATE: 0 rule(s) checked, 0 failure(s), 0 needing judgement.",
       "nodeIds": []
     }
   ],

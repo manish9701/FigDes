@@ -81,7 +81,7 @@ test("discovery escalation states its purpose and caps at phase 3", () => {
 
 test("second screen for the same product inherits context without rediscovery", () => {
   const d = assembleDiscovery({ file: { fileName: "EXO", currentPage: { id: "p", name: "S" } } });
-  const ctx = buildDesignContext({ discovery: d, audience: ["operator"] });
+  const ctx = buildDesignContext({ discovery: d, audience: ["operator"], product: "exo" });
   assert.equal(ctx.productName, "EXO");
   assert.deepEqual(ctx.audience, ["operator"]);
   assert.ok(ctx.antiPatterns.some((a) => a.id === "exo.no-card-wall"), "EXO anti-patterns travel with the context");

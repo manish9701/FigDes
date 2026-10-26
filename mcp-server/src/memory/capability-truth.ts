@@ -273,7 +273,8 @@ export interface CapabilityFinding {
 }
 
 export interface CapabilityTruthReport {
-  verdict: "PASS" | "WARNING" | "FAIL" | "INDETERMINATE";
+  /** NOT EVALUATED: the stage is scoped to a product the run did not assume. */
+  verdict: "PASS" | "WARNING" | "FAIL" | "INDETERMINATE" | "NOT EVALUATED";
   findings: CapabilityFinding[];
   source: ExoCapabilitySource;
   reason: string;

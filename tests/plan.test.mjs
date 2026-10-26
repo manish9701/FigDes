@@ -517,7 +517,7 @@ test("art direction names the focal region and ranks the rest", () => {
 });
 
 test("topology decisions get EXO runtime states", () => {
-  const plan = planScreen({ primaryDecision: "show network topology", availableInformation: ["nodes"] });
+  const plan = planScreen({ primaryDecision: "show network topology", availableInformation: ["nodes"], product: "exo" });
   assert.ok(plan.artDirection.interactionStates.includes("cluster degraded"));
   assert.ok(plan.artDirection.interactionStates.includes("model fitting"));
 });
@@ -655,6 +655,7 @@ test("rejectGenericDashboard refuses the dashboard shape instead of ignoring it"
   const out = buildPlan({
     primaryDecision: "select a model",
     availableInformation: ["a"],
+    profile: "exo",
     artDirection: {
       visualCharacter: "technical precise calm",
       primaryFocalObject: "comparison field",

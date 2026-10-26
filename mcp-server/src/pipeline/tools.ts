@@ -34,8 +34,9 @@ import type { MetricsReport, TransactionResult } from "../../../shared/protocol"
 import { runRules } from "../review/rules";
 import { verifyRepairs } from "../review/verdict";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
+import { assertKnownProfile, profileForProduct } from "../memory/profiles";
 import { runGuard, snapshotFromMetrics } from "../memory/tools";
-import { checkCapabilityTruth } from "../memory/capability-truth";
+import { checkCapabilityTruth, EXO_CAPABILITY_SOURCE, type CapabilityTruthReport } from "../memory/capability-truth";
 import { contentRevision } from "../design/quality/revision";
 import { analyzeScreenshot, type ScreenshotAnalysis } from "../design/quality/screenshot-qa";
 import { guardMutation, resolveExistingResources } from "../plan/gate";
@@ -153,6 +154,27 @@ const COMPOSITION_ALIASES: Record<string, string[]> = {
   comparison: ["split-view"],
   "split-view": ["comparison"],
 };
+
+/**
+ * The pipeline's product channel (GitHub issue #27): the brief's explicit
+ * `profile` id names a registered profile and is validated (an unknown one
+ * fails loudly instead of silently planning general); the display `product`
+ * name is descriptive text that only becomes a profile when it matches one.
+ * Returns the id exactly as the tool layer hands it to `effectiveRules`, or
+ * null for a run with no profile: general, domain-neutral defaults.
+ */
+function resolvePipelineProfile(brief: { profile?: string | null; product: string | null }): string | null {
+  if (brief.profile !== undefined && brief.profile !== null) {
+    assertKnownProfile(brief.profile);
+    return brief.profile;
+  }
+  // The display name keeps its pre-profile behaviour: it applies only when it
+  // finds a registered profile (case-insensitive), and the CANONICAL id is
+  // handed downstream — the display text "EXO"/"EXO Labs" is not itself a
+  // profile id, and effectiveRules must be fed registry keys (issue #27).
+  const matched = profileForProduct(brief.product ?? undefined);
+  return matched ? matched.id : null;
+}
 
 export function compositionMatches(requested: string | null | undefined, applied: string | null | undefined): boolean {
   if (typeof requested !== "string" || typeof applied !== "string") return false;
@@ -294,10 +316,14 @@ export async function designPipelineTool(
   const blocking = blockers.filter((b) => b.severity === "blocking");
 
   // Product rules are loaded once, before any build stage: the runtime guard at
-  // build time and the final guard both check against the merged set — built-in
-  // EXO truths plus every rule recorded for this project via project_memory —
-  // so a recorded rule is enforced during generation, not only at final review.
+  // build time and the final guard both check against the merged set — the
+  // active profile's truths plus every rule recorded for this project via
+  // project_memory — so a recorded rule is enforced during generation, not only
+  // at final review. The profile channel (issue #27): the brief's explicit
+  // `profile` id named first ("exo"); the display `product` name remains a
+  // descriptive fallback that only applies when it finds a registered profile.
   const { memory } = loadMemory(projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined));
+  const resolvedPipelineProduct = resolvePipelineProfile(brief);
   if (blocking.length > 0) {
     // Nothing is created. The brief is contradictory, and a screen built from
     // a contradictory brief is a screen that is wrong in a way nobody can
@@ -447,7 +473,7 @@ export async function designPipelineTool(
   // content's heights. So the first compile resolves the widths, the plugin
   // measures the text at them, and the second compile lays the screen out with
   // the heights Figma will really produce.
-  const firstPass = executeRuntime(built.program, { rules: effectiveRules(memory) }) as unknown as CompiledProgram;
+  const firstPass = executeRuntime(built.program, { rules: effectiveRules(memory, resolvedPipelineProduct) }) as unknown as CompiledProgram;
   const widths = new Map<string, number>();
   for (const [id, box] of firstPass.boxes) widths.set(id, box.w);
   // Issue #25 RC1: the first pass's operations go to the measurement so
@@ -457,8 +483,8 @@ export async function designPipelineTool(
   const refined = applyMeasuredWidths(built.program, firstPass.boxes);
   const compiled = (
     measured.metrics.size > 0
-      ? executeRuntime(refined.program, { textMetrics: measured.metrics, rules: effectiveRules(memory) })
-      : executeRuntime(refined.program, { rules: effectiveRules(memory) })
+      ? executeRuntime(refined.program, { textMetrics: measured.metrics, rules: effectiveRules(memory, resolvedPipelineProduct) })
+      : executeRuntime(refined.program, { rules: effectiveRules(memory, resolvedPipelineProduct) })
   ) as unknown as CompiledProgram;
   const program = refined.measured > 0 ? refined.program : built.program;
   const operations = compiled.operations as Array<Record<string, unknown>>;
@@ -1249,13 +1275,28 @@ export async function designPipelineTool(
   if (finalMetrics !== null) {
     try {
       const snapshot = snapshotFromMetrics(finalMetrics, rootNodeId ?? undefined);
-      // Checklist #14: the applied set is the merge — built-in EXO truths plus
-      // the rules recorded for THIS project via project_memory — so a rule the
-      // user recorded is enforced during generation, not only at final review.
-      const guarded = runGuard(effectiveRules(memory), snapshot);
+      // Checklist #14: the applied set is the merge — the active profile's
+      // truths plus the rules recorded for THIS project via project_memory —
+      // so a rule the user recorded is enforced during generation, not only at
+      // final review. The brief's profile channel resolves it (issue #27).
+      const guarded = runGuard(effectiveRules(memory, resolvedPipelineProduct), snapshot);
       // The capability-truth stage runs beside the design rules: what the
-      // screen claims is checked even when how it behaves checks clean.
-      const capability = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });
+      // screen claims is checked even when how it behaves checks clean. The
+      // claim registry is profile data (issue #27): it runs only while the
+      // resolved profile declares one, and the reasons otherwise state why.
+      const capabilityProfile = profileForProduct(resolvedPipelineProduct);
+      const capability =
+        capabilityProfile?.capabilityRegistry != null && capabilityProfile.capabilityRegistry === capabilityProfile.id
+          ? checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] })
+          : {
+              verdict: "NOT EVALUATED",
+              findings: [],
+              source: EXO_CAPABILITY_SOURCE,
+              reason:
+                capabilityProfile === undefined
+                  ? "No product profile is resolved for this run, and the capability-claim registry is product-specific; claim integrity was not checked here. Pass the brief's profile id or record it to enable the stage."
+                  : `The resolved profile ('${capabilityProfile.id}') declares no capability-claim registry, so claim integrity was not checked here.`,
+            };
       finalGuard = {
         verdict: capability.verdict === "FAIL" && guarded.verdict !== "FAIL" ? "FAIL" : capability.verdict !== "PASS" && guarded.verdict === "PASS" ? "WARNING" : guarded.verdict,
         rulesChecked: guarded.stats?.rulesChecked ?? 0,

@@ -363,6 +363,7 @@ export function normalizeBrief(input: BriefInput, id = "brief"): {
   const brief: NormalizedBrief = {
     id,
     product: input.product?.trim() || null,
+    profile: input.profile?.trim() || null,
     screen: screen || decision || "Untitled screen",
     purpose: purpose || decision,
     primaryDecision: decision || purpose,

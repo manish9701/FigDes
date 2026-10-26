@@ -395,6 +395,30 @@ export function decideGuardTarget(
 }
 
 export function runGuard(rules: ProductRule[], snapshot: GuardSnapshot): GuardResult {
+  // No product rules active (issue #27): a project that resolved to no
+  // profile carries none, and the guard must say so rather than report a
+  // PASS that silently attributes another product's approval to it.
+  if (rules.length === 0) {
+    const notes = snapshotHasEvidence(snapshot)
+      ? `${snapshot.scope?.nodeCount ?? 0} node(s) were inspected for the generic-composition review, but no product narrows were active.`
+      : "The snapshot itself was empty.";
+    return {
+      verdict: "INDETERMINATE",
+      findings: [
+        {
+          verdict: "INDETERMINATE",
+          rule: "profile",
+          message:
+            `No product rules were active for this project, so nothing product-specific was checked. ${notes} ` +
+            "Record product rules via project_memory, or pass the project's profile explicitly; the generic composition review still applies. This is not an approval.",
+          evidence: "rulesActive: 0",
+          nextStep: "Pass the project's product profile, or record its rules with project_memory(action:'record'), then re-run.",
+        },
+      ],
+      stats: { rulesChecked: 0, passed: 0, warnings: 0, failures: 0, manual: 0 },
+    };
+  }
+
   // An empty snapshot short-circuits before any rule runs. Every rule here
   // passes on absence, so a guard with nothing to measure reports PASS for all
   // of them — which reads as "the guard approved this design" when in truth

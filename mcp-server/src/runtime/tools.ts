@@ -21,7 +21,7 @@ import { scoreDesign } from "../review/score";
 import { preflightCheckTag, validateTransaction } from "../preflight";
 import { effectiveRules, loadMemory, projectKey } from "../memory/store";
 import { runGuard, snapshotFromIR } from "../memory/guard";
-import { defaultRules } from "../memory/rules-exo";
+import { resolveProfile } from "../memory/profiles";
 import { assessIRIntelligence, assessRuntimeIntelligence, planlessScreenRefusal, programRegionCount } from "../design/intelligence-gate";
 import { recordPlanlessScreenRefusal, recordProvenanceWaiver } from "../metrics";
 import { contentRevision } from "../design/quality/revision";
@@ -207,10 +207,15 @@ export const RuntimeArgs = z
      * and stated: chunked builds take one undo per chunk, not one undo total.
      */
     chunked: z.boolean().optional().describe("Build in sequential chunked transactions. For large programs."),
+    /**
+     * The product profile for this build (GitHub issue #27). Omitted =
+     * resolved from the project's memory; none = no product rules apply.
+     */
+    profile: z.string().max(80).optional(),
   })
   .strict();
 
-export const CompileArgs = z.object({ ir: DesignIRSchema, dryRun: z.boolean().optional() }).strict();
+export const CompileArgs = z.object({ ir: DesignIRSchema, dryRun: z.boolean().optional(), profile: z.string().max(80).optional() }).strict();
 
 /**
  * Issue #29 — how many top-level regions make a program a SCREEN rather than
@@ -577,11 +582,14 @@ export async function runRuntimeTool(
   // compiler only hands a text-holding region to Figma's own layout when every
   // text child carries a measurement (see compile.ts), so a measured recompile
   // that declines no container stands on the truth, not on the heuristic.
-  // Checklist #14: a build is guarded against the merged rule set — built-in
-  // EXO truths plus every rule recorded for this project via project_memory —
-  // so a recorded rule is enforced during generation, not only at final review.
+  // Checklist #14: a build is guarded against the merged rule set — the
+  // active profile's truths plus every rule recorded for this project via
+  // project_memory — so a recorded rule is enforced during generation, not
+  // only at final review. The profile resolves from the brief's explicit
+  // argument first, then the project memory; a project that resolves to
+  // neither builds with no product rules active (issue #27).
   const { memory: projectMemory } = loadMemory(projectKey(session?.fileKey ?? undefined, session?.fileName ?? undefined));
-  const rules = effectiveRules(projectMemory);
+  const rules = effectiveRules(projectMemory, parsed.profile);
   const firstPass = executeRuntime(styledProgram, { rules });
   let compiled = firstPass;
   let measuredCount = 0;
@@ -1366,7 +1374,12 @@ export function compileIrTool(args: unknown): unknown {
   // named) and the product guard (run on every compile, reported on every
   // payload — the same truths the interpreter enforces at build time).
   const intelligence = assessIRIntelligence(parsed.ir);
-  const guard = runGuard(defaultRules(), snapshotFromIR(parsed.ir, { composition: inferComposition(parsed.ir.regions) }));
+  // The product guard resolves its rules from the project (issue #27): the
+  // brief may name a profile explicitly; otherwise nothing product-specific
+  // is assumed, and the guard reports zero rules honestly instead of
+  // inheriting one product's truths as global defaults.
+  const rules = resolveProfile({ explicit: parsed.profile }).rules;
+  const guard = runGuard(rules, snapshotFromIR(parsed.ir, { composition: inferComposition(parsed.ir.regions) }));
 
   return {
     status: !compiled.applicable ? "not-applicable" : compiled.violations.length > 0 ? "completed-with-violations" : "completed",
@@ -1387,6 +1400,7 @@ export function compileIrTool(args: unknown): unknown {
       failures: guard.stats.failures,
       warnings: guard.stats.warnings,
       manual: guard.stats.manual,
+      ...(guard.stats.rulesChecked === 0 ? { note: "no product profile resolved for this compile; nothing product-specific was checked" } : {}),
     },
     howToProceed: compiled.applicable
       ? undefined

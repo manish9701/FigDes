@@ -45,7 +45,9 @@ const run = (content) => executeRuntime({
     { fn: "frame", id: "main", args: { width: "fill", height: "fill" } },
   ],
   content,
-});
+  // These regressions pin the EXO truth set; under issue #27 that set is the
+  // exo profile's, passed explicitly — no rule set is a global default.
+}, { rules: EXO_RULES });
 
 /* -------------------------------------------------------------------------- */
 /* The verdict may not lie                                                      */

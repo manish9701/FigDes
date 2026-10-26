@@ -179,6 +179,33 @@ export const ProductRuleSchema = z
 
 export type ProductRule = z.infer<typeof ProductRuleSchema>;
 
+/**
+ * The project design profile, in the project's own words (GitHub issue #27).
+ *
+ * This is the boundary between reusable design intelligence and one product's
+ * facts: identity, typical artefacts, anti-goals and visual direction. It does
+ * NOT carry acceptance rules — those are `ProductRule`s in the same memory
+ * file, scoped to the project either way.
+ */
+export const ProjectProfileRefSchema = z
+  .object({
+    /** The product this project designs, matching a registered profile id. */
+    product: z.string().min(1).max(80),
+    /** What the product is, in the project's own words. */
+    domain: z.string().max(160).optional(),
+    /** Who designs it for. */
+    audience: z.string().max(160).optional(),
+    /** The artefact types this project typically produces ("product-ui", "editorial"...). */
+    artefactTypes: z.array(z.string().max(40)).max(8).default([]),
+    /** Explicit anti-goals, in the project's own words. */
+    antiGoals: z.array(z.string().max(200)).max(8).default([]),
+    /** The project's stated visual direction, when it has one. */
+    visualDirection: z.string().max(160).optional(),
+  })
+  .strict();
+
+export type ProjectProfileRef = z.infer<typeof ProjectProfileRefSchema>;
+
 /* -------------------------------------------------------------------------- */
 /* Guard verdicts                                                               */
 /* -------------------------------------------------------------------------- */
@@ -211,9 +238,13 @@ export interface GuardFinding {
 /**
  * The stored shape for one project.
  *
- * `rules` defaults to the built-in EXO set rather than an empty list: an empty
- * rule set would make DesignGuard silently pass everything, which reads as
- * "the guard approved this" when in fact nothing was checked.
+ * `rules` defaults to an EMPTY list rather than the built-in EXO set
+ * (GitHub issue #27): seeding one project's product truths into every new
+ * project is exactly the cross-project leak the profile boundary exists to
+ * prevent. A project with no rules and no profile plans and guards under
+ * general, domain-neutral defaults; EXO's truths arrive through the exo
+ * profile when the project resolves to it. A guard run with no product rules
+ * active reports INDETERMINATE, never a whispered approval.
  */
 export const ProjectMemorySchema = z
   .object({
@@ -223,6 +254,8 @@ export const ProjectMemorySchema = z
     fileKey: z.string().max(200).nullable().default(null),
     notes: z.array(MemoryNoteSchema).max(300).default([]),
     rules: z.array(ProductRuleSchema).max(100).default([]),
+    /** The project's design profile, when one is recorded or seeded. */
+    profile: ProjectProfileRefSchema.optional(),
     updatedAt: z.string().max(40).default(""),
   })
   .strict();

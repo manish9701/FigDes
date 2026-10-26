@@ -10,12 +10,13 @@
  *   FAIL. Read-only, and free — it works on a snapshot the server already has.
  */
 import { z } from "zod";
-import { VerdictSchema, ProductRuleSchema, type ProductRule } from "../../../shared/memory";
+import { VerdictSchema, ProjectProfileRefSchema, ProductRuleSchema, type ProductRule } from "../../../shared/memory";
 import type { MetricsReport } from "../../../shared/protocol";
 import { inferComposition } from "../runtime/layout";
 import { runGuard, snapshotFromIR, decideGuardTarget, metricsFromLiveNodes, type GuardSnapshot } from "./guard";
-import { checkCapabilityTruth } from "./capability-truth";
+import { checkCapabilityTruth, EXO_CAPABILITY_SOURCE, type CapabilityTruthReport } from "./capability-truth";
 import { addNote, defaultRules, effectiveRules, loadMemory, notesForPrompt, projectKey, removeNote, rulesForPrompt, saveMemory } from "./store";
+import { PRODUCT_PROFILE_IDS, profileForProduct, resolveProfile } from "./profiles";
 import type { Session } from "../sessions";
 
 /* -------------------------------------------------------------------------- */
@@ -53,6 +54,13 @@ export const ProjectMemoryArgs = z
      * FAIL) at guard time by the store's normalisation.
      */
     rule: z.unknown().optional(),
+    /**
+     * The project design profile (GitHub issue #27): what the product this
+     * project designs is, in its own words. `product` must name a registered
+     * profile id (e.g. "exo") — product behaviour applies only through a
+     * profile, never through global defaults.
+     */
+    profile: z.unknown().optional(),
     /** Screen and composition filter for reading relevant notes. */
     screen: z.string().max(120).optional(),
     composition: z.string().max(60).optional(),
@@ -77,6 +85,12 @@ export const DesignGuardArgs = z
     /** Or run against a program that has not been built yet. */
     program: z.unknown().optional(),
     project: z.string().max(200).optional(),
+    /**
+     * The product profile to check under (issue #27). Omitted = resolve from
+     * the project's memory; none = no product rules apply (the guard reports
+     * that honestly instead of assuming another product's).
+     */
+    profile: z.string().max(80).optional(),
   })
   .strict();
 
@@ -107,8 +121,10 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
   }
 
   if (args.action === "record") {
-    if (!args.note && !args.rule) {
-      throw new Error("project_memory(action:'record') needs a 'note' object with at least an id and a note string, or a 'rule' object (id, rule, therefore).");
+    if (!args.note && !args.rule && !args.profile) {
+      throw new Error(
+        "project_memory(action:'record') needs a 'note' object with at least an id and a note string, a 'rule' object (id, rule, therefore), or a 'profile' object (product, domain...).",
+      );
     }
 
     // Validate the rule on record, against the same shape the built-ins carry
@@ -128,12 +144,13 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
         );
       }
       recordedRule = parsed.data;
-      // A stored rule may not shadow a built-in EXO truth: the built-in keeps
-      // the id, so a fresh record under a built-in id would be silently
-      // ineffective. Refuse here, before anything is saved. (Re-recording the
-      // identical truth is allowed — an idempotent no-op; and a file that
-      // already holds a stale copy under a built-in id may still be
-      // re-recorded, replacing the stale copy.)
+      // A stored rule may not shadow a built-in truth owned by the product
+      // whose ids those are: the built-in keeps the id, so a fresh record
+      // under a built-in id would be silently ineffective. Refuse here,
+      // before anything is saved. (Re-recording the identical truth is
+      // allowed — an idempotent no-op; and a file that already holds a stale
+      // copy under a built-in id may still be re-recorded, replacing the
+      // stale copy.)
       const currentForCheck = loadMemory(key);
       const storedCopy = currentForCheck.memory.rules.find((r) => r.id === recordedRule!.id);
       const reRecordsIdentical =
@@ -147,6 +164,29 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
 
     const current = loadMemory(key);
     let action: "added" | "updated" = "added";
+    let recordedProfile: unknown = null;
+
+    // The project profile validates on record too, and `product` must name a
+    // registered profile: product behaviour reaches the engine only through a
+    // profile, so an unresolvable one would be a silent no-op.
+    if (args.profile) {
+      const parsedProfile = ProjectProfileRefSchema.safeParse(args.profile);
+      if (!parsedProfile.success) {
+        throw new Error(
+          `project_memory(action:'record') rejected the profile: ${parsedProfile.error.issues
+            .slice(0, 3)
+            .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+            .join("; ")}. A profile needs a \`product\` id and may carry domain, audience, artefactTypes, antiGoals and visualDirection.`,
+        );
+      }
+      if (!profileForProduct(parsedProfile.data.product)) {
+        throw new Error(
+          `project_memory(action:'record') refused profile '${parsedProfile.data.product}': no registered product profile by that name. Known profiles: ${PRODUCT_PROFILE_IDS.join(", ")}. Other products record their rules directly (rule: ...) instead of a profile.`,
+        );
+      }
+      recordedProfile = parsedProfile.data;
+      current.memory = { ...current.memory, profile: parsedProfile.data };
+    }
 
     if (recordedRule) {
       const rules = [...current.memory.rules];
@@ -183,6 +223,7 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
       notes: current.memory.notes.length,
       ...(args.note ? { recorded: args.note } : {}),
       ...(recordedRule ? { ruleRecorded: recordedRule, rules: current.memory.rules.length } : {}),
+      ...(recordedProfile ? { profileRecorded: recordedProfile, profile: recordedProfile } : {}),
       ...(current.problem ? { warning: current.problem } : {}),
     };
   }
@@ -210,6 +251,8 @@ export async function projectMemoryTool(session: Session | null, rawArgs: unknow
     updatedAt: memory.updatedAt,
     notes: memory.notes,
     noteCount: memory.notes.length,
+    /** The project's design profile, when one is recorded or seeded (issue #27). */
+    profile: memory.profile ?? null,
     rules: memory.rules.map((r) => ({ id: r.id, severity: r.severity, rule: r.rule, therefore: r.therefore })),
     ruleCount: memory.rules.length,
     /** The exact text prepended to the runtime prompt, so it is inspectable. */
@@ -234,6 +277,11 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
   const args = DesignGuardArgs.parse(rawArgs);
   const key = resolveKey(args, session);
   const { memory, problem } = loadMemory(key);
+
+  // Active project profile (GitHub issue #27): the brief's explicit profile
+  // wins, then what the project memory records/seeds. No profile = no product
+  // rules: the guard says so, rather than inheriting another product's truths.
+  const profile = resolveProfile({ memory, explicit: args.profile });
 
   let snapshot: GuardSnapshot;
   let escalation: { requested: string; checked: string } | undefined;
@@ -292,7 +340,7 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     const { executeRuntime } = await import("../runtime/interpreter");
     // Checklist #14: a program guarded here is checked against the merged rule
     // set, so the pre-build check and the post-build review agree on the rules.
-    const result = executeRuntime(args.program, { rules: effectiveRules(memory) });
+    const result = executeRuntime(args.program, { rules: effectiveRules(memory, profile.product) });
     // The composition the shell layout actually resolved, not the one the model
     // asked for. A screen can request 'spatial' and end up 'canvas', and only the
     // resolved value is what the guard can judge.
@@ -302,24 +350,47 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     throw new Error("design_guard needs either inspect:true (checks the current selection) or a program (checks a design before building it).");
   }
 
-  // The guard applies the merged set (checklist #14): built-in EXO truths plus
-  // every rule recorded for this project via project_memory — normalized so a
-  // stored rule without checkable evidence degrades to guidance, never FAIL.
-  const rules = effectiveRules(memory);
+  // The guard applies the merged set (checklist #14): the active profile's
+  // product truths plus every rule recorded for this project via
+  // project_memory — normalized so a stored rule without checkable evidence
+  // degrades to guidance, never FAIL.
+  const rules = effectiveRules(memory, profile.product);
   const result = runGuard(rules, snapshot);
 
   /**
    * The capability-truth stage: what the screen *claims*, checked separately
    * from how it behaves (issue #20, workstream 8). A screen can pass every
-   * design rule and still present unconfirmed Enterprise features as shipped.
+   * design rule and still present unconfirmed features as shipped.
+   *
+   * The stage is profile-scoped (issue #27): the claim registry is EXO's, so
+   * it runs only while the exo profile is active. For any other project the
+   * stage reports NOT EVALUATED with the reason — never silently skipped,
+   * never silently applied to a product whose claims it does not know.
    * The fold is deliberate: a FAIL here fails the guard verdict, a
    * WARNING/INDETERMINATE is reported and downgrades an otherwise clean PASS
    * to WARNING-level truth, but never silently upgrades anything.
    */
-  const capability = checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] });
+  const registryOwner = profile.spec?.capabilityRegistry ?? null;
+  const capability: CapabilityTruthReport =
+    registryOwner !== null && registryOwner === profile.spec?.id
+      ? checkCapabilityTruth({ texts: snapshot.texts ?? [], nodeNames: snapshot.nodeNames ?? [] })
+      : {
+          verdict: "NOT EVALUATED",
+          findings: [],
+          source: EXO_CAPABILITY_SOURCE,
+          reason:
+            registryOwner === null
+              ? profile.product === null
+                ? "No product profile is resolved for this project, and the capability-claim registry is product-specific; claim integrity was not checked here. Record the project's profile and capabilities to enable it."
+                : `The resolved profile ('${profile.product}') declares no capability-claim registry, so claim integrity was not checked here.`
+              : `The capability-claim registry is owned by the '${registryOwner}' profile and this project resolved to '${profile.product}', so claim integrity was not checked here.`,
+        };
   let verdict = result.verdict;
   if (capability.verdict === "FAIL" && verdict !== "FAIL") verdict = "FAIL";
-  if (capability.verdict !== "PASS" && verdict === "PASS") verdict = "WARNING";
+  if (
+    (capability.verdict === "WARNING" || capability.verdict === "INDETERMINATE") &&
+    verdict === "PASS"
+  ) verdict = "WARNING";
   const capabilityNote = `capability-truth: ${capability.reason}`;
 
   return {
@@ -331,11 +402,14 @@ export async function designGuardTool(session: Session | null, rawArgs: unknown)
     verdict,
     findings: result.findings,
     stats: result.stats,
-    /** Provenance of the checked set: built-ins and stored rules merged at run time. */
+    /** Provenance of the checked set: the active profile and stored rules. */
     rulesSource: {
-      builtIn: defaultRules().filter((r) => rules.some((x) => x.id === r.id)).length,
+      product: profile.product,
+      builtIn: profile.rules.filter((r) => rules.some((x) => x.id === r.id)).length,
       stored: memory.rules.length,
     },
+    /** Which product rules were active, and how the profile resolved (issue #27). */
+    activeProfile: { product: profile.product, source: profile.source, rulesChecked: rules.length },
     /** What the screen claims, and whether the product can back it. */
     capabilityTruth: {
       verdict: capability.verdict,

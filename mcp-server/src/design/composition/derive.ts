@@ -77,7 +77,7 @@ export interface DerivedRegion {
 }
 
 export interface Derivation {
-  strategy: "task-derived" | "shell-fallback";
+  strategy: "task-derived" | "shell-fallback" | "artefact-composition";
   pattern: string | null;
   infoKinds: InfoKind[];
   /**

@@ -138,7 +138,7 @@ const RAW_PROGRAM = {
 };
 
 test("design_runtime dry-run discloses the bypass but still guards and labels the basis", async () => {
-  const result = await runRuntimeTool(null, { program: RAW_PROGRAM, dryRun: true });
+  const result = await runRuntimeTool(null, { program: RAW_PROGRAM, dryRun: true, profile: "exo" });
   assert.equal(result.intelligence.applied, false, "a raw program must not claim intelligence");
   assert.equal(result.intelligence.basis, "auto-art-direction");
   assert.ok(
@@ -159,7 +159,7 @@ test("design_runtime with a plan_screen program passes the gate with no bypass w
     availableInformation: ["latency", "memory"],
     visualDirection: "quiet-instrument",
   });
-  const result = await runRuntimeTool(null, { program: planned.program, dryRun: true });
+  const result = await runRuntimeTool(null, { program: planned.program, dryRun: true, profile: "exo" });
   assert.equal(result.intelligence.applied, true);
   assert.equal(result.intelligence.basis, "visual-intent");
   assert.equal(
@@ -181,7 +181,7 @@ const RAW_IR = {
 };
 
 test("compile_ir discloses the bypass and still runs the product guard", () => {
-  const result = compileIrTool({ ir: RAW_IR });
+  const result = compileIrTool({ ir: RAW_IR, profile: "exo" });
   assert.equal(result.intelligence.applied, false);
   assert.equal(result.intelligence.basis, "none");
   assert.ok(

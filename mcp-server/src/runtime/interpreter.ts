@@ -21,7 +21,6 @@
  */
 import { z } from "zod";
 import { runGuard, snapshotFromIR } from "../memory/guard";
-import { defaultRules } from "../memory/rules-exo";
 import type { ProductRule } from "../../../shared/memory";
 import {
   canvasSize,
@@ -607,7 +606,7 @@ warnings: string[];
   /** What the visual intent changed, in plain language. Not warnings. */
   intentNotes: string[];
   /** What the product guard concluded about this build. */
-  productGuard?: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number };
+  productGuard?: { verdict: string; rulesChecked: number; failures: number; warnings: number; manual: number; note?: string };
   /** Algorithms invoked per region, so the caller can see what was chosen. */
   algorithms: Record<string, string>;
   /** How many relations were applied. */
@@ -641,10 +640,14 @@ export interface RuntimeOptions {
   /** Measured text heights, keyed by the text node's id. */
   textMetrics?: Map<string, { width: number; height: number }>;
   /**
-   * Product rules the build-time guard checks against. Defaults to the
-   * built-in rule set; callers that have project memory loaded pass the
-   * merged set (`effectiveRules`) so rules recorded for this project via
-   * project_memory are enforced during generation, not only at final review.
+   * Product rules the build-time guard checks against. There is NO default
+   * product rule set (GitHub issue #27): an explicit call carries the active
+   * project's resolved set (`effectiveRules`) so rules recorded for this
+   * project via project_memory — and the active profile's truths — are
+   * enforced during generation, not only at final review. When no rules are
+   * given, the guard reports honestly that nothing product-specific was
+   * checked; one product's truths are never a global default for another
+   * project's build.
    */
   rules?: ProductRule[];
 }
@@ -1332,7 +1335,7 @@ case "shape": {
   // truth does not silently ship. An INDETERMINATE — anything left to a human
   // judgement — is surfaced as a warning rather than swallowed, because "nobody
   // checked" and "nothing was wrong" are different sentences.
-  const guard = runGuard(options.rules ?? defaultRules(), snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
+  const guard = runGuard(options.rules ?? [], snapshotFromIR(ir, { composition: resolvedComposition(ir) }));
   const violations = [...compiled.violations, ...parentViolations];
   for (const f of guard.findings) {
     if (f.verdict === "FAIL") {
@@ -1467,6 +1470,10 @@ case "shape": {
       failures: guard.stats.failures,
       warnings: guard.stats.warnings,
       manual: guard.stats.manual,
+      // Honest when no profile resolved (issue #27): zero rules means nothing
+      // product-specific was checked. The generic composition review ran;
+      // a bare verdict here must not read as an approval of product truths.
+      ...(guard.stats.rulesChecked === 0 ? { note: "no product rules were active for this project (no profile resolved); nothing product-specific was checked" } : {}),
     },
   };
 }

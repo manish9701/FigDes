@@ -44,6 +44,13 @@ export const BriefInputSchema = z
   .object({
     /** The product this screen belongs to. */
     product: z.string().max(120).optional().describe("The product this screen belongs to."),
+    /**
+     * The project's product profile id (GitHub issue #27): names a registered
+     * profile ("exo") explicitly, so product vocabulary, inference and rule
+     * previews apply during the pipeline run. The display `product` name above
+     * is descriptive text, not a profile reference.
+     */
+    profile: z.string().max(80).optional().describe("Registered product profile id for this project (e.g. 'exo'). The display `product` name is not."),
     /** The screen's own name, in the file's language. */
     screen: z.string().max(120).optional().describe("Screen name, in the product's own language."),
     /** The user's primary task on this screen, in their words. */
@@ -228,6 +235,12 @@ export interface NormalizedBrief {
   /** Stable id for the brief, used in the trace. */
   id: string;
   product: string | null;
+  /**
+   * The explicit profile channel (issue #27): a registered profile id the
+   * caller named. `product` above is display text; THIS is what gates product
+   * behaviour — null means the run resolves nothing and builds general.
+   */
+  profile: string | null;
   screen: string;
   purpose: string;
   primaryDecision: string;

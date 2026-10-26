@@ -90,12 +90,41 @@ export function exoDefaultContext(): DesignContext {
 }
 
 /**
+ * General (domain-neutral) defaults (GitHub issue #27).
+ *
+ * No product description, no borrowed anti-patterns, no borrowed brand rules:
+ * a project that resolved to no product profile builds its context purely
+ * from what IT states and records. Empty strings rather than a product's
+ * taste, and `contextBrief` skips the empty segments instead of lying.
+ */
+export function generalDefaultContext(): DesignContext {
+  return {
+    productName: "",
+    audience: [],
+    productDescription: "",
+    designIntent: "",
+    visualDirection: "custom",
+    typography: null,
+    tokens: null,
+    components: [],
+    patterns: [],
+    existingScreens: [],
+    decisions: [],
+    constraints: [],
+    antiPatterns: [],
+    brandRules: [],
+  };
+}
+
+/**
  * Builds a context from discovery plus already-recorded product notes.
  * Recorded notes (decisions/constraints/anti-patterns) win over defaults;
  * discovery fills tokens/typography/components/screens.
  */
 export function buildDesignContext(input: {
   discovery?: DesignDiscovery | null;
+  /** The resolved product id, when the project profile declares one ("exo"). */
+  product?: string | null;
   productName?: string;
   audience?: string[];
   visualDirection?: VisualDirection;
@@ -107,7 +136,10 @@ export function buildDesignContext(input: {
   antiPatterns?: AntiPattern[];
   brandRules?: BrandRule[];
 }): DesignContext {
-  const base = exoDefaultContext();
+  // The base product context is profile-scoped (issue #27): EXO's taste for
+  // EXO-profile projects, neutral defaults for everyone else. Recorded
+  // project data below the base applies in both cases.
+  const base = input.product === "exo" ? exoDefaultContext() : generalDefaultContext();
   return {
     productName: input.productName ?? base.productName,
     audience: input.audience ?? base.audience,
@@ -128,11 +160,20 @@ export function buildDesignContext(input: {
 
 /** Compact prompt fragment: what the planner and compiler actually need. */
 export function contextBrief(ctx: DesignContext): string {
-  const lines = [
-    `Product: ${ctx.productName} — ${ctx.designIntent}.`,
-    `Direction: ${ctx.visualDirection}. Audience: ${ctx.audience.join(", ")}.`,
-    `Avoid: ${ctx.antiPatterns.map((a) => a.pattern).join("; ")}.`,
-  ];
+  const lines: string[] = [];
+  // Empty base segments (a general project) are skipped, not printed as "
+  // Product: — ." Non-empty ones go first.
+  if (ctx.productName || ctx.designIntent) {
+    lines.push(`Product: ${ctx.productName}${ctx.designIntent ? ` — ${ctx.designIntent}` : ""}.`);
+  }
+  if (ctx.audience.length > 0) {
+    lines.push(`Direction: ${ctx.visualDirection}. Audience: ${ctx.audience.join(", ")}.`);
+  } else {
+    lines.push(`Direction: ${ctx.visualDirection}.`);
+  }
+  if (ctx.antiPatterns.length > 0) {
+    lines.push(`Avoid: ${ctx.antiPatterns.map((a) => a.pattern).join("; ")}.`);
+  }
   if (ctx.decisions.length > 0) lines.push(`Decisions: ${ctx.decisions.map((d) => d.decision).join("; ")}.`);
   if (ctx.typography) lines.push(`Type: ${ctx.typography.primary} / mono ${ctx.typography.mono}.`);
   return lines.join(" ");

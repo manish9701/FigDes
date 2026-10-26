@@ -23,6 +23,7 @@
  * exists.
  */
 import { planScreen, resolveArchetype, type ScreenIntent } from "../plan/planner";
+import { profileForProduct } from "../memory/profiles";
 import { defaultGutter, layoutRegions, packContent } from "../runtime/layout";
 // The compiler's own estimator: the plan states the room content needs with
 // the same arithmetic the build applies (issue #25/#28 plan-side content fit).
@@ -259,13 +260,21 @@ export function buildCompositionPlan(
 
   /**
    * The archetype is resolved the same way the planner resolves it (stated by
-   * name, else inferred for deploy decisions), so its priority items become
-   * plan material: they join the required information the plan and the content
-   * both carry. Archetype priority was previously dead data — echoed by
-   * plan_screen and nowhere else. Briefs that name no archetype resolve to no
-   * archetype, so every existing plan is unchanged.
+   * name, else inferred for deploy decisions under a profile that declares
+   * the inference — issue #27), so its priority items become plan material:
+   * they join the required information the plan and the content both carry.
+   * Briefs that name no archetype resolve to no archetype, so every existing
+   * plan is unchanged.
    */
-  const archetype = resolveArchetype(brief.primaryDecision, brief.archetype ?? undefined);
+  /**
+   * The profile channel (issue #27): the brief's explicit `profile` id names
+   * the product; the display `product` name is descriptive text that only
+   * applies when it finds a registered profile. Unknown names stay neutral —
+   * no profile, no inference, no product rules.
+   */
+  const pipelineProductResolution = profileForProduct(brief.profile ?? brief.product);
+  const pipelineProductId = pipelineProductResolution !== undefined ? pipelineProductResolution.id : undefined;
+  const archetype = resolveArchetype(brief.primaryDecision, brief.archetype ?? undefined, pipelineProductId);
   /**
    * A priority item the brief already covers is redundant, not additional: the
    * fixture says "fit verdict for the selected model" where the archetype says
@@ -297,6 +306,16 @@ export function buildCompositionPlan(
     existingPatterns: brief.existingPatterns,
     // The archetype name is threaded so the plan records the same resolution.
     ...(brief.archetype !== null ? { archetype: brief.archetype } : {}),
+    // The brief's own product declaration is the explicit profile channel
+    // (issue #27): it names whose vocabulary/archetype inference applies and
+    // which product rules can fire in previews.
+    // The brief's own product declaration is the explicit profile channel
+    // (issue #27): it names whose vocabulary/archetype inference applies and
+    // which product rules can fire in previews. The explicit `profile` id
+    // wins over the display `product` name; an unknown name resolves nothing.
+    ...(pipelineProductResolution !== undefined
+      ? { product: pipelineProductResolution.id, rules: pipelineProductResolution.rules }
+      : {}),
     // Caller-declared states merge into the art direction's interaction
     // states (advisory only — no geometry impact). The brief's primaryAction
     // is deliberately NOT threaded as intent: the pipeline already places it

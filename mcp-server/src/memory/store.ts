@@ -19,8 +19,21 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { MemoryNoteSchema, ProjectMemorySchema, type MemoryNote, type ProductRule, type ProjectMemory } from "../../../shared/memory";
+import {
+  MemoryNoteSchema,
+  ProjectMemorySchema,
+  type MemoryNote,
+  type ProductRule,
+  type ProjectMemory,
+  type ProjectProfileRef,
+} from "../../../shared/memory";
 import { defaultRules } from "./rules-exo";
+import {
+  profileForProduct,
+  resolveActiveProduct,
+  assertKnownProfile,
+  keySeedsProfile,
+} from "./profiles";
 
 /** Re-exported for callers that read the built-in set through the store module. */
 export { defaultRules };
@@ -66,12 +79,20 @@ function pathFor(key: string): string {
  * guard because of a stray comma is the wrong trade.
  */
 export function loadMemory(key: string): { memory: ProjectMemory; problem?: string } {
+  /**
+   * A fresh memory carries NO product rules and NO product notes unless the
+   * project key itself names a known product (GitHub issue #27). Seeding one
+   * product's truths into every unrelated project was the cross-project leak
+   * the profile boundary exists to prevent: "acme-landing" must not open with
+   * EXO's rules, and an unowned project must not open with any of them.
+   */
   const fresh = (): ProjectMemory => ({
     version: 1,
     project: key,
     fileKey: null,
     notes: defaultNotes(key),
-    rules: defaultRules(),
+    rules: defaultRulesFor(key),
+    ...(defaultProfileFor(key) !== null ? { profile: { product: defaultProfileFor(key)! } as ProjectProfileRef } : {}),
     updatedAt: new Date().toISOString(),
   });
 
@@ -102,14 +123,17 @@ export function loadMemory(key: string): { memory: ProjectMemory; problem?: stri
 /**
  * Default visual notes for a new project (FigDes §32).
  *
- * Only seeded when the project key suggests EXO: these are product-identity
- * judgements (topology heroes, restrained accents, open surfaces), and imposing
+ * Only seeded when the project key names a product as its own word (the
+ * issue #27 key seed): these notes are product-identity judgements
+ * (topology heroes, restrained accents, open surfaces), and imposing
  * another product's taste on an unrelated file would be exactly the kind of
  * silent presumption this system exists to avoid. Every one can be forgotten
  * with project_memory forget.
  */
 function defaultNotes(key: string): ProjectMemory["notes"] {
-  if (!key.includes("exo")) return [];
+  const product = keySeedsProfile(key);
+  if (!product) return [];
+  if (product !== "exo") return []; // no seeded identity notes defined for this profile yet
   const at = new Date().toISOString();
   return [
     { id: "visual-topology-hero", note: "Prefer topology as the hero visualization on system screens.", scope: "project", tags: ["visual", "default"], recordedAt: at },
@@ -118,6 +142,25 @@ function defaultNotes(key: string): ProjectMemory["notes"] {
     { id: "visual-quiet-metrics", note: "Metrics are quiet instrument readouts, never a KPI wall.", scope: "project", tags: ["visual", "default"], recordedAt: at },
     { id: "visual-mono-data", note: "Set identifiers, latencies and addresses in a monospaced face.", scope: "project", tags: ["visual", "default"], recordedAt: at },
   ] as ProjectMemory["notes"];
+}
+
+/**
+ * The product profile a project's key seeds, and the rules that follow it.
+ *
+ * The SAME mechanism (and the same honesty limits) as `defaultNotes`: a project
+ * whose key names a known product as its own word seeds that product's profile
+ * and truths, so existing product work keeps its guard; every other key seeds
+ * nothing. The profile is stored explicitly on the memory file, so after the
+ * first save the resolution is recorded data, not filename inference (issue #27).
+ */
+export function defaultProfileFor(key: string): string | null {
+  return keySeedsProfile(key);
+}
+
+/** The rules a project's key seeds: the named product's truths, or none. */
+function defaultRulesFor(key: string): ProductRule[] {
+  const product = defaultProfileFor(key);
+  return product ? (profileForProduct(product)?.rules ?? []) : [];
 }
 
 export function saveMemory(key: string, memory: ProjectMemory): string {
@@ -271,27 +314,33 @@ export function normalizeStoredRule(rule: ProductRule): ProductRule {
 }
 
 /**
- * The rule set a guard run should actually apply: the built-in EXO truths plus
- * every rule recorded in the project's memory, merged at use time.
+ * The rule set a guard run should actually apply: the active profile's product
+ * truths plus every rule recorded in the project's memory, merged at use time.
  *
- * A stored rule cannot *shadow* a built-in: a stored copy of an EXO rule id
- * would freeze an old version of a product truth this build maintains in code —
- * the drift the guard exists to catch. Stored rules with fresh ids are
- * additive, which is the whole point: a truth recorded via `project_memory`
- * must be checked during generation (the pipeline's runGuard path), not only
- * at final review. EXO_RULES remains the default when the project has recorded
- * nothing of its own.
+ * GitHub issue #27 — the built-ins are no longer GLOBAL. Which set applies is
+ * resolved from the project (see `resolveActiveProduct` for the order):
+ * the task brief's explicit profile wins, then the recorded profile, then a
+ * stored `exo.*` rule id or the project key naming a product. A project that
+ * resolves to no profile gets NO product rules — its guard surfaces that
+ * honestly (INDETERMINATE, "nothing product-specific was checked") rather
+ * than inheriting another product's acceptance criteria.
+ *
+ * A stored rule still cannot *shadow* an active built-in: a stored copy of a
+ * built-in id would freeze an old version of a truth the build maintains in
+ * code — the drift the guard exists to catch. Stored rules with fresh ids are
+ * additive.
  */
-export function effectiveRules(memory: ProjectMemory): ProductRule[] {
+export function effectiveRules(memory: ProjectMemory, explicitProduct?: string | null): ProductRule[] {
   // Last recording of an id wins within the stored set (same replace-by-id
-  // semantics as notes); the built-ins fill the space around them.
+  // semantics as notes); the active profile fills the space around them.
   const stored = new Map<string, ProductRule>();
   for (const rule of memory.rules ?? []) {
     if (typeof rule?.id !== "string" || rule.id.length === 0) continue;
     stored.set(rule.id, normalizeStoredRule(rule));
   }
-  const builtIn = defaultRules();
-  // A stored rule may not shadow a built-in: a stored copy of an EXO rule id
+  const product = resolveActiveProduct(memory, explicitProduct);
+  const builtIn = product ? (profileForProduct(product)?.rules ?? []) : [];
+  // A stored rule may not shadow an active built-in: a stored copy of its id
   // would freeze an old version of a product truth this build maintains in
   // code — the drift the guard exists to catch. Built-in wins the id; stored
   // rules with fresh ids are additive.

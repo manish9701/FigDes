@@ -1,0 +1,548 @@
+{
+  "tool": "cross-domain-benchmark",
+  "version": 2,
+  "generatedAt": "2026-10-26T07:42:45.689Z",
+  "fixturesRun": 12,
+  "counts": {
+    "pass": 12,
+    "fail": 0,
+    "warning": 0,
+    "indeterminate": 0,
+    "notEvaluated": 0
+  },
+  "verdict": "PASS",
+  "summary": "all 12 fixtures held every declared trait — product behaviour stayed inside its profile and the domains planned their own compositions.",
+  "results": [
+    {
+      "id": "editorial-deep-dive",
+      "domain": "editorial",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/editorial",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'editorial', observed 'editorial' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/editorial-rhythm",
+          "ok": true,
+          "detail": "expected plan.template.name === 'editorial-rhythm', observed 'editorial-rhythm'."
+        },
+        {
+          "trait": "regions-include/masthead+column+furniture",
+          "ok": true,
+          "detail": "all required regions present; observed: [masthead, column, furniture]"
+        },
+        {
+          "trait": "regions-exclude/nav",
+          "ok": true,
+          "detail": "none of nav present; observed: [masthead, column, furniture]"
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "7/7 traits held."
+    },
+    {
+      "id": "landing-conversion",
+      "domain": "landing",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/landing",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'landing', observed 'landing' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/landing-narrative",
+          "ok": true,
+          "detail": "expected plan.template.name === 'landing-narrative', observed 'landing-narrative'."
+        },
+        {
+          "trait": "regions-include/hero+cta",
+          "ok": true,
+          "detail": "all required regions present; observed: [hero, proof, explain, cta]"
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "6/6 traits held."
+    },
+    {
+      "id": "mobile-onboarding",
+      "domain": "mobile",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/mobile",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'mobile', observed 'mobile' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/mobile-flow",
+          "ok": true,
+          "detail": "expected plan.template.name === 'mobile-flow', observed 'mobile-flow'."
+        },
+        {
+          "trait": "regions-include/header+steps+submit",
+          "ok": true,
+          "detail": "all required regions present; observed: [header, steps, submit]"
+        },
+        {
+          "trait": "regions-exclude/sidebar",
+          "ok": true,
+          "detail": "none of sidebar present; observed: [header, steps, submit]"
+        },
+        {
+          "trait": "canvas/390x844",
+          "ok": true,
+          "detail": "expected plan.intent.canvas 390x844, observed {\"width\":390,\"height\":844}."
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "8/8 traits held."
+    },
+    {
+      "id": "dataviz-trend",
+      "domain": "dataviz",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/dataviz",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'dataviz', observed 'dataviz' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/data-axes",
+          "ok": true,
+          "detail": "expected plan.template.name === 'data-axes', observed 'data-axes'."
+        },
+        {
+          "trait": "regions-include/chart+legend",
+          "ok": true,
+          "detail": "all required regions present; observed: [titled, chart, legend]"
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "6/6 traits held."
+    },
+    {
+      "id": "system-diagram",
+      "domain": "diagram",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/diagram",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'diagram', observed 'diagram' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/relationship-map",
+          "ok": true,
+          "detail": "expected plan.template.name === 'relationship-map', observed 'relationship-map'."
+        },
+        {
+          "trait": "regions-include/map+legend",
+          "ok": true,
+          "detail": "all required regions present; observed: [map, legend]"
+        },
+        {
+          "trait": "region-composition/map=topology",
+          "ok": true,
+          "detail": "expected region 'map' composition 'topology', observed 'topology'."
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "7/7 traits held."
+    },
+    {
+      "id": "identity-marks",
+      "domain": "identity",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/identity",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'identity', observed 'identity' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/identity-exploration",
+          "ok": true,
+          "detail": "expected plan.template.name === 'identity-exploration', observed 'identity-exploration'."
+        },
+        {
+          "trait": "regions-include/marks+palette",
+          "ok": true,
+          "detail": "all required regions present; observed: [marks, palette, ramp]"
+        },
+        {
+          "trait": "region-composition/marks=canvas",
+          "ok": true,
+          "detail": "expected region 'marks' composition 'canvas', observed 'canvas'."
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "7/7 traits held."
+    },
+    {
+      "id": "design-system-specimens",
+      "domain": "design-system",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "artefact-echo/design-system",
+          "ok": true,
+          "detail": "expected plan.artefact.type === 'design-system', observed 'design-system' — the artefact must be first-class input, not dropped on the way in."
+        },
+        {
+          "trait": "template/system-specimens",
+          "ok": true,
+          "detail": "expected plan.template.name === 'system-specimens', observed 'system-specimens'."
+        },
+        {
+          "trait": "regions-include/tokens+specimens",
+          "ok": true,
+          "detail": "all required regions present; observed: [tokens, specimens, ramp]"
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "6/6 traits held."
+    },
+    {
+      "id": "dense-ops-console",
+      "domain": "ops",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "regions-include/rail+primary-visual+detail+action",
+          "ok": true,
+          "detail": "all required regions present; observed: [rail, primary-visual, detail, action]"
+        },
+        {
+          "trait": "regions-exclude/nav",
+          "ok": true,
+          "detail": "none of nav present; observed: [rail, primary-visual, detail, action]"
+        },
+        {
+          "trait": "region-composition/rail=instrument",
+          "ok": true,
+          "detail": "expected region 'rail' composition 'instrument', observed 'instrument'."
+        },
+        {
+          "trait": "region-composition/primary-visual=instrument",
+          "ok": true,
+          "detail": "expected region 'primary-visual' composition 'instrument', observed 'instrument'."
+        },
+        {
+          "trait": "decision-kind/monitor",
+          "ok": true,
+          "detail": "expected plan.intent.decisionKind === 'monitor', observed 'monitor'."
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        }
+      ],
+      "summary": "8/8 traits held."
+    },
+    {
+      "id": "content-heavy-missing-states",
+      "domain": "content",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "template/model-analysis",
+          "ok": true,
+          "detail": "expected plan.template.name === 'model-analysis', observed 'model-analysis'."
+        },
+        {
+          "trait": "required-information/all-stated-items",
+          "ok": true,
+          "detail": "plan.requiredInformation carries every stated item (5 items)"
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        },
+        {
+          "trait": "interaction-states",
+          "ok": true,
+          "detail": "interactionStates hold (8 states)"
+        }
+      ],
+      "summary": "6/6 traits held."
+    },
+    {
+      "id": "general-deploy-flow",
+      "domain": "deploy (general)",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-general",
+          "ok": true,
+          "detail": "expected profile.product null with 0 product rules active, observed {\"product\":null,\"ruleCount\":0} — a general fixture must plan under no product profile at all."
+        },
+        {
+          "trait": "regions-include/candidates+placement",
+          "ok": true,
+          "detail": "all required regions present; observed: [nav, header, candidates, placement]"
+        },
+        {
+          "trait": "decision-kind/deploy",
+          "ok": true,
+          "detail": "expected plan.intent.decisionKind === 'deploy', observed 'deploy'."
+        },
+        {
+          "trait": "archetype-absent",
+          "ok": true,
+          "detail": "no archetype present, as expected — inference declares itself profile-scoped"
+        },
+        {
+          "trait": "guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no preview carries a product rule id; rule ids observed: none"
+        },
+        {
+          "trait": "placement-vocabulary/general",
+          "ok": true,
+          "detail": "placement 'because' is general-worded; observed: \"the placement decision for the selected candidate: where it should run, what is required against what is available, and the fit verdict — stated beside the laun\""
+        },
+        {
+          "trait": "interaction-states",
+          "ok": true,
+          "detail": "interactionStates hold (11 states)"
+        },
+        {
+          "trait": "tool-decision-kind/deploy",
+          "ok": true,
+          "detail": "expected buildPlan decision.kind === 'deploy', observed 'deploy'."
+        },
+        {
+          "trait": "tool-design-context/no-product",
+          "ok": true,
+          "detail": "expected designContext.product === '', observed '' — the tool layer is the boundary issue #27 closed."
+        },
+        {
+          "trait": "tool-brief-free-of-other-products",
+          "ok": true,
+          "detail": "the design context brief carries no other product's identity"
+        },
+        {
+          "trait": "tool-guard-preview-excludes/exo.",
+          "ok": true,
+          "detail": "no tool-layer guard preview carries a product rule id"
+        },
+        {
+          "trait": "tool-interaction-states-free-of/product",
+          "ok": true,
+          "detail": "tool response interactionStates carry no product states (11 states)"
+        }
+      ],
+      "summary": "12/12 traits held."
+    },
+    {
+      "id": "exo-deploy-under-profile",
+      "domain": "deploy (exo)",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "profile-is-exo",
+          "ok": true,
+          "detail": "expected profile.product 'exo', observed 'exo' — the EXO control only works while its profile is active."
+        },
+        {
+          "trait": "archetype/model-fit",
+          "ok": true,
+          "detail": "expected inferred archetype 'model-fit', observed 'model-fit'."
+        },
+        {
+          "trait": "placement-vocabulary/exo",
+          "ok": true,
+          "detail": "placement 'because' is exo-worded; observed: \"the automatic placement recommendation for the selected candidate: where it should run, required vs available memory, and the fit verdict — placement is recomme\""
+        },
+        {
+          "trait": "interaction-states",
+          "ok": true,
+          "detail": "interactionStates hold (17 states)"
+        }
+      ],
+      "summary": "4/4 traits held."
+    },
+    {
+      "id": "guard-isolation-lane",
+      "domain": "guard",
+      "status": "PASS",
+      "traits": [
+        {
+          "trait": "guard-baseline-status/indeterminate",
+          "ok": true,
+          "detail": "expected status 'indeterminate', observed 'indeterminate' — nothing product-specific ran, so the run is not a success status."
+        },
+        {
+          "trait": "guard-baseline-verdict/INDETERMINATE",
+          "ok": true,
+          "detail": "expected verdict 'INDETERMINATE', observed 'INDETERMINATE' — zero rules may never read as approval."
+        },
+        {
+          "trait": "guard-baseline-finding/profile",
+          "ok": true,
+          "detail": "finding 'profile' present, as expected"
+        },
+        {
+          "trait": "guard-baseline-rules-checked/0",
+          "ok": true,
+          "detail": "expected stats.rulesChecked === 0, observed 0."
+        },
+        {
+          "trait": "guard-baseline-no-product-findings",
+          "ok": true,
+          "detail": "no finding rule id starts with 'exo.' on the no-profile lane"
+        },
+        {
+          "trait": "guard-profiled-verdict/FAIL",
+          "ok": true,
+          "detail": "expected verdict 'FAIL', observed 'FAIL' — the veto must survive inside its profile."
+        },
+        {
+          "trait": "guard-profiled-failing-rule/exo.no-generic-saas",
+          "ok": true,
+          "detail": "expected verdict 'FAIL' for 'exo.no-generic-saas', observed 'FAIL'"
+        },
+        {
+          "trait": "guard-profiled-rules-source/exo",
+          "ok": true,
+          "detail": "expected rulesSource.product 'exo', observed 'exo'."
+        },
+        {
+          "trait": "guard-profiled-source/explicit",
+          "ok": true,
+          "detail": "expected activeProfile.source 'explicit', observed 'explicit' — the explicit profile argument, not a global default, is what activated the rules."
+        },
+        {
+          "trait": "guard-isolation-contrast",
+          "ok": true,
+          "detail": "same program on two projects: no 'exo.' rule fired with no profile, while 'exo.no-generic-saas' fired 'FAIL' under its profile — the truth set is profile data, not an engine default."
+        }
+      ],
+      "summary": "10/10 traits held."
+    }
+  ]
+}

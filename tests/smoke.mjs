@@ -778,47 +778,58 @@ await check("a malformed runtime program fails with an actionable message", asyn
 
 console.log("\n  design memory and the drift guard");
 
-await check("project_memory starts with the built-in rule set", async () => {
-  const { data, isError } = await callTool("project_memory", { project: "smoke-test" });
+await check("an exo-keyed project starts with its profile's rule set", async () => {
+  // Issue #27: the key seeds the profile — "exo..." IS an exo project as far
+  // as seeding goes, so its memory opens with EXO's own rule set (no rules are
+  // global defaults any more). Its profile starter notes are seeded with it,
+  // so freshness here is about rules.
+  const { data, isError } = await callTool("project_memory", { project: "exo-smoke-test" });
   assert.equal(isError, false);
-  assert.equal(data.ruleCount > 0, true, "a fresh project must not have zero rules");
+  assert.equal(data.ruleCount > 0, true, "an exo-keyed project must not have zero rules");
+});
+
+await check("a fresh general project starts with zero rules and zero notes", async () => {
+  const { data, isError } = await callTool("project_memory", { project: "smoke-notes-test" });
+  assert.equal(isError, false);
+  assert.equal(data.ruleCount, 0, "no product rules are global defaults");
+  assert.equal(data.rulesSource?.product ?? null, null, "no profile applies to an unrelated key");
   assert.equal(data.noteCount, 0);
 });
 
 await check("a recorded note is durable and appears in the prompt fragment", async () => {
   const { isError } = await callTool("project_memory", {
-    project: "smoke-test",
+    project: "smoke-notes-test",
     action: "record",
     note: { id: "topology-style", note: "Topology screens read better as one large spatial diagram.", scope: "project" },
   });
   assert.equal(isError, false);
 
-  const { data } = await callTool("project_memory", { project: "smoke-test" });
+  const { data } = await callTool("project_memory", { project: "smoke-notes-test" });
   assert.equal(data.noteCount, 1);
   assert.match(data.promptFragment, /spatial diagram/);
 });
 
 await check("recording the same id updates rather than duplicating", async () => {
   await callTool("project_memory", {
-    project: "smoke-test",
+    project: "smoke-notes-test",
     action: "record",
     note: { id: "topology-style", note: "Topology screens read better as a clustered map.", scope: "project" },
   });
 
-  const { data } = await callTool("project_memory", { project: "smoke-test" });
+  const { data } = await callTool("project_memory", { project: "smoke-notes-test" });
   assert.equal(data.noteCount, 1, "one note, corrected");
   assert.match(data.promptFragment, /clustered map/);
   assert.doesNotMatch(data.promptFragment, /spatial diagram/);
 });
 
 await check("a forgotten note is gone", async () => {
-  const { data } = await callTool("project_memory", { project: "smoke-test", action: "forget", id: "topology-style" });
+  const { data } = await callTool("project_memory", { project: "smoke-notes-test", action: "forget", id: "topology-style" });
   assert.equal(data.notes, 0);
 });
 
 await check("design_guard passes a design that contradicts nothing", async () => {
   const { data, isError } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Guard ok", width: 1440, height: 900, grid: 8 },
       regions: [
@@ -849,7 +860,7 @@ await check("a guard verdict cannot be PASS while any of its own checks are unev
   // top-level PASS on the strength of eight structural checks while evaluating
   // none of the five encoding design judgement.
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Manual", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -864,7 +875,7 @@ await check("a guard verdict cannot be PASS while any of its own checks are unev
 
 await check("design_guard fails a manual connect-device wizard with evidence", async () => {
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Guard fail", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -884,7 +895,7 @@ await check("design_guard fails a manual connect-device wizard with evidence", a
 
 await check("design_guard fails a three-card SaaS metric wall", async () => {
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Card wall", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -902,7 +913,7 @@ await check("design_guard fails a three-card SaaS metric wall", async () => {
 
 await check("a rule with only unmeasurable evidence is reported, not silently passed", async () => {
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Manual", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -928,7 +939,7 @@ await check("machine data set in a proportional face is caught, not asked about"
   // `value: "1.8 TB"` in a proportional face is not reported and this test uses
   // an address instead.
   const clean = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Mono", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -936,7 +947,7 @@ await check("machine data set in a proportional face is caught, not asked about"
     },
   });
   const dirty = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Proportional", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -952,7 +963,7 @@ await check("machine data set in a proportional face is caught, not asked about"
 
   // Byte quantities stay the author's call, which is what `valueStyle` is for.
   const quantity = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Quantity", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -965,7 +976,7 @@ await check("machine data set in a proportional face is caught, not asked about"
 
 await check("design_guard warns on unexplained topology relationships", async () => {
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Lonely pair", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "hero", id: "map", args: { width: "fill", height: "fill", composition: "topology" } }],
@@ -982,7 +993,7 @@ await check("design_guard warns on unexplained topology relationships", async ()
 
 await check("design_guard fails an anonymous control", async () => {
   const { data } = await callTool("design_guard", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Anon", width: 800, height: 600, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],
@@ -995,7 +1006,7 @@ await check("design_guard fails an anonymous control", async () => {
 });
 
 await check("design_guard without a target explains itself", async () => {
-  const { isError, text } = await callTool("design_guard", { project: "smoke-test" });
+  const { isError, text } = await callTool("design_guard", { project: "exo-smoke-test" });
   assert.equal(isError, true);
   assert.match(text, /inspect|program/i);
 });
@@ -1270,7 +1281,7 @@ await check("design_snapshot saves, lists and fetches versions", async () => {
 
 await check("final_qa gates a program with a checklist", async () => {
   const { data, isError } = await callTool("final_qa", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "QA", width: 1440, height: 900, grid: 8 },
       regions: [
@@ -1292,7 +1303,7 @@ await check("final_qa gates a program with a checklist", async () => {
 
 await check("final_qa fails a screen with no focal hierarchy", async () => {
   const { data } = await callTool("final_qa", {
-    project: "smoke-test",
+    project: "exo-smoke-test",
     program: {
       canvas: { name: "Flat", width: 1440, height: 900, grid: 8 },
       regions: [{ fn: "frame", id: "main", args: { width: "fill", height: "fill" } }],

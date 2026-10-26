@@ -40,6 +40,7 @@ test("the deployment decision gets the deployment-fit template and shell", () =>
   const plan = planScreen({
     primaryDecision: "Choose a model deployment that fits the discovered compute cluster.",
     availableInformation: ["candidate models", "cluster memory", "machine health"],
+    product: "exo",
   });
   assert.equal(plan.template.name, "deployment-fit");
   const ids = plan.regions.map((r) => r.id);
@@ -62,20 +63,21 @@ test("the deployment decision gets the deployment-fit template and shell", () =>
 /* -------------------------------------------------------------------------- */
 
 test("the deploy decision infers the model-fit archetype deterministically", () => {
-  const inferred = resolveArchetype("Choose a model deployment that fits the discovered compute cluster.");
+  const inferred = resolveArchetype("Choose a model deployment that fits the discovered compute cluster.", undefined, "exo");
   assert.equal(inferred?.name, "model-fit");
   assert.deepEqual(inferred, archetypeFor("model-fit"));
 
   // A deployment decision about the cluster itself is the deployment screen.
-  assert.equal(resolveArchetype("confirm the rollout to the cluster")?.name, "deployment");
+  assert.equal(resolveArchetype("confirm the rollout to the cluster", undefined, "exo")?.name, "deployment");
   // Non-deploy decisions infer nothing.
-  assert.equal(resolveArchetype("select a model"), undefined);
+  assert.equal(resolveArchetype("select a model", undefined, "exo"), undefined);
 });
 
 test("model-fit priority items surface as required information", () => {
   const plan = planScreen({
     primaryDecision: "Choose a model deployment that fits the discovered compute cluster.",
     availableInformation: ["candidate models", "cluster memory"],
+    product: "exo",
   });
   // Inferred archetype: the four model-fit priorities join the stated items.
   for (const priority of ["fit verdict", "requires vs available", "recommended config", "run action"]) {
@@ -110,7 +112,7 @@ test("buildPlan echoes the archetype and required information", () => {
 /* -------------------------------------------------------------------------- */
 
 test("deploy plans carry the deployment runtime states", () => {
-  const plan = planScreen({ primaryDecision: "Choose a model deployment that fits the discovered compute cluster." });
+  const plan = planScreen({ primaryDecision: "Choose a model deployment that fits the discovered compute cluster.", product: "exo" });
   const states = plan.artDirection.interactionStates;
   for (const state of [
     "model downloading",
@@ -200,6 +202,7 @@ test("the exo-deployment-fit offline brief plans cleanly", () => {
     visualDirection: fixture.brief.visualDirection,
     states: fixture.brief.states,
     primaryAction: fixture.brief.primaryAction,
+    product: "exo",
   });
   assert.equal(plan.intent.decisionKind, "deploy");
 

@@ -14,8 +14,9 @@
  * happens in a call that costs one message, not an undo.
  */
 import { z } from "zod";
-import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, isActionBearing, SCREEN_ARCHETYPES, type ScreenIntent } from "./planner";
+import { classifyDecision, planDeckNarrative, planScreen, archetypeFor, isActionBearing, SCREEN_ARCHETYPES, ARTEFACT_TYPES, isArtefactType, type ScreenIntent } from "./planner";
 import { notesForPrompt, loadMemory, projectKey } from "../memory/store";
+import { resolveProfile, type ResolvedProfile } from "../memory/profiles";
 import { bestPattern } from "../design/grammar/matcher";
 import { buildCompositionPlan, compositionHolds } from "../design/composition/planner";
 import { compositionHintFor, resolveCompositionHintSources } from "../design/skills/composition";
@@ -144,6 +145,23 @@ export const PlanScreenArgs = z
      * never be considered final without seeing its siblings.
      */
     variants: z.boolean().optional().describe("Include 2-3 full structural variants to compare. Default true."),
+    /**
+     * The product profile to plan under (GitHub issue #27).
+     *
+     * Names a registered product profile ("exo"). When omitted, the profile
+     * resolves from the project's memory; a project that resolves to neither
+     * plans under general, domain-neutral defaults with no product rules.
+     * Product-specific composition, vocabulary and acceptance rules are
+     * therefore always explicit or project-scoped — never global.
+     */
+    profile: z.string().max(80).optional().describe("Product profile id (e.g. 'exo'). Omitted = resolve from project memory; none = general defaults."),
+    /**
+     * The artefact type (issue #27 P0): "product-ui", "mobile", "landing",
+     * "editorial", "dataviz", "diagram", "identity", "design-system",
+     * "presentation". Artefacts that own a composition decide the plan's
+     * regions; "product-ui" keeps the decision-led path.
+     */
+    artefact: z.string().max(40).optional(),
   })
   .strict();
 
@@ -153,7 +171,7 @@ export const PlanScreenArgs = z
  * Kept as a separate exported function so it can be tested without a session —
  * the planner is pure and should not require a live Figma connection to exercise.
  */
-export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?: string; notes?: string } = {}): unknown {
+export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?: string; notes?: string; profile?: ResolvedProfile } = {}): unknown {
   // An archetype presets the decision; anything stated explicitly wins. The
   // archetype's anti-patterns join the warnings so they are seen, not buried.
   const archetype = args.archetype !== undefined ? archetypeFor(args.archetype) : undefined;
@@ -162,6 +180,17 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       `Unknown archetype '${args.archetype}'. Known archetypes: ${SCREEN_ARCHETYPES.map((a) => a.name).join(", ")}.`,
     );
   }
+  if (args.artefact !== undefined && !isArtefactType(args.artefact)) {
+    throw new Error(
+      `Unknown artefact type '${args.artefact}'. Known types: ${ARTEFACT_TYPES.join(", ")}.`,
+    );
+  }
+
+  // Project design profile (GitHub issue #27): resolved once here, from the
+  // explicit brief when given, else by the caller with project memory in
+  // hand. The planner receives product + rules and stays product-agnostic —
+  // no profile means a general, domain-neutral plan with no product rules.
+  const profile = opts.profile ?? resolveProfile({ explicit: args.profile });
 
   const intent: ScreenIntent = {
     primaryDecision: args.primaryDecision ?? archetype?.decision ?? "",
@@ -200,6 +229,12 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
     // the plan's required information); an unknown name still fails here first
     // with the known list.
     ...(args.archetype !== undefined ? { archetype: args.archetype } : {}),
+    // The resolved profile travels in: product gates product-specific
+    // composition, vocabulary and archetype inference; rules gate rule
+    // previews. With no profile, nothing product-specific can fire.
+    ...(profile.product !== null ? { product: profile.product } : {}),
+    ...(profile.rules.length > 0 ? { rules: profile.rules } : {}),
+    ...(args.artefact !== undefined ? { artefact: args.artefact } : {}),
     // Deck format overrides any canvas size: slides are fixed 1920x1080, and a
     // custom size here would promise geometry the build cannot produce.
     ...(args.format === "deck" ? { canvas: { width: 1920, height: 1080, grid: 8 } } : args.canvas !== undefined ? { canvas: args.canvas } : {}),
@@ -216,6 +251,11 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
   // table-content + inspector) IS the dashboard shape when executed
   // literally — so when rejection is requested, say so loudly and point at
   // the spatial sibling instead of silently returning the template.
+  //
+  // The `exo.no-generic-saas` preview entry fires only when that product
+  // rule is active for this project (issue #27): a general project's plan
+  // cannot preview another product's rule. The always-on generic audit
+  // (plan.* findings below) covers the shape itself either way.
   const rejectGeneric = args.artDirection?.rejectGenericDashboard === true;
   if (rejectGeneric && isGenericDashboardShape(plan)) {
     plan.warnings.push(
@@ -223,10 +263,14 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
         "Do not execute it literally through design_runtime: build the native spatial shell instead (status strip + topology field + attention rail), " +
         "or confirm the spatial variant below.",
     );
-    plan.guardPreview.push({
-      rule: "exo.no-generic-saas",
-      therefore: "Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. Build the spatial/instrument shell natively; reserve design_runtime for reusable content inside it.",
-    });
+    const metricWallRuleId = profile.spec?.metricWallRuleId ?? null;
+    const metricWallRule = metricWallRuleId ? (intent.rules ?? []).find((r) => r.id === metricWallRuleId) : undefined;
+    if (metricWallRule) {
+      plan.guardPreview.push({
+        rule: metricWallRule.id,
+        therefore: "Avoid generic SaaS dashboard composition, especially repeated three-card metric rows. Build the spatial/instrument shell natively; reserve design_runtime for reusable content inside it.",
+      });
+    }
   }
 
   // Plan-time completeness signal (not a mutation gate): a deployment plan
@@ -329,6 +373,10 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
   const designContext = buildDesignContext({
     ...(args.audience !== undefined ? { audience: [args.audience] } : {}),
     ...(args.visualDirection !== undefined ? { visualDirection: directionFor(args.visualDirection) } : {}),
+    // The project context base follows the resolved profile (issue #27): the
+    // exo product context applies to exo-profile projects; a general project
+    // gets a neutral base and builds its context from its own recorded data.
+    ...(profile.product !== null ? { product: profile.product } : {}),
   });
   // The composition descriptors the *stated* direction words name (issue #24,
   // item 3) and the composition the caller *requests* (desiredComposition
@@ -422,6 +470,12 @@ export function buildPlan(args: z.infer<typeof PlanScreenArgs>, opts: { screen?:
       name: plan.template.name,
       why: plan.template.why,
     },
+
+    /**
+     * The artefact-led composition the plan follows, when the brief named an
+     * artefact that owns one (issue #27). Absent for decision-led plans.
+     */
+    ...(plan.artefact !== undefined ? { artefact: plan.artefact } : {}),
 
     /**
      * The §31 composition model. Geometry only.
@@ -650,18 +704,23 @@ export function auditPlanShape(plan: {
  * Plan-time completeness for deployment decisions (a signal, not a gate).
  *
  * A deployment plan owes its reader two things beyond the generic shell: the
- * automatic placement recommendation (an inspector carrying placement, the
- * requires-vs-available memory comparison and the fit verdict) and a primary
- * action — a region or slot the decision is committed through. When either is
- * absent the plan still stands, but it says so rather than letting the caller
+ * placement decision (an inspector carrying where it runs, the
+ * requires-vs-available comparison and the fit verdict) and a primary action
+ * — a region or slot the decision is committed through. When either is absent
+ * the plan still stands, but it says so rather than letting the caller
  * discover the gap in a render.
+ *
+ * The wording follows the active product profile (issue #27): the exo profile
+ * speaks in its own nouns, a general project's plan states the requirement
+ * without claiming another product's vocabulary.
  */
 function deployCompleteness(plan: {
   intent: { decisionKind: string };
   archetype?: { name: string };
   regions: Array<{ id: string; role: string; because: string }>;
 }): string[] {
-  const isDeploy = plan.intent.decisionKind === "deploy" || plan.archetype?.name === "model-fit" || plan.archetype?.name === "deployment";
+  const isDeploy =
+    plan.intent.decisionKind === "deploy" || plan.archetype?.name === "model-fit" || plan.archetype?.name === "deployment";
   if (!isDeploy) return [];
 
   const findings: string[] = [];
@@ -670,7 +729,7 @@ function deployCompleteness(plan: {
   );
   if (!hasPlacement) {
     findings.push(
-      "plan-completeness:deploy: no region carries the automatic placement recommendation — an inspector should state where the model runs, required vs available memory, and the fit verdict.",
+      "plan-completeness:deploy: no region carries the placement decision — an inspector should state where it runs, what is required against what is available, and the fit verdict.",
     );
   }
   if (!plan.regions.some((r) => isActionBearing(r))) {
@@ -715,7 +774,13 @@ export async function planScreenTool(session: Session | null, rawArgs: unknown):
   const { memory } = loadMemory(key);
   const notes = notesForPrompt(memory, { limit: 6 });
 
-  const result = buildPlan(args, { notes }) as Record<string, unknown>;
+  // The active project design profile (GitHub issue #27): the brief's explicit
+  // profile wins, else what the project's memory records (or seeds). The same
+  // resolution feeds plan previews and guard runs, so the two cannot disagree.
+  const profile = resolveProfile({ memory, explicit: args.profile });
+
+  const result = buildPlan(args, { notes, profile }) as Record<string, unknown>;
+  result["profileSource"] = profile.source;
 
   // Issue #29 — register the issued plan and stamp its id where the build
   // will find it. Provenance used to be whatever the calling model asserted

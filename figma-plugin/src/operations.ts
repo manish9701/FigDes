@@ -1911,8 +1911,16 @@ async function apply(ctx: Ctx, op: Parsed, index: number): Promise<string> {
     case "appendChild": {
       const parent = await resolveParent(ctx, op.parent, index, op.type);
       const child = await resolve(ctx, op.child, index, op.type);
-      if (!("appendChild" in child)) {
-        throw new OperationError(`${child.type} cannot be a child node`, index, op.type);
+      // The container ability is the PARENT side (resolveParent already
+      // checked it). The moved child may be ANY scene node — rectangles,
+      // ellipses, vectors and text are appended into frames constantly, and
+      // ChildrenMixin only exists on containers, so testing it on the child
+      // rejected every leaf ("RECTANGLE cannot be a child node") and made
+      // layer reordering in a live file impossible. What cannot be somebody's
+      // child is the document itself or a page.
+      const childType = (child as { type?: string }).type;
+      if (childType === "DOCUMENT" || childType === "PAGE") {
+        throw new OperationError(`A ${childType} cannot be a child node`, index, op.type);
       }
       if (parent.id === child.id) {
         throw new OperationError("Cannot append a node to itself", index, op.type);
@@ -2303,8 +2311,15 @@ async function restoreJournal(ctx: Ctx): Promise<{ restoredIds: string[]; unrest
       }
       if (entry.kind === "reparent" || entry.kind === "setPage") {
         const node = await resolveLive(entry.figmaNodeId);
+        // The restored child is any scene node — leaves included. ChildrenMixin
+        // exists only on containers, so demanding appendChild on the node here
+        // checked the wrong side and would have refused to restore every leaf
+        // the op had already moved, turning a full rollback into a partial one.
+        // Container ability is the parent's demand: restore into the recorded
+        // old parent when it still is a container, else into the documented
+        // fallback destination, the current page.
         const parentLive = entry.parentId ? await resolveLive(entry.parentId) : null;
-        if (!node || !("appendChild" in node)) {
+        if (!node) {
           unrestoredIds.push(entry.figmaNodeId);
           continue;
         }

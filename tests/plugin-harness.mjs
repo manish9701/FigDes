@@ -270,8 +270,45 @@ function addInstanceFactory(component) {
   return component;
 }
 
+/**
+ * Leaf scene nodes.
+ *
+ * Real Figma leaves (RECTANGLE, ELLIPSE, TEXT and most shape nodes) are NOT
+ * containers: ChildrenMixin — and with it appendChild/insertChild/children —
+ * exists only on frames, groups, components, instances, pages, sections and
+ * boolean ops. Plugin behaviour keys on exactly that distinction (the
+ * reparent op used to demand it on the wrong side, rejecting every leaf with
+ * "RECTANGLE cannot be a child node"), so the mock must not hand container
+ * abilities to a leaf: a faithful mock is what lets that class of bug
+ * reproduce here instead of only in live files.
+ */
+function leaf(type, props = {}) {
+  const node = mixin({
+    type,
+    id: props.id ?? nextId(),
+    name: props.name ?? type.charAt(0) + type.slice(1).toLowerCase(),
+    visible: props.visible !== false,
+    opacity: 1,
+    x: props.x ?? 0,
+    y: props.y ?? 0,
+    width: props.width ?? 100,
+    height: props.height ?? 100,
+    fills: props.fills ?? [paint("#CCCCCC")],
+    strokes: props.strokes ?? [],
+    strokeWeight: props.strokeWeight ?? 1,
+    effects: props.effects ?? [],
+    cornerRadius: props.cornerRadius ?? 0,
+    parent: props.parent ?? null,
+  });
+  // The two container methods mixin() hands out by default. `children` was
+  // never added for a leaf — real Figma simply does not have the property.
+  delete node.appendChild;
+  delete node.insertChild;
+  return node;
+}
+
 function text(props = {}) {
-  return mixin({
+  const node = mixin({
     type: "TEXT",
     id: props.id ?? nextId(),
     name: props.name ?? "Text",
@@ -297,6 +334,10 @@ function text(props = {}) {
     cornerRadius: 0,
     parent: props.parent ?? null,
   });
+  // A TEXT node is a leaf: the container mixins never existed on it.
+  delete node.appendChild;
+  delete node.insertChild;
+  return node;
 }
 
 function linkParents(node) {
@@ -571,8 +612,8 @@ getLocalVariablesAsync: async () => [
     },
 
     createFrame: () => frame({ name: "Frame" }),
-    createRectangle: () => frame({ name: "Rectangle", cornerRadius: 0 }),
-    createEllipse: () => frame({ name: "Ellipse", cornerRadius: 0 }),
+    createRectangle: () => leaf("RECTANGLE", { name: "Rectangle", width: 100, height: 100 }),
+    createEllipse: () => leaf("ELLIPSE", { name: "Ellipse", width: 100, height: 100 }),
     createText: () => text({ name: "Text" }),
 
     group: (nodes, parent) => {

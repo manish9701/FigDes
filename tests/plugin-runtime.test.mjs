@@ -1645,3 +1645,80 @@ test("native setLayoutGrid appends through the native bridge", async () => {
   assert.equal(reply.ok, true, reply.error);
   assert.equal(f.__node(made.data.id).layoutGrids.length, 1);
 });
+
+/* -------------------------------------------------------------------------- */
+/* Leaf reparenting + layer reordering (observed live: appendChild of a        */
+/* created rectangle was rejected and rolled the batch back)                    */
+/* -------------------------------------------------------------------------- */
+
+test("appendChild moves a created rectangle — a leaf — under another parent", async () => {
+  const { figma: f } = loadPlugin();
+  const reply = await ask(f, "create_design", {
+    transactionId: "txn-leaf-reparent",
+    operations: [
+      // The rectangle is created with no parent (it lands on the page), then
+      // moved into the map frame — the exact batch shape the live session used.
+      { type: "createFrame", id: "map", name: "Map", width: 400, height: 300 },
+      { type: "createRectangle", id: "edge", name: "Edge", width: 120, height: 4, fill: "#2D7A4D" },
+      { type: "appendChild", parent: "map", child: "edge" },
+    ],
+  });
+  assert.equal(reply.data.status, "success", `appendChild of a leaf must not fail: ${JSON.stringify(reply.data.error ?? {})}`);
+  const rect = f.__node(reply.data.createdNodes.find((n) => n.temporaryId === "edge").figmaNodeId);
+  const map = f.__node(reply.data.createdNodes.find((n) => n.temporaryId === "map").figmaNodeId);
+  assert.equal(rect.parent, map, "the rectangle lives in the frame now");
+  assert.ok(map.children.includes(rect), "the leaf is among the parent's children");
+});
+
+test("appendChild with an index reorders layers inside one parent (z-order)", async () => {
+  const { figma: f, doc: d } = loadPlugin();
+  const reply = await ask(f, "create_design", {
+    transactionId: "txn-leaf-zorder",
+    operations: [
+      { type: "createFrame", id: "map", name: "Map", width: 400, height: 300 },
+      { type: "createRectangle", id: "r1", name: "Land 1", width: 40, height: 40, parent: "map" },
+      { type: "createRectangle", id: "r2", name: "Land 2", width: 40, height: 40, parent: "map" },
+      { type: "createRectangle", id: "r3", name: "Road", width: 60, height: 6, parent: "map" },
+      // Insert the road at index 0: the bottommost layer (children are back-to-front).
+      { type: "appendChild", parent: "map", child: "r3", index: 0 },
+    ],
+  });
+  assert.equal(reply.data.status, "success", `reordering a leaf must not fail: ${JSON.stringify(reply.data.error ?? {})}`);
+  const map = f.__node(reply.data.createdNodes.find((n) => n.temporaryId === "map").figmaNodeId);
+  const byName = map.children.map((c) => c.name);
+  assert.deepEqual(byName, ["Road", "Land 1", "Land 2"], "the road sits under the lands, not on top");
+  assert.ok(d.page.children.every((c) => c.name !== "Land 1"), "the leaves never left the parent they were created in");
+});
+
+test("a failed batch carrying a leaf reparent restores the leaf to its original parent", async () => {
+  const { figma: f, doc: d } = loadPlugin();
+  // Commit the rectangle first, so the second batch holds a PRE-EXISTING leaf:
+  // the journal-reparent restore path, not create-cleanup, has to bring it back.
+  const made = await ask(f, "create_design", {
+    transactionId: "txn-set-up-leaf",
+    operations: [
+      { type: "createFrame", id: "map", name: "Map", width: 400, height: 300 },
+      { type: "createRectangle", id: "edge", name: "Edge", width: 120, height: 4, fill: "#2D7A4D" },
+    ],
+  });
+  assert.equal(made.data.status, "success");
+  const rectId = made.data.createdNodes.find((n) => n.temporaryId === "edge").figmaNodeId;
+  const mapId = made.data.createdNodes.find((n) => n.temporaryId === "map").figmaNodeId;
+  const rectBefore = f.__node(rectId);
+  assert.notEqual(rectBefore.parent, null, "the rectangle starts on the page");
+
+  const reply = await ask(f, "create_design", {
+    transactionId: "txn-leaf-rollback",
+    operations: [
+      { type: "appendChild", parent: mapId, child: rectId },
+      { type: "renameNode", target: "ghost-does-not-exist", name: "boom" },
+    ],
+  });
+  assert.equal(reply.data.status, "failed");
+  assert.equal(reply.data.rolledBack, true, "the reparented leaf must not survive a failed batch");
+  assert.equal(reply.data.rollbackStatus, "full", `the reparent restore is required for full: ${reply.data.rollbackStatus}`);
+  const restored = f.__node(rectId);
+  assert.ok(restored, "the leaf still exists");
+  assert.ok(d.page.children.includes(restored), "the leaf is back on the page, not inside the map");
+  assert.equal(restored.fills[0].color.r, 0x2d / 255, "its own properties restored too");
+});

@@ -121,6 +121,14 @@ export const RUNTIME_PRIMITIVES = {
   flowNode: { description: "One step box in a flow/process diagram.", kind: "content" as const },
   decisionDiamond: { description: "A decision diamond in a flow diagram.", kind: "content" as const },
   timelineEvent: { description: "One dated event on a timeline.", kind: "content" as const },
+  notice: { description: "A hued inline notice: title, explanatory body, optional action text (info, success, warning, error).", kind: "content" as const },
+  codeBlock: { description: "A dark monospaced code/JSON block with an optional language header.", kind: "content" as const },
+  copyField: { description: "A labelled read-only field showing a machine value with a Copy affordance.", kind: "content" as const },
+  keyValueList: { description: "A key/value list of machine data as aligned rows (known/missing inputs, endpoint details).", kind: "content" as const },
+  emptyState: { description: "An explicit empty region: quiet icon, title, explanation, optional action — never a blank frame.", kind: "content" as const },
+  loadingState: { description: "An explicit loading state: what is being waited on, with a progress indication.", kind: "content" as const },
+  successState: { description: "An explicit success state: what succeeded, with evidence text and optional next action.", kind: "content" as const },
+  errorState: { description: "An explicit error state: what failed, why it matters, and a recovery action.", kind: "content" as const },
   chartBar: { description: "A bar-chart scaffold from labelled values.", kind: "content" as const },
   chartLine: { description: "A line-chart scaffold from an ordered series.", kind: "content" as const },
   chartPie: { description: "A pie/donut scaffold from labelled shares.", kind: "content" as const },
@@ -313,6 +321,12 @@ const CONTENT_ARGS = new Set([
   "footer",
   "accent",
   "number",
+  // State + data primitives: `code`/`language` name the content of a code
+  // block declaratively (the string is rendered as text). They sit on this
+  // allowlist for the same reason `body`/`items` do — schema + allowlist must
+  // agree, or a correctly-spelled argument reads as unknown.
+  "code",
+  "language",
   // Token / style args
   "name",
   "type",
@@ -2398,6 +2412,14 @@ function componentTypeFor(fn: PrimitiveName): DesignIR["content"][number] extend
     flowNode: "flowNode",
     decisionDiamond: "decisionDiamond",
     timelineEvent: "timelineEvent",
+    notice: "notice",
+    codeBlock: "codeBlock",
+    copyField: "copyField",
+    keyValueList: "keyValueList",
+    emptyState: "emptyState",
+    loadingState: "loadingState",
+    successState: "successState",
+    errorState: "errorState",
     chartBar: "chartBar",
     chartLine: "chartLine",
     chartPie: "chartPie",

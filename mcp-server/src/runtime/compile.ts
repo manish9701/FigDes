@@ -2335,6 +2335,282 @@ function emitComponent(
       break;
     }
 
+    case "notice":
+    case "errorState":
+    case "successState": {
+      // One shared anatomy for the hued states (improvement brief §3: honest
+      // uncertainty is an explicit state, not an empty region): a hued
+      // surface, a headline, an explanatory body, and an optional action line.
+      // `notice` picks its tone; the two state variants pin theirs and bring a
+      // default headline so an unlabelled call still reads as an error, not a
+      // mystery rectangle.
+      const preset: Record<string, { tone: string; title: string }> = {
+        notice: { tone: "info", title: "Notice" },
+        successState: { tone: "success", title: "Completed" },
+        errorState: { tone: "error", title: "Something failed" },
+      };
+      const pre = preset[spec.type]!;
+      const tone = toneFor(typeof p.tone === "string" ? p.tone : pre.tone);
+      const title = str("title") || str("label") || pre.title;
+      const body = str("body");
+      const action = str("action");
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: title,
+          x: box.x,
+          y: box.y,
+          width: Math.max(180, Math.round(box.w)),
+          height: Math.max(grid * 9, Math.round(box.h || (grid * 3 + (body ? grid * 5 : 0) + (action ? grid * 4 : 0)))),
+          fill: str("surface", tone.bg),
+          stroke: tone.fg,
+          strokeWeight: 1,
+          cornerRadius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: grid / 2,
+          counterAxisAlignItems: "MIN",
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: title, fontSize: fs(13), weight: 600, fill: tone.fg }));
+      if (body) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Body", content: body, fontSize: fs(12), fill: "#55564F" }));
+      }
+      if (action) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Action", content: action, fontSize: fs(12), weight: 600, fill: tone.fg }));
+      }
+      break;
+    }
+
+    case "loadingState": {
+      // A wait stated as a fact in text plus a small progress indication.
+      // "Loading…" carries no information; the title says what is happening
+      // and the body says what completion unlocks.
+      const tone = toneFor(typeof p.tone === "string" ? p.tone : "info");
+      const title = str("title") || str("label") || "Loading…";
+      const body = str("body");
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: title,
+          x: box.x,
+          y: box.y,
+          width: Math.max(180, Math.round(box.w)),
+          height: Math.max(grid * 9, Math.round(box.h || (grid * 3 + (body ? grid * 4 : 0) + grid * 2))),
+          fill: str("surface", tone.bg),
+          cornerRadius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: grid / 2,
+          counterAxisAlignItems: "MIN",
+        }),
+      );
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: title, fontSize: fs(13), weight: 600, fill: tone.fg }));
+      if (body) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Body", content: body, fontSize: fs(12), fill: "#55564F" }));
+      }
+      // The progress indication is three real dots in a tiny auto-layout row —
+      // motion is the only part of loading a screenshot cannot fake, but the
+      // dots at least tag the state visually so a static export still reads.
+      operations.push(
+        op({ type: "createFrame", id: `${spec.id}-dots`, parent: spec.id, name: "Progress", width: 34, height: 6, fill: surfaceFill("transparent", []), layoutMode: "HORIZONTAL", itemSpacing: 5 }),
+      );
+      for (const dot of ["-dot-1", "-dot-2", "-dot-3"]) {
+        operations.push(op({ type: "createEllipse", id: `${spec.id}${dot}`, parent: `${spec.id}-dots`, name: "Dot", width: 6, height: 6, fill: tone.fg }));
+      }
+      break;
+    }
+
+    case "emptyState": {
+      // Open, unhued: emptiness is not an error. Icon (a quiet ring), title,
+      // explanation, and the next useful action when one exists — the exact
+      // opposite of an empty region with only a heading.
+      const tone = toneFor(typeof p.tone === "string" ? p.tone : "neutral");
+      const title = str("title") || str("label") || "Nothing here yet";
+      const body = str("body");
+      const action = str("action");
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: title,
+          x: box.x,
+          y: box.y,
+          width: Math.max(200, Math.round(box.w)),
+          height: Math.max(grid * 14, Math.round(box.h || (grid * 14 + (body ? grid * 4 : 0) + (action ? grid * 3 : 0)))),
+          fill: surfaceFill(str("surface", "transparent"), []),
+          cornerRadius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 2,
+          itemSpacing: grid,
+          counterAxisAlignItems: "CENTER",
+          primaryAxisAlignItems: "MIN",
+        }),
+      );
+      operations.push(op({ type: "createEllipse", id: `${spec.id}-ring`, parent: spec.id, name: "Icon ring", width: Math.round(grid * 5), height: Math.round(grid * 5), fill: surfaceFill("transparent", []), stroke: tone.fg, strokeWeight: 2 }));
+      operations.push(op({ type: "createText", parent: spec.id, name: "Title", content: title, fontSize: fs(14), weight: 600, fill: "#242521" }));
+      if (body) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Body", content: body, fontSize: fs(12), fill: "#6F716A", textAlignHorizontal: "CENTER" }));
+      }
+      if (action) {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Action", content: action, fontSize: fs(12), weight: 600, fill: tone.fg }));
+      }
+      break;
+    }
+
+    case "codeBlock": {
+      // Machine data in a machine face on a dark surface: a config snippet is
+      // equipment, not prose. Line count drives the height estimate; 24 lines
+      // cap so one long paste cannot take over a region.
+      const code = str("code") || str("text") || str("value");
+      const language = str("language");
+      const lines = Math.min(24, Math.max(1, code ? code.split("\n").length : 1));
+      const headerH = language !== "" ? grid * 2.5 : 0;
+      const bodyH = lines * Math.round(15 * typeScale) + grid;
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: language || "Code",
+          x: box.x,
+          y: box.y,
+          width: Math.max(200, Math.round(box.w)),
+          height: Math.max(grid * 8, Math.round(box.h || grid * 3 + headerH + bodyH)),
+          fill: str("surface", "#1E1F1C"),
+          cornerRadius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: grid / 2,
+        }),
+      );
+      if (language !== "") {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Language", content: language.toUpperCase(), fontSize: fs(10), family: "JetBrains Mono", fill: "#8A8C84" }));
+      }
+      operations.push(op({ type: "createText", parent: spec.id, name: "Code", content: code || "// empty", fontSize: fs(12), family: "JetBrains Mono", fill: "#E8E6DF" }));
+      break;
+    }
+
+    case "copyField": {
+      // A read-only machine value with an explicit copy affordance: the field
+      // is drawn, the affordance is labelled in text, so the affordance is
+      // visible in exports and to screen readers. The value is mono — it is a
+      // machine value, and the reviewer measures that.
+      const label = str("label");
+      const value = str("value") || str("text");
+      const cardH = grid * 4.5;
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: label || value || "Copy field",
+          x: box.x,
+          y: box.y,
+          width: Math.max(180, Math.round(box.w)),
+          height: Math.max(cardH, Math.round(box.h || (label !== "" ? cardH + grid * 2.5 : cardH))),
+          fill: surfaceFill(str("surface", "transparent"), []),
+          layoutMode: "VERTICAL",
+          padding: 0,
+          itemSpacing: grid / 2,
+        }),
+      );
+      if (label !== "") {
+        operations.push(op({ type: "createText", parent: spec.id, name: "Label", content: label, fontSize: fs(11), fill: "#6F716A" }));
+      }
+      operations.push(
+        op({
+          type: "createFrame",
+          id: `${spec.id}-field`,
+          parent: spec.id,
+          name: "Field",
+          width: Math.max(160, Math.round(box.w)),
+          height: Math.round(cardH),
+          fill: "#FFFFFF",
+          stroke: "#E0E0E0",
+          strokeWeight: 1,
+          cornerRadius: num("radius", grid / 2),
+          layoutMode: "HORIZONTAL",
+          padding: { top: 0, right: grid, bottom: 0, left: grid },
+          itemSpacing: grid,
+          counterAxisAlignItems: "CENTER",
+          primaryAxisAlignItems: "SPACE_BETWEEN",
+        }),
+      );
+      operations.push(op({ type: "createText", parent: `${spec.id}-field`, name: "Value", content: value || "—", fontSize: fs(12), family: "JetBrains Mono", fill: "#242521" }));
+      operations.push(op({ type: "createText", parent: `${spec.id}-field`, name: "Copy affordance", content: "Copy", fontSize: fs(11), weight: 600, fill: "#0D99FF" }));
+      break;
+    }
+
+    case "keyValueList": {
+      // One row per fact, key muted on the left, value on the right. Values
+      // render in the machine face by default: these are the "known / still
+      // needed" ledgers, and proportional faces there were measured as a drift
+      // risk. `rows` is accepted as an alias for `items`.
+      const rawItems = Array.isArray(p.items) ? p.items : Array.isArray(p.rows) ? p.rows : [];
+      const items = rawItems
+        .map((i) => (typeof i === "object" && i !== null && !Array.isArray(i) ? (i as Record<string, string | number | boolean>) : null))
+        .filter((i): i is Record<string, string | number | boolean> => i !== null)
+        .slice(0, 10)
+        .map((i) => ({ key: typeof i.key === "string" ? i.key : "", value: typeof i.value === "string" ? i.value : "" }));
+      const technical = look.valueMono || p.mono === true;
+      const innerW = Math.max(160, Math.round(box.w) - grid * 3);
+      operations.push(
+        op({
+          type: "createFrame",
+          id: spec.id,
+          parent: parentHint,
+          name: str("title", "Details"),
+          x: box.x,
+          y: box.y,
+          width: Math.max(200, Math.round(box.w)),
+          height: Math.max(grid * 6, Math.round(box.h || grid * 3 + items.length * Math.round(22 * typeScale))),
+          fill: str("surface", "#FFFFFF"),
+          stroke: "#E8E6DF",
+          strokeWeight: 1,
+          cornerRadius: num("radius", grid),
+          layoutMode: "VERTICAL",
+          padding: grid * 1.5,
+          itemSpacing: grid / 2,
+        }),
+      );
+      for (const [index, item] of items.entries()) {
+        operations.push(
+          op({
+            type: "createFrame",
+            id: `${spec.id}-row-${index + 1}`,
+            parent: spec.id,
+            name: item.key || `Row ${index + 1}`,
+            width: innerW,
+            height: Math.round(22 * typeScale),
+            fill: surfaceFill("transparent", []),
+            layoutMode: "HORIZONTAL",
+            itemSpacing: grid,
+            counterAxisAlignItems: "CENTER",
+            primaryAxisAlignItems: "SPACE_BETWEEN",
+          }),
+        );
+        operations.push(op({ type: "createText", parent: `${spec.id}-row-${index + 1}`, name: "Key", content: item.key, fontSize: fs(12), fill: "#6F716A" }));
+        operations.push(
+          op({
+            type: "createText",
+            parent: `${spec.id}-row-${index + 1}`,
+            name: "Value",
+            content: item.value,
+            fontSize: fs(12),
+            ...(technical ? { family: "JetBrains Mono" } : {}),
+            fill: "#242521",
+          }),
+        );
+      }
+      break;
+    }
+
     case "deviceNode": {
       // Health is a stroke, selection is a heavier stroke in action blue.
       // Selection wins over health: the thing the user is looking at must be
@@ -5242,6 +5518,22 @@ export function toVectorPathData(points: Array<{ x: number; y: number }>): Vecto
 
 /** Routes every candidate through the allowlist; an invalid op is a bug here. */
 function op(candidate: unknown): Operation {
+  // Legacy create emitters wrote `radius`; the op schema names the field
+  // `cornerRadius` and parses non-strict, which silently stripped it — every
+  // card emitted that way drew with square corners. Remap once, here, at the
+  // one place every emitted operation passes through.
+  if (candidate !== null && typeof candidate === "object" && !Array.isArray(candidate)) {
+    const c = candidate as Record<string, unknown>;
+    const type = typeof c.type === "string" ? c.type : "";
+    if (
+      c.radius !== undefined &&
+      c.cornerRadius === undefined &&
+      (type === "createFrame" || type === "createRectangle" || type === "createEllipse" || type === "createVector")
+    ) {
+      candidate = { ...c, cornerRadius: c.radius };
+      delete (candidate as Record<string, unknown>).radius;
+    }
+  }
   const parsed = OperationSchema.safeParse(candidate);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
@@ -5578,6 +5870,50 @@ function hugSize(
       // neighbouring panel), and the detail wraps — resolvedSize computes the
       // wrapped height with the same formula the emitter uses.
       return null;
+    }
+    // Explicit states + data primitives: extents estimated from their own
+    // text, matching the emitter's `box.h || estimate` formulas so the layout
+    // reserves what the emitter draws (the trace-check rule).
+    case "notice":
+    case "successState":
+    case "errorState": {
+      const body = str("body");
+      const action = str("action");
+      return {
+        w: Math.min(240, Math.max(200, hugWidth(str("title", "Notice"), { fontSize: Math.round(13 * typeScale), paddingX: grid * 3 }))),
+        h: Math.round(grid * 3 + (body ? (body.length > 72 ? grid * 7 : grid * 4) : 0) + (action ? grid * 3 : 0)),
+      };
+    }
+    case "loadingState": {
+      const body = str("body");
+      return { w: 220, h: Math.round(grid * 3 + (body ? grid * 4 : 0) + grid * 2) };
+    }
+    case "emptyState": {
+      const body = str("body");
+      const action = str("action");
+      return { w: 240, h: Math.round(grid * 14 + (body ? grid * 4 : 0) + (action ? grid * 3 : 0)) };
+    }
+    case "codeBlock": {
+      const code = str("code") || str("text") || str("value");
+      const lines = Math.min(24, Math.max(1, code ? code.split("\n").length : 1));
+      const language = str("language");
+      return {
+        w: 280,
+        h: Math.round(grid * 3 + (language ? grid * 2.5 : 0) + lines * Math.round(15 * typeScale) + grid),
+      };
+    }
+    case "copyField": {
+      const label = str("label");
+      const value = str("value") || str("text");
+      return {
+        w: Math.min(240, Math.max(200, hugWidth(value || "—", { fontSize: Math.round(12 * typeScale), paddingX: grid * 4 }))),
+        h: Math.round(grid * 4.5 + (label ? grid * 2.5 : 0)),
+      };
+    }
+    case "keyValueList": {
+      const raw = spec.props.items;
+      const rows = Array.isArray(raw) ? raw.length : 0;
+      return { w: 260, h: Math.round(grid * 3 + rows * Math.round(22 * typeScale)) };
     }
     default:
       return null;

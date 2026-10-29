@@ -271,6 +271,17 @@ export const ComponentSpecSchema = z
         "dialog",
         "navigationItem",
         "tableRow",
+        // Explicit state + data primitives (improvement brief §2, §3):
+        // uncertainty and progress states are drawn, not described; machine
+        // data gets a mono block or a copyable field instead of a label.
+        "notice",
+        "codeBlock",
+        "copyField",
+        "keyValueList",
+        "emptyState",
+        "loadingState",
+        "successState",
+        "errorState",
       ])
       .default("panel"),
     props: z

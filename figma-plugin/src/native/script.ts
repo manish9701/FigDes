@@ -108,104 +108,54 @@ function clampTimeout(value: unknown): number {
 }
 
 /**
- * Counts raw-API mutations heuristically, without breaking Figma's own proxy.
+ * Observes raw-API mutations without ever proxying Figma's API.
  *
  * The `figdes` builder reports exact counts through noteMutation, but a raw
  * `figma.*` script bypasses it — so a script creating 25 nodes reported
  * mutations:0, which reads as "did nothing" next to a success status (and made
- * the rollback gate a no-op for raw scripts). This wrapper counts mutating
- * method calls plus property writes.
+ * the rollback gate a no-op for raw scripts).
  *
- * How the wrapper avoids `proxy: inconsistent get` and
- * `cannot convert to object` (the faults that made every mutating
- * `figdes_use_figma` script fail, even a minimal one-rectangle probe):
+ * A JS Proxy wrapper around `figma` was tried to close that gap and removed:
+ * under Figma's sandbox (QuickJS) the called object is itself a proxy under
+ * `documentAccess: "dynamic-page"`, and wrapping it in another JS Proxy trips
+ * QuickJS's proxy invariants (`proxy: inconsistent get`) no matter how the
+ * traps forward — live-measured on 2026-10-29 against the fixed receiver and
+ * identity-preserving variant. Meanwhile the SAME calls succeed untouched —
+ * the builder path (raw `figma`, direct calls) commits cleanly, and a script
+ * speaking only the builder built, loaded fonts, and read back node state.
  *
- * 1. The receiver forwarded into Figma's API is always the wrapped target —
- *    never the outer Proxy. Figma's internal safe proxy
- *    (documentAccess: "dynamic-page") validates the receiver it is invoked
- *    with; passing the outer Proxy as receiver throws
- *    `proxy: inconsistent get` on the first property read or write.
- * 2. Property reads and method results are returned unwrapped. Values keep
- *    their exact identity, so `node.fills = other.fills`,
- *    `node.children` traversal, and array round-trips never hand Figma a
- *    Proxy where a plain object is required — the trigger for
- *    `cannot convert to object` — and repeated reads are `===`-stable.
- *
- * Two antennas both feed noteMutation (a presence indicator for the rollback
- * gate, not an audit — they may double count): synchronous root-level
- * mutating calls plus property writes, and Figma's own documentchange events,
- * which also cover mutations on node objects that live below the wrapped
- * root. Mutating scripts observer the handler only for the duration of the
- * run and it is always removed in dispose().
+ * So scripts now receive the raw `figma` they would have in any normal
+ * plugin, and mutations are observed through Figma's own `documentchange`
+ * events instead. documentchange is batched asynchronously: it fires after
+ * the mutation, on a later task — so the observer is disposed on a delay
+ * (LATE_DISPOSE_MS) and the failure path of the script runner waits one short
+ * turn of the event loop before making the rollback decision, letting events
+ * for changes made just before a throw land in the ledger first.
  */
-const MUTATING_METHODS = new Set([
-  "createFrame", "createRectangle", "createEllipse", "createPolygon", "createStar",
-  "createLine", "createText", "createVector", "createConnector", "createComponent",
-  "createComponentSet", "createInstance", "createPage", "createSlice",
-  "createBooleanOperation", "flatten", "subtract", "union", "intersect", "exclude",
-  "appendChild", "insertChild", "remove", "clone", "resize", "rescale",
-  "group", "ungroup", "detachInstance", "swapComponent", "swapStyle",
-  "setPluginData", "setSharedPluginData", "setRelaunchData",
-  "addOnDocumentChange", "notify",
-]);
+const LATE_DISPOSE_MS = 750;
 
-function countingFigma(raw: typeof figma): {
-  api: typeof figma;
+function mutationObserver(raw: typeof figma): {
   mutations: () => number;
   dispose: () => void;
 } {
   let count = 0;
-
-  // Document-level antenna: fires for every real content change (including
-  // writes on unwrapped node objects) and feeds the transaction ledger, so a
-  // failed raw script rolls back even when the synchronous count missed it.
   const onDocumentChange = (..._args: unknown[]): void => {
+    count += 1;
+    // Separately guarded: once the owning transaction commits or rolls back,
+    // noteMutation throws (ledger closed) — the count itself must survive so
+    // the report still says how many changes the script made.
     try {
       noteMutation();
-      count += 1;
     } catch {
-      /* ledger closed already (committed/rolled back) — nothing to count on */
+      /* ledger closed already — nothing to count on */
     }
   };
   try {
     raw.on("documentchange", onDocumentChange);
   } catch {
-    /* host without documentchange support: synchronous count still applies */
+    /* host without documentchange support: the ledger stays on the builder */
   }
-
-  const api = new Proxy(raw as unknown as object, {
-    get(target, prop) {
-      // Receiver is always `target`, never the outer Proxy — see above.
-      const got = Reflect.get(target, prop, target);
-      if (typeof got === "function" && typeof prop === "string") {
-        const mutating = MUTATING_METHODS.has(prop);
-        return (...args: unknown[]): unknown => {
-          // Applying with `target` as `this` is exactly what the un-wrapped
-          // `figma.method(...)` call would do — node methods keep receiver.
-          const out = (got as (...a: unknown[]) => unknown).apply(target, args);
-          if (mutating) {
-            count += 1;
-            noteMutation();
-          }
-          // Promises and results pass through unwrapped (identity-safe).
-          return out;
-        };
-      }
-      return got;
-    },
-    set(target, prop, next) {
-      // Any property write through the root (rare — nodes are unwrapped) is a
-      // mutation. Figma validates the receiver, so it must stay `target`.
-      if (typeof prop === "string" && !prop.startsWith("__")) {
-        count += 1;
-        noteMutation();
-      }
-      return Reflect.set(target, prop, next, target);
-    },
-  }) as unknown as typeof figma;
-
   return {
-    api,
     mutations: () => count,
     dispose() {
       try {
@@ -215,6 +165,20 @@ function countingFigma(raw: typeof figma): {
       }
     },
   };
+}
+
+/** Disposes the observer on a delay, unlike `finally` disposal which races the
+ * batched documentchange dispatch itself. Never throws. */
+function lateDispose(observer: ReturnType<typeof mutationObserver> | null): void {
+  if (observer === null) return;
+  const self = observer;
+  setTimeout(() => {
+    try {
+      self.dispose();
+    } catch {
+      /* ignore — disposal is best-effort */
+    }
+  }, LATE_DISPOSE_MS);
 }
 
 export async function executeFigmaScript(payload: unknown): Promise<Record<string, unknown>> {
@@ -251,18 +215,19 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
 
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   let timedOut = false;
-  let collector: ReturnType<typeof countingFigma> | null = null;
+  let observer: ReturnType<typeof mutationObserver> | null = null;
 
   try {
-    // Raw `figma.*` calls bypass the builder's noteMutation tracking, so a
-    // script creating 25 nodes reported mutations:0 next to a success status.
-    // The wrapper observes mutating calls, property writes, and Figma's own
-    // documentchange events (documented in countingFigma); the builder keeps
-    // its exact count. Values pass through unwrapped, so scripts run exactly
-    // as they would against the raw API.
-    collector = countingFigma(figma);
+    // Scripts run against the RAW `figma` object — proxies around it are
+    // unsound under Figma's QuickJS sandbox (see mutationObserver). Raw
+    // `figma.*` mutations bypass the builder's noteMutation, so a
+    // documentchange observer fills the ledger instead (documented in
+    // mutationObserver); the builder keeps its exact count. The two can
+    // overlap: the ledger treats the total as a presence indicator, not an
+    // audit.
+    observer = mutationObserver(figma);
     const execution = Promise.resolve(execute(
-      collector.api,
+      figma,
       Math,
       JSON,
       Date,
@@ -295,7 +260,7 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
         transactionId,
         result: serializable(result),
         transaction: committed,
-        rawApiMutations: { count: collector.mutations(), heuristic: true },
+        rawApiMutations: { count: observer.mutations(), heuristic: true, source: "documentchange" },
       };
     }
 
@@ -314,9 +279,18 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
         },
       };
     }
+    // documentchange is batched asynchronously — events for changes made just
+    // before the throw have not been dispatched yet. One short turn of the
+    // event loop lets them land in the ledger first, so the rollback gate
+    // sees them and actually undoes instead of reporting a no-op for work
+    // the script did do.
+    await new Promise((resolve) => setTimeout(resolve, 150));
     return rollbackResult(transactionId, error);
   } finally {
     if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
-    if (collector !== null) collector.dispose();
+    // Late disposal: an immediate unsubscribe races the batched
+    // documentchange dispatch, which lands after this call returns. The
+    // observer stays ≤750ms and is then removed by lateDispose.
+    lateDispose(observer);
   }
 }

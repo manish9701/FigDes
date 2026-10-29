@@ -168,6 +168,39 @@ export const LIBRARY_STATE_TABLES: Record<string, Record<string, Record<string, 
     error: { status: "error" },
     success: { status: "fits" },
   },
+  /* ---- explicit states + notices (improvement brief §2): the state STRIP
+     vocabulary exercises the same tone rendering paths the single call does */
+  notice: {
+    default: {},
+    selected: {},
+    disabled: { tone: "neutral" },
+    loading: { tone: "info" },
+    empty: { tone: "neutral" },
+    error: { tone: "error" },
+    success: { tone: "success" },
+  },
+  emptyState: {
+    default: {},
+    selected: {},
+    disabled: { tone: "neutral" },
+    loading: { tone: "info" },
+    error: { tone: "error" },
+    success: { tone: "success" },
+  },
+  successState: {
+    default: { tone: "success" },
+    selected: { tone: "success" },
+    disabled: { tone: "neutral" },
+    loading: { tone: "info" },
+    error: { tone: "error" },
+  },
+  errorState: {
+    default: { tone: "error" },
+    selected: { tone: "error" },
+    disabled: { tone: "neutral" },
+    loading: { tone: "warning" },
+    success: { tone: "success" },
+  },
 };
 
 /** Tone vocabulary for status-carrying parts (mirrors the compiler's TONES keys). */
@@ -584,6 +617,182 @@ function tableRowDef(): LibraryComponentDef {
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Explicit states + notices (improvement brief §2 + §3)                        */
+/*                                                                              */
+/* Component masters for the hued state family, so `asComponent: true` emits      */
+/* reusable `exo/notice`-family masters instead of hand-drawn frames, and every   */
+/* use site links to one componentId a shared change can propagate through.       */
+/* The fallback paths draw the identical anatomy inline (that contract holds for  */
+/* every library component), reading the same props the compiler's draw path      */
+/* reads: title, body, action, tone.                                              */
+/* -------------------------------------------------------------------------- */
+
+/** Surface/ink pairs mirroring the compiler's TONES (value + alpha hex). */
+const STATE_TONE_PAIRS: Record<string, { fg: string; bg: string }> = {
+  success: { fg: "#1E6B3A", bg: "#2D7A4D1A" },
+  info: { fg: "#0B6BCB", bg: "#0D99FF1A" },
+  warning: { fg: "#8A5200", bg: "#B26A001A" },
+  error: { fg: "#A32A12", bg: "#D134151A" },
+  neutral: { fg: "#5A5C54", bg: "#6F716A1A" },
+};
+const STATE_TONE_KEYS = ["info", "success", "warning", "error", "neutral"] as const;
+
+function stateTonePair(props: Record<string, unknown>, fallback: string): { fg: string; bg: string } {
+  const tone = str(props, "tone", fallback).toLowerCase();
+  return STATE_TONE_PAIRS[tone] ?? STATE_TONE_PAIRS[fallback] ?? STATE_TONE_PAIRS.neutral!;
+}
+
+/** Shared fallback anatomy for the hued family: surface + title + body + action. */
+function huedFallbackOps(
+  id: string,
+  parent: string,
+  box: { x: number; y: number; w: number },
+  props: Record<string, unknown>,
+  grid: number,
+  typeScale: number,
+  preset: { tone: string; title: string },
+): OpCandidate[] {
+  const tone = stateTonePair(props, preset.tone);
+  const title = str(props, "title", str(props, "label", preset.title));
+  const body = str(props, "body");
+  const action = str(props, "action");
+  const ops: OpCandidate[] = [
+    {
+      type: "createFrame",
+      id,
+      parent,
+      name: title,
+      x: Math.round(box.x),
+      y: Math.round(box.y),
+      width: Math.max(160, Math.round(box.w)),
+      height: 110,
+      fill: tone.bg,
+      stroke: tone.fg,
+      strokeWeight: 1,
+      cornerRadius: grid,
+      layoutMode: "VERTICAL",
+      padding: grid * 1.5,
+      itemSpacing: 4,
+    },
+    { type: "createText", parent: id, name: "Title", content: title, fontSize: Math.round(13 * typeScale), weight: 600, fill: tone.fg },
+  ];
+  if (body) ops.push({ type: "createText", parent: id, name: "Body", content: body, fontSize: Math.round(12 * typeScale), fill: "#55564F" });
+  if (action) ops.push({ type: "createText", parent: id, name: "Action", content: action, fontSize: Math.round(12 * typeScale), weight: 600, fill: tone.fg });
+  return ops;
+}
+
+function noticeDef(): LibraryComponentDef {
+  return {
+    type: "notice",
+    masterName: "exo/notice",
+    masterId: "master-notice",
+    description: "A hued inline notice: headline, explanatory body, optional action text.",
+    anatomy: ["frame H hue surface + stroke", "title text 13/600 tone", "body text 12 optional", "action text 12/600 optional"],
+    variants: [...STATE_TONE_KEYS],
+    properties: { tone: [...STATE_TONE_KEYS] },
+    states: Object.keys(LIBRARY_STATE_TABLES.notice!),
+    masterSize: { width: 320, height: 110 },
+    masterOps: (grid) => [
+      masterHeader("notice", 320, 110),
+      { type: "createFrame", parent: "master-notice", name: "Notice", width: 320, height: 110, fill: STATE_TONE_PAIRS.info!.bg, stroke: STATE_TONE_PAIRS.info!.fg, strokeWeight: 1, cornerRadius: grid, layoutMode: "VERTICAL", padding: grid * 1.5, itemSpacing: 4 },
+      { type: "createText", parent: "master-notice", name: "Title", content: "Notice", fontSize: 13, weight: 600, fill: STATE_TONE_PAIRS.info!.fg },
+      { type: "createText", parent: "master-notice", name: "Body", content: "What this means and what happens next.", fontSize: 12, fill: "#55564F" },
+      { type: "createText", parent: "master-notice", name: "Action", content: "Review →", fontSize: 12, weight: 600, fill: STATE_TONE_PAIRS.info!.fg },
+    ],
+    fallbackOps: ({ id, parent, box, props, grid, typeScale }) => huedFallbackOps(id, parent, box, props, grid, typeScale, { tone: "info", title: "Notice" }),
+    variantFor: (props) => {
+      const tone = typeof props.tone === "string" && props.tone.toLowerCase() !== "neutral" ? props.tone.toLowerCase() : undefined;
+      return tone ? { Tone: tone } : undefined;
+    },
+  };
+}
+
+function emptyStateDef(): LibraryComponentDef {
+  return {
+    type: "emptyState",
+    masterName: "exo/empty-state",
+    masterId: "master-emptyState",
+    description: "An explicit empty region: quiet ring, title, explanation, optional action.",
+    anatomy: ["frame V open centred", "ring ellipse stroke", "title text 14/600", "body text 12 optional", "action text 12/600 optional"],
+    variants: [...STATE_TONE_KEYS],
+    properties: { tone: [...STATE_TONE_KEYS] },
+    states: Object.keys(LIBRARY_STATE_TABLES.emptyState!),
+    masterSize: { width: 280, height: 160 },
+    masterOps: (grid) => [
+      masterHeader("emptyState", 280, 160),
+      { type: "createFrame", parent: "master-emptyState", name: "Empty state", width: 280, height: 160, fill: [], cornerRadius: grid, layoutMode: "VERTICAL", padding: grid * 2, itemSpacing: 8, counterAxisAlignItems: "CENTER" },
+      { type: "createEllipse", parent: "master-emptyState", name: "Icon ring", width: 40, height: 40, fill: [], stroke: STATE_TONE_PAIRS.neutral!.fg, strokeWeight: 2 },
+      { type: "createText", parent: "master-emptyState", name: "Title", content: "Nothing here yet", fontSize: 14, weight: 600, fill: "#242521" },
+      { type: "createText", parent: "master-emptyState", name: "Body", content: "Say why it is empty and what will change it.", fontSize: 12, fill: "#6F716A" },
+    ],
+    fallbackOps: ({ id, parent, box, props, grid, typeScale }) => {
+      const tone = stateTonePair(props, "neutral");
+      const title = str(props, "title", str(props, "label", "Nothing here yet"));
+      const body = str(props, "body");
+      const action = str(props, "action");
+      const ops: OpCandidate[] = [
+        { type: "createFrame", id, parent, name: title, x: Math.round(box.x), y: Math.round(box.y), width: Math.max(200, Math.round(box.w)), height: 160, fill: [], cornerRadius: grid, layoutMode: "VERTICAL", padding: grid * 2, itemSpacing: 8, counterAxisAlignItems: "CENTER" },
+        { type: "createEllipse", id: id + "-ring", parent: id, name: "Icon ring", width: 40, height: 40, fill: [], stroke: tone.fg, strokeWeight: 2 },
+        { type: "createText", parent: id, name: "Title", content: title, fontSize: Math.round(14 * typeScale), weight: 600, fill: "#242521" },
+      ];
+      if (body) ops.push({ type: "createText", parent: id, name: "Body", content: body, fontSize: Math.round(12 * typeScale), fill: "#6F716A" });
+      if (action) ops.push({ type: "createText", parent: id, name: "Action", content: action, fontSize: Math.round(12 * typeScale), weight: 600, fill: tone.fg });
+      return ops;
+    },
+    variantFor: (props) => {
+      const tone = typeof props.tone === "string" && props.tone.toLowerCase() !== "neutral" ? props.tone.toLowerCase() : undefined;
+      return tone ? { Tone: tone } : undefined;
+    },
+  };
+}
+
+function successStateDef(): LibraryComponentDef {
+  return {
+    type: "successState",
+    masterName: "exo/success-state",
+    masterId: "master-successState",
+    description: "An explicit success state: what succeeded, evidence text, optional next action.",
+    anatomy: ["frame H success hue + stroke", "title text 13/600", "body text 12 optional", "action text 12/600 optional"],
+    variants: [...STATE_TONE_KEYS],
+    properties: { tone: [...STATE_TONE_KEYS] },
+    states: Object.keys(LIBRARY_STATE_TABLES.successState!),
+    masterSize: { width: 320, height: 100 },
+    masterOps: (grid) => [
+      masterHeader("successState", 320, 100),
+      { type: "createFrame", parent: "master-successState", name: "Success", width: 320, height: 100, fill: STATE_TONE_PAIRS.success!.bg, stroke: STATE_TONE_PAIRS.success!.fg, strokeWeight: 1, cornerRadius: grid, layoutMode: "VERTICAL", padding: grid * 1.5, itemSpacing: 4 },
+      { type: "createText", parent: "master-successState", name: "Title", content: "Completed", fontSize: 13, weight: 600, fill: STATE_TONE_PAIRS.success!.fg },
+      { type: "createText", parent: "master-successState", name: "Body", content: "The supporting fact or timestamp.", fontSize: 12, fill: "#55564F" },
+      { type: "createText", parent: "master-successState", name: "Action", content: "Next step →", fontSize: 12, weight: 600, fill: STATE_TONE_PAIRS.success!.fg },
+    ],
+    fallbackOps: ({ id, parent, box, props, grid, typeScale }) => huedFallbackOps(id, parent, box, props, grid, typeScale, { tone: "success", title: "Completed" }),
+    variantFor: (props) => ({ Tone: str(props, "tone", "success").toLowerCase() }),
+  };
+}
+
+function errorStateDef(): LibraryComponentDef {
+  return {
+    type: "errorState",
+    masterName: "exo/error-state",
+    masterId: "master-errorState",
+    description: "An explicit error state: what failed, why it matters, and a recovery action.",
+    anatomy: ["frame H error hue + stroke", "title text 13/600", "body text 12 optional", "action text 12/600 optional"],
+    variants: [...STATE_TONE_KEYS],
+    properties: { tone: [...STATE_TONE_KEYS] },
+    states: Object.keys(LIBRARY_STATE_TABLES.errorState!),
+    masterSize: { width: 320, height: 100 },
+    masterOps: (grid) => [
+      masterHeader("errorState", 320, 100),
+      { type: "createFrame", parent: "master-errorState", name: "Error", width: 320, height: 100, fill: STATE_TONE_PAIRS.error!.bg, stroke: STATE_TONE_PAIRS.error!.fg, strokeWeight: 1, cornerRadius: grid, layoutMode: "VERTICAL", padding: grid * 1.5, itemSpacing: 4 },
+      { type: "createText", parent: "master-errorState", name: "Title", content: "Something failed", fontSize: 13, weight: 600, fill: STATE_TONE_PAIRS.error!.fg },
+      { type: "createText", parent: "master-errorState", name: "Body", content: "Why it matters and any supporting evidence — no invented causes.", fontSize: 12, fill: "#55564F" },
+      { type: "createText", parent: "master-errorState", name: "Action", content: "Recover →", fontSize: 12, weight: 600, fill: STATE_TONE_PAIRS.error!.fg },
+    ],
+    fallbackOps: ({ id, parent, box, props, grid, typeScale }) => huedFallbackOps(id, parent, box, props, grid, typeScale, { tone: "error", title: "Something failed" }),
+    variantFor: (props) => ({ Tone: str(props, "tone", "error").toLowerCase() }),
+  };
+}
+
 export const COMPONENT_LIBRARY: Record<string, LibraryComponentDef> = {
   button: buttonDef(),
   iconButton: iconButtonDef(),
@@ -598,7 +807,12 @@ export const COMPONENT_LIBRARY: Record<string, LibraryComponentDef> = {
   dialog: dialogDef(),
   navigationItem: navigationItemDef(),
   tableRow: tableRowDef(),
+  notice: noticeDef(),
+  emptyState: emptyStateDef(),
+  successState: successStateDef(),
+  errorState: errorStateDef(),
 };
+
 
 /** All library types, including the navigation-item and table-row additions. */
 export const LIBRARY_COMPONENT_TYPES = Object.keys(COMPONENT_LIBRARY);

@@ -1028,7 +1028,11 @@ regions.push({
       (call.fn === "button" || call.fn === "statusPill" || call.fn === "navItem" || call.fn === "deviceNode" ||
         call.fn === "iconButton" || call.fn === "textInput" || call.fn === "select" || call.fn === "checkbox" ||
         call.fn === "switch" || call.fn === "tabs" || call.fn === "badge" || call.fn === "tooltip" ||
-        call.fn === "menu" || call.fn === "dialog" || call.fn === "navigationItem" || call.fn === "tableRow") &&
+        call.fn === "menu" || call.fn === "dialog" || call.fn === "navigationItem" || call.fn === "tableRow" ||
+        // Explicit state family: a strip of hued states is exactly what Pass 4
+        // (states) asks for, and each sibling carries the state in its id.
+        call.fn === "notice" || call.fn === "emptyState" || call.fn === "successState" || call.fn === "errorState" ||
+        call.fn === "loadingState") &&
       Array.isArray((call.args as Record<string, unknown>).states)
     ) {
       for (const item of expandStates(call, warnings)) pushCall(item);

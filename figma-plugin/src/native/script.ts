@@ -226,14 +226,20 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
     // overlap: the ledger treats the total as a presence indicator, not an
     // audit.
     observer = mutationObserver(figma);
+    const builder = createFigdesBuilder(figma);
     const execution = Promise.resolve(execute(
       figma,
       Math,
       JSON,
       Date,
       console,
-      createFigdesBuilder(figma),
+      builder,
     ));
+
+    // Warm the common text styles while the script runs: its first text call
+    // then shares this load instead of paying it synchronously. Fire-and-forget
+    // — the warmup must never delay or fail the script itself.
+    void builder.preloadFonts();
 
     const timeout = new Promise<never>((_, reject) => {
       timeoutHandle = setTimeout(() => {
@@ -254,6 +260,12 @@ export async function executeFigmaScript(payload: unknown): Promise<Record<strin
     }
 
     if (!readonlyMode) {
+      // documentchange is batched asynchronously; without this wait the
+      // commit lands before the events for the script's own changes do, so
+      // the ledger reports mutations:0 next to a successful build. One short
+      // let of the event loop is enough for the batched dispatch, and keeps
+      // the gate honest for both success reports and later rollbacks.
+      await new Promise((resolve) => setTimeout(resolve, 150));
       const committed = commitNativeTransaction(transactionId);
       return {
         status: "success",

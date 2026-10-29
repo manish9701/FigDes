@@ -2228,7 +2228,8 @@ function emitComponent(
   // a TEXT property override; the frame+text path below is the fallback when
   // no component was named.
   if (
-    (spec.type === "button" || spec.type === "statusPill" || spec.type === "navItem" || isLibraryComponent(spec.type)) &&
+    (spec.type === "button" || spec.type === "statusPill" || spec.type === "navItem" || isLibraryComponent(spec.type) ||
+      spec.type === "loadingState" || spec.type === "codeBlock" || spec.type === "copyField" || spec.type === "keyValueList") &&
     typeof spec.componentId === "string" &&
     spec.componentId.length > 0
   ) {
@@ -5881,12 +5882,15 @@ function hugSize(
       const action = str("action");
       return {
         w: Math.min(240, Math.max(200, hugWidth(str("title", "Notice"), { fontSize: Math.round(13 * typeScale), paddingX: grid * 3 }))),
-        h: Math.round(grid * 3 + (body ? (body.length > 72 ? grid * 7 : grid * 4) : 0) + (action ? grid * 3 : 0)),
+        // The emitter will not draw below its min-height floor (grid*9); the
+        // layout must reserve that same floor, or a slim state-strip sibling
+        // (no body/action) traces as an operation-trace violation.
+        h: Math.max(Math.round(grid * 9 * typeScale), Math.round(grid * 3 + (body ? (body.length > 72 ? grid * 7 : grid * 4) : 0) + (action ? grid * 3 : 0))),
       };
     }
     case "loadingState": {
       const body = str("body");
-      return { w: 220, h: Math.round(grid * 3 + (body ? grid * 4 : 0) + grid * 2) };
+      return { w: 220, h: Math.max(Math.round(grid * 9 * typeScale), Math.round(grid * 3 + (body ? grid * 4 : 0) + grid * 2)) };
     }
     case "emptyState": {
       const body = str("body");
@@ -5899,7 +5903,7 @@ function hugSize(
       const language = str("language");
       return {
         w: 280,
-        h: Math.round(grid * 3 + (language ? grid * 2.5 : 0) + lines * Math.round(15 * typeScale) + grid),
+        h: Math.max(Math.round(grid * 8 * typeScale), Math.round(grid * 3 + (language ? grid * 2.5 : 0) + lines * Math.round(15 * typeScale) + grid)),
       };
     }
     case "copyField": {
@@ -5907,13 +5911,13 @@ function hugSize(
       const value = str("value") || str("text");
       return {
         w: Math.min(240, Math.max(200, hugWidth(value || "—", { fontSize: Math.round(12 * typeScale), paddingX: grid * 4 }))),
-        h: Math.round(grid * 4.5 + (label ? grid * 2.5 : 0)),
+        h: Math.max(Math.round(grid * 4.5 * typeScale), Math.round(grid * 4.5 + (label ? grid * 2.5 : 0))),
       };
     }
     case "keyValueList": {
       const raw = spec.props.items;
       const rows = Array.isArray(raw) ? raw.length : 0;
-      return { w: 260, h: Math.round(grid * 3 + rows * Math.round(22 * typeScale)) };
+      return { w: 260, h: Math.max(Math.round(grid * 6 * typeScale), Math.round(grid * 3 + rows * Math.round(22 * typeScale))) };
     }
     default:
       return null;

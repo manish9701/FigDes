@@ -152,6 +152,37 @@ function safeLineHeight(value: TextOptions["lineHeight"]): any {
   return typeof value === "number" ? { unit: "PIXELS", value } : value;
 }
 
+/**
+ * Fonts already requested in this plugin session, keyed "family::style".
+ *
+ * `loadFontAsync` resolves (near-)instantly for a font that is already loaded,
+ * but is not free — and every text call in a screen script asks for the same
+ * two or three styles over and over. The cache turns the Nth text call into a
+ * plain property set. Module-level on purpose: one Figma session, one cache.
+ *
+ * The map holds the in-flight promise, not a settled flag, so concurrent text
+ * calls share one load instead of racing several.
+ */
+const fontLoads = new Map<string, Promise<void>>();
+
+function ensureFont(figmaApi: AnyFigma, family: string, style: string): Promise<void> {
+  const key = family + "::" + style;
+  let p = fontLoads.get(key);
+  if (p === undefined) {
+    p = (async () => {
+      try {
+        await figmaApi.loadFontAsync({ family, style });
+      } catch (err) {
+        // Drop the failed entry so a later (or corrected) call can retry.
+        fontLoads.delete(key);
+        throw err;
+      }
+    })();
+    fontLoads.set(key, p);
+  }
+  return p;
+}
+
 function nodeSummary(node: AnyNode): Record<string, unknown> {
   return { id: node.id, type: node.type, name: node.name, x: node.x, y: node.y, width: node.width, height: node.height };
 }
@@ -187,7 +218,7 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
   const text = async (opts: TextOptions): Promise<AnyNode> => {
     const family = opts.family ?? "Inter";
     const style = opts.style ?? fontStyleForWeight(opts.weight, "Regular");
-    await figmaApi.loadFontAsync({ family, style });
+    await ensureFont(figmaApi, family, style);
     const node = figmaApi.createText();
     if (opts.parent) opts.parent.appendChild(node);
     node.fontName = { family, style };
@@ -281,6 +312,16 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
     return node;
   };
 
+  /** Warm the styles screen scripts almost always use, in the background. */
+  const preloadFonts = (): Promise<void> =>
+    Promise.allSettled([
+      ensureFont(figmaApi, "Inter", "Regular"),
+      ensureFont(figmaApi, "Inter", "Medium"),
+      ensureFont(figmaApi, "Inter", "Semi Bold"),
+      ensureFont(figmaApi, "Inter", "Bold"),
+      ensureFont(figmaApi, "JetBrains Mono", "Regular"),
+    ]).then(() => undefined);
+
   return {
     frame,
     stack,
@@ -302,6 +343,7 @@ export function createFigdesBuilder(figmaApi: AnyFigma) {
     color,
     paint,
     fontStyleForWeight,
+    preloadFonts,
     summary: nodeSummary,
   };
 }
